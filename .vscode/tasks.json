@@ -1,0 +1,52 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "type": "shell",
+            "command": "mingw32-make -j24",
+            "args": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "dependsOn": [],
+            "detail": "编译构建",
+            "problemMatcher": [
+                "$gcc"
+            ],
+        },
+        {
+            "label": "download daplink",
+            "type": "shell",
+            "command": "mingw32-make -j24 ; mingw32-make download_dap",
+            "args": [],
+            "group": {},
+            "dependsOn": [],
+            "detail": "使用daplink下载",
+            "problemMatcher": [],
+        },
+        {
+            "label": "download jlink",
+            "type": "shell",
+            "command": "mingw32-make -j24 ; mingw32-make download_jlink",
+            "args": [],
+            "group": {},
+            "dependsOn": [],
+            "detail": "使用jlink下载",
+            "problemMatcher": [],
+        },
+        {
+            "label": "log",
+            "type": "shell",
+            "command": "JlinkRTTClient",
+            "args": [],
+            "group": {},
+            "dependsOn": [
+                "build task"
+            ],
+            "detail": "打开jlink日志",
+            "problemMatcher": [],
+        }
+    ]
+}

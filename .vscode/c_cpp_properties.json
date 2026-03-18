@@ -1,0 +1,20 @@
+{
+    "env": {
+        "myIncludePath": []
+    },
+    "configurations": [
+        {
+            "name": "STM32",
+            "compilerPath": "C:/Program Files/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc.exe",
+            "intelliSenseMode": "windows-gcc-arm",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [],
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "customConfigurationVariables": {}
+        }
+    ],
+    "version": 4
+}

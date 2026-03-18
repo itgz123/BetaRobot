@@ -1,0 +1,28 @@
+/**
+ * @file app_cfg.h
+ * @brief APP层配置文件：开发板选择、应用参数配置
+ *
+ * @note 本文件职责：
+ *       1. 选择开发板（DEVELOPMENT_BOARD）
+ *       2. 配置应用层参数（任务频率、底盘参数等）
+ *
+ * @note 切换开发板：只需修改 DEVELOPMENT_BOARD 宏
+ *       BSP层会自动适配硬件映射
+ */
+
+#ifndef __APP_CFG_H
+#define __APP_CFG_H
+
+/*============================================
+ *              开发板选择
+ *============================================*/
+
+#define TELESKY_VET6 0
+#define DM_MC02 1
+#define DJI_A 2
+#define DJI_C 3
+
+// ⬇️ 修改此处切换开发板 ⬇️
+#define DEVELOPMENT_BOARD TELESKY_VET6
+
+#endif // __APP_CFG_H
