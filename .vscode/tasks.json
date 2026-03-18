@@ -1,52 +1,133 @@
 {
     "version": "2.0.0",
     "tasks": [
+        // ==================== TELESKY_VET6 ====================
         {
-            "label": "build",
+            "label": "TELESKY_VET6 - build",
             "type": "shell",
-            "command": "mingw32-make -j24",
-            "args": [],
+            "command": "mingw32-make -j24 BOARD=TELESKY_VET6",
+            "detail": "编译 TELESKY_VET6 (STM32F407VET6)",
             "group": {
                 "kind": "build",
-                "isDefault": true
+                "isDefault": false
             },
-            "dependsOn": [],
-            "detail": "编译构建",
             "problemMatcher": [
                 "$gcc"
-            ],
+            ]
         },
         {
-            "label": "download daplink",
+            "label": "TELESKY_VET6 - download dap",
             "type": "shell",
-            "command": "mingw32-make -j24 ; mingw32-make download_dap",
-            "args": [],
+            "command": "mingw32-make -j24 BOARD=TELESKY_VET6; mingw32-make download_dap BOARD=TELESKY_VET6",
+            "detail": "编译并使用DAPlink下载",
             "group": {},
-            "dependsOn": [],
-            "detail": "使用daplink下载",
-            "problemMatcher": [],
+            "problemMatcher": []
         },
         {
-            "label": "download jlink",
+            "label": "TELESKY_VET6 - download jlink",
             "type": "shell",
-            "command": "mingw32-make -j24 ; mingw32-make download_jlink",
-            "args": [],
+            "command": "mingw32-make -j24 BOARD=TELESKY_VET6; mingw32-make download_jlink BOARD=TELESKY_VET6",
+            "detail": "编译并使用Jlink下载",
             "group": {},
-            "dependsOn": [],
-            "detail": "使用jlink下载",
-            "problemMatcher": [],
+            "problemMatcher": []
+        },
+        // ==================== DM_MC02 ====================
+        {
+            "label": "DM_MC02 - build",
+            "type": "shell",
+            "command": "mingw32-make -j24 BOARD=DM_MC02",
+            "detail": "编译 DM_MC02 (STM32H723VGT6)",
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "DM_MC02 - download dap",
+            "type": "shell",
+            "command": "mingw32-make -j24 BOARD=DM_MC02; mingw32-make download_dap BOARD=DM_MC02",
+            "detail": "编译并使用DAPlink下载",
+            "group": {},
+            "problemMatcher": []
+        },
+        {
+            "label": "DM_MC02 - download jlink",
+            "type": "shell",
+            "command": "mingw32-make -j24 BOARD=DM_MC02; mingw32-make download_jlink BOARD=DM_MC02",
+            "detail": "编译并使用Jlink下载",
+            "group": {},
+            "problemMatcher": []
+        },
+        // ==================== DJI_A ====================
+        {
+            "label": "DJI_A - build",
+            "type": "shell",
+            "command": "mingw32-make -j24 BOARD=DJI_A",
+            "detail": "编译 DJI_A (STM32F427IIH6)",
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "DJI_A - download dap",
+            "type": "shell",
+            "command": "mingw32-make -j24 BOARD=DJI_A; mingw32-make download_dap BOARD=DJI_A",
+            "detail": "编译并使用DAPlink下载",
+            "group": {},
+            "problemMatcher": []
+        },
+        {
+            "label": "DJI_A - download jlink",
+            "type": "shell",
+            "command": "mingw32-make -j24 BOARD=DJI_A; mingw32-make download_jlink BOARD=DJI_A",
+            "detail": "编译并使用Jlink下载",
+            "group": {},
+            "problemMatcher": []
+        },
+        // ==================== DJI_C ====================
+        {
+            "label": "DJI_C - build",
+            "type": "shell",
+            "command": "mingw32-make -j24 BOARD=DJI_C",
+            "detail": "编译 DJI_C (STM32F407IGH6)",
+            "group": "build",
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "DJI_C - download dap",
+            "type": "shell",
+            "command": "mingw32-make -j24 BOARD=DJI_C; mingw32-make download_dap BOARD=DJI_C",
+            "detail": "编译并使用DAPlink下载",
+            "group": {},
+            "problemMatcher": []
+        },
+        {
+            "label": "DJI_C - download jlink",
+            "type": "shell",
+            "command": "mingw32-make -j24 BOARD=DJI_C; mingw32-make download_jlink BOARD=DJI_C",
+            "detail": "编译并使用Jlink下载",
+            "group": {},
+            "problemMatcher": []
+        },
+        // ==================== 公共任务 ====================
+        {
+            "label": "clean",
+            "type": "shell",
+            "command": "mingw32-make clean",
+            "detail": "清理构建目录",
+            "group": {},
+            "problemMatcher": []
         },
         {
             "label": "log",
             "type": "shell",
             "command": "JlinkRTTClient",
-            "args": [],
+            "detail": "打开Jlink RTT日志",
             "group": {},
-            "dependsOn": [
-                "build task"
-            ],
-            "detail": "打开jlink日志",
-            "problemMatcher": [],
+            "problemMatcher": []
         }
     ]
 }

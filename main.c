@@ -1,3 +1,18 @@
+/**
+ * @file main.c
+ * @brief 主函数入口，根据 DEVELOPMENT_BOARD 宏选择对应开发板的代码
+ *
+ * @note 本文件由用户维护，从 CubeMX 生成的 main.c 中复制代码
+ *       切换开发板时，需要复制对应 hal 目录下的 Core/Src/main.c 内容
+ */
+
+#include "app_cfg.h"
+
+/*============================================
+ *              TELESKY_VET6 (STM32F407VET6)
+ *============================================*/
+#if DEVELOPMENT_BOARD == TELESKY_VET6
+
 #include "main.h"
 #include "cmsis_os.h"
 #include "dma.h"
@@ -76,9 +91,40 @@ void Error_Handler(void)
     {
     }
 }
-#ifdef USE_FULL_ASSERT
 
+#ifdef USE_FULL_ASSERT
 void assert_failed(uint8_t *file, uint32_t line)
 {
 }
 #endif /* USE_FULL_ASSERT */
+
+/*============================================
+ *              DM_MC02 (STM32H723VGT6)
+ *============================================*/
+#elif DEVELOPMENT_BOARD == DM_MC02
+
+// TODO: 从 hal/STM32H723VGT6/Core/Src/main.c 复制代码到此处
+
+#error "DM_MC02 main.c content not implemented. Please copy from hal/STM32H723VGT6/Core/Src/main.c"
+
+/*============================================
+ *              DJI_A (STM32F427IIH6)
+ *============================================*/
+#elif DEVELOPMENT_BOARD == DJI_A
+
+// TODO: 从 hal/STM32F427IIH6/Core/Src/main.c 复制代码到此处
+
+#error "DJI_A main.c content not implemented. Please copy from hal/STM32F427IIH6/Core/Src/main.c"
+
+/*============================================
+ *              DJI_C (STM32F407IGH6)
+ *============================================*/
+#elif DEVELOPMENT_BOARD == DJI_C
+
+// TODO: 从 hal/STM32F407IGH6/Core/Src/main.c 复制代码到此处
+
+#error "DJI_C main.c content not implemented. Please copy from hal/STM32F407IGH6/Core/Src/main.c"
+
+#else
+#error "Unknown DEVELOPMENT_BOARD value. Check app/inc/app_cfg.h"
+#endif

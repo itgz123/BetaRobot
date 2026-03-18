@@ -1,19 +1,108 @@
 {
-    "env": {
-        "myIncludePath": []
-    },
     "configurations": [
         {
-            "name": "STM32",
+            "name": "TELESKY_VET6",
             "compilerPath": "C:/Program Files/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc.exe",
             "intelliSenseMode": "windows-gcc-arm",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/hal/STM32F407VET6/Core/Inc",
+                "${workspaceFolder}/hal/STM32F407VET6/Drivers/STM32F4xx_HAL_Driver/Inc",
+                "${workspaceFolder}/hal/STM32F407VET6/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy",
+                "${workspaceFolder}/hal/STM32F407VET6/Drivers/CMSIS/Device/ST/STM32F4xx/Include",
+                "${workspaceFolder}/hal/STM32F407VET6/Drivers/CMSIS/Include",
+                "${workspaceFolder}/hal/STM32F407VET6/Middlewares/Third_Party/FreeRTOS/Source/include",
+                "${workspaceFolder}/hal/STM32F407VET6/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS",
+                "${workspaceFolder}/hal/STM32F407VET6/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
+                "${workspaceFolder}/app/inc",
+                "${workspaceFolder}/bsp/inc",
+                "${workspaceFolder}/drv/inc"
             ],
-            "defines": [],
+            "defines": [
+                "USE_HAL_DRIVER",
+                "STM32F407xx",
+                "DEVELOPMENT_BOARD=0"
+            ],
             "cStandard": "c11",
-            "cppStandard": "c++17",
-            "customConfigurationVariables": {}
+            "cppStandard": "c++17"
+        },
+        {
+            "name": "DM_MC02",
+            "compilerPath": "C:/Program Files/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc.exe",
+            "intelliSenseMode": "windows-gcc-arm",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/hal/STM32H723VGT6/Core/Inc",
+                "${workspaceFolder}/hal/STM32H723VGT6/Drivers/STM32H7xx_HAL_Driver/Inc",
+                "${workspaceFolder}/hal/STM32H723VGT6/Drivers/STM32H7xx_HAL_Driver/Inc/Legacy",
+                "${workspaceFolder}/hal/STM32H723VGT6/Drivers/CMSIS/Device/ST/STM32H7xx/Include",
+                "${workspaceFolder}/hal/STM32H723VGT6/Drivers/CMSIS/Include",
+                "${workspaceFolder}/hal/STM32H723VGT6/Middlewares/Third_Party/FreeRTOS/Source/include",
+                "${workspaceFolder}/hal/STM32H723VGT6/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS",
+                "${workspaceFolder}/hal/STM32H723VGT6/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
+                "${workspaceFolder}/app/inc",
+                "${workspaceFolder}/bsp/inc",
+                "${workspaceFolder}/drv/inc"
+            ],
+            "defines": [
+                "USE_HAL_DRIVER",
+                "STM32H723xx",
+                "DEVELOPMENT_BOARD=1"
+            ],
+            "cStandard": "c11",
+            "cppStandard": "c++17"
+        },
+        {
+            "name": "DJI_A",
+            "compilerPath": "C:/Program Files/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc.exe",
+            "intelliSenseMode": "windows-gcc-arm",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/hal/STM32F427IIH6/Core/Inc",
+                "${workspaceFolder}/hal/STM32F427IIH6/Drivers/STM32F4xx_HAL_Driver/Inc",
+                "${workspaceFolder}/hal/STM32F427IIH6/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy",
+                "${workspaceFolder}/hal/STM32F427IIH6/Drivers/CMSIS/Device/ST/STM32F4xx/Include",
+                "${workspaceFolder}/hal/STM32F427IIH6/Drivers/CMSIS/Include",
+                "${workspaceFolder}/hal/STM32F427IIH6/Middlewares/Third_Party/FreeRTOS/Source/include",
+                "${workspaceFolder}/hal/STM32F427IIH6/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS",
+                "${workspaceFolder}/hal/STM32F427IIH6/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
+                "${workspaceFolder}/app/inc",
+                "${workspaceFolder}/bsp/inc",
+                "${workspaceFolder}/drv/inc"
+            ],
+            "defines": [
+                "USE_HAL_DRIVER",
+                "STM32F427xx",
+                "DEVELOPMENT_BOARD=2"
+            ],
+            "cStandard": "c11",
+            "cppStandard": "c++17"
+        },
+        {
+            "name": "DJI_C",
+            "compilerPath": "C:/Program Files/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc.exe",
+            "intelliSenseMode": "windows-gcc-arm",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/hal/STM32F407IGH6/Core/Inc",
+                "${workspaceFolder}/hal/STM32F407IGH6/Drivers/STM32F4xx_HAL_Driver/Inc",
+                "${workspaceFolder}/hal/STM32F407IGH6/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy",
+                "${workspaceFolder}/hal/STM32F407IGH6/Drivers/CMSIS/Device/ST/STM32F4xx/Include",
+                "${workspaceFolder}/hal/STM32F407IGH6/Drivers/CMSIS/Include",
+                "${workspaceFolder}/hal/STM32F407IGH6/Middlewares/Third_Party/FreeRTOS/Source/include",
+                "${workspaceFolder}/hal/STM32F407IGH6/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS",
+                "${workspaceFolder}/hal/STM32F407IGH6/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
+                "${workspaceFolder}/app/inc",
+                "${workspaceFolder}/bsp/inc",
+                "${workspaceFolder}/drv/inc"
+            ],
+            "defines": [
+                "USE_HAL_DRIVER",
+                "STM32F407xx",
+                "DEVELOPMENT_BOARD=3"
+            ],
+            "cStandard": "c11",
+            "cppStandard": "c++17"
         }
     ],
     "version": 4
