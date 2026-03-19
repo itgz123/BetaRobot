@@ -7,6 +7,7 @@
  */
 
 #include "app_cfg.h"
+#include "app_robot.h"
 
 /*============================================
  *              TELESKY_VET6 (STM32F407VET6)
@@ -38,6 +39,7 @@ int main(void)
     MX_USART2_UART_Init();
 
     MX_FREERTOS_Init();
+    function_in_main_c();
     osKernelStart();
 }
 

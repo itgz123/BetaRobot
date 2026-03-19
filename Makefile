@@ -48,6 +48,11 @@ C_SOURCES := $(addprefix $(HAL_DIR)/,$(filter-out Core/Src/main.c,$(C_SOURCES)))
 C_SOURCES += main.c \
 Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT_printf.c \
 Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT.c \
+bsp/src/bsp_cfg.c \
+bsp/src/bsp_dwt.c \
+bsp/src/bsp_gpio.c \
+bsp/src/bsp_log.c \
+app/src/app_robot.c \
 
 ######################################
 # 修正 ASM_SOURCES
