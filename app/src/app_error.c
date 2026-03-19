@@ -1,4 +1,7 @@
 #include "app_error.h"
+#include "bsp_log.h"
+#include "bsp_dwt.h"
+#include "app_cfg.h"
 
 /**
  * @brief  Error 任务函数
@@ -7,9 +10,19 @@
  */
 void StartErrorTask(void const *argument)
 {
-    /* 无限循环 */
+    // 初始化开始
+    // 初始化结束
+    static float start;
+    static float dt;
+    LOGINFO("[freeRTOS] ERROR Task Start");
     for (;;)
     {
-        osDelay(1);
+        start = DWT_GetTimeline_ms();
+        // 任务开始
+        // 任务结束
+        dt = DWT_GetTimeline_ms() - start;
+        if (dt > ERROR_FREQ_MS)
+            LOGERROR("[freeRTOS] ERROR Task is being DELAY! dt = [%f]", &dt);
+        osDelay(ERROR_FREQ_MS);
     }
 }

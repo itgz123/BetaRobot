@@ -32,14 +32,27 @@
 #define DJI_A 2
 #define DJI_C 3
 
-// ⬇️ 修改此处切换开发板 ⬇️
+// 修改此处切换开发板
 #define DEVELOPMENT_BOARD TELESKY_VET6
 
 /*============================================
  *              应用参数配置
  *============================================*/
 
-// TODO: 在此添加应用层参数配置
-// 例如：任务频率、底盘参数、PID参数等
+/**
+ * @brief 任务频率设置
+ */
+#define CMD_FREQ_MS 100   // 10Hz 遥控
+#define CHASSIS_FREQ_MS 5 // 200Hz 底盘
+#define MOTOR_FREQ_MS 1   // 1000Hz 电机
+#define ERROR_FREQ_MS 100 // 10Hz 错误
+
+/**
+ * @brief 任务STACK大小
+ */
+#define CMD_STACK_SIZE 256     // 遥控256
+#define CHASSIS_STACK_SIZE 256 // 底盘256
+#define MOTOR_STACK_SIZE 256   // 电机256
+#define ERROR_STACK_SIZE 256   // 错误256
 
 #endif // __APP_CFG_H

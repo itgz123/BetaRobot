@@ -1,4 +1,7 @@
 #include "app_chassis.h"
+#include "bsp_log.h"
+#include "bsp_dwt.h"
+#include "app_cfg.h"
 
 /**
  * @brief  Chassis 任务函数
@@ -7,9 +10,19 @@
  */
 void StartChassisTask(void const *argument)
 {
-    /* 无限循环 */
+    // 初始化开始
+    // 初始化结束
+    static float start;
+    static float dt;
+    LOGINFO("[freeRTOS] CHASSIS Task Start");
     for (;;)
     {
-        osDelay(1);
+        start = DWT_GetTimeline_ms();
+        // 任务开始
+        // 任务结束
+        dt = DWT_GetTimeline_ms() - start;
+        if (dt > CHASSIS_FREQ_MS)
+            LOGERROR("[freeRTOS] CHASSIS Task is being DELAY! dt = [%f]", &dt);
+        osDelay(CHASSIS_FREQ_MS);
     }
 }
