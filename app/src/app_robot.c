@@ -1,4 +1,6 @@
 #include "app_robot.h"
+#include "bsp_log.h"
+#include "bsp_dwt.h"
 
 /* 任务句柄定义 */
 osThreadId errorTaskHandle;
@@ -25,19 +27,22 @@ osStaticThreadDef_t motorTaskControlBlock;
  */
 void function_in_main_c(void)
 {
-    /* 创建 error 任务 */
+    __disable_irq();
+    DWT_Init();
+    BSPLogInit();
+    __enable_irq();
+    LOGINFO("[robot] DWT_Init() and BSPLogInit() done");
+
+    // 创建任务
     osThreadStaticDef(errorTask, StartErrorTask, 0, 0, 128, errorTaskBuffer, &errorTaskControlBlock);
     errorTaskHandle = osThreadCreate(osThread(errorTask), NULL);
 
-    /* 创建 cmd 任务 */
     osThreadStaticDef(cmdTask, StartCmdTask, 1, 0, 256, cmdTaskBuffer, &cmdTaskControlBlock);
     cmdTaskHandle = osThreadCreate(osThread(cmdTask), NULL);
 
-    /* 创建 chassis 任务 */
     osThreadStaticDef(chassisTask, StartChassisTask, 2, 0, 256, chassisTaskBuffer, &chassisTaskControlBlock);
     chassisTaskHandle = osThreadCreate(osThread(chassisTask), NULL);
 
-    /* 创建 motor 任务 */
     osThreadStaticDef(motorTask, StartMotorTask, 3, 0, 128, motorTaskBuffer, &motorTaskControlBlock);
     motorTaskHandle = osThreadCreate(osThread(motorTask), NULL);
 }

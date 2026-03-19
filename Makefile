@@ -73,6 +73,12 @@ app/src/app_cmd.c \
 app/src/app_chassis.c \
 app/src/app_motor.c \
 app/src/app_error.c \
+bsp/src/bsp_math.c \
+$(HAL_DIR)/Drivers/CMSIS/DSP/Source/CommonTables/arm_common_tables.c \
+$(HAL_DIR)/Drivers/CMSIS/DSP/Source/CommonTables/arm_const_structs.c \
+$(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_sin_f32.c \
+$(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c \
+$(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c \
 
 ######################################
 # 修正 ASM_SOURCES
@@ -95,6 +101,8 @@ C_INCLUDES += -Iapp/inc \
 -Idrv/inc \
 -IMiddlewares/Third_Party/SEGGER/RTT \
 -IMiddlewares/Third_Party/SEGGER/Config \
+-I$(HAL_DIR)/Drivers/CMSIS/DSP/Include \
+-I$(HAL_DIR)/Drivers/CMSIS/DSP/PrivateInclude \
 
 ######################################
 # 修正 LDSCRIPT
@@ -115,6 +123,11 @@ LDSCRIPT := $(HAL_DIR)/$(LDSCRIPT)
 # 添加开发板选择宏
 ######################################
 C_DEFS += -DDEVELOPMENT_BOARD=$(BOARD)
+
+######################################
+# CMSIS-DSP 支持（Cortex-M4F）
+######################################
+C_DEFS += -DARM_MATH_CM4
 
 ######################################
 # 重新计算 vpath（CFLAGS 会自动使用更新后的变量）

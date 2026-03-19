@@ -549,4 +549,137 @@ DWT_Delay(0.001f);  // 延时 1ms
 
 ---
 
+## 十一、数学加速模块（bsp_math）
+
+### 11.1 模块概述
+
+`bsp_math` 模块提供统一的数学函数接口，根据硬件特性自动选择最优实现：
+
+| 优先级 | 实现方式      | 适用芯片                   | 性能   |
+| ------ | ------------- | -------------------------- | ------ |
+| 1      | CORDIC 硬件   | STM32H7/G4 系列            | 最快   |
+| 2      | CMSIS-DSP 库  | 有 DSP 指令集的 Cortex-M   | 较快   |
+| 3      | 标准库 math.h | 所有平台                   | 基础   |
+
+### 11.2 重要原则：禁止直接使用 math.h
+
+**项目中所有数学运算必须通过 `bsp_math` 接口进行，禁止直接调用 `<math.h>` 的函数。**
+
+```c
+// ❌ 错误：直接使用标准库
+float result = sinf(theta);
+float angle = atan2f(y, x);
+
+// ✅ 正确：使用 bsp_math 接口
+float result = BSP_Math_Sin(theta);
+float angle = BSP_Math_Atan2(y, x);
+```
+
+**原因：**
+- 自动适配不同硬件平台
+- 充分利用硬件加速特性
+- 便于性能优化和调试
+
+### 11.3 可用接口
+
+| 函数                    | 功能               | 说明                         |
+| ----------------------- | ------------------ | ---------------------------- |
+| `BSP_Math_Sin(theta)`   | 计算 sin(theta)    | theta 为弧度                 |
+| `BSP_Math_Cos(theta)`   | 计算 cos(theta)    | theta 为弧度                 |
+| `BSP_Math_SinCos(...)`  | 同时计算 sin 和 cos | 比 separate 调用效率更高     |
+| `BSP_Math_Atan2(y, x)`  | 计算 atan2(y, x)   | 返回弧度，自动判断象限       |
+| `BSP_Math_Sqrt(x)`      | 计算 sqrt(x)       | x 必须 >= 0                  |
+
+### 11.4 使用示例
+
+```c
+#include "bsp_math.h"
+
+void chassis_control(float vx, float vy, float omega)
+{
+    float theta = 0.0f;
+    
+    // 计算运动分解
+    for (int i = 0; i < 4; i++)
+    {
+        // ❌ 错误写法
+        // float sin_val = sinf(theta);
+        // float cos_val = cosf(theta);
+        
+        // ✅ 正确写法：同时计算 sin 和 cos（CORDIC 下更高效）
+        float sin_val, cos_val;
+        BSP_Math_SinCos(theta, &sin_val, &cos_val);
+        
+        // 计算轮子速度
+        float wheel_speed = vx * cos_val + vy * sin_val + omega * radius;
+        
+        theta += M_PI_2;  // 使用 bsp_math.h 中定义的 M_PI_2
+    }
+}
+
+float get_heading(float x, float y)
+{
+    // ✅ 使用 BSP_Math_Atan2 计算航向角
+    return BSP_Math_Atan2(y, x);
+}
+
+float calculate_distance(float dx, float dy)
+{
+    // ✅ 使用 BSP_Math_Sqrt 计算距离
+    return BSP_Math_Sqrt(dx * dx + dy * dy);
+}
+```
+
+### 11.5 常用数学常量
+
+`bsp_math.h` 中定义了常用数学常量，应优先使用：
+
+```c
+#define M_PI    3.14159265358979323846f  // π
+#define M_PI_2  1.57079632679489661923f  // π/2
+#define M_E     2.71828182845904523536f  // e
+
+#define DEG_TO_RAD(deg)  ((deg) * M_PI / 180.0f)   // 角度转弧度
+#define RAD_TO_DEG(rad)  ((rad) * 180.0f / M_PI)   // 弧度转角度
+```
+
+### 11.6 硬件特性查询
+
+可通过以下接口查询当前平台的硬件特性：
+
+```c
+if (BSP_Math_HasCORDIC())
+{
+    // 当前平台有 CORDIC 硬件加速
+}
+
+if (BSP_Math_HasDSP())
+{
+    // 当前平台有 DSP 指令集
+}
+```
+
+### 11.7 各开发板加速情况
+
+| 开发板        | CORDIC | CMSIS-DSP | 实际使用 |
+| ------------- | ------ | --------- | -------- |
+| TELESKY_VET6  | ❌      | ✅         | CMSIS-DSP |
+| DM_MC02       | ✅      | ✅         | CORDIC   |
+| DJI_A         | ❌      | ✅         | CMSIS-DSP |
+| DJI_C         | ❌      | ✅         | CMSIS-DSP |
+
+### 11.8 初始化
+
+在使用数学函数前，需要在系统初始化时调用：
+
+```c
+void App_Robot_Init(void)
+{
+    BSP_Math_Init();  // 初始化数学加速模块
+    // ...其他初始化
+}
+```
+
+---
+
 _本文档适用于 test_my_frame 项目的 BSP 层开发。跨层设计原则请参考《项目架构设计方案》，命名规范请参考《代码规范》。_

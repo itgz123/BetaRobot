@@ -121,7 +121,10 @@ extern const UART_Map_t uart_map[];
  *============================================*/
 
 #if DEVELOPMENT_BOARD == TELESKY_VET6
+/*---------- CPU频率 ----------*/
 #define CPU_FREQ_MHZ 168
+
+/*---------- 外设数量 ----------*/
 #define ADC_NUM 0
 #define CAN_NUM 0
 #define GPIO_NUM 10 // 2 LED + 8 电机方向
@@ -132,18 +135,89 @@ extern const UART_Map_t uart_map[];
 #define UART_NUM 1 // UART2
 #define USART_NUM 0
 #define USB_NUM 0
+
+/*---------- 硬件加速特性 ----------*/
+#define HAS_FPU 1    // Cortex-M4F 单精度浮点
+#define HAS_DSP 1    // DSP指令集
+#define HAS_CORDIC 0 // 无CORDIC协处理器
+#define HAS_CRC 1    // 硬件CRC
+#define HAS_FMAC 0   // 无滤波数学加速器
+#define HAS_MPU 1    // 内存保护单元（可选）
+#define HAS_RAMECC 0 // 无RAM错误校正
+
+/*---------- CMSIS-DSP 库支持 ----------*/
+#if HAS_DSP
+#define HAS_CMSIS_DSP 1 // 有DSP指令集时可使用CMSIS-DSP加速
+#else
+#define HAS_CMSIS_DSP 0
+#endif
+
 #endif // TELESKY_VET6
 
 #if DEVELOPMENT_BOARD == DM_MC02
+/*---------- CPU频率 ----------*/
 #define CPU_FREQ_MHZ 550
+
+/*---------- 硬件加速特性 ----------*/
+#define HAS_FPU 1    // Cortex-M7 双精度浮点
+#define HAS_DSP 1    // DSP指令集
+#define HAS_CORDIC 1 // CORDIC协处理器
+#define HAS_CRC 1    // 硬件CRC
+#define HAS_FMAC 1   // 滤波数学加速器
+#define HAS_MPU 1    // 内存保护单元
+#define HAS_RAMECC 1 // RAM错误校正
+
+/*---------- CMSIS-DSP 库支持 ----------*/
+#if HAS_DSP
+#define HAS_CMSIS_DSP 1
+#else
+#define HAS_CMSIS_DSP 0
+#endif
+
 #endif // DM_MC02
 
 #if DEVELOPMENT_BOARD == DJI_A
+/*---------- CPU频率 ----------*/
 #define CPU_FREQ_MHZ 180
+
+/*---------- 硬件加速特性 ----------*/
+#define HAS_FPU 1    // Cortex-M4F 单精度浮点
+#define HAS_DSP 1    // DSP指令集
+#define HAS_CORDIC 0 // 无CORDIC协处理器
+#define HAS_CRC 1    // 硬件CRC
+#define HAS_FMAC 0   // 无滤波数学加速器
+#define HAS_MPU 1    // 内存保护单元（可选）
+#define HAS_RAMECC 0 // 无RAM错误校正
+
+/*---------- CMSIS-DSP 库支持 ----------*/
+#if HAS_DSP
+#define HAS_CMSIS_DSP 1
+#else
+#define HAS_CMSIS_DSP 0
+#endif
+
 #endif // DJI_A
 
 #if DEVELOPMENT_BOARD == DJI_C
+/*---------- CPU频率 ----------*/
 #define CPU_FREQ_MHZ 168
+
+/*---------- 硬件加速特性 ----------*/
+#define HAS_FPU 1    // Cortex-M4F 单精度浮点
+#define HAS_DSP 1    // DSP指令集
+#define HAS_CORDIC 0 // 无CORDIC协处理器
+#define HAS_CRC 1    // 硬件CRC
+#define HAS_FMAC 0   // 无滤波数学加速器
+#define HAS_MPU 1    // 内存保护单元（可选）
+#define HAS_RAMECC 0 // 无RAM错误校正
+
+/*---------- CMSIS-DSP 库支持 ----------*/
+#if HAS_DSP
+#define HAS_CMSIS_DSP 1
+#else
+#define HAS_CMSIS_DSP 0
+#endif
+
 #endif // DJI_C
 
 #endif // __BSP_CFG_H
