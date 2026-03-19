@@ -30,6 +30,22 @@ else
 endif
 
 ######################################
+# 构建变量
+######################################
+# 调试构建 (1=开启, 0=关闭)
+DEBUG ?= 1
+
+# 优化等级（在 include 之前 override，覆盖子 Makefile 的定义）
+# -O0: 无优化，最易调试
+# -O1: 基本优化
+# -O2: 推荐的发布优化
+# -O3: 激进优化
+# -Og: 调试友好优化（默认）
+# -Os: 代码大小优化
+OPT ?= -Og
+override OPT := $(OPT)
+
+######################################
 # 在 include 之前覆盖 TARGET
 # 这样子 Makefile 解析规则时会使用我们的 TARGET
 ######################################
@@ -53,6 +69,10 @@ bsp/src/bsp_dwt.c \
 bsp/src/bsp_gpio.c \
 bsp/src/bsp_log.c \
 app/src/app_robot.c \
+app/src/app_cmd.c \
+app/src/app_chassis.c \
+app/src/app_motor.c \
+app/src/app_error.c \
 
 ######################################
 # 修正 ASM_SOURCES
@@ -80,6 +100,16 @@ C_INCLUDES += -Iapp/inc \
 # 修正 LDSCRIPT
 ######################################
 LDSCRIPT := $(HAL_DIR)/$(LDSCRIPT)
+
+######################################
+# 编译标志扩展
+######################################
+# 额外警告选项（子 Makefile 已有 -Wall）
+# override CFLAGS += -Wextra -Wshadow
+
+# 链接时优化（LTO），可减小代码体积（可选）
+# override CFLAGS += -flto
+# override LDFLAGS += -flto
 
 ######################################
 # 添加开发板选择宏

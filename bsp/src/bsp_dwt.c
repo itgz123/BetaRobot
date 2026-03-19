@@ -6,7 +6,7 @@
  */
 
 #include "bsp_dwt.h"
-// 查看便签待办
+
 /*------------- 私有变量 --------------*/
 static DWT_Time_t s_sys_time;
 static uint32_t s_cpu_freq_hz;

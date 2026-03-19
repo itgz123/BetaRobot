@@ -25,7 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "main.h"
+#include "bsp_gpio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -176,7 +176,7 @@ void MX_FREERTOS_Init(void) {
 
   /* Create the thread(s) */
   /* definition and creation of defaultTask */
-  osThreadStaticDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128, defaultTaskBuffer, &defaultTaskControlBlock);
+  osThreadStaticDef(defaultTask, StartDefaultTask, -3, 0, 128, defaultTaskBuffer, &defaultTaskControlBlock);
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -195,10 +195,13 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void const * argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
+  GPIO_INSTANCE_DEF(work_led, GPIO_LED_GREEN, NULL);
+  GPIO_INSTANCE_DEF(error_led, GPIO_LED_RED, NULL);
+  GPIOSet(&error_led);
   /* Infinite loop */
-  for(;;)
+  for (;;)
   {
-    HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_1);
+    GPIOToggle(&work_led);
     osDelay(100);
   }
   /* USER CODE END StartDefaultTask */
