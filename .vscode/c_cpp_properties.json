@@ -16,7 +16,9 @@
                 "${workspaceFolder}/hal/STM32F407VET6/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
                 "${workspaceFolder}/app/inc",
                 "${workspaceFolder}/bsp/inc",
-                "${workspaceFolder}/drv/inc"
+                "${workspaceFolder}/drv/inc",
+                "${workspaceFolder}/Middlewares/Third_Party/SEGGER/RTT",
+                "${workspaceFolder}/Middlewares/Third_Party/SEGGER/Config"
             ],
             "defines": [
                 "USE_HAL_DRIVER",
@@ -42,7 +44,9 @@
                 "${workspaceFolder}/hal/STM32H723VGT6/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
                 "${workspaceFolder}/app/inc",
                 "${workspaceFolder}/bsp/inc",
-                "${workspaceFolder}/drv/inc"
+                "${workspaceFolder}/drv/inc",
+                "${workspaceFolder}/Middlewares/Third_Party/SEGGER/RTT",
+                "${workspaceFolder}/Middlewares/Third_Party/SEGGER/Config"
             ],
             "defines": [
                 "USE_HAL_DRIVER",
@@ -68,7 +72,9 @@
                 "${workspaceFolder}/hal/STM32F427IIH6/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
                 "${workspaceFolder}/app/inc",
                 "${workspaceFolder}/bsp/inc",
-                "${workspaceFolder}/drv/inc"
+                "${workspaceFolder}/drv/inc",
+                "${workspaceFolder}/Middlewares/Third_Party/SEGGER/RTT",
+                "${workspaceFolder}/Middlewares/Third_Party/SEGGER/Config"
             ],
             "defines": [
                 "USE_HAL_DRIVER",
@@ -94,7 +100,9 @@
                 "${workspaceFolder}/hal/STM32F407IGH6/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
                 "${workspaceFolder}/app/inc",
                 "${workspaceFolder}/bsp/inc",
-                "${workspaceFolder}/drv/inc"
+                "${workspaceFolder}/drv/inc",
+                "${workspaceFolder}/Middlewares/Third_Party/SEGGER/RTT",
+                "${workspaceFolder}/Middlewares/Third_Party/SEGGER/Config"
             ],
             "defines": [
                 "USE_HAL_DRIVER",

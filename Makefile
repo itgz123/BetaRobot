@@ -45,13 +45,16 @@ include $(HAL_DIR)/Makefile
 ######################################
 # 过滤 CubeMX 的 main.c，添加 HAL_DIR 前缀，添加根目录 main.c
 C_SOURCES := $(addprefix $(HAL_DIR)/,$(filter-out Core/Src/main.c,$(C_SOURCES)))
-C_SOURCES += main.c
+C_SOURCES += main.c \
+Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT_printf.c \
+Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT.c \
 
 ######################################
 # 修正 ASM_SOURCES
 ######################################
 ASM_SOURCES := $(addprefix $(HAL_DIR)/,$(ASM_SOURCES))
 ASMM_SOURCES := $(addprefix $(HAL_DIR)/,$(ASMM_SOURCES))
+ASM_SOURCES += Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT_ASM_ARMv7M.s \
 
 ######################################
 # 修正 C_INCLUDES（将 -Ixxx 替换为 -I$(HAL_DIR)/xxx）
@@ -62,9 +65,11 @@ AS_INCLUDES := $(patsubst -I%,-I$(HAL_DIR)/%,$(AS_INCLUDES))
 ######################################
 # 添加公共头文件路径
 ######################################
-C_INCLUDES += -Iapp/inc
-C_INCLUDES += -Ibsp/inc
-C_INCLUDES += -Idrv/inc
+C_INCLUDES += -Iapp/inc \
+-Ibsp/inc \
+-Idrv/inc \
+-IMiddlewares/Third_Party/SEGGER/RTT \
+-IMiddlewares/Third_Party/SEGGER/Config \
 
 ######################################
 # 修正 LDSCRIPT
@@ -82,5 +87,17 @@ C_DEFS += -DDEVELOPMENT_BOARD=$(BOARD)
 vpath %.c $(sort $(dir $(C_SOURCES)))
 vpath %.s $(sort $(dir $(ASM_SOURCES)))
 vpath %.S $(sort $(dir $(ASMM_SOURCES)))
+
+######################################
+# 重新计算 OBJECTS（因为 C_SOURCES 和 ASM_SOURCES 已修改）
+######################################
+OBJECTS = $(addprefix $(BUILD_DIR)/,$(notdir $(C_SOURCES:.c=.o)))
+OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(ASM_SOURCES:.s=.o)))
+OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(ASMM_SOURCES:.S=.o)))
+
+######################################
+# 重新定义 elf 目标的依赖（因为 OBJECTS 已修改）
+######################################
+$(BUILD_DIR)/$(TARGET).elf: $(OBJECTS)
 
 # *** EOF ***
