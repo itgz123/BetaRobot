@@ -19,16 +19,16 @@ static void MOTORTask(void)
 void StartMotorTask(void *argument)
 {
     MOTORInit();
-    static float start;
-    static float dt;
+    static uint64_t start;
+    static uint64_t dt;
     LOGINFO("[freeRTOS] MOTOR Task Start");
     for (;;)
     {
-        start = DWT_GetTimeline_ms();
+        start = DWT_GetTimeline_us();
         MOTORTask();
-        dt = DWT_GetTimeline_ms() - start;
-        if (dt > MOTOR_FREQ_MS)
-            LOGERROR("[freeRTOS] MOTOR Task is being DELAY! dt = [%f]", &dt);
+        dt = DWT_GetTimeline_us() - start;
+        if ((dt / 1000) > MOTOR_FREQ_MS)
+            LOGERROR("[freeRTOS] MOTOR Task is being DELAY! dt = %d(ms)", (dt / 1000));
         vTaskDelay(pdMS_TO_TICKS(MOTOR_FREQ_MS));
     }
 }

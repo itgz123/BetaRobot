@@ -1,114 +1,48 @@
 {
     "version": "2.0.0",
-    "tasks": [
-        // ==================== TELESKY_VET6 ====================
+    "inputs": [
         {
-            "label": "TELESKY_VET6 - build",
+            "id": "selectBoard",
+            "type": "pickString",
+            "description": "选择开发板",
+            "options": [
+                "STM32F407VET6",
+                "DM_MC02",
+                "DJI_A",
+                "DJI_C"
+            ],
+            "default": "STM32F407VET6"
+        }
+    ],
+    "tasks": [
+        // ==================== 构建任务 ====================
+        {
+            "label": "build",
             "type": "shell",
-            "command": "mingw32-make -j24 BOARD=TELESKY_VET6",
-            "detail": "编译 TELESKY_VET6 (STM32F407VET6)",
+            "command": "${config:betaRobot.makeCommand} -j${config:betaRobot.buildJobs}",
+            "detail": "编译（根据 app_cfg.h 中的 DEVELOPMENT_BOARD）",
             "group": {
                 "kind": "build",
-                "isDefault": false
+                "isDefault": true
             },
             "problemMatcher": [
                 "$gcc"
             ]
         },
+        // ==================== 下载任务 ====================
         {
-            "label": "TELESKY_VET6 - download dap",
+            "label": "download dap",
             "type": "shell",
-            "command": "mingw32-make -j24 BOARD=TELESKY_VET6; mingw32-make download_dap BOARD=TELESKY_VET6",
-            "detail": "编译并使用DAPlink下载",
+            "command": "${config:betaRobot.makeCommand} download_dap",
+            "detail": "使用DAPlink下载",
             "group": {},
             "problemMatcher": []
         },
         {
-            "label": "TELESKY_VET6 - download jlink",
+            "label": "download jlink",
             "type": "shell",
-            "command": "mingw32-make -j24 BOARD=TELESKY_VET6; mingw32-make download_jlink BOARD=TELESKY_VET6",
-            "detail": "编译并使用Jlink下载",
-            "group": {},
-            "problemMatcher": []
-        },
-        // ==================== DM_MC02 ====================
-        {
-            "label": "DM_MC02 - build",
-            "type": "shell",
-            "command": "mingw32-make -j24 BOARD=DM_MC02",
-            "detail": "编译 DM_MC02 (STM32H723VGT6)",
-            "group": "build",
-            "problemMatcher": [
-                "$gcc"
-            ]
-        },
-        {
-            "label": "DM_MC02 - download dap",
-            "type": "shell",
-            "command": "mingw32-make -j24 BOARD=DM_MC02; mingw32-make download_dap BOARD=DM_MC02",
-            "detail": "编译并使用DAPlink下载",
-            "group": {},
-            "problemMatcher": []
-        },
-        {
-            "label": "DM_MC02 - download jlink",
-            "type": "shell",
-            "command": "mingw32-make -j24 BOARD=DM_MC02; mingw32-make download_jlink BOARD=DM_MC02",
-            "detail": "编译并使用Jlink下载",
-            "group": {},
-            "problemMatcher": []
-        },
-        // ==================== DJI_A ====================
-        {
-            "label": "DJI_A - build",
-            "type": "shell",
-            "command": "mingw32-make -j24 BOARD=DJI_A",
-            "detail": "编译 DJI_A (STM32F427IIH6)",
-            "group": "build",
-            "problemMatcher": [
-                "$gcc"
-            ]
-        },
-        {
-            "label": "DJI_A - download dap",
-            "type": "shell",
-            "command": "mingw32-make -j24 BOARD=DJI_A; mingw32-make download_dap BOARD=DJI_A",
-            "detail": "编译并使用DAPlink下载",
-            "group": {},
-            "problemMatcher": []
-        },
-        {
-            "label": "DJI_A - download jlink",
-            "type": "shell",
-            "command": "mingw32-make -j24 BOARD=DJI_A; mingw32-make download_jlink BOARD=DJI_A",
-            "detail": "编译并使用Jlink下载",
-            "group": {},
-            "problemMatcher": []
-        },
-        // ==================== DJI_C ====================
-        {
-            "label": "DJI_C - build",
-            "type": "shell",
-            "command": "mingw32-make -j24 BOARD=DJI_C",
-            "detail": "编译 DJI_C (STM32F407IGH6)",
-            "group": "build",
-            "problemMatcher": [
-                "$gcc"
-            ]
-        },
-        {
-            "label": "DJI_C - download dap",
-            "type": "shell",
-            "command": "mingw32-make -j24 BOARD=DJI_C; mingw32-make download_dap BOARD=DJI_C",
-            "detail": "编译并使用DAPlink下载",
-            "group": {},
-            "problemMatcher": []
-        },
-        {
-            "label": "DJI_C - download jlink",
-            "type": "shell",
-            "command": "mingw32-make -j24 BOARD=DJI_C; mingw32-make download_jlink BOARD=DJI_C",
-            "detail": "编译并使用Jlink下载",
+            "command": "${config:betaRobot.makeCommand} download_jlink",
+            "detail": "使用Jlink下载",
             "group": {},
             "problemMatcher": []
         },
@@ -116,7 +50,7 @@
         {
             "label": "clean",
             "type": "shell",
-            "command": "mingw32-make clean",
+            "command": "${config:betaRobot.makeCommand} clean",
             "detail": "清理构建目录",
             "group": {},
             "problemMatcher": []
@@ -128,6 +62,29 @@
             "detail": "打开Jlink RTT日志",
             "group": {},
             "problemMatcher": []
+        },
+        {
+            "label": "RTT: Start",
+            "type": "shell",
+            "command": "openocd -f ${workspaceFolder}/hal/${input:selectBoard}/openocd_rtt.cfg",
+            "detail": "启动RTT服务",
+            "problemMatcher": [],
+            "isBackground": true,
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            }
+        },
+        {
+            "label": "RTT: View",
+            "type": "shell",
+            "command": "telnet 127.0.0.1 8888",
+            "detail": "查看RTT输出",
+            "problemMatcher": [],
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            }
         }
     ]
 }

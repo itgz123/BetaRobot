@@ -19,16 +19,16 @@ static void CmdTask(void)
 void StartCmdTask(void *argument)
 {
     CmdInit();
-    static float start;
-    static float dt;
+    static uint64_t start;
+    static uint64_t dt;
     LOGINFO("[freeRTOS] CMD Task Start");
     for (;;)
     {
-        start = DWT_GetTimeline_ms();
+        start = DWT_GetTimeline_us();
         CmdTask();
-        dt = DWT_GetTimeline_ms() - start;
-        if (dt > CMD_FREQ_MS)
-            LOGERROR("[freeRTOS] CMD Task is being DELAY! dt = [%f]", &dt);
+        dt = DWT_GetTimeline_us() - start;
+        if ((dt / 1000) > CMD_FREQ_MS)
+            LOGERROR("[freeRTOS] CMD Task is being DELAY! dt = %d(ms)", (dt / 1000));
         vTaskDelay(pdMS_TO_TICKS(CMD_FREQ_MS));
     }
 }

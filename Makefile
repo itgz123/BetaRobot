@@ -1,32 +1,52 @@
 ##########################################################################################################################
 # BetaRobot 顶层 Makefile
 # 
-# 功能：根据 DEVELOPMENT_BOARD 宏选择对应开发板的 hal 目录，导入 CubeMX 生成的 Makefile
+# 功能：根据 app_cfg.h 中的 DEVELOPMENT_BOARD 宏选择对应开发板的 hal 目录
 # 
 # 使用方法：
-#   make                  # 使用默认开发板编译
-#   make BOARD=DM_MC02    # 指定开发板编译
-#   make clean            # 清理构建
+#   make        # 编译（根据 app_cfg.h 中的 DEVELOPMENT_BOARD 宏）
+#   make clean  # 清理构建
+# 
+# 切换开发板：修改 app/inc/app_cfg.h 中的 DEVELOPMENT_BOARD 宏
 ##########################################################################################################################
 
 ######################################
-# 开发板选择
+# 从 app_cfg.h 读取 DEVELOPMENT_BOARD 值
 ######################################
-# 与 app/inc/app_cfg.h 中的定义保持一致
-# 可通过命令行传入: make BOARD=DM_MC02
-BOARD ?= TELESKY_VET6
+# DEVELOPMENT_BOARD 定义格式: #define DEVELOPMENT_BOARD STM32F407VET6 (或 0/1/2/3)
+BOARD_VALUE := $(shell grep -E "^#define DEVELOPMENT_BOARD" app/inc/app_cfg.h | awk '{print $$3}')
 
-# 根据开发板选择 hal 目录
-ifeq ($(BOARD), TELESKY_VET6)
+# 根据值选择开发板名称和 hal 目录
+# 值为 0/STM32F407VET6 -> hal/STM32F407VET6
+# 值为 1/DM_MC02      -> hal/DM_MC02
+# 值为 2/DJI_A        -> hal/DJI_A
+# 值为 3/DJI_C        -> hal/DJI_C
+ifeq ($(BOARD_VALUE), 0)
+    BOARD_NAME = STM32F407VET6
     HAL_DIR = hal/STM32F407VET6
-else ifeq ($(BOARD), DM_MC02)
-    HAL_DIR = hal/STM32H723VGT6
-else ifeq ($(BOARD), DJI_A)
-    HAL_DIR = hal/STM32F427IIH6
-else ifeq ($(BOARD), DJI_C)
-    HAL_DIR = hal/STM32F407IGH6
+else ifeq ($(BOARD_VALUE), 1)
+    BOARD_NAME = DM_MC02
+    HAL_DIR = hal/DM_MC02
+else ifeq ($(BOARD_VALUE), 2)
+    BOARD_NAME = DJI_A
+    HAL_DIR = hal/DJI_A
+else ifeq ($(BOARD_VALUE), 3)
+    BOARD_NAME = DJI_C
+    HAL_DIR = hal/DJI_C
+else ifeq ($(BOARD_VALUE), STM32F407VET6)
+    BOARD_NAME = STM32F407VET6
+    HAL_DIR = hal/STM32F407VET6
+else ifeq ($(BOARD_VALUE), DM_MC02)
+    BOARD_NAME = DM_MC02
+    HAL_DIR = hal/DM_MC02
+else ifeq ($(BOARD_VALUE), DJI_A)
+    BOARD_NAME = DJI_A
+    HAL_DIR = hal/DJI_A
+else ifeq ($(BOARD_VALUE), DJI_C)
+    BOARD_NAME = DJI_C
+    HAL_DIR = hal/DJI_C
 else
-    $(error Unknown BOARD: $(BOARD). Valid options: TELESKY_VET6, DM_MC02, DJI_A, DJI_C)
+    $(error Unknown DEVELOPMENT_BOARD: $(BOARD_VALUE). Valid options: 0/STM32F407VET6, 1/DM_MC02, 2/DJI_A, 3/DJI_C)
 endif
 
 ######################################
@@ -122,7 +142,7 @@ LDSCRIPT := $(HAL_DIR)/$(LDSCRIPT)
 ######################################
 # 添加开发板选择宏
 ######################################
-C_DEFS += -DDEVELOPMENT_BOARD=$(BOARD)
+C_DEFS += -DDEVELOPMENT_BOARD=$(BOARD_NAME)
 
 ######################################
 # CMSIS-DSP 支持（Cortex-M4F）
@@ -147,5 +167,31 @@ OBJECTS += $(addprefix $(BUILD_DIR)/,$(notdir $(ASMM_SOURCES:.S=.o)))
 # 重新定义 elf 目标的依赖（因为 OBJECTS 已修改）
 ######################################
 $(BUILD_DIR)/$(TARGET).elf: $(OBJECTS)
+
+######################################
+# 下载目标
+######################################
+.PHONY: download_dap download_jlink
+
+# DAPlink 下载
+download_dap: all
+	openocd -f hal/$(BOARD_NAME)/openocd_daplink.cfg -c "program build/$(TARGET).elf verify reset exit"
+
+# Jlink 下载
+download_jlink: all
+	JLink.exe -CommanderScript hal/$(BOARD_NAME)/jlink_download.jlink
+
+######################################
+# build 目录创建（覆盖子 Makefile）
+######################################
+$(BUILD_DIR):
+	powershell -Command "New-Item -ItemType Directory -Force -Path build | Out-Null"
+
+######################################
+# 清理目标（覆盖子 Makefile）
+######################################
+.PHONY: clean
+clean:
+	powershell -Command "if (Test-Path build) { Remove-Item -Recurse -Force build/* }"
 
 # *** EOF ***

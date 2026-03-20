@@ -19,16 +19,16 @@ static void ChassisTask(void)
 void StartChassisTask(void *argument)
 {
     ChassisInit();
-    static float start;
-    static float dt;
+    static uint64_t start;
+    static uint64_t dt;
     LOGINFO("[freeRTOS] CHASSIS Task Start");
     for (;;)
     {
-        start = DWT_GetTimeline_ms();
+        start = DWT_GetTimeline_us();
         ChassisTask();
-        dt = DWT_GetTimeline_ms() - start;
-        if (dt > CHASSIS_FREQ_MS)
-            LOGERROR("[freeRTOS] CHASSIS Task is being DELAY! dt = [%f]", &dt);
+        dt = DWT_GetTimeline_us() - start;
+        if ((dt / 1000) > CHASSIS_FREQ_MS)
+            LOGERROR("[freeRTOS] CHASSIS Task is being DELAY! dt = %d(ms)", (dt / 1000));
         vTaskDelay(pdMS_TO_TICKS(CHASSIS_FREQ_MS));
     }
 }

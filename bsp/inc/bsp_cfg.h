@@ -120,7 +120,7 @@ extern const UART_Map_t uart_map[];
  *              开发板硬件配置
  *============================================*/
 
-#if DEVELOPMENT_BOARD == TELESKY_VET6
+#if DEVELOPMENT_BOARD == STM32F407VET6
 /*---------- CPU频率 ----------*/
 #define CPU_FREQ_MHZ 168
 
@@ -152,7 +152,7 @@ extern const UART_Map_t uart_map[];
 #define HAS_CMSIS_DSP 0
 #endif
 
-#endif // TELESKY_VET6
+#endif // STM32F407VET6
 
 #if DEVELOPMENT_BOARD == DM_MC02
 /*---------- CPU频率 ----------*/

@@ -10,9 +10,9 @@
 #include "app_robot.h"
 
 /*============================================
- *              TELESKY_VET6 (STM32F407VET6)
+ *              STM32F407VET6
  *============================================*/
-#if DEVELOPMENT_BOARD == TELESKY_VET6
+#if DEVELOPMENT_BOARD == STM32F407VET6
 
 #include "main.h"
 #include "cmsis_os.h"
@@ -101,31 +101,31 @@ void assert_failed(uint8_t *file, uint32_t line)
 #endif /* USE_FULL_ASSERT */
 
 /*============================================
- *              DM_MC02 (STM32H723VGT6)
+ *              DM_MC02
  *============================================*/
 #elif DEVELOPMENT_BOARD == DM_MC02
 
-// TODO: 从 hal/STM32H723VGT6/Core/Src/main.c 复制代码到此处
+// TODO: 从 hal/DM_MC02/Core/Src/main.c 复制代码到此处
 
-#error "DM_MC02 main.c content not implemented. Please copy from hal/STM32H723VGT6/Core/Src/main.c"
+#error "DM_MC02 main.c content not implemented. Please copy from hal/DM_MC02/Core/Src/main.c"
 
 /*============================================
- *              DJI_A (STM32F427IIH6)
+ *              DJI_A
  *============================================*/
 #elif DEVELOPMENT_BOARD == DJI_A
 
-// TODO: 从 hal/STM32F427IIH6/Core/Src/main.c 复制代码到此处
+// TODO: 从 hal/DJI_A/Core/Src/main.c 复制代码到此处
 
-#error "DJI_A main.c content not implemented. Please copy from hal/STM32F427IIH6/Core/Src/main.c"
+#error "DJI_A main.c content not implemented. Please copy from hal/DJI_A/Core/Src/main.c"
 
 /*============================================
- *              DJI_C (STM32F407IGH6)
+ *              DJI_C
  *============================================*/
 #elif DEVELOPMENT_BOARD == DJI_C
 
-// TODO: 从 hal/STM32F407IGH6/Core/Src/main.c 复制代码到此处
+// TODO: 从 hal/DJI_C/Core/Src/main.c 复制代码到此处
 
-#error "DJI_C main.c content not implemented. Please copy from hal/STM32F407IGH6/Core/Src/main.c"
+#error "DJI_C main.c content not implemented. Please copy from hal/DJI_C/Core/Src/main.c"
 
 #else
 #error "Unknown DEVELOPMENT_BOARD value. Check app/inc/app_cfg.h"

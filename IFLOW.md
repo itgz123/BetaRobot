@@ -57,13 +57,13 @@
 ```c
 // app/Inc/app_cfg.h
 
-#define TELESKY_VET6 0
+#define STM32F407VET6 0
 #define DM_MC02 1
 #define DJI_A 2
 #define DJI_C 3
 
 // ⬇️ 修改此处切换开发板 ⬇️
-#define DEVELOPMENT_BOARD TELESKY_VET6
+#define DEVELOPMENT_BOARD STM32F407VET6
 ```
 
 **bsp_cfg.h 会自动适配：**

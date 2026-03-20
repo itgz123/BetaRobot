@@ -10,7 +10,7 @@
 #include "tim.h"
 #include "usart.h"
 
-#if DEVELOPMENT_BOARD == TELESKY_VET6
+#if DEVELOPMENT_BOARD == STM32F407VET6
 
 /*============================================
  *              GPIO 映射数组
@@ -56,4 +56,4 @@ const UART_Map_t uart_map[UART_NUM_MAX] = {
     [UART_SBUS] = {&huart2}, // SBUS遥控接收 UART2
 };
 
-#endif // TELESKY_VET6
+#endif // STM32F407VET6
