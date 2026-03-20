@@ -4,8 +4,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "main.h"
-#include "cmsis_os.h"
 
-void StartChassisTask(void const *argument);
+void StartChassisTask(void *argument);
 
 #endif // !__APP_CHASSIS_H

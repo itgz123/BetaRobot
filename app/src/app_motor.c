@@ -3,26 +3,32 @@
 #include "bsp_dwt.h"
 #include "app_cfg.h"
 
+static void MOTORInit(void)
+{
+}
+
+static void MOTORTask(void)
+{
+}
+
 /**
  * @brief  Motor 任务函数
  * @param  argument: 未使用
  * @retval None
  */
-void StartMotorTask(void const *argument)
+void StartMotorTask(void *argument)
 {
-    // 初始化开始
-    // 初始化结束
+    MOTORInit();
     static float start;
     static float dt;
     LOGINFO("[freeRTOS] MOTOR Task Start");
     for (;;)
     {
         start = DWT_GetTimeline_ms();
-        // 任务开始
-        // 任务结束
+        MOTORTask();
         dt = DWT_GetTimeline_ms() - start;
         if (dt > MOTOR_FREQ_MS)
             LOGERROR("[freeRTOS] MOTOR Task is being DELAY! dt = [%f]", &dt);
-        osDelay(MOTOR_FREQ_MS);
+        vTaskDelay(pdMS_TO_TICKS(MOTOR_FREQ_MS));
     }
 }

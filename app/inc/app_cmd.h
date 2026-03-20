@@ -4,8 +4,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "main.h"
-#include "cmsis_os.h"
 
-void StartCmdTask(void const *argument);
+void StartCmdTask(void *argument);
 
 #endif // !__APP_CMD_H

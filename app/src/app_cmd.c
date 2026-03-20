@@ -3,26 +3,32 @@
 #include "bsp_dwt.h"
 #include "app_cfg.h"
 
+static void CmdInit(void)
+{
+}
+
+static void CmdTask(void)
+{
+}
+
 /**
  * @brief  Cmd 任务函数
  * @param  argument: 未使用
  * @retval None
  */
-void StartCmdTask(void const *argument)
+void StartCmdTask(void *argument)
 {
-    // 初始化开始
-    // 初始化结束
+    CmdInit();
     static float start;
     static float dt;
     LOGINFO("[freeRTOS] CMD Task Start");
     for (;;)
     {
         start = DWT_GetTimeline_ms();
-        // 任务开始
-        // 任务结束
+        CmdTask();
         dt = DWT_GetTimeline_ms() - start;
         if (dt > CMD_FREQ_MS)
-            LOGERROR("[freeRTOS] CDM Task is being DELAY! dt = [%f]", &dt);
-        osDelay(CMD_FREQ_MS);
+            LOGERROR("[freeRTOS] CMD Task is being DELAY! dt = [%f]", &dt);
+        vTaskDelay(pdMS_TO_TICKS(CMD_FREQ_MS));
     }
 }

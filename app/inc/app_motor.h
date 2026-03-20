@@ -4,8 +4,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "main.h"
-#include "cmsis_os.h"
 
-void StartMotorTask(void const *argument);
+void StartMotorTask(void *argument);
 
 #endif // !__APP_MOTOR_H

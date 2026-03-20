@@ -8,7 +8,7 @@
  * @param  argument: 未使用
  * @retval None
  */
-void StartErrorTask(void const *argument)
+void StartErrorTask(void *argument)
 {
     // 初始化开始
     // 初始化结束
@@ -23,6 +23,6 @@ void StartErrorTask(void const *argument)
         dt = DWT_GetTimeline_ms() - start;
         if (dt > ERROR_FREQ_MS)
             LOGERROR("[freeRTOS] ERROR Task is being DELAY! dt = [%f]", &dt);
-        osDelay(ERROR_FREQ_MS);
+        vTaskDelay(pdMS_TO_TICKS(ERROR_FREQ_MS));
     }
 }

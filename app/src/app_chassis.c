@@ -3,26 +3,32 @@
 #include "bsp_dwt.h"
 #include "app_cfg.h"
 
+static void ChassisInit(void)
+{
+}
+
+static void ChassisTask(void)
+{
+}
+
 /**
  * @brief  Chassis 任务函数
  * @param  argument: 未使用
  * @retval None
  */
-void StartChassisTask(void const *argument)
+void StartChassisTask(void *argument)
 {
-    // 初始化开始
-    // 初始化结束
+    ChassisInit();
     static float start;
     static float dt;
     LOGINFO("[freeRTOS] CHASSIS Task Start");
     for (;;)
     {
         start = DWT_GetTimeline_ms();
-        // 任务开始
-        // 任务结束
+        ChassisTask();
         dt = DWT_GetTimeline_ms() - start;
         if (dt > CHASSIS_FREQ_MS)
             LOGERROR("[freeRTOS] CHASSIS Task is being DELAY! dt = [%f]", &dt);
-        osDelay(CHASSIS_FREQ_MS);
+        vTaskDelay(pdMS_TO_TICKS(CHASSIS_FREQ_MS));
     }
 }

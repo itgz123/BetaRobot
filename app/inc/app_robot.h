@@ -4,7 +4,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "main.h"
-#include "cmsis_os.h"
 //
 #include "app_cmd.h"
 #include "app_chassis.h"
@@ -12,10 +11,10 @@
 #include "app_error.h"
 
 /* 任务句柄声明 */
-extern osThreadId errorTaskHandle;
-extern osThreadId cmdTaskHandle;
-extern osThreadId chassisTaskHandle;
-extern osThreadId motorTaskHandle;
+extern TaskHandle_t errorTaskHandle;
+extern TaskHandle_t cmdTaskHandle;
+extern TaskHandle_t chassisTaskHandle;
+extern TaskHandle_t motorTaskHandle;
 
 /* 任务创建函数 */
 void function_in_main_c(void);

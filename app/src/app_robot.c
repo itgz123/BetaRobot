@@ -4,22 +4,22 @@
 #include "app_cfg.h"
 
 /* 任务句柄定义 */
-osThreadId errorTaskHandle;
-osThreadId cmdTaskHandle;
-osThreadId chassisTaskHandle;
-osThreadId motorTaskHandle;
+TaskHandle_t errorTaskHandle;
+TaskHandle_t cmdTaskHandle;
+TaskHandle_t chassisTaskHandle;
+TaskHandle_t motorTaskHandle;
 
-/* 任务栈缓冲区定义 */
-uint32_t errorTaskBuffer[ERROR_STACK_SIZE];
-uint32_t cmdTaskBuffer[CMD_STACK_SIZE];
-uint32_t chassisTaskBuffer[CHASSIS_STACK_SIZE];
-uint32_t motorTaskBuffer[MOTOR_STACK_SIZE];
+/* 任务栈定义 */
+static StackType_t errorTaskStack[ERROR_STACK_SIZE];
+static StackType_t cmdTaskStack[CMD_STACK_SIZE];
+static StackType_t chassisTaskStack[CHASSIS_STACK_SIZE];
+static StackType_t motorTaskStack[MOTOR_STACK_SIZE];
 
 /* 任务控制块定义 */
-osStaticThreadDef_t errorTaskControlBlock;
-osStaticThreadDef_t cmdTaskControlBlock;
-osStaticThreadDef_t chassisTaskControlBlock;
-osStaticThreadDef_t motorTaskControlBlock;
+static StaticTask_t errorTaskTCB;
+static StaticTask_t cmdTaskTCB;
+static StaticTask_t chassisTaskTCB;
+static StaticTask_t motorTaskTCB;
 
 /**
  * @brief  应用任务初始化
@@ -34,16 +34,20 @@ void function_in_main_c(void)
     __enable_irq();
     LOGINFO("[robot] DWT_Init() and BSPLogInit() done");
 
-    // 创建任务
-    osThreadStaticDef(errorTask, StartErrorTask, 0, 0, ERROR_STACK_SIZE, errorTaskBuffer, &errorTaskControlBlock);
-    errorTaskHandle = osThreadCreate(osThread(errorTask), NULL);
+    // 创建任务（静态分配）
+    errorTaskHandle = xTaskCreateStatic(
+        StartErrorTask, "errorTask", ERROR_STACK_SIZE,
+        NULL, 0, errorTaskStack, &errorTaskTCB);
 
-    osThreadStaticDef(cmdTask, StartCmdTask, 1, 0, CMD_STACK_SIZE, cmdTaskBuffer, &cmdTaskControlBlock);
-    cmdTaskHandle = osThreadCreate(osThread(cmdTask), NULL);
+    cmdTaskHandle = xTaskCreateStatic(
+        StartCmdTask, "cmdTask", CMD_STACK_SIZE,
+        NULL, 1, cmdTaskStack, &cmdTaskTCB);
 
-    osThreadStaticDef(chassisTask, StartChassisTask, 2, 0, CHASSIS_STACK_SIZE, chassisTaskBuffer, &chassisTaskControlBlock);
-    chassisTaskHandle = osThreadCreate(osThread(chassisTask), NULL);
+    chassisTaskHandle = xTaskCreateStatic(
+        StartChassisTask, "chassisTask", CHASSIS_STACK_SIZE,
+        NULL, 2, chassisTaskStack, &chassisTaskTCB);
 
-    osThreadStaticDef(motorTask, StartMotorTask, 3, 0, MOTOR_STACK_SIZE, motorTaskBuffer, &motorTaskControlBlock);
-    motorTaskHandle = osThreadCreate(osThread(motorTask), NULL);
+    motorTaskHandle = xTaskCreateStatic(
+        StartMotorTask, "motorTask", MOTOR_STACK_SIZE,
+        NULL, 3, motorTaskStack, &motorTaskTCB);
 }

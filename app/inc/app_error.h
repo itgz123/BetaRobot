@@ -4,8 +4,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "main.h"
-#include "cmsis_os.h"
 
-void StartErrorTask(void const *argument);
+void StartErrorTask(void *argument);
 
 #endif // !__APP_ERROR_H
