@@ -20,9 +20,9 @@
         }
     ],
     "configurations": [
-        // ==================== Debug - DAPlink ====================
+        // ==================== DAPlink - Launch (无RTT) ====================
         {
-            "name": "Debug - DAPlink",
+            "name": "DAPlink - Launch",
             "type": "cortex-debug",
             "request": "launch",
             "preLaunchTask": "build",
@@ -39,6 +39,79 @@
             "liveWatch": {
                 "enabled": true,
                 "samplesPerSecond": 4
+            }
+        },
+        // ==================== DAPlink - Launch (RTT) ====================
+        {
+            "name": "DAPlink - Launch (RTT)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/BetaRobot.elf",
+            "device": "${input:selectBoard}",
+            "svdFile": "${workspaceFolder}/hal/${input:selectBoard}/${input:selectBoard}.svd",
+            "servertype": "openocd",
+            "configFiles": [
+                "${workspaceFolder}/hal/${input:selectBoard}/openocd_daplink.cfg"
+            ],
+            "runToEntryPoint": "main",
+            "rtos": "FreeRTOS",
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 4
+            },
+            "rttConfig": {
+                "enabled": true,
+                "address": "auto",
+                "decoders": [
+                    {
+                        "port": 0,
+                        "type": "console",
+                        "name": "RTT Channel 0"
+                    }
+                ]
+            }
+        },
+        // ==================== DAPlink - Attach (无RTT) ====================
+        {
+            "name": "DAPlink - Attach",
+            "type": "cortex-debug",
+            "request": "attach",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/BetaRobot.elf",
+            "device": "${input:selectBoard}",
+            "svdFile": "${workspaceFolder}/hal/${input:selectBoard}/${input:selectBoard}.svd",
+            "servertype": "openocd",
+            "configFiles": [
+                "${workspaceFolder}/hal/${input:selectBoard}/openocd_daplink.cfg"
+            ],
+            "rtos": "FreeRTOS"
+        },
+        // ==================== DAPlink - Attach (RTT) ====================
+        {
+            "name": "DAPlink - Attach (RTT)",
+            "type": "cortex-debug",
+            "request": "attach",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/BetaRobot.elf",
+            "device": "${input:selectBoard}",
+            "svdFile": "${workspaceFolder}/hal/${input:selectBoard}/${input:selectBoard}.svd",
+            "servertype": "openocd",
+            "configFiles": [
+                "${workspaceFolder}/hal/${input:selectBoard}/openocd_daplink.cfg"
+            ],
+            "rtos": "FreeRTOS",
+            "rttConfig": {
+                "enabled": true,
+                "address": "auto",
+                "decoders": [
+                    {
+                        "port": 0,
+                        "type": "console",
+                        "name": "RTT Channel 0"
+                    }
+                ]
             }
         },
         // ==================== Debug - Jlink ====================
