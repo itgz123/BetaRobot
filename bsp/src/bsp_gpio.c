@@ -10,7 +10,7 @@
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_idx = 0;
-static GPIOInstance *s_gpio_instance[GPIO_NUM] = {NULL};
+static GPIOInstance *s_gpio_instance[GPIO_INSTANCE_NUM] = {NULL};
 
 /*------------- HAL回调函数重写 --------------*/
 
@@ -45,7 +45,7 @@ int8_t GPIORegister(GPIOInstance *instance)
     }
 
     // 实例数量检查
-    if (s_idx >= GPIO_NUM)
+    if (s_idx >= GPIO_INSTANCE_NUM)
     {
         LOGERROR("[bsp_gpio] Exceeded max instance count!");
         return -1;

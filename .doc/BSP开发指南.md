@@ -930,8 +930,16 @@ DWT_Delay(0.001f);  // 延时 1ms
 - [ ] 是否在 `bsp_cfg.h` 中添加硬件映射结构体？
 - [ ] 是否在 `bsp_cfg.c` 中定义硬件映射数组？
 - [ ] 是否在 `bsp_cfg.h` 中根据开发板配置实例数量？
+- [ ] 枚举命名是否使用功能命名（如 `GPIO_LED_GREEN`）而非物理命名（如 `GPIO_PE14`）？
+- [ ] 是否区分物理硬件数量（`XXX_HW_NUM`）和逻辑实例数量（`XXX_INSTANCE_NUM`）？
 
-### 10.6 使用示例（APP/DRV 层）
+### 10.6 竞争问题
+
+- [ ] 总线类外设是否提供状态查询接口（如 `XXX_IsReady()`）？
+- [ ] 发送函数内部是否检查硬件状态？
+- [ ] 文档是否说明发送前需检查状态？
+
+### 10.7 使用示例（APP/DRV 层）
 
 ```c
 // ✅ 正确用法
@@ -1078,6 +1086,236 @@ void App_Robot_Init(void)
     // ...其他初始化
 }
 ```
+
+---
+
+## 十二、枚举命名与数量限制设计
+
+### 12.1 枚举命名规范
+
+#### 12.1.1 功能命名 vs 物理命名
+
+**原则：板载枚举使用功能命名，而非物理引脚命名。**
+
+| 类型     | 示例                      | 说明                           |
+| -------- | ------------------------- | ------------------------------ |
+| ✅ 功能命名 | `GPIO_LED_GREEN`          | 表示功能（绿色 LED）           |
+| ❌ 物理命名 | `GPIO_PE14`               | 表示物理引脚（与开发板耦合）   |
+| ✅ 功能命名 | `UART_SBUS`               | 表示功能（SBUS 遥控接收）      |
+| ❌ 物理命名 | `UART_USART2`             | 表示物理外设（与开发板耦合）   |
+
+#### 12.1.2 目的
+
+**切换开发板后 APP/DRV 层代码无需修改。**
+
+```c
+// app/src/app_led.c - 使用功能枚举
+
+#include "bsp_gpio.h"
+
+// ✅ 正确：使用功能枚举，切换开发板无需修改
+GPIO_INSTANCE_DEF(led_green, GPIO_LED_GREEN, NULL);
+GPIO_INSTANCE_DEF(led_red, GPIO_LED_RED, NULL);
+
+// ❌ 错误：使用物理引脚，切换开发板后需要修改
+// GPIO_INSTANCE_DEF(led_green, GPIO_PE14, NULL);  // DJI_C 可能是 PA5
+```
+
+#### 12.1.3 命名约定
+
+| 外设类型 | 命名前缀   | 示例                          |
+| -------- | ---------- | ----------------------------- |
+| GPIO     | `GPIO_`    | `GPIO_LED_GREEN`, `GPIO_MOTOR_1_IN1` |
+| TIM      | `TIM_`     | `TIM_MOTOR_PWM`, `TIM_ENCODER_1` |
+| UART     | `UART_`    | `UART_SBUS`, `UART_DEBUG`     |
+| CAN      | `CAN_`     | `CAN_MOTOR`, `CAN_IMU`（逻辑实例） |
+| I2C      | `I2C_`     | `I2C_IMU`, `I2C_EEPROM`       |
+| SPI      | `SPI_`     | `SPI_FLASH`, `SPI_SCREEN`     |
+
+### 12.2 竞争问题处理
+
+#### 12.2.1 问题场景
+
+总线类外设（CAN/I2C/SPI）可能被多个逻辑实例共用同一物理硬件：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  CAN1 物理硬件                                               │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │  逻辑实例1：电机驱动（订阅 ID 0x201-0x204）              ││
+│  │  逻辑实例2：IMU 驱动（订阅 ID 0x501）                    ││
+│  │  逻辑实例3：裁判系统（订阅 ID 0x180）                    ││
+│  └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────┘
+```
+
+**问题：** 如果多个实例同时发送，可能导致数据冲突或丢失。
+
+#### 12.2.2 解决方案：发送前检查状态
+
+**BSP 层必须提供状态查询接口：**
+
+```c
+/* bsp_can.h */
+
+/**
+ * @brief 检查 CAN 是否空闲可发送
+ * @param instance CAN 实例指针
+ * @retval 1 空闲，可发送
+ * @retval 0 忙碌，不可发送
+ */
+uint8_t CAN_IsReady(CANInstance *instance);
+```
+
+**APP/DRV 层发送前必须检查：**
+
+```c
+/* drv/src/drv_motor.c */
+
+void Motor_SendCommand(MotorInstance *motor, uint8_t *data, uint16_t len)
+{
+    // ✅ 正确：发送前检查状态
+    if (CAN_IsReady(motor->can_instance))
+    {
+        CAN_Transmit(motor->can_instance, data, len);
+    }
+    else
+    {
+        // 处理发送失败（队列、重试或丢弃）
+        LOGWARNING("[drv_motor] CAN busy, command dropped!");
+    }
+}
+```
+
+#### 12.2.3 状态检查实现示例
+
+```c
+/* bsp/src/bsp_can.c */
+
+uint8_t CAN_IsReady(CANInstance *instance)
+{
+    if (instance == NULL || instance->handle == NULL)
+    {
+        return 0;
+    }
+
+    // 检查 CAN 硬件状态
+    return (instance->handle->State == HAL_CAN_STATE_READY);
+}
+
+void CAN_Transmit(CANInstance *instance, uint8_t *data, uint16_t len)
+{
+    // 内部也做状态检查
+    if (!CAN_IsReady(instance))
+    {
+        LOGWARNING("[bsp_can] Hardware not ready!");
+        return;
+    }
+
+    // 执行发送
+    CAN_TxHeaderTypeDef header = {0};
+    header.StdId = instance->tx_id;
+    header.IDE = CAN_ID_STD;
+    header.DLC = len;
+
+    uint32_t mailbox;
+    HAL_CAN_AddTxMessage(instance->handle, &header, data, &mailbox);
+}
+```
+
+### 12.3 数量限制设计
+
+#### 12.3.1 两种数量的区分
+
+| 概念         | 说明                       | 定义方式           | 示例                |
+| ------------ | -------------------------- | ------------------ | ------------------- |
+| 物理硬件数量 | MCU 上的物理外设数量       | 枚举 `_NUM_MAX`    | `CAN_HW_NUM_MAX`    |
+| 逻辑实例数量 | APP/DRV 层可注册的最大实例数 | 宏 `XXX_INSTANCE_NUM` | `CAN_INSTANCE_NUM` |
+
+#### 12.3.2 配置示例
+
+```c
+/* bsp/inc/bsp_cfg.h */
+
+#if DEVELOPMENT_BOARD == STM32F407VET6
+
+/*---------- 逻辑实例数量（APP/DRV 层可注册的最大实例数）----------*/
+/* 总线类外设：多个逻辑实例可共用同一物理硬件 */
+#define CAN_INSTANCE_NUM 4   // 最多 4 个 CAN 订阅者
+#define I2C_INSTANCE_NUM 2   // 最多 2 个 I2C 设备
+
+/* 独占类外设：逻辑实例与物理硬件一一对应 */
+#define GPIO_INSTANCE_NUM 10  // GPIO 实例数量
+#define UART_INSTANCE_NUM 1   // UART 实例数量
+#define TIM_INSTANCE_NUM 5    // TIM 实例数量（1 PWM + 4 编码器）
+
+#endif
+```
+
+#### 12.3.3 使用场景
+
+**物理硬件数量（枚举 `_NUM_MAX`）：**
+- 由枚举自动统计，无需手动定义
+- 用于索引硬件映射数组
+
+```c
+/* bsp/inc/bsp_cfg.h */
+typedef enum {
+    GPIO_LED_GREEN = 0,
+    GPIO_LED_RED,
+    // ...
+    GPIO_NUM_MAX  // 自动统计物理硬件数量
+} BoardGPIO_e;
+
+/* bsp/src/bsp_cfg.c */
+const GPIO_Map_t gpio_map[GPIO_NUM_MAX] = {
+    [GPIO_LED_GREEN] = {GPIOE, GPIO_PIN_14},
+    [GPIO_LED_RED]   = {GPIOA, GPIO_PIN_1},
+};
+
+/* bsp/src/bsp_gpio.c */
+int8_t GPIO_Register(GPIOInstance *instance)
+{
+    // 检查枚举值是否有效
+    if (instance->gpio_e >= GPIO_NUM_MAX)
+    {
+        LOGERROR("[bsp_gpio] Invalid GPIO enum!");
+        return -1;
+    }
+
+    // 根据枚举填充硬件映射
+    instance->map = gpio_map[instance->gpio_e];
+    // ...
+}
+```
+
+**逻辑实例数量（`XXX_INSTANCE_NUM`）：**
+- 用于定义实例数组大小
+- 用于注册时检查数量上限
+
+```c
+/* bsp/src/bsp_gpio.c */
+static uint8_t s_idx = 0;
+static GPIOInstance *s_gpio_instances[GPIO_INSTANCE_NUM];
+
+int8_t GPIO_Register(GPIOInstance *instance)
+{
+    // 检查逻辑实例数量上限
+    if (s_idx >= GPIO_INSTANCE_NUM)
+    {
+        LOGERROR("[bsp_gpio] Exceeded max instance count!");
+        return -1;
+    }
+    // ...
+}
+```
+
+#### 12.3.4 外设类型分类
+
+| 类型       | 特点                       | 示例      | 说明               |
+| ---------- | -------------------------- | --------- | ------------------ |
+| 总线类     | 多实例可共用同一物理硬件   | CAN/I2C/SPI | `INSTANCE_NUM >= 枚举数` |
+| 独占类     | 实例与硬件一一对应         | GPIO/UART/TIM | `INSTANCE_NUM = 枚举数` |
 
 ---
 

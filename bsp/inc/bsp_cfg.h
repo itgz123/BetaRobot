@@ -3,12 +3,29 @@
  * @brief BSP层配置文件：板载资源定义、实例数量配置、硬件映射
  *
  * @note 本文件职责：
- *       1. 定义板载资源枚举（GPIO/TIM）
+ *       1. 定义板载资源枚举（GPIO/TIM/UART等）
  *       2. 声明硬件映射数组和获取接口
  *       3. 根据开发板自动配置实例数量
  *
  * @note 切换开发板：只需修改 app_cfg.h 中的 DEVELOPMENT_BOARD 宏
  *       本文件会自动适配，无需修改
+ *
+ * @section 设计原则
+ *
+ * @subsection 枚举命名统一
+ * - 板载枚举使用**功能命名**，而非物理引脚命名
+ * - 示例：GPIO_LED_GREEN（功能）而非 GPIO_PE14（引脚）
+ * - 目的：切换开发板后 APP/DRV 层代码无需修改
+ *
+ * @subsection 竞争问题处理
+ * - 总线类外设（CAN/I2C/SPI）可能被多个逻辑实例共用同一物理硬件
+ * - 发送前必须检查硬件状态：if (XXX_IsReady(instance)) { XXX_Transmit(...); }
+ * - BSP 层提供状态查询接口，避免发送冲突
+ *
+ * @subsection 数量限制设计
+ * - 物理硬件数量：由枚举的 _NUM_MAX 自动统计（如 GPIO_NUM_MAX、UART_NUM_MAX）
+ * - 逻辑实例数量：用宏 XXX_INSTANCE_NUM 手动配置（如 GPIO_INSTANCE_NUM）
+ * - 一个物理硬件可承载多个逻辑实例（如多个 CAN 订阅者共用一个 CAN 总线）
  */
 
 #ifndef __BSP_CFG_H
@@ -51,7 +68,7 @@ typedef enum
 typedef enum
 {
     // PWM定时器
-    TIM_MOTOR_PWM = 0, // 电机PWM TIM1 (4通道)
+    TIM_PWM = 0, // 电机PWM TIM1 (4通道)
 
     // 编码器定时器
     TIM_ENCODER_1, // 编码器1 TIM2
@@ -124,17 +141,16 @@ extern const UART_Map_t uart_map[];
 /*---------- CPU频率 ----------*/
 #define CPU_FREQ_MHZ 168
 
-/*---------- 外设数量 ----------*/
-#define ADC_NUM 0
-#define CAN_NUM 0
-#define GPIO_NUM 10 // 2 LED + 8 电机方向
-#define I2C_NUM 0
-#define PWM_NUM 4     // TIM1的4个通道
-#define ENCODER_NUM 4 // TIM2/3/4/8
-#define SPI_NUM 0
-#define UART_NUM 1 // UART2
-#define USART_NUM 0
-#define USB_NUM 0
+/*---------- 逻辑实例数量（APP/DRV 层可注册的最大实例数）----------*/
+/* 总线类外设：多个逻辑实例可共用同一物理硬件 */
+#define CAN_INSTANCE_NUM 0 // CAN 订阅者数量（如电机驱动、IMU 等）
+#define I2C_INSTANCE_NUM 0 // I2C 设备数量（如传感器、EEPROM 等）
+#define SPI_INSTANCE_NUM 0 // SPI 设备数量（如 Flash、屏幕等）
+
+/* 独占类外设：逻辑实例与物理硬件一一对应 */
+#define GPIO_INSTANCE_NUM 10 // GPIO 实例数量
+#define UART_INSTANCE_NUM 1  // UART 实例数量
+#define TIM_INSTANCE_NUM 5   // TIM 实例数量（1 PWM + 4 编码器）
 
 /*---------- 硬件加速特性 ----------*/
 #define HAS_FPU 1    // Cortex-M4F 单精度浮点
@@ -158,6 +174,17 @@ extern const UART_Map_t uart_map[];
 /*---------- CPU频率 ----------*/
 #define CPU_FREQ_MHZ 550
 
+/*---------- 逻辑实例数量（APP/DRV 层可注册的最大实例数）----------*/
+/* 总线类外设：多个逻辑实例可共用同一物理硬件 */
+#define CAN_INSTANCE_NUM 0 // CAN 订阅者数量
+#define I2C_INSTANCE_NUM 0 // I2C 设备数量
+#define SPI_INSTANCE_NUM 0 // SPI 设备数量
+
+/* 独占类外设：逻辑实例与物理硬件一一对应 */
+#define GPIO_INSTANCE_NUM 0 // GPIO 实例数量
+#define UART_INSTANCE_NUM 0 // UART 实例数量
+#define TIM_INSTANCE_NUM 0  // TIM 实例数量（根据实际配置）
+
 /*---------- 硬件加速特性 ----------*/
 #define HAS_FPU 1    // Cortex-M7 双精度浮点
 #define HAS_DSP 1    // DSP指令集
@@ -180,6 +207,17 @@ extern const UART_Map_t uart_map[];
 /*---------- CPU频率 ----------*/
 #define CPU_FREQ_MHZ 180
 
+/*---------- 逻辑实例数量（APP/DRV 层可注册的最大实例数）----------*/
+/* 总线类外设：多个逻辑实例可共用同一物理硬件 */
+#define CAN_INSTANCE_NUM 0 // CAN 订阅者数量
+#define I2C_INSTANCE_NUM 0 // I2C 设备数量
+#define SPI_INSTANCE_NUM 0 // SPI 设备数量
+
+/* 独占类外设：逻辑实例与物理硬件一一对应 */
+#define GPIO_INSTANCE_NUM 0 // GPIO 实例数量
+#define UART_INSTANCE_NUM 0 // UART 实例数量
+#define TIM_INSTANCE_NUM 0  // TIM 实例数量（根据实际配置）
+
 /*---------- 硬件加速特性 ----------*/
 #define HAS_FPU 1    // Cortex-M4F 单精度浮点
 #define HAS_DSP 1    // DSP指令集
@@ -201,6 +239,17 @@ extern const UART_Map_t uart_map[];
 #if DEVELOPMENT_BOARD == DJI_C
 /*---------- CPU频率 ----------*/
 #define CPU_FREQ_MHZ 168
+
+/*---------- 逻辑实例数量（APP/DRV 层可注册的最大实例数）----------*/
+/* 总线类外设：多个逻辑实例可共用同一物理硬件 */
+#define CAN_INSTANCE_NUM 0 // CAN 订阅者数量
+#define I2C_INSTANCE_NUM 0 // I2C 设备数量
+#define SPI_INSTANCE_NUM 0 // SPI 设备数量
+
+/* 独占类外设：逻辑实例与物理硬件一一对应 */
+#define GPIO_INSTANCE_NUM 00 // GPIO 实例数量
+#define UART_INSTANCE_NUM 0  // UART 实例数量
+#define TIM_INSTANCE_NUM 0   // TIM 实例数量（根据实际配置）
 
 /*---------- 硬件加速特性 ----------*/
 #define HAS_FPU 1    // Cortex-M4F 单精度浮点

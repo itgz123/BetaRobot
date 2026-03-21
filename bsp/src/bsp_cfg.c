@@ -39,7 +39,7 @@ const GPIO_Map_t gpio_map[GPIO_NUM_MAX] = {
 // PWM通道在 drv 层通过参数传递，此处 channel 填 0
 const TIM_Map_t tim_map[TIM_NUM_MAX] = {
     // PWM定时器
-    [TIM_MOTOR_PWM] = {&htim1, 0}, // 电机PWM TIM1
+    [TIM_PWM] = {&htim1, 0}, // 电机PWM TIM1
 
     // 编码器定时器
     [TIM_ENCODER_1] = {&htim2, 0}, // 编码器1 TIM2

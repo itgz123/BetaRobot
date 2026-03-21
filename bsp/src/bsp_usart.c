@@ -18,7 +18,7 @@ typedef void (*UART_TransmitFunc)(UART_HandleTypeDef *, uint8_t *, uint16_t, uin
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_idx = 0;
-static USARTInstance *s_usart_instance[UART_NUM] = {NULL};
+static USARTInstance *s_usart_instance[UART_INSTANCE_NUM] = {NULL};
 
 /**
  * @brief 发送函数指针数组
@@ -96,7 +96,7 @@ int8_t USARTRegister(USARTInstance *instance)
     }
 
     // 实例数量检查
-    if (s_idx >= UART_NUM)
+    if (s_idx >= UART_INSTANCE_NUM)
     {
         LOGERROR("[bsp_usart] Exceeded max instance count!");
         return -1;
