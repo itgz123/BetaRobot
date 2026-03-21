@@ -16,11 +16,11 @@
 
 /**
  * @brief GPIO实例结构体
- * @note 第一个成员为 GPIO_Map_t，可直接赋值板载映射
  */
 typedef struct GPIOInstance
 {
-    GPIO_Map_t map;                          // GPIO映射（port + pin）
+    BoardGPIO_e gpio_e;                      // 板载GPIO枚举（注册时用于查找映射）
+    GPIO_Map_t map;                          // GPIO映射（注册时自动填充）
     GPIO_PinState pin_state;                 // 引脚状态
     void (*callback)(struct GPIOInstance *); // EXTI中断回调函数
 } GPIOInstance;
@@ -29,17 +29,18 @@ typedef struct GPIOInstance
 
 /**
  * @brief 静态定义GPIO实例（使用板载枚举）
- * @param name   实例名称
- * @param gpio_e 板载GPIO枚举（BoardGPIO_e）
- * @param cb     回调函数（可为NULL）
+ * @param name     实例名称
+ * @param gpio_idx 板载GPIO枚举（BoardGPIO_e）
+ * @param cb       回调函数（可为NULL）
  *
  * @example
  *   GPIO_INSTANCE_DEF(led_green, GPIO_LED_GREEN, led_callback);
  */
-#define GPIO_INSTANCE_DEF(name, gpio_e, cb) \
-    GPIOInstance name = {                   \
-        .map = gpio_map[gpio_e],            \
-        .pin_state = GPIO_PIN_RESET,        \
+#define GPIO_INSTANCE_DEF(name, gpio_idx, cb) \
+    GPIOInstance name = {                     \
+        .gpio_e = gpio_idx,                   \
+        .map = {0},                           \
+        .pin_state = GPIO_PIN_RESET,          \
         .callback = cb}
 
 /*------------- 外部接口声明 --------------*/

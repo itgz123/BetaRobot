@@ -51,6 +51,9 @@ int8_t GPIORegister(GPIOInstance *instance)
         return -1;
     }
 
+    // 根据枚举自动填充硬件映射
+    instance->map = gpio_map[instance->gpio_e];
+
     s_gpio_instance[s_idx++] = instance;
     LOGINFO("[bsp_gpio] Instance registered, idx=%d", s_idx - 1);
     return 0;

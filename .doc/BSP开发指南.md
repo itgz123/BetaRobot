@@ -115,81 +115,179 @@ typedef struct gpio_instance
 
 ---
 
-## 三、实例注册机制
+## 三、实例注册机制（静态宏定义模式）
 
-### 3.1 代码模板
+### 3.1 设计原则
+
+本项目采用**静态宏定义 + 注册函数**的架构：
+
+| 特点        | 说明                                      |
+| ----------- | ----------------------------------------- |
+| 静态定义    | 使用宏在编译时定义实例，无需动态内存分配  |
+| 枚举索引    | 宏只存储板载枚举，注册时自动填充硬件映射  |
+| 零 HAL 依赖 | APP/DRV 层只需使用枚举，无需接触 HAL 类型 |
+| 编译时检查  | 枚举值是编译时常量，可用于静态初始化      |
+
+### 3.2 架构流程
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  bsp_cfg.h                                                  │
+│  - 定义板载枚举（BoardGPIO_e / BoardUART_e 等）             │
+│  - 定义硬件映射数组（gpio_map[] / uart_map[] 等）           │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│  APP/DRV 层使用                                             │
+│  XXX_INSTANCE_DEF(name, ENUM, ...);  // 静态定义实例        │
+│  XXXRegister(&name);                 // 注册时自动填充映射  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 3.3 代码模板
+
+#### 3.3.1 头文件（bsp_xxx.h）
 
 ```c
-// 1. 定义最大实例数量（在 .h 文件中）
-#define XXX_DEVICE_CNT 8
+#ifndef __BSP_XXX_H
+#define __BSP_XXX_H
 
-// 2. 定义实例结构体（在 .h 文件中）
-typedef struct xxx_temp
+#include "main.h"
+#include "bsp_cfg.h"
+#include "stdint.h"
+
+/*------------- 类型定义 --------------*/
+
+/**
+ * @brief XXX工作模式枚举（如需要）
+ */
+typedef enum
 {
-    // 硬件句柄
-    XXX_HandleTypeDef *handle;
+    XXX_BLOCK_MODE = 0,
+    XXX_IT_MODE,
+    XXX_DMA_MODE,
+} XXX_Work_Mode_e;
 
-    // 配置参数
-    uint32_t config_param1;
-    uint8_t config_param2;
-
-    // 回调函数
-    void (*callback)(struct xxx_temp *);
-
-    // 实例标识
-    void *id;
-
+/**
+ * @brief XXX实例结构体
+ * @note 第一个成员必须是对应的板载枚举类型
+ */
+typedef struct XXXInstance
+{
+    BoardXXX_e xxx_e;                          // 板载枚举（注册时用于查找映射）
+    XXX_HandleTypeDef *handle;                 // 硬件句柄（注册时自动填充）
+    // ... 其他配置成员
+    void (*callback)(struct XXXInstance *);    // 回调函数
 } XXXInstance;
 
-// 3. 定义初始化配置结构体（在 .h 文件中）
-typedef struct
-{
-    XXX_HandleTypeDef *handle;
-    uint32_t config_param1;
-    uint8_t config_param2;
-    void (*callback)(XXXInstance *);
-    void *id;
-} XXX_Init_Config_s;
+/*------------- 实例定义宏 --------------*/
 
-// 4. 实现实例数组和管理索引（在 .c 文件中）
-static uint8_t s_idx = 0;
-static XXXInstance *s_xxx_instance[XXX_DEVICE_CNT] = {NULL};
-
-// 5. 实现注册函数（在 .c 文件中）
-XXXInstance *XXXRegister(XXX_Init_Config_s *config)
-{
-    // 检查实例数量限制
-    if (s_idx >= XXX_DEVICE_CNT)
-    {
-        LOGERROR("[bsp_xxx] Instance count exceeded max limit!");
-        return NULL;
+/**
+ * @brief 静态定义XXX实例
+ * @param name    实例名称
+ * @param xxx_idx 板载枚举（BoardXXX_e）
+ * @param ...     其他参数
+ *
+ * @note 宏参数名必须不同于结构体成员名（用 xxx_idx 而非 xxx_e）
+ *
+ * @example
+ *   XXX_INSTANCE_DEF(my_xxx, XXX_1, ...);
+ */
+#define XXX_INSTANCE_DEF(name, xxx_idx, ...) \
+    XXXInstance name = {                     \
+        .xxx_e = xxx_idx,                    \
+        .handle = NULL,                      \
+        /* ... 其他成员初始化 */             \
     }
 
-    // 分配内存并清零
-    XXXInstance *instance = (XXXInstance *)malloc(sizeof(XXXInstance));
-    memset(instance, 0, sizeof(XXXInstance));
+/*------------- 外部接口声明 --------------*/
 
-    // 初始化实例成员
-    instance->handle = config->handle;
-    instance->config_param1 = config->config_param1;
-    instance->config_param2 = config->config_param2;
-    instance->callback = config->callback;
-    instance->id = config->id;
+int8_t XXXRegister(XXXInstance *instance);
+void XXXTransmit(XXXInstance *instance, uint8_t *data, uint16_t len);
 
-    // 保存到实例数组
+#endif /* __BSP_XXX_H */
+```
+
+#### 3.3.2 源文件（bsp_xxx.c）
+
+```c
+#include "bsp_xxx.h"
+#include "bsp_log.h"
+#include <string.h>
+
+/*------------- 私有变量 --------------*/
+static uint8_t s_idx = 0;
+static XXXInstance *s_xxx_instance[XXX_NUM] = {NULL};
+
+/*------------- 外部接口实现 --------------*/
+
+int8_t XXXRegister(XXXInstance *instance)
+{
+    // 参数检查
+    if (instance == NULL)
+    {
+        LOGERROR("[bsp_xxx] Instance is NULL!");
+        return -1;
+    }
+
+    // 实例数量检查
+    if (s_idx >= XXX_NUM)
+    {
+        LOGERROR("[bsp_xxx] Exceeded max instance count!");
+        return -1;
+    }
+
+    // 重复注册检查
+    for (uint8_t i = 0; i < s_idx; i++)
+    {
+        if (s_xxx_instance[i]->handle == instance->handle)
+        {
+            LOGERROR("[bsp_xxx] Instance already registered!");
+            return -1;
+        }
+    }
+
+    // ⭐ 关键：根据枚举自动填充硬件句柄
+    instance->handle = xxx_map[instance->xxx_e].handle;
+
     s_xxx_instance[s_idx++] = instance;
 
-    return instance;
+    LOGINFO("[bsp_xxx] Instance registered, idx=%d", s_idx - 1);
+    return 0;
 }
 ```
 
-### 3.2 注册函数要点
+### 3.4 使用示例
 
-1. **参数检查**：检查 config 是否为 NULL
-2. **数量检查**：检查是否超过最大实例数
-3. **内存分配**：使用 malloc 分配实例内存
-4. **成员初始化**：从配置结构体复制参数
-5. **保存实例**：添加到实例数组
+```c
+// app/src/app_xxx.c
+
+#include "bsp_xxx.h"
+
+// 定义接收回调
+static void MyCallback(XXXInstance *instance)
+{
+    // 处理接收数据
+}
+
+// 静态定义实例
+XXX_INSTANCE_DEF(my_xxx, XXX_1, XXX_DMA_MODE, 128, MyCallback);
+
+// 初始化时注册
+void AppInit(void)
+{
+    XXXRegister(&my_xxx);
+}
+```
+
+### 3.5 关键规则
+
+| 规则                      | 说明                                          |
+| ------------------------- | --------------------------------------------- |
+| 枚举成员必须在首位        | 结构体第一个成员是 `BoardXXX_e xxx_e`         |
+| 宏参数名避免冲突          | 使用 `xxx_idx` 而非 `xxx_e`，否则宏展开会错误 |
+| 句柄初始化为 NULL         | 宏中 `.handle = NULL`，注册时填充实际值       |
+| 实例数量使用 bsp_cfg.h 宏 | `XXX_NUM` 在 bsp_cfg.h 中根据开发板自动配置   |
 
 ---
 
@@ -197,43 +295,133 @@ XXXInstance *XXXRegister(XXX_Init_Config_s *config)
 
 ### 4.1 回调函数的使用场景
 
-- 接收完成回调
-- 发送完成回调
-- 错误回调
-- 外部中断回调
+| 场景     | 触发时机                  | 示例                  |
+| -------- | ------------------------- | --------------------- |
+| 接收完成 | DMA/IDLE 中断收到数据     | USART RX 回调         |
+| 发送完成 | IT/DMA 发送完成           | USART TX 回调（可选） |
+| 错误恢复 | 通信错误（帧错误/溢出等） | UART Error 回调       |
+| 外部中断 | GPIO 外部中断触发         | EXTI 回调             |
 
 ### 4.2 HAL 回调分发实现
 
 ```c
-// 1. 在实例结构体中定义回调函数指针
-typedef struct xxx_temp
-{
-    // ...其他成员
-    void (*callback)(struct xxx_temp *);
-} XXXInstance;
+/* bsp_xxx.c */
 
-// 2. 在 HAL 回调函数中分发到对应的实例回调
+/**
+ * @brief HAL 回调函数重写
+ * @note 在 HAL 回调中遍历实例数组，找到对应实例并调用其回调
+ */
 void HAL_XXX_RxCpltCallback(XXX_HandleTypeDef *hxxx)
 {
     for (uint8_t i = 0; i < s_idx; i++)
     {
-        if (s_xxx_instance[i]->handle == hxxx)
+        if (hxxx == s_xxx_instance[i]->handle)
         {
+            // 保存接收长度（如有）
+            s_xxx_instance[i]->rx_len = ...;
+
+            // 调用用户回调
             if (s_xxx_instance[i]->callback != NULL)
             {
                 s_xxx_instance[i]->callback(s_xxx_instance[i]);
             }
+
+            // 自动重启接收（如需要）
+            XXXRestartReceive(s_xxx_instance[i]);
             return;
         }
     }
 }
 ```
 
-### 4.3 回调机制的优点
+### 4.3 USART 回调示例
 
-- 模块间解耦，BSP 层不依赖具体模块
-- 灵活扩展，不同模块可注册不同回调
-- 便于测试和调试
+```c
+/* bsp_usart.c */
+
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
+{
+    for (uint8_t i = 0; i < s_idx; i++)
+    {
+        if (huart == s_usart_instance[i]->handle)
+        {
+            // 保存接收长度
+            s_usart_instance[i]->rx_len = Size;
+
+            // 调用用户回调
+            if (s_usart_instance[i]->rx_callback != NULL)
+            {
+                s_usart_instance[i]->rx_callback(s_usart_instance[i]);
+            }
+
+            // 清空缓冲区并重启接收
+            memset(s_usart_instance[i]->rx_buff, 0, Size);
+            USARTRestartReceive(s_usart_instance[i]);
+            return;
+        }
+    }
+}
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    for (uint8_t i = 0; i < s_idx; i++)
+    {
+        if (huart == s_usart_instance[i]->handle)
+        {
+            uint32_t error_code = huart->ErrorCode;
+            LOGWARNING("[bsp_usart] Error detected, idx[%d], code=0x%lX", i, error_code);
+            USARTRestartReceive(s_usart_instance[i]);
+            return;
+        }
+    }
+}
+```
+
+### 4.4 GPIO EXTI 回调示例
+
+```c
+/* bsp_gpio.c */
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    GPIOInstance *gpio;
+    for (uint8_t i = 0; i < s_idx; i++)
+    {
+        gpio = s_gpio_instance[i];
+        // 通过引脚号匹配（注意：多个实例可能共用同一引脚）
+        if (gpio->map.pin == GPIO_Pin && gpio->callback != NULL)
+        {
+            gpio->callback(gpio);
+            return;
+        }
+    }
+}
+```
+
+### 4.5 回调中的数据访问
+
+用户在回调中可通过实例指针访问数据：
+
+```c
+// APP 层回调实现
+static void MyUartCallback(USARTInstance *instance)
+{
+    // 访问接收数据
+    uint8_t *data = instance->rx_buff;
+    uint16_t len = instance->rx_len;
+
+    // 处理数据...
+}
+```
+
+### 4.6 回调机制优点
+
+| 优点     | 说明                           |
+| -------- | ------------------------------ |
+| 模块解耦 | BSP 层不依赖具体业务逻辑       |
+| 灵活扩展 | 不同模块可注册不同回调函数     |
+| 统一接口 | 所有外设使用相同的回调分发模式 |
+| 便于调试 | 回调中可添加日志，追踪数据流   |
 
 ---
 
@@ -294,82 +482,254 @@ void XXXTransmit(XXXInstance *instance, uint8_t *data, uint16_t len)
 
 ```
 bsp/
-├── bsp_cfg.h           # BSP 层配置（实例数量、常量定义等）
-├── Inc/
-│   ├── bsp_can.h       # CAN 外设接口
-│   ├── bsp_usart.h     # USART 外设接口
+├── inc/
+│   ├── bsp_cfg.h       # BSP 配置（板载枚举、实例数量、硬件映射声明）
 │   ├── bsp_gpio.h      # GPIO 外设接口
+│   ├── bsp_usart.h     # USART 外设接口
+│   ├── bsp_can.h       # CAN 外设接口
 │   └── ...
-└── Src/
-    ├── bsp_can.c       # CAN 外设实现
-    ├── bsp_usart.c     # USART 外设实现
+└── src/
+    ├── bsp_cfg.c       # 硬件映射数组定义
     ├── bsp_gpio.c      # GPIO 外设实现
+    ├── bsp_usart.c     # USART 外设实现
+    ├── bsp_can.c       # CAN 外设实现
     └── ...
 ```
 
-### 6.2 头文件模板
+### 6.2 头文件模板（bsp_xxx.h）
 
 ```c
-#ifndef BSP_XXX_H
-#define BSP_XXX_H
+/**
+ * @file bsp_xxx.h
+ * @brief XXX驱动封装，提供实例管理和回调分发功能
+ *
+ * @note 硬件配置由 CubeMX 负责，BSP 层只管理实例
+ */
+
+#ifndef __BSP_XXX_H
+#define __BSP_XXX_H
 
 #include "main.h"
 #include "bsp_cfg.h"
 #include "stdint.h"
 
-/*------------- 宏定义 --------------*/
-#define XXX_DEVICE_CNT      8
-#define XXX_BUFF_SIZE       256
-
 /*------------- 类型定义 --------------*/
-// 枚举类型
-typedef enum { ... } XXX_Mode_e;
 
-// 实例结构体
-typedef struct xxx_temp { ... } XXXInstance;
+/**
+ * @brief XXX工作模式枚举（如需要）
+ */
+typedef enum
+{
+    XXX_BLOCK_MODE = 0,
+    XXX_IT_MODE,
+    XXX_DMA_MODE,
+} XXX_Work_Mode_e;
 
-// 初始化配置结构体
-typedef struct { ... } XXX_Init_Config_s;
+/**
+ * @brief XXX实例结构体
+ */
+typedef struct XXXInstance
+{
+    BoardXXX_e xxx_e;                          // 板载枚举（注册时用于查找映射）
+    XXX_HandleTypeDef *handle;                 // 硬件句柄（注册时自动填充）
+    // ... 业务相关成员
+    void (*callback)(struct XXXInstance *);    // 回调函数
+} XXXInstance;
+
+/*------------- 实例定义宏 --------------*/
+
+/**
+ * @brief 静态定义XXX实例
+ * @param name    实例名称
+ * @param xxx_idx 板载枚举（BoardXXX_e）
+ * @param ...     其他参数
+ *
+ * @example
+ *   XXX_INSTANCE_DEF(my_xxx, XXX_1, ...);
+ */
+#define XXX_INSTANCE_DEF(name, xxx_idx, ...) \
+    XXXInstance name = {                     \
+        .xxx_e = xxx_idx,                    \
+        .handle = NULL,                      \
+        /* ... 其他成员初始化 */             \
+    }
 
 /*------------- 外部接口声明 --------------*/
-XXXInstance *XXXRegister(XXX_Init_Config_s *config);
-void XXXTransmit(XXXInstance *instance, uint8_t *data, uint16_t len);
 
-#endif // BSP_XXX_H
+/**
+ * @brief 注册XXX实例
+ * @param instance XXX实例指针
+ * @retval 0 成功
+ * @retval -1 失败
+ */
+int8_t XXXRegister(XXXInstance *instance);
+
+/**
+ * @brief 其他操作接口
+ */
+void XXXTransmit(XXXInstance *instance, uint8_t *data, uint16_t len);
+void XXXRestartReceive(XXXInstance *instance);
+
+#endif /* __BSP_XXX_H */
 ```
 
-### 6.3 源文件模板
+### 6.3 源文件模板（bsp_xxx.c）
 
 ```c
+/**
+ * @file bsp_xxx.c
+ * @brief XXX驱动封装实现
+ *
+ * @note 只负责实例管理和回调分发，不负责硬件配置
+ */
+
 #include "bsp_xxx.h"
 #include "bsp_log.h"
-#include <stdlib.h>
 #include <string.h>
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_idx = 0;
-static XXXInstance *s_xxx_instance[XXX_DEVICE_CNT] = {NULL};
-
-/*------------- 私有函数声明 --------------*/
-static void XXXServiceInit(void);
+static XXXInstance *s_xxx_instance[XXX_NUM] = {NULL};
 
 /*------------- HAL 回调函数重写 --------------*/
+
 void HAL_XXX_RxCpltCallback(XXX_HandleTypeDef *hxxx)
 {
-    // 回调分发逻辑
+    for (uint8_t i = 0; i < s_idx; i++)
+    {
+        if (hxxx == s_xxx_instance[i]->handle)
+        {
+            if (s_xxx_instance[i]->callback != NULL)
+            {
+                s_xxx_instance[i]->callback(s_xxx_instance[i]);
+            }
+            return;
+        }
+    }
 }
 
 /*------------- 外部接口实现 --------------*/
-XXXInstance *XXXRegister(XXX_Init_Config_s *config)
+
+int8_t XXXRegister(XXXInstance *instance)
 {
-    // 注册实现
+    // 参数检查
+    if (instance == NULL)
+    {
+        LOGERROR("[bsp_xxx] Instance is NULL!");
+        return -1;
+    }
+
+    // 实例数量检查
+    if (s_idx >= XXX_NUM)
+    {
+        LOGERROR("[bsp_xxx] Exceeded max instance count!");
+        return -1;
+    }
+
+    // 重复注册检查
+    for (uint8_t i = 0; i < s_idx; i++)
+    {
+        if (s_xxx_instance[i]->handle == instance->handle)
+        {
+            LOGERROR("[bsp_xxx] Instance already registered!");
+            return -1;
+        }
+    }
+
+    // 根据枚举自动填充硬件句柄
+    instance->handle = xxx_map[instance->xxx_e].handle;
+
+    s_xxx_instance[s_idx++] = instance;
+
+    LOGINFO("[bsp_xxx] Instance registered, idx=%d", s_idx - 1);
+    return 0;
 }
 
-/*------------- 私有函数实现 --------------*/
-static void XXXServiceInit(void)
+void XXXTransmit(XXXInstance *instance, uint8_t *data, uint16_t len)
 {
-    // 服务初始化
+    if (instance == NULL || data == NULL || len == 0)
+    {
+        LOGWARNING("[bsp_xxx] Invalid transmit parameters!");
+        return;
+    }
+    // ... 发送实现
 }
+
+void XXXRestartReceive(XXXInstance *instance)
+{
+    if (instance == NULL) return;
+    // ... 重启接收实现
+}
+```
+
+### 6.4 bsp_cfg.h 配置示例
+
+```c
+/* bsp/inc/bsp_cfg.h */
+
+/*------------- 板载枚举定义 --------------*/
+
+typedef enum
+{
+    GPIO_LED_GREEN = 0,
+    GPIO_LED_RED,
+    // ...
+    GPIO_NUM_MAX
+} BoardGPIO_e;
+
+typedef enum
+{
+    UART_SBUS = 0,
+    // ...
+    UART_NUM_MAX
+} BoardUART_e;
+
+/*------------- 硬件映射结构体 --------------*/
+
+typedef struct
+{
+    GPIO_TypeDef *port;
+    uint16_t pin;
+} GPIO_Map_t;
+
+typedef struct
+{
+    UART_HandleTypeDef *handle;
+} UART_Map_t;
+
+/*------------- 硬件映射数组声明 --------------*/
+
+extern const GPIO_Map_t gpio_map[];
+extern const UART_Map_t uart_map[];
+
+/*------------- 实例数量配置（根据开发板自动适配）-------------*/
+
+#if DEVELOPMENT_BOARD == STM32F407VET6
+#define GPIO_NUM  10
+#define UART_NUM  1
+#endif
+```
+
+### 6.5 bsp_cfg.c 硬件映射定义
+
+```c
+/* bsp/src/bsp_cfg.c */
+
+#include "bsp_cfg.h"
+#include "usart.h"  // HAL 句柄声明
+#include "gpio.h"
+
+/*------------- GPIO 硬件映射 --------------*/
+const GPIO_Map_t gpio_map[] = {
+    [GPIO_LED_GREEN] = {GPIOE, GPIO_PIN_14},
+    [GPIO_LED_RED]   = {GPIOA, GPIO_PIN_1},
+    // ...
+};
+
+/*------------- UART 硬件映射 --------------*/
+const UART_Map_t uart_map[] = {
+    [UART_SBUS] = {&huart2},
+};
 ```
 
 ---
@@ -537,15 +897,53 @@ DWT_Delay(0.001f);  // 延时 1ms
 
 编写新的 BSP 模块时，请检查以下项目：
 
-- [ ] 是否使用实例注册机制？
-- [ ] 是否提供了初始化配置结构体？
-- [ ] 是否定义了最大实例数量并做检查？
-- [ ] 是否正确实现了回调分发？
-- [ ] 是否支持多种工作模式（如适用）？
-- [ ] 是否添加了参数验证和错误处理？
-- [ ] 是否使用了统一的日志接口？
+### 10.1 结构体设计
+
+- [ ] 结构体第一个成员是否为板载枚举（`BoardXXX_e xxx_e`）？
+- [ ] 硬件句柄成员是否初始化为 `NULL`（宏中）？
+- [ ] 是否包含回调函数指针成员？
 - [ ] 是否直接使用 HAL 类型而非过度封装？
-- [ ] 是否避免在 BSP 层配置硬件参数？
+
+### 10.2 宏定义
+
+- [ ] 宏参数名是否不同于结构体成员名？（避免 `xxx_e` 作为参数名）
+- [ ] 宏中是否只存储枚举值，不访问映射数组？
+- [ ] 宏是否可以同时定义缓冲区（如需要）？
+
+### 10.3 注册函数
+
+- [ ] 是否检查参数 NULL？
+- [ ] 是否检查实例数量上限？
+- [ ] 是否检查重复注册？
+- [ ] **关键**：是否根据枚举自动填充硬件映射？
+- [ ] 是否记录日志？
+
+### 10.4 回调分发
+
+- [ ] HAL 回调中是否正确遍历实例数组？
+- [ ] 回调前是否检查 callback != NULL？
+- [ ] 是否自动重启接收/恢复错误？
+
+### 10.5 配置文件
+
+- [ ] 是否在 `bsp_cfg.h` 中添加板载枚举？
+- [ ] 是否在 `bsp_cfg.h` 中添加硬件映射结构体？
+- [ ] 是否在 `bsp_cfg.c` 中定义硬件映射数组？
+- [ ] 是否在 `bsp_cfg.h` 中根据开发板配置实例数量？
+
+### 10.6 使用示例（APP/DRV 层）
+
+```c
+// ✅ 正确用法
+#include "bsp_xxx.h"
+
+static void MyCallback(XXXInstance *inst) { ... }
+XXX_INSTANCE_DEF(my_inst, XXX_1, ...);
+XXXRegister(&my_inst);
+
+// ❌ 错误用法
+XXX_INSTANCE_DEF(my_inst, xxx_map[XXX_1].handle, ...);  // 不能在宏中访问数组
+```
 
 ---
 
@@ -555,11 +953,11 @@ DWT_Delay(0.001f);  // 延时 1ms
 
 `bsp_math` 模块提供统一的数学函数接口，根据硬件特性自动选择最优实现：
 
-| 优先级 | 实现方式      | 适用芯片                   | 性能   |
-| ------ | ------------- | -------------------------- | ------ |
-| 1      | CORDIC 硬件   | STM32H7/G4 系列            | 最快   |
-| 2      | CMSIS-DSP 库  | 有 DSP 指令集的 Cortex-M   | 较快   |
-| 3      | 标准库 math.h | 所有平台                   | 基础   |
+| 优先级 | 实现方式      | 适用芯片                 | 性能 |
+| ------ | ------------- | ------------------------ | ---- |
+| 1      | CORDIC 硬件   | STM32H7/G4 系列          | 最快 |
+| 2      | CMSIS-DSP 库  | 有 DSP 指令集的 Cortex-M | 较快 |
+| 3      | 标准库 math.h | 所有平台                 | 基础 |
 
 ### 11.2 重要原则：禁止直接使用 math.h
 
@@ -576,19 +974,20 @@ float angle = BSP_Math_Atan2(y, x);
 ```
 
 **原因：**
+
 - 自动适配不同硬件平台
 - 充分利用硬件加速特性
 - 便于性能优化和调试
 
 ### 11.3 可用接口
 
-| 函数                    | 功能               | 说明                         |
-| ----------------------- | ------------------ | ---------------------------- |
-| `BSP_Math_Sin(theta)`   | 计算 sin(theta)    | theta 为弧度                 |
-| `BSP_Math_Cos(theta)`   | 计算 cos(theta)    | theta 为弧度                 |
-| `BSP_Math_SinCos(...)`  | 同时计算 sin 和 cos | 比 separate 调用效率更高     |
-| `BSP_Math_Atan2(y, x)`  | 计算 atan2(y, x)   | 返回弧度，自动判断象限       |
-| `BSP_Math_Sqrt(x)`      | 计算 sqrt(x)       | x 必须 >= 0                  |
+| 函数                   | 功能                | 说明                     |
+| ---------------------- | ------------------- | ------------------------ |
+| `BSP_Math_Sin(theta)`  | 计算 sin(theta)     | theta 为弧度             |
+| `BSP_Math_Cos(theta)`  | 计算 cos(theta)     | theta 为弧度             |
+| `BSP_Math_SinCos(...)` | 同时计算 sin 和 cos | 比 separate 调用效率更高 |
+| `BSP_Math_Atan2(y, x)` | 计算 atan2(y, x)    | 返回弧度，自动判断象限   |
+| `BSP_Math_Sqrt(x)`     | 计算 sqrt(x)        | x 必须 >= 0              |
 
 ### 11.4 使用示例
 
@@ -598,21 +997,21 @@ float angle = BSP_Math_Atan2(y, x);
 void chassis_control(float vx, float vy, float omega)
 {
     float theta = 0.0f;
-    
+
     // 计算运动分解
     for (int i = 0; i < 4; i++)
     {
         // ❌ 错误写法
         // float sin_val = sinf(theta);
         // float cos_val = cosf(theta);
-        
+
         // ✅ 正确写法：同时计算 sin 和 cos（CORDIC 下更高效）
         float sin_val, cos_val;
         BSP_Math_SinCos(theta, &sin_val, &cos_val);
-        
+
         // 计算轮子速度
         float wheel_speed = vx * cos_val + vy * sin_val + omega * radius;
-        
+
         theta += M_PI_2;  // 使用 bsp_math.h 中定义的 M_PI_2
     }
 }
@@ -661,12 +1060,12 @@ if (BSP_Math_HasDSP())
 
 ### 11.7 各开发板加速情况
 
-| 开发板        | CORDIC | CMSIS-DSP | 实际使用 |
-| ------------- | ------ | --------- | -------- |
-| TELESKY_VET6  | ❌      | ✅         | CMSIS-DSP |
-| DM_MC02       | ✅      | ✅         | CORDIC   |
-| DJI_A         | ❌      | ✅         | CMSIS-DSP |
-| DJI_C         | ❌      | ✅         | CMSIS-DSP |
+| 开发板       | CORDIC | CMSIS-DSP | 实际使用  |
+| ------------ | ------ | --------- | --------- |
+| TELESKY_VET6 | ❌     | ✅        | CMSIS-DSP |
+| DM_MC02      | ✅     | ✅        | CORDIC    |
+| DJI_A        | ❌     | ✅        | CMSIS-DSP |
+| DJI_C        | ❌     | ✅        | CMSIS-DSP |
 
 ### 11.8 初始化
 

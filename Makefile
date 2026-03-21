@@ -99,6 +99,7 @@ $(HAL_DIR)/Drivers/CMSIS/DSP/Source/CommonTables/arm_const_structs.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_sin_f32.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c \
+bsp/src/bsp_usart.c \
 
 ######################################
 # 修正 ASM_SOURCES
@@ -181,17 +182,17 @@ download_dap: all
 download_jlink: all
 	JLink.exe -CommanderScript hal/$(BOARD_NAME)/jlink_download.jlink
 
-######################################
-# build 目录创建（覆盖子 Makefile）
-######################################
-$(BUILD_DIR):
-	powershell -Command "New-Item -ItemType Directory -Force -Path build | Out-Null"
+# ######################################
+# # build 目录创建（覆盖子 Makefile）
+# ######################################
+# $(BUILD_DIR):
+# 	powershell -Command "New-Item -ItemType Directory -Force -Path build | Out-Null"
 
-######################################
-# 清理目标（覆盖子 Makefile）
-######################################
-.PHONY: clean
-clean:
-	powershell -Command "if (Test-Path build) { Remove-Item -Recurse -Force build/* }"
+# ######################################
+# # 清理目标（覆盖子 Makefile）
+# ######################################
+# .PHONY: clean
+# clean:
+# 	powershell -Command "if (Test-Path build) { Remove-Item -Recurse -Force build/* }"
 
 # *** EOF ***
