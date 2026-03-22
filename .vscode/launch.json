@@ -3,7 +3,7 @@
     // 
     // 使用流程：
     // 1. 修改 app/inc/app_cfg.h 中的 DEVELOPMENT_BOARD 宏选择开发板
-    // 2. F5 启动调试 → 选择对应的开发板名 → 选择调试器
+    // 2. F5 启动调试 → 选择对应的开发板名 → 选择调试配置
     "version": "0.2.0",
     "inputs": [
         {
@@ -17,10 +17,26 @@
                 "DJI_C"
             ],
             "default": "STM32F407VET6"
+        },
+        {
+            "id": "jlinkDevice",
+            "type": "pickString",
+            "description": "J-Link 目标设备（根据开发板选择）",
+            "options": [
+                {
+                    "label": "STM32F407VET6 / DJI_A / DJI_C",
+                    "value": "Cortex-M4"
+                },
+                {
+                    "label": "DM_MC02",
+                    "value": "Cortex-M7"
+                }
+            ],
+            "default": "Cortex-M4"
         }
     ],
     "configurations": [
-        // ==================== DAPlink - Launch (无RTT) ====================
+        // ==================== DAPlink - Launch ====================
         {
             "name": "DAPlink - Launch",
             "type": "cortex-debug",
@@ -73,7 +89,7 @@
                 ]
             }
         },
-        // ==================== DAPlink - Attach (无RTT) ====================
+        // ==================== DAPlink - Attach ====================
         {
             "name": "DAPlink - Attach",
             "type": "cortex-debug",
@@ -114,15 +130,34 @@
                 ]
             }
         },
-        // ==================== Debug - Jlink ====================
+        // ==================== J-Link - Launch ====================
         {
-            "name": "Debug - Jlink",
+            "name": "J-Link - Launch",
             "type": "cortex-debug",
             "request": "launch",
             "preLaunchTask": "build",
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/build/BetaRobot.elf",
-            "device": "${input:selectBoard}",
+            "device": "${input:jlinkDevice}",
+            "svdFile": "${workspaceFolder}/hal/${input:selectBoard}/${input:selectBoard}.svd",
+            "servertype": "jlink",
+            "runToEntryPoint": "main",
+            "rtos": "FreeRTOS",
+            "liveWatch": {
+                "enabled": true,
+                "samplesPerSecond": 4
+            },
+            "interface": "swd"
+        },
+        // ==================== J-Link - Launch (RTT) ====================
+        {
+            "name": "J-Link - Launch (RTT)",
+            "type": "cortex-debug",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceFolder}/build/BetaRobot.elf",
+            "device": "${input:jlinkDevice}",
             "svdFile": "${workspaceFolder}/hal/${input:selectBoard}/${input:selectBoard}.svd",
             "servertype": "jlink",
             "runToEntryPoint": "main",
@@ -132,36 +167,54 @@
                 "samplesPerSecond": 4
             },
             "interface": "swd",
-            "showDevDebugOutput": "none"
+            "rttConfig": {
+                "enabled": true,
+                "address": "auto",
+                "decoders": [
+                    {
+                        "port": 0,
+                        "type": "console",
+                        "name": "RTT Channel 0"
+                    }
+                ]
+            }
         },
-        // ==================== Attach - DAPlink ====================
+        // ==================== J-Link - Attach ====================
         {
-            "name": "Attach - DAPlink",
+            "name": "J-Link - Attach",
             "type": "cortex-debug",
             "request": "attach",
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/build/BetaRobot.elf",
-            "device": "${input:selectBoard}",
+            "device": "${input:jlinkDevice}",
             "svdFile": "${workspaceFolder}/hal/${input:selectBoard}/${input:selectBoard}.svd",
-            "servertype": "openocd",
-            "configFiles": [
-                "${workspaceFolder}/hal/${input:selectBoard}/openocd_daplink.cfg"
-            ],
-            "rtos": "FreeRTOS"
+            "servertype": "jlink",
+            "rtos": "FreeRTOS",
+            "interface": "swd"
         },
-        // ==================== Attach - Jlink ====================
+        // ==================== J-Link - Attach (RTT) ====================
         {
-            "name": "Attach - Jlink",
+            "name": "J-Link - Attach (RTT)",
             "type": "cortex-debug",
             "request": "attach",
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/build/BetaRobot.elf",
-            "device": "${input:selectBoard}",
+            "device": "${input:jlinkDevice}",
             "svdFile": "${workspaceFolder}/hal/${input:selectBoard}/${input:selectBoard}.svd",
             "servertype": "jlink",
             "rtos": "FreeRTOS",
             "interface": "swd",
-            "showDevDebugOutput": "none"
+            "rttConfig": {
+                "enabled": true,
+                "address": "auto",
+                "decoders": [
+                    {
+                        "port": 0,
+                        "type": "console",
+                        "name": "RTT Channel 0"
+                    }
+                ]
+            }
         }
     ]
 }

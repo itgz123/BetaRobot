@@ -56,30 +56,10 @@
             "problemMatcher": []
         },
         {
-            "label": "log",
+            "label": "DAP-link RTT",
             "type": "shell",
-            "command": "JlinkRTTClient",
-            "detail": "打开Jlink RTT日志",
-            "group": {},
-            "problemMatcher": []
-        },
-        {
-            "label": "RTT: Start",
-            "type": "shell",
-            "command": "openocd -f ${workspaceFolder}/hal/${input:selectBoard}/openocd_rtt.cfg",
-            "detail": "启动RTT服务",
-            "problemMatcher": [],
-            "isBackground": true,
-            "presentation": {
-                "reveal": "always",
-                "panel": "new"
-            }
-        },
-        {
-            "label": "RTT: View",
-            "type": "shell",
-            "command": "telnet 127.0.0.1 8888",
-            "detail": "查看RTT输出",
+            "command": "Start-Process openocd -ArgumentList '-f','${workspaceFolder}/hal/${input:selectBoard}/openocd_rtt.cfg'; Start-Sleep -Seconds 2; putty -telnet 127.0.0.1 -P 8888",
+            "detail": "启动DAP-Link RTT服务并用PuTTY连接",
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
