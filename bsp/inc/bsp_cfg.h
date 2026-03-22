@@ -63,12 +63,15 @@ typedef enum
 
 /**
  * @brief 板载TIM枚举
- * @note PWM和编码器分开枚举
+ * @note PWM每个通道单独枚举，编码器单独枚举
  */
 typedef enum
 {
-    // PWM定时器
-    TIM_PWM = 0, // 电机PWM TIM1 (4通道)
+    // PWM定时器（TIM1 4通道）
+    TIM_PWM_1 = 0, // 电机PWM CH1
+    TIM_PWM_2,     // 电机PWM CH2
+    TIM_PWM_3,     // 电机PWM CH3
+    TIM_PWM_4,     // 电机PWM CH4
 
     // 编码器定时器
     TIM_ENCODER_1, // 编码器1 TIM2
@@ -150,7 +153,7 @@ extern const UART_Map_t uart_map[];
 /* 独占类外设：逻辑实例与物理硬件一一对应 */
 #define GPIO_INSTANCE_NUM 10 // GPIO 实例数量
 #define UART_INSTANCE_NUM 1  // UART 实例数量
-#define TIM_INSTANCE_NUM 5   // TIM 实例数量（1 PWM + 4 编码器）
+#define TIM_INSTANCE_NUM 8   // TIM 实例数量（4 PWM + 4 编码器）
 
 /*---------- 硬件加速特性 ----------*/
 #define HAS_FPU 1    // Cortex-M4F 单精度浮点

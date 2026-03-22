@@ -8,6 +8,7 @@
 
 #include "app_cfg.h"
 #include "app_robot.h"
+#include "bsp_tim.h"
 
 /*============================================
  *              STM32F407VET6
@@ -84,6 +85,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     {
         HAL_IncTick();
     }
+    // bsp层tim回调
+    BSPTim_PeriodElapsedCallback(htim);
 }
 
 void Error_Handler(void)

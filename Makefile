@@ -100,6 +100,7 @@ $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_sin_f32.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c \
 bsp/src/bsp_usart.c \
+bsp/src/bsp_tim.c \
 
 ######################################
 # 修正 ASM_SOURCES

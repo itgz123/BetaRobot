@@ -36,10 +36,12 @@ const GPIO_Map_t gpio_map[GPIO_NUM_MAX] = {
  *              TIM 映射数组
  *============================================*/
 // 根据 BoardTIM_e 枚举顺序定义
-// PWM通道在 drv 层通过参数传递，此处 channel 填 0
 const TIM_Map_t tim_map[TIM_NUM_MAX] = {
-    // PWM定时器
-    [TIM_PWM] = {&htim1, 0}, // 电机PWM TIM1
+    // PWM定时器（TIM1 4通道）
+    [TIM_PWM_1] = {&htim1, TIM_CHANNEL_1}, // 电机PWM CH1
+    [TIM_PWM_2] = {&htim1, TIM_CHANNEL_2}, // 电机PWM CH2
+    [TIM_PWM_3] = {&htim1, TIM_CHANNEL_3}, // 电机PWM CH3
+    [TIM_PWM_4] = {&htim1, TIM_CHANNEL_4}, // 电机PWM CH4
 
     // 编码器定时器
     [TIM_ENCODER_1] = {&htim2, 0}, // 编码器1 TIM2

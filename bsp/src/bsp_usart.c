@@ -120,7 +120,7 @@ int8_t USARTRegister(USARTInstance *instance)
     // 启动接收
     USARTRestartReceive(instance);
 
-    LOGINFO("[bsp_usart] Instance registered, idx=%d", s_idx - 1);
+    LOGINFO("[bsp_usart] USART Instance registered, idx=%d", s_idx - 1);
     return 0;
 }
 
