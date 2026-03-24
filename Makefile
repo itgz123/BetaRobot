@@ -102,6 +102,7 @@ bsp/src/bsp_usart.c \
 bsp/src/bsp_tim.c \
 drv/src/drv_sbus.c \
 bsp/src/bsp_spi.c \
+drv/src/drv_bmi088.c \
 
 ######################################
 # 修正 ASM_SOURCES
