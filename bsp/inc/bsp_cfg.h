@@ -121,7 +121,7 @@
 #define SPI_INSTANCE_NUM 0   // SPI 设备数量
 #define GPIO_INSTANCE_NUM 11 // GPIO 实例数量
 #define UART_INSTANCE_NUM 8  // UART 实例数量
-#define TIM_INSTANCE_NUM 7   // TIM 实例数量
+#define TIM_INSTANCE_NUM 6   // TIM 实例数量
 #endif
 
 #if DEVELOPMENT_BOARD == DJI_A
@@ -265,7 +265,6 @@ typedef enum
     TIM_PWM_4,     // PWM输出4 TIM1_CH3 PE13
 
     // 特殊功能定时器
-    TIM_WS2812, // WS2812 LED TIM8_CH1N PA7
     TIM_BUZZER, // 蜂鸣器 TIM12_CH2 PB15
     TIM_HEATER, // BMI088加热 TIM3_CH4 PB1
 

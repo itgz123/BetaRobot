@@ -118,7 +118,6 @@ const TIM_Map_t tim_map[TIM_NUM_MAX] = {
     [TIM_PWM_4] = {&htim1, TIM_CHANNEL_3}, // PWM输出4 TIM1_CH3 PE13
 
     // 特殊功能定时器
-    //[TIM_WS2812] = {&htim8, TIM_CHANNEL_1},  // WS2812 LED TIM8_CH1N PA7
     [TIM_BUZZER] = {&htim12, TIM_CHANNEL_2}, // 蜂鸣器 TIM12_CH2 PB15
     [TIM_HEATER] = {&htim3, TIM_CHANNEL_4},  // BMI088加热 TIM3_CH4 PB1
 };

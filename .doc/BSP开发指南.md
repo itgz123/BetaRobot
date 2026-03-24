@@ -831,7 +831,154 @@ static XXXInstance *s_xxx2_instances[8];
 
 ---
 
-## 九、常见问题与解决方案
+## 九、Cortex-M7 内存与 DMA 注意事项
+
+> 本节内容适用于 Cortex-M7 内核（如 STM32H7 系列），Cortex-M4 内核无需特殊处理。
+
+### 9.1 DMA 缓冲区位置要求
+
+**核心原则：DMA 缓冲区必须放入 RAM_D1 或 RAM_D2 区域。**
+
+#### 9.1.1 内存区域与 DMA 支持
+
+| 区域    | 地址       | DMA 支持 | 说明            |
+| ------- | ---------- | -------- | --------------- |
+| DTCMRAM | 0x20000000 | **否**   | 仅 CPU 可访问   |
+| RAM_D1  | 0x24000000 | **是**   | 推荐 DMA 缓冲区 |
+| RAM_D2  | 0x30000000 | **是**   | 外设 DMA 专用   |
+| RAM_D3  | 0x38000000 | **是**   | 支持 DMA        |
+| ITCMRAM | 0x00000000 | **否**   | 仅 CPU 可访问   |
+
+#### 9.1.2 正确做法
+
+```c
+/* ✅ 正确：DMA 缓冲区放入 RAM_D1 */
+uint8_t usart_rx_buf[512] __attribute__((section(".ram_d1")));
+uint8_t usart_tx_buf[512] __attribute__((section(".ram_d1")));
+
+/* ❌ 错误：默认在 DTCMRAM，DMA 无法访问 */
+uint8_t usart_rx_buf[512];
+```
+
+#### 9.1.3 BSP 层实例定义示例
+
+```c
+/* bsp/inc/bsp_usart.h */
+
+#if CPU_IS_M7
+#define USART_INSTANCE_DEF(name, uart_idx, mode, buff_sz, cb)                         \
+    static uint8_t name##_rx_buff[buff_sz] __attribute__((section(".ram_d1"))) = {0}; \
+    static USARTInstance name = {                                                     \
+        .uart_e = uart_idx,                                                           \
+        .rx_buff = name##_rx_buff,                                                    \
+        /* ... */                                                                     \
+    }
+#else
+#define USART_INSTANCE_DEF(name, uart_idx, mode, buff_sz, cb) \
+    static uint8_t name##_rx_buff[buff_sz] = {0};             \
+    static USARTInstance name = {                             \
+        .uart_e = uart_idx,                                   \
+        .rx_buff = name##_rx_buff,                            \
+        /* ... */                                             \
+    }
+#endif
+```
+
+**注意：只需要缓冲区放入 RAM_D1，实例结构体保持在默认位置（DTCMRAM）访问更快。**
+
+#### 9.1.4 常见问题
+
+| 问题               | 原因                 | 解决方案           |
+| ------------------ | -------------------- | ------------------ |
+| DMA 传输数据全为 0 | 缓冲区在 DTCMRAM     | 移至 RAM_D1/RAM_D2 |
+| DMA 传输数据异常   | 缓冲区在 ITCMRAM     | 移至 RAM_D1/RAM_D2 |
+| 接收中断无数据     | DMA 无法写入目标地址 | 检查缓冲区位置     |
+
+### 9.2 强制指针类型转换的危险
+
+**核心原则：避免强制指针类型转换，防止非对齐访问。**
+
+#### 9.2.1 问题场景
+
+```c
+/* ❌ 危险：可能导致非对齐访问 */
+uint8_t buffer[100];
+
+uint32_t *ptr = (uint32_t*)&buffer[1];  // 地址可能是奇数！
+uint32_t value = *ptr;                   // 非对齐访问
+
+uint16_t *ptr2 = (uint16_t*)&buffer[3]; // 地址不是2的倍数！
+uint16_t val2 = *ptr2;                   // 非对齐访问
+```
+
+**原因：** `buffer` 的地址可能是任意值，`&buffer[1]` 或 `&buffer[3]` 不一定是 4 字节或 2 字节对齐。
+
+#### 9.2.2 非对齐访问的后果
+
+| 后果     | 说明                           |
+| -------- | ------------------------------ |
+| 性能下降 | CPU 需要多次内存访问           |
+| 数据错误 | 某些架构可能读取错误数据       |
+| 硬件异常 | 启用 UFSR.UNALIGNED 时触发异常 |
+
+#### 9.2.3 正确做法
+
+```c
+/* ✅ 方法1：使用 memcpy（安全，编译器处理对齐） */
+uint8_t buffer[100];
+uint32_t value;
+memcpy(&value, &buffer[1], sizeof(uint32_t));
+
+/* ✅ 方法2：确保缓冲区对齐 */
+uint8_t buffer[100] __attribute__((aligned(4)));  // 4 字节对齐
+uint32_t *ptr = (uint32_t*)&buffer[0];  // buffer[0] 地址是 4 的倍数
+uint32_t value = *ptr;  // 对齐访问
+
+/* ✅ 方法3：逐字节解析（协议解析推荐） */
+uint32_t value = ((uint32_t)buffer[1] << 24) |
+                 ((uint32_t)buffer[2] << 16) |
+                 ((uint32_t)buffer[3] << 8)  |
+                 ((uint32_t)buffer[4]);
+```
+
+#### 9.2.4 BSP 层协议解析示例
+
+```c
+/* bsp/src/bsp_can.c */
+
+/* ❌ 错误：强制转换可能导致非对齐 */
+void CAN_ParseFrame(uint8_t *data, uint16_t len)
+{
+    uint32_t id = *(uint32_t*)&data[0];   // 危险！
+    float value = *(float*)&data[4];       // 危险！
+}
+
+/* ✅ 正确：逐字节解析 */
+void CAN_ParseFrame(uint8_t *data, uint16_t len)
+{
+    uint32_t id = ((uint32_t)data[0] << 24) |
+                  ((uint32_t)data[1] << 16) |
+                  ((uint32_t)data[2] << 8)  |
+                  ((uint32_t)data[3]);
+
+    // 或使用 memcpy
+    float value;
+    memcpy(&value, &data[4], sizeof(float));
+}
+```
+
+### 9.3 检查清单
+
+编写 BSP 层 DMA 相关代码时，请检查：
+
+- [ ] DMA 缓冲区是否使用 `__attribute__((section(".ram_d1")))`（Cortex-M7）？
+- [ ] 是否避免了强制指针类型转换 `(uint32_t*)&buf[x]`？
+- [ ] 协议解析是否使用逐字节或 memcpy 方式？
+- [ ] 接收缓冲区数组是否对齐（`aligned(4)`）？
+
+---
+
+## 十、常见问题与解决方案
 
 ### Q1: 如何处理多实例共享同一硬件的情况？
 
@@ -893,24 +1040,25 @@ DWT_Delay(0.001f);  // 延时 1ms
 
 ---
 
-## 十、BSP 层检查清单
+## 十一、BSP 层检查清单
 
 编写新的 BSP 模块时，请检查以下项目：
 
-### 10.1 结构体设计
+### 11.1 结构体设计
 
 - [ ] 结构体第一个成员是否为板载枚举（`BoardXXX_e xxx_e`）？
 - [ ] 硬件句柄成员是否初始化为 `NULL`（宏中）？
 - [ ] 是否包含回调函数指针成员？
 - [ ] 是否直接使用 HAL 类型而非过度封装？
 
-### 10.2 宏定义
+### 11.2 宏定义
 
 - [ ] 宏参数名是否不同于结构体成员名？（避免 `xxx_e` 作为参数名）
 - [ ] 宏中是否只存储枚举值，不访问映射数组？
 - [ ] 宏是否可以同时定义缓冲区（如需要）？
+- [ ] （Cortex-M7）DMA 缓冲区是否使用 `__attribute__((section(".ram_d1")))`？
 
-### 10.3 注册函数
+### 11.3 注册函数
 
 - [ ] 是否检查参数 NULL？
 - [ ] 是否检查实例数量上限？
@@ -918,13 +1066,13 @@ DWT_Delay(0.001f);  // 延时 1ms
 - [ ] **关键**：是否根据枚举自动填充硬件映射？
 - [ ] 是否记录日志？
 
-### 10.4 回调分发
+### 11.4 回调分发
 
 - [ ] HAL 回调中是否正确遍历实例数组？
 - [ ] 回调前是否检查 callback != NULL？
 - [ ] 是否自动重启接收/恢复错误？
 
-### 10.5 配置文件
+### 11.5 配置文件
 
 - [ ] 是否在 `bsp_cfg.h` 中添加板载枚举？
 - [ ] 是否在 `bsp_cfg.h` 中添加硬件映射结构体？
@@ -933,13 +1081,13 @@ DWT_Delay(0.001f);  // 延时 1ms
 - [ ] 枚举命名是否使用功能命名（如 `GPIO_LED_GREEN`）而非物理命名（如 `GPIO_PE14`）？
 - [ ] 是否区分物理硬件数量（`XXX_HW_NUM`）和逻辑实例数量（`XXX_INSTANCE_NUM`）？
 
-### 10.6 竞争问题
+### 11.6 竞争问题
 
 - [ ] 总线类外设是否提供状态查询接口（如 `XXX_IsReady()`）？
 - [ ] 发送函数内部是否检查硬件状态？
 - [ ] 文档是否说明发送前需检查状态？
 
-### 10.7 使用示例（APP/DRV 层）
+### 11.7 使用示例（APP/DRV 层）
 
 ```c
 // ✅ 正确用法
@@ -955,9 +1103,9 @@ XXX_INSTANCE_DEF(my_inst, xxx_map[XXX_1].handle, ...);  // 不能在宏中访问
 
 ---
 
-## 十一、数学加速模块（bsp_math）
+## 十二、数学加速模块（bsp_math）
 
-### 11.1 模块概述
+### 12.1 模块概述
 
 `bsp_math` 模块提供统一的数学函数接口，根据硬件特性自动选择最优实现：
 
@@ -967,7 +1115,7 @@ XXX_INSTANCE_DEF(my_inst, xxx_map[XXX_1].handle, ...);  // 不能在宏中访问
 | 2      | CMSIS-DSP 库  | 有 DSP 指令集的 Cortex-M | 较快 |
 | 3      | 标准库 math.h | 所有平台                 | 基础 |
 
-### 11.2 重要原则：禁止直接使用 math.h
+### 12.2 重要原则：禁止直接使用 math.h
 
 **项目中所有数学运算必须通过 `bsp_math` 接口进行，禁止直接调用 `<math.h>` 的函数。**
 
@@ -987,7 +1135,7 @@ float angle = BSP_Math_Atan2(y, x);
 - 充分利用硬件加速特性
 - 便于性能优化和调试
 
-### 11.3 可用接口
+### 12.3 可用接口
 
 | 函数                   | 功能                | 说明                     |
 | ---------------------- | ------------------- | ------------------------ |
@@ -997,7 +1145,7 @@ float angle = BSP_Math_Atan2(y, x);
 | `BSP_Math_Atan2(y, x)` | 计算 atan2(y, x)    | 返回弧度，自动判断象限   |
 | `BSP_Math_Sqrt(x)`     | 计算 sqrt(x)        | x 必须 >= 0              |
 
-### 11.4 使用示例
+### 12.4 使用示例
 
 ```c
 #include "bsp_math.h"
@@ -1037,7 +1185,7 @@ float calculate_distance(float dx, float dy)
 }
 ```
 
-### 11.5 常用数学常量
+### 12.5 常用数学常量
 
 `bsp_math.h` 中定义了常用数学常量，应优先使用：
 
@@ -1050,7 +1198,7 @@ float calculate_distance(float dx, float dy)
 #define RAD_TO_DEG(rad)  ((rad) * 180.0f / M_PI)   // 弧度转角度
 ```
 
-### 11.6 硬件特性查询
+### 12.6 硬件特性查询
 
 可通过以下接口查询当前平台的硬件特性：
 
@@ -1066,7 +1214,7 @@ if (BSP_Math_HasDSP())
 }
 ```
 
-### 11.7 各开发板加速情况
+### 12.7 各开发板加速情况
 
 | 开发板       | CORDIC | CMSIS-DSP | 实际使用  |
 | ------------ | ------ | --------- | --------- |
@@ -1075,7 +1223,7 @@ if (BSP_Math_HasDSP())
 | DJI_A        | ❌     | ✅        | CMSIS-DSP |
 | DJI_C        | ❌     | ✅        | CMSIS-DSP |
 
-### 11.8 初始化
+### 12.8 初始化
 
 在使用数学函数前，需要在系统初始化时调用：
 
@@ -1089,22 +1237,22 @@ void App_Robot_Init(void)
 
 ---
 
-## 十二、枚举命名与数量限制设计
+## 十三、枚举命名与数量限制设计
 
-### 12.1 枚举命名规范
+### 13.1 枚举命名规范
 
-#### 12.1.1 功能命名 vs 物理命名
+#### 13.1.1 功能命名 vs 物理命名
 
 **原则：板载枚举使用功能命名，而非物理引脚命名。**
 
-| 类型     | 示例                      | 说明                           |
-| -------- | ------------------------- | ------------------------------ |
-| ✅ 功能命名 | `GPIO_LED_GREEN`          | 表示功能（绿色 LED）           |
-| ❌ 物理命名 | `GPIO_PE14`               | 表示物理引脚（与开发板耦合）   |
-| ✅ 功能命名 | `UART_SBUS`               | 表示功能（SBUS 遥控接收）      |
-| ❌ 物理命名 | `UART_USART2`             | 表示物理外设（与开发板耦合）   |
+| 类型        | 示例             | 说明                         |
+| ----------- | ---------------- | ---------------------------- |
+| ✅ 功能命名 | `GPIO_LED_GREEN` | 表示功能（绿色 LED）         |
+| ❌ 物理命名 | `GPIO_PE14`      | 表示物理引脚（与开发板耦合） |
+| ✅ 功能命名 | `UART_SBUS`      | 表示功能（SBUS 遥控接收）    |
+| ❌ 物理命名 | `UART_USART2`    | 表示物理外设（与开发板耦合） |
 
-#### 12.1.2 目的
+#### 13.1.2 目的
 
 **切换开发板后 APP/DRV 层代码无需修改。**
 
@@ -1121,20 +1269,20 @@ GPIO_INSTANCE_DEF(led_red, GPIO_LED_RED, NULL);
 // GPIO_INSTANCE_DEF(led_green, GPIO_PE14, NULL);  // DJI_C 可能是 PA5
 ```
 
-#### 12.1.3 命名约定
+#### 13.1.3 命名约定
 
-| 外设类型 | 命名前缀   | 示例                          |
-| -------- | ---------- | ----------------------------- |
-| GPIO     | `GPIO_`    | `GPIO_LED_GREEN`, `GPIO_MOTOR_1_IN1` |
-| TIM      | `TIM_`     | `TIM_MOTOR_PWM`, `TIM_ENCODER_1` |
-| UART     | `UART_`    | `UART_SBUS`, `UART_DEBUG`     |
-| CAN      | `CAN_`     | `CAN_MOTOR`, `CAN_IMU`（逻辑实例） |
-| I2C      | `I2C_`     | `I2C_IMU`, `I2C_EEPROM`       |
-| SPI      | `SPI_`     | `SPI_FLASH`, `SPI_SCREEN`     |
+| 外设类型 | 命名前缀 | 示例                                 |
+| -------- | -------- | ------------------------------------ |
+| GPIO     | `GPIO_`  | `GPIO_LED_GREEN`, `GPIO_MOTOR_1_IN1` |
+| TIM      | `TIM_`   | `TIM_MOTOR_PWM`, `TIM_ENCODER_1`     |
+| UART     | `UART_`  | `UART_SBUS`, `UART_DEBUG`            |
+| CAN      | `CAN_`   | `CAN_MOTOR`, `CAN_IMU`（逻辑实例）   |
+| I2C      | `I2C_`   | `I2C_IMU`, `I2C_EEPROM`              |
+| SPI      | `SPI_`   | `SPI_FLASH`, `SPI_SCREEN`            |
 
-### 12.2 竞争问题处理
+### 13.2 竞争问题处理
 
-#### 12.2.1 问题场景
+#### 13.2.1 问题场景
 
 总线类外设（CAN/I2C/SPI）可能被多个逻辑实例共用同一物理硬件：
 
@@ -1151,7 +1299,7 @@ GPIO_INSTANCE_DEF(led_red, GPIO_LED_RED, NULL);
 
 **问题：** 如果多个实例同时发送，可能导致数据冲突或丢失。
 
-#### 12.2.2 解决方案：发送前检查状态
+#### 13.2.2 解决方案：发送前检查状态
 
 **BSP 层必须提供状态查询接口：**
 
@@ -1187,7 +1335,7 @@ void Motor_SendCommand(MotorInstance *motor, uint8_t *data, uint16_t len)
 }
 ```
 
-#### 12.2.3 状态检查实现示例
+#### 13.2.3 状态检查实现示例
 
 ```c
 /* bsp/src/bsp_can.c */
@@ -1223,16 +1371,16 @@ void CAN_Transmit(CANInstance *instance, uint8_t *data, uint16_t len)
 }
 ```
 
-### 12.3 数量限制设计
+### 13.3 数量限制设计
 
-#### 12.3.1 两种数量的区分
+#### 13.3.1 两种数量的区分
 
-| 概念         | 说明                       | 定义方式           | 示例                |
-| ------------ | -------------------------- | ------------------ | ------------------- |
-| 物理硬件数量 | MCU 上的物理外设数量       | 枚举 `_NUM_MAX`    | `CAN_HW_NUM_MAX`    |
+| 概念         | 说明                         | 定义方式              | 示例               |
+| ------------ | ---------------------------- | --------------------- | ------------------ |
+| 物理硬件数量 | MCU 上的物理外设数量         | 枚举 `_NUM_MAX`       | `CAN_HW_NUM_MAX`   |
 | 逻辑实例数量 | APP/DRV 层可注册的最大实例数 | 宏 `XXX_INSTANCE_NUM` | `CAN_INSTANCE_NUM` |
 
-#### 12.3.2 配置示例
+#### 13.3.2 配置示例
 
 ```c
 /* bsp/inc/bsp_cfg.h */
@@ -1252,9 +1400,10 @@ void CAN_Transmit(CANInstance *instance, uint8_t *data, uint16_t len)
 #endif
 ```
 
-#### 12.3.3 使用场景
+#### 13.3.3 使用场景
 
 **物理硬件数量（枚举 `_NUM_MAX`）：**
+
 - 由枚举自动统计，无需手动定义
 - 用于索引硬件映射数组
 
@@ -1290,6 +1439,7 @@ int8_t GPIO_Register(GPIOInstance *instance)
 ```
 
 **逻辑实例数量（`XXX_INSTANCE_NUM`）：**
+
 - 用于定义实例数组大小
 - 用于注册时检查数量上限
 
@@ -1310,12 +1460,12 @@ int8_t GPIO_Register(GPIOInstance *instance)
 }
 ```
 
-#### 12.3.4 外设类型分类
+#### 13.3.4 外设类型分类
 
-| 类型       | 特点                       | 示例      | 说明               |
-| ---------- | -------------------------- | --------- | ------------------ |
-| 总线类     | 多实例可共用同一物理硬件   | CAN/I2C/SPI | `INSTANCE_NUM >= 枚举数` |
-| 独占类     | 实例与硬件一一对应         | GPIO/UART/TIM | `INSTANCE_NUM = 枚举数` |
+| 类型   | 特点                     | 示例          | 说明                     |
+| ------ | ------------------------ | ------------- | ------------------------ |
+| 总线类 | 多实例可共用同一物理硬件 | CAN/I2C/SPI   | `INSTANCE_NUM >= 枚举数` |
+| 独占类 | 实例与硬件一一对应       | GPIO/UART/TIM | `INSTANCE_NUM = 枚举数`  |
 
 ---
 
