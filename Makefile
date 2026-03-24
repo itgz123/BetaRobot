@@ -93,7 +93,6 @@ app/src/app_cmd.c \
 app/src/app_chassis.c \
 app/src/app_motor.c \
 app/src/app_error.c \
-bsp/src/bsp_math.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/CommonTables/arm_common_tables.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/CommonTables/arm_const_structs.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_sin_f32.c \
