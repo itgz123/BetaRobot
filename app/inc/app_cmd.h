@@ -6,6 +6,6 @@
 #include "main.h"
 
 /*------------- 任务函数 --------------*/
-void StartCmdTask(void *argument);
+__attribute__((noreturn)) void StartCmdTask(void *argument);
 
 #endif // !__APP_CMD_H

@@ -8,7 +8,7 @@
  * @param  argument: 未使用
  * @retval None
  */
-void StartErrorTask(void *argument)
+__attribute__((noreturn)) void StartErrorTask(void *argument)
 {
     for (;;)
     {

@@ -18,7 +18,7 @@ static void MOTORTask(void)
  * @param  argument: 未使用
  * @retval None
  */
-void StartMotorTask(void *argument)
+__attribute__((noreturn)) void StartMotorTask(void *argument)
 {
     MOTORInit();
     static uint64_t start;

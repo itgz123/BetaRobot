@@ -5,6 +5,6 @@
 #include "task.h"
 #include "main.h"
 
-void StartErrorTask(void *argument);
+__attribute__((noreturn)) void StartErrorTask(void *argument);
 
 #endif // !__APP_ERROR_H

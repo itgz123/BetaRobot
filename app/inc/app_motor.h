@@ -5,6 +5,6 @@
 #include "task.h"
 #include "main.h"
 
-void StartMotorTask(void *argument);
+__attribute__((noreturn)) void StartMotorTask(void *argument);
 
 #endif // !__APP_MOTOR_H

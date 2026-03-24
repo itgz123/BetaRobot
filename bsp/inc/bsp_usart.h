@@ -48,12 +48,27 @@ typedef struct USARTInstance
  * @param buff_sz  接收缓冲区大小
  * @param cb       接收回调函数（可为NULL）
  *
+ * @note Cortex-M7 缓冲区放入 RAM_D1 以支持 DMA 访问
+ *       实例结构体保持默认位置（DTCMRAM），CPU 访问更快
+ *
  * @example
  *   USART_INSTANCE_DEF(sbus_uart, UART_SBUS, USART_DMA_MODE, 64, sbus_callback);
  */
+#if CPU_CORE == CORTEX_M7
+#define USART_INSTANCE_DEF(name, uart_idx, mode, buff_sz, cb)                         \
+    static uint8_t name##_rx_buff[buff_sz] __attribute__((section(".ram_d1"))) = {0}; \
+    static USARTInstance name = {                                                     \
+        .uart_e = uart_idx,                                                           \
+        .handle = NULL,                                                               \
+        .tx_mode = mode,                                                              \
+        .rx_buff = name##_rx_buff,                                                    \
+        .rx_buff_size = buff_sz,                                                      \
+        .rx_len = 0,                                                                  \
+        .rx_callback = cb}
+#else
 #define USART_INSTANCE_DEF(name, uart_idx, mode, buff_sz, cb) \
     static uint8_t name##_rx_buff[buff_sz] = {0};             \
-    USARTInstance name = {                                    \
+    static USARTInstance name = {                             \
         .uart_e = uart_idx,                                   \
         .handle = NULL,                                       \
         .tx_mode = mode,                                      \
@@ -61,6 +76,7 @@ typedef struct USARTInstance
         .rx_buff_size = buff_sz,                              \
         .rx_len = 0,                                          \
         .rx_callback = cb}
+#endif
 
 /*------------- 外部接口声明 --------------*/
 

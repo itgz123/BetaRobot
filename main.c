@@ -4,6 +4,7 @@
  *
  * @note 本文件由用户维护，从 CubeMX 生成的 main.c 中复制代码
  *       切换开发板时，需要复制对应 hal 目录下的 Core/Src/main.c 内容
+ * @note 复制之后添加function_in_main_c和BSPTim_PeriodElapsedCallback两个函数
  */
 
 #include "app_cfg.h"
