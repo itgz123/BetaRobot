@@ -95,10 +95,10 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
             // 保存接收长度
             s_spi_instance[i]->rx_len = s_spi_instance[i]->buff_size;
 
-            // 调用用户回调
-            if (s_spi_instance[i]->tx_rx_callback != NULL)
+            // 调用接收回调
+            if (s_spi_instance[i]->rx_callback != NULL)
             {
-                s_spi_instance[i]->tx_rx_callback(s_spi_instance[i]);
+                s_spi_instance[i]->rx_callback(s_spi_instance[i]);
             }
             return;
         }
@@ -108,6 +108,7 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
 /**
  * @brief SPI发送完成回调函数
  * @param hspi 发生中断的SPI句柄
+ * @note 发送完成时也调用 rx_callback，保持接口统一
  */
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
@@ -115,9 +116,10 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
     {
         if (hspi == s_spi_instance[i]->handle)
         {
-            if (s_spi_instance[i]->tx_rx_callback != NULL)
+            // 发送完成也调用接收回调（统一接口）
+            if (s_spi_instance[i]->rx_callback != NULL)
             {
-                s_spi_instance[i]->tx_rx_callback(s_spi_instance[i]);
+                s_spi_instance[i]->rx_callback(s_spi_instance[i]);
             }
             return;
         }
@@ -137,9 +139,10 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
             // 保存接收长度
             s_spi_instance[i]->rx_len = s_spi_instance[i]->buff_size;
 
-            if (s_spi_instance[i]->tx_rx_callback != NULL)
+            // 调用接收回调
+            if (s_spi_instance[i]->rx_callback != NULL)
             {
-                s_spi_instance[i]->tx_rx_callback(s_spi_instance[i]);
+                s_spi_instance[i]->rx_callback(s_spi_instance[i]);
             }
             return;
         }

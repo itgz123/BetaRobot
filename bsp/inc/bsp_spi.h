@@ -30,13 +30,13 @@ typedef enum
  */
 typedef struct SPIInstance
 {
-    BoardSPI_e spi_e;                             // 板载SPI枚举（注册时用于查找映射）
-    SPI_HandleTypeDef *handle;                    // SPI句柄（注册时自动填充）
-    SPI_Work_Mode_e work_mode;                    // 工作模式
-    uint8_t *rx_buff;                             // 接收缓冲区指针
-    uint16_t buff_size;                           // 缓冲区大小
-    uint16_t rx_len;                              // 接收数据长度
-    void (*tx_rx_callback)(struct SPIInstance *); // DMA收发完成回调
+    BoardSPI_e spi_e;                          // 板载SPI枚举（注册时用于查找映射）
+    SPI_HandleTypeDef *handle;                 // SPI句柄（注册时自动填充）
+    SPI_Work_Mode_e work_mode;                 // 工作模式
+    uint8_t *rx_buff;                          // 接收缓冲区指针
+    uint16_t buff_size;                        // 缓冲区大小
+    uint16_t rx_len;                           // 接收数据长度
+    void (*rx_callback)(struct SPIInstance *); // DMA接收完成回调
 } SPIInstance;
 
 /*------------- 实例定义宏 --------------*/
@@ -47,16 +47,16 @@ typedef struct SPIInstance
  * @param spi_idx 板载SPI枚举（BoardSPI_e）
  * @param mode    工作模式（SPI_Work_Mode_e）
  * @param buff_sz 接收缓冲区大小
- * @param cb      收发完成回调函数（可为NULL，仅DMA/IT模式有效）
+ * @param rx_cb   接收完成回调函数（可为NULL，仅DMA/IT模式有效）
  *
  * @note Cortex-M7 缓冲区放入 RAM_D1 以支持 DMA 访问
  *       实例结构体保持默认位置（DTCMRAM），CPU 访问更快
  *
  * @example
- *   SPI_INSTANCE_DEF(bmi088_spi, SPI_BMI088, SPI_DMA_MODE, 64, bmi088_callback);
+ *   SPI_INSTANCE_DEF(bmi088_spi, SPI_BMI088, SPI_DMA_MODE, 64, rx_callback);
  */
 #if CPU_CORE == CORTEX_M7
-#define SPI_INSTANCE_DEF(name, spi_idx, mode, buff_sz, cb)                            \
+#define SPI_INSTANCE_DEF(name, spi_idx, mode, buff_sz, rx_cb)                         \
     static uint8_t name##_rx_buff[buff_sz] __attribute__((section(".ram_d1"))) = {0}; \
     static SPIInstance name = {                                                       \
         .spi_e = spi_idx,                                                             \
@@ -65,18 +65,18 @@ typedef struct SPIInstance
         .rx_buff = name##_rx_buff,                                                    \
         .buff_size = buff_sz,                                                         \
         .rx_len = 0,                                                                  \
-        .tx_rx_callback = cb}
+        .rx_callback = rx_cb}
 #else
-#define SPI_INSTANCE_DEF(name, spi_idx, mode, buff_sz, cb) \
-    static uint8_t name##_rx_buff[buff_sz] = {0};          \
-    static SPIInstance name = {                            \
-        .spi_e = spi_idx,                                  \
-        .handle = NULL,                                    \
-        .work_mode = mode,                                 \
-        .rx_buff = name##_rx_buff,                         \
-        .buff_size = buff_sz,                              \
-        .rx_len = 0,                                       \
-        .tx_rx_callback = cb}
+#define SPI_INSTANCE_DEF(name, spi_idx, mode, buff_sz, rx_cb) \
+    static uint8_t name##_rx_buff[buff_sz] = {0};             \
+    static SPIInstance name = {                               \
+        .spi_e = spi_idx,                                     \
+        .handle = NULL,                                       \
+        .work_mode = mode,                                    \
+        .rx_buff = name##_rx_buff,                            \
+        .buff_size = buff_sz,                                 \
+        .rx_len = 0,                                          \
+        .rx_callback = rx_cb}
 #endif
 
 /*------------- 外部接口声明 --------------*/
