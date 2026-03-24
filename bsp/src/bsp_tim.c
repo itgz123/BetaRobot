@@ -14,7 +14,11 @@
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_pwm_idx = 0;
-static PWMInstance *s_pwm_instance[TIM_INSTANCE_NUM] = {NULL};
+#if PWM_INSTANCE_NUM > 0
+static PWMInstance *s_pwm_instance[PWM_INSTANCE_NUM] = {NULL};
+#else
+static PWMInstance **s_pwm_instance = NULL;
+#endif
 
 /*------------- PWM接口实现 --------------*/
 
@@ -26,7 +30,7 @@ int8_t PWMRegister(PWMInstance *instance)
         return -1;
     }
 
-    if (s_pwm_idx >= TIM_INSTANCE_NUM)
+    if (s_pwm_idx >= PWM_INSTANCE_NUM)
     {
         LOGERROR("[bsp_tim] PWM exceeded max instance count!");
         return -1;
@@ -81,7 +85,11 @@ void PWMSetDutyRatio(PWMInstance *instance, float dutyratio)
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_encoder_idx = 0;
-static EncoderInstance *s_encoder_instance[TIM_INSTANCE_NUM] = {NULL};
+#if ENCODER_INSTANCE_NUM > 0
+static EncoderInstance *s_encoder_instance[ENCODER_INSTANCE_NUM] = {NULL};
+#else
+static EncoderInstance **s_encoder_instance = NULL;
+#endif
 
 /*------------- 编码器接口实现 --------------*/
 
@@ -93,7 +101,7 @@ int8_t EncoderRegister(EncoderInstance *instance)
         return -1;
     }
 
-    if (s_encoder_idx >= TIM_INSTANCE_NUM)
+    if (s_encoder_idx >= ENCODER_INSTANCE_NUM)
     {
         LOGERROR("[bsp_tim] Encoder exceeded max instance count!");
         return -1;

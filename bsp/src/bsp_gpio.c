@@ -10,7 +10,11 @@
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_idx = 0;
+#if GPIO_INSTANCE_NUM > 0
 static GPIOInstance *s_gpio_instance[GPIO_INSTANCE_NUM] = {NULL};
+#else
+static GPIOInstance **s_gpio_instance = NULL;
+#endif
 
 /*------------- HAL回调函数重写 --------------*/
 

@@ -18,7 +18,11 @@ typedef void (*UART_TransmitFunc)(UART_HandleTypeDef *, uint8_t *, uint16_t, uin
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_idx = 0;
+#if UART_INSTANCE_NUM > 0
 static USARTInstance *s_usart_instance[UART_INSTANCE_NUM] = {NULL};
+#else
+static USARTInstance **s_usart_instance = NULL;
+#endif
 
 /**
  * @brief 发送函数指针数组

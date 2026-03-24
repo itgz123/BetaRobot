@@ -101,6 +101,7 @@ $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c \
 bsp/src/bsp_usart.c \
 bsp/src/bsp_tim.c \
 drv/src/drv_sbus.c \
+bsp/src/bsp_spi.c \
 
 ######################################
 # 修正 ASM_SOURCES
