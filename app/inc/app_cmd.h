@@ -1,3 +1,8 @@
+/**
+ * @file app_cmd.h
+ * @brief 遥控器任务模块头文件
+ */
+
 #ifndef __APP_CMD_H
 #define __APP_CMD_H
 
