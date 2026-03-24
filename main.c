@@ -125,8 +125,6 @@ int main(void)
 
     SCB_EnableICache();
 
-    SCB_EnableDCache();
-
     HAL_Init();
 
     SystemClock_Config();
