@@ -151,6 +151,54 @@ SECTIONS
     . = ALIGN(4);
   } >FLASH
 
+  /* RAM_D1 section - DMA accessible, 320KB AXI SRAM */
+  _siram_d1 = LOADADDR(.ram_d1);
+  .ram_d1 :
+  {
+    . = ALIGN(4);
+    _sram_d1 = .;
+    *(.ram_d1)
+    *(.ram_d1*)
+    . = ALIGN(4);
+    _eram_d1 = .;
+  } >RAM_D1 AT> FLASH
+
+  /* RAM_D2 section - Peripheral DMA, 32KB SRAM1/2/3 */
+  _siram_d2 = LOADADDR(.ram_d2);
+  .ram_d2 :
+  {
+    . = ALIGN(4);
+    _sram_d2 = .;
+    *(.ram_d2)
+    *(.ram_d2*)
+    . = ALIGN(4);
+    _eram_d2 = .;
+  } >RAM_D2 AT> FLASH
+
+  /* RAM_D3 section - Low power domain, 16KB SRAM4 */
+  _siram_d3 = LOADADDR(.ram_d3);
+  .ram_d3 :
+  {
+    . = ALIGN(4);
+    _sram_d3 = .;
+    *(.ram_d3)
+    *(.ram_d3*)
+    . = ALIGN(4);
+    _eram_d3 = .;
+  } >RAM_D3 AT> FLASH
+
+  /* ITCMRAM section - Fast code execution, 64KB Instruction TCM */
+  _siitcmram = LOADADDR(.itcmram);
+  .itcmram :
+  {
+    . = ALIGN(4);
+    _sitcmram = .;
+    *(.itcmram)
+    *(.itcmram*)
+    . = ALIGN(4);
+    _eitcmram = .;
+  } >ITCMRAM AT> FLASH
+
   /* used by the startup to initialize data */
   _sidata = LOADADDR(.data);
 
