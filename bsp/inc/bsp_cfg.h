@@ -46,49 +46,55 @@
 /**
  * @note CPU频率和硬件加速特性由MCU型号决定，不可修改
  */
+#define CORTEX_M4 0
+#define CORTEX_M7 1
 
 #if DEVELOPMENT_BOARD == STM32F407VET6
-#define CPU_FREQ_MHZ 168 // CPU频率 MHz
-#define HAS_FPU 1        // Cortex-M4F 单精度浮点
-#define HAS_DSP 1        // DSP指令集
-#define HAS_CORDIC 0     // 无CORDIC协处理器
-#define HAS_CRC 1        // 硬件CRC
-#define HAS_FMAC 0       // 无滤波数学加速器
-#define HAS_MPU 1        // 内存保护单元（可选）
-#define HAS_RAMECC 0     // 无RAM错误校正
+#define CPU_FREQ_MHZ 168   // CPU频率 MHz
+#define CPU_CORE CORTEX_M4 // Cortex-M4 内核
+#define HAS_FPU 1          // Cortex-M4F 单精度浮点
+#define HAS_DSP 1          // DSP指令集
+#define HAS_CORDIC 0       // 无CORDIC协处理器
+#define HAS_CRC 1          // 硬件CRC
+#define HAS_FMAC 0         // 无滤波数学加速器
+#define HAS_MPU 1          // 内存保护单元（可选）
+#define HAS_RAMECC 0       // 无RAM错误校正
 #endif
 
 #if DEVELOPMENT_BOARD == DM_MC02
-#define CPU_FREQ_MHZ 480 // CPU频率 MHz
-#define HAS_FPU 1        // Cortex-M7 双精度浮点
-#define HAS_DSP 1        // DSP指令集
-#define HAS_CORDIC 1     // CORDIC协处理器
-#define HAS_CRC 1        // 硬件CRC
-#define HAS_FMAC 0       // 滤波数学加速器（暂时禁用）
-#define HAS_MPU 1        // 内存保护单元
-#define HAS_RAMECC 1     // RAM错误校正
+#define CPU_FREQ_MHZ 480   // CPU频率 MHz
+#define CPU_CORE CORTEX_M7 // Cortex-M7 内核
+#define HAS_FPU 1          // Cortex-M7 双精度浮点
+#define HAS_DSP 1          // DSP指令集
+#define HAS_CORDIC 1       // CORDIC协处理器
+#define HAS_CRC 1          // 硬件CRC
+#define HAS_FMAC 0         // 滤波数学加速器（暂时禁用）
+#define HAS_MPU 1          // 内存保护单元
+#define HAS_RAMECC 1       // RAM错误校正
 #endif
 
 #if DEVELOPMENT_BOARD == DJI_A
-#define CPU_FREQ_MHZ 180 // CPU频率 MHz
-#define HAS_FPU 1        // Cortex-M4F 单精度浮点
-#define HAS_DSP 1        // DSP指令集
-#define HAS_CORDIC 0     // 无CORDIC协处理器
-#define HAS_CRC 1        // 硬件CRC
-#define HAS_FMAC 0       // 无滤波数学加速器
-#define HAS_MPU 1        // 内存保护单元（可选）
-#define HAS_RAMECC 0     // 无RAM错误校正
+#define CPU_FREQ_MHZ 180   // CPU频率 MHz
+#define CPU_CORE CORTEX_M4 // Cortex-M4 内核
+#define HAS_FPU 1          // Cortex-M4F 单精度浮点
+#define HAS_DSP 1          // DSP指令集
+#define HAS_CORDIC 0       // 无CORDIC协处理器
+#define HAS_CRC 1          // 硬件CRC
+#define HAS_FMAC 0         // 无滤波数学加速器
+#define HAS_MPU 1          // 内存保护单元（可选）
+#define HAS_RAMECC 0       // 无RAM错误校正
 #endif
 
 #if DEVELOPMENT_BOARD == DJI_C
-#define CPU_FREQ_MHZ 168 // CPU频率 MHz
-#define HAS_FPU 1        // Cortex-M4F 单精度浮点
-#define HAS_DSP 1        // DSP指令集
-#define HAS_CORDIC 0     // 无CORDIC协处理器
-#define HAS_CRC 1        // 硬件CRC
-#define HAS_FMAC 0       // 无滤波数学加速器
-#define HAS_MPU 1        // 内存保护单元（可选）
-#define HAS_RAMECC 0     // 无RAM错误校正
+#define CPU_FREQ_MHZ 168   // CPU频率 MHz
+#define CPU_CORE CORTEX_M4 // Cortex-M4 内核
+#define HAS_FPU 1          // Cortex-M4F 单精度浮点
+#define HAS_DSP 1          // DSP指令集
+#define HAS_CORDIC 0       // 无CORDIC协处理器
+#define HAS_CRC 1          // 硬件CRC
+#define HAS_FMAC 0         // 无滤波数学加速器
+#define HAS_MPU 1          // 内存保护单元（可选）
+#define HAS_RAMECC 0       // 无RAM错误校正
 #endif
 
 /*============================================

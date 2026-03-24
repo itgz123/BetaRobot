@@ -16,7 +16,7 @@ static void ChassisTask(void)
  * @param  argument: 未使用
  * @retval None
  */
-void StartChassisTask(void *argument)
+__attribute__((noreturn)) void StartChassisTask(void *argument)
 {
     ChassisInit();
     static uint64_t start;

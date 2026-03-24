@@ -32,7 +32,7 @@ static void CmdTask(void)
  * @param  argument: 未使用
  * @retval None
  */
-void StartCmdTask(void *argument)
+__attribute__((noreturn)) void StartCmdTask(void *argument)
 {
     CmdInit();
     static uint64_t start;

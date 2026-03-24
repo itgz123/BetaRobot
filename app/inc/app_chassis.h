@@ -5,6 +5,6 @@
 #include "task.h"
 #include "main.h"
 
-void StartChassisTask(void *argument);
+__attribute__((noreturn)) void StartChassisTask(void *argument);
 
 #endif // !__APP_CHASSIS_H
