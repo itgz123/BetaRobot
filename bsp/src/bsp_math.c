@@ -18,18 +18,30 @@
  *============================================*/
 
 #if HAS_CRC
+#if DEVELOPMENT_BOARD == DM_MC02
+#include "stm32h7xx_hal_crc.h"
+#else
 #include "stm32f4xx_hal_crc.h"
+#endif
 #endif
 
 #if HAS_CORDIC
+#if DEVELOPMENT_BOARD == DM_MC02
+#include "stm32h7xx_hal_cordic.h"
+#else
 #include "stm32f4xx_hal_cordic.h"
+#endif
 #endif
 
 #if HAS_FMAC
+#if DEVELOPMENT_BOARD == DM_MC02
+#include "stm32h7xx_hal_fmac.h"
+#else
 #include "stm32f4xx_hal_fmac.h"
 #endif
+#endif
 
-#if HAS_CMSIS_DSP
+#if HAS_DSP
 #include "arm_math.h"
 #endif
 
@@ -79,7 +91,7 @@ void BSP_Math_Init(void)
     LOGINFO("[bsp_math] FPU enabled");
 #endif
 
-#if HAS_CMSIS_DSP
+#if HAS_DSP
     LOGINFO("[bsp_math] CMSIS-DSP available");
 #endif
 
@@ -164,7 +176,7 @@ float BSP_Math_Sin(float theta)
     }
 #endif
 
-#if HAS_CMSIS_DSP
+#if HAS_DSP
     /* 第二层：CMSIS-DSP快速逼近 */
     return arm_sin_f32(theta);
 #endif
@@ -201,7 +213,7 @@ float BSP_Math_Cos(float theta)
     }
 #endif
 
-#if HAS_CMSIS_DSP
+#if HAS_DSP
     /* 第二层：CMSIS-DSP快速逼近 */
     return arm_cos_f32(theta);
 #endif
@@ -245,7 +257,7 @@ void BSP_Math_SinCos(float theta, float *p_sin, float *p_cos)
     }
 #endif
 
-#if HAS_CMSIS_DSP
+#if HAS_DSP
     /* 第二层：CMSIS-DSP快速逼近 */
     *p_sin = arm_sin_f32(theta);
     *p_cos = arm_cos_f32(theta);
@@ -291,14 +303,7 @@ float BSP_Math_Atan2(float y, float x)
     }
 #endif
 
-#if HAS_CMSIS_DSP
-    /* 第二层：CMSIS-DSP */
-    float result;
-    arm_atan2_f32(y, x, &result);
-    return result;
-#endif
-
-    /* 第三层：标准库 */
+    /* CMSIS-DSP 没有 atan2 函数，直接使用标准库 */
     return atan2f(y, x);
 }
 
@@ -314,7 +319,7 @@ float BSP_Math_Sqrt(float x)
     if (s_hcordic != NULL)
     {
         CORDIC_ConfigTypeDef config = {0};
-        config.Function = CORDIC_FUNCTION_SQRT;
+        config.Function = CORDIC_FUNCTION_SQUAREROOT;
         config.Precision = CORDIC_PRECISION_6CYCLES;
         config.Scale = CORDIC_SCALE_0;
         config.InSize = CORDIC_INSIZE_32BITS;
@@ -345,7 +350,7 @@ float BSP_Math_Sqrt(float x)
     }
 #endif
 
-#if HAS_CMSIS_DSP
+#if HAS_DSP
     /* 第二层：CMSIS-DSP（使用VSQRT指令或优化实现） */
     float result;
     arm_sqrt_f32(x, &result);

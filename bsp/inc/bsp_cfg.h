@@ -3,7 +3,7 @@
  * @brief BSP层配置文件：板载资源定义、实例数量配置、硬件映射
  *
  * @note 本文件职责：
- *       1. 定义板载资源枚举（GPIO/TIM/UART等）
+ *       1. 定义板载资源枚举（GPIO/TIM/UART/CAN/SPI/I2C等）
  *       2. 声明硬件映射数组和获取接口
  *       3. 根据开发板自动配置实例数量
  *
@@ -35,12 +35,115 @@
 #include "main.h"
 
 /*============================================
+ *              通用配置
+ *============================================*/
+
+#define USART_BLOCK_TIMEOUT_MS 100 // 阻塞模式发送超时时间（毫秒）
+
+/*============================================
+ *              硬件特性配置
+ *============================================*/
+/**
+ * @note CPU频率和硬件加速特性由MCU型号决定，不可修改
+ */
+
+#if DEVELOPMENT_BOARD == STM32F407VET6
+#define CPU_FREQ_MHZ 168 // CPU频率 MHz
+#define HAS_FPU 1        // Cortex-M4F 单精度浮点
+#define HAS_DSP 1        // DSP指令集
+#define HAS_CORDIC 0     // 无CORDIC协处理器
+#define HAS_CRC 1        // 硬件CRC
+#define HAS_FMAC 0       // 无滤波数学加速器
+#define HAS_MPU 1        // 内存保护单元（可选）
+#define HAS_RAMECC 0     // 无RAM错误校正
+#endif
+
+#if DEVELOPMENT_BOARD == DM_MC02
+#define CPU_FREQ_MHZ 480 // CPU频率 MHz
+#define HAS_FPU 1        // Cortex-M7 双精度浮点
+#define HAS_DSP 1        // DSP指令集
+#define HAS_CORDIC 1     // CORDIC协处理器
+#define HAS_CRC 1        // 硬件CRC
+#define HAS_FMAC 0       // 滤波数学加速器（暂时禁用）
+#define HAS_MPU 1        // 内存保护单元
+#define HAS_RAMECC 1     // RAM错误校正
+#endif
+
+#if DEVELOPMENT_BOARD == DJI_A
+#define CPU_FREQ_MHZ 180 // CPU频率 MHz
+#define HAS_FPU 1        // Cortex-M4F 单精度浮点
+#define HAS_DSP 1        // DSP指令集
+#define HAS_CORDIC 0     // 无CORDIC协处理器
+#define HAS_CRC 1        // 硬件CRC
+#define HAS_FMAC 0       // 无滤波数学加速器
+#define HAS_MPU 1        // 内存保护单元（可选）
+#define HAS_RAMECC 0     // 无RAM错误校正
+#endif
+
+#if DEVELOPMENT_BOARD == DJI_C
+#define CPU_FREQ_MHZ 168 // CPU频率 MHz
+#define HAS_FPU 1        // Cortex-M4F 单精度浮点
+#define HAS_DSP 1        // DSP指令集
+#define HAS_CORDIC 0     // 无CORDIC协处理器
+#define HAS_CRC 1        // 硬件CRC
+#define HAS_FMAC 0       // 无滤波数学加速器
+#define HAS_MPU 1        // 内存保护单元（可选）
+#define HAS_RAMECC 0     // 无RAM错误校正
+#endif
+
+/*============================================
+ *              逻辑实例数量配置
+ *============================================*/
+/**
+ * @note 定义APP/DRV层可注册的最大实例数，根据实际使用调整
+ *       总线类外设：多个逻辑实例可共用同一物理硬件
+ *       独占类外设：逻辑实例与物理硬件一一对应
+ */
+
+#if DEVELOPMENT_BOARD == STM32F407VET6
+#define CAN_INSTANCE_NUM 0   // CAN 订阅者数量
+#define I2C_INSTANCE_NUM 0   // I2C 设备数量
+#define SPI_INSTANCE_NUM 0   // SPI 设备数量
+#define GPIO_INSTANCE_NUM 10 // GPIO 实例数量
+#define UART_INSTANCE_NUM 1  // UART 实例数量
+#define TIM_INSTANCE_NUM 8   // TIM 实例数量
+#endif
+
+#if DEVELOPMENT_BOARD == DM_MC02
+#define CAN_INSTANCE_NUM 0   // CAN 订阅者数量
+#define I2C_INSTANCE_NUM 0   // I2C 设备数量
+#define SPI_INSTANCE_NUM 0   // SPI 设备数量
+#define GPIO_INSTANCE_NUM 11 // GPIO 实例数量
+#define UART_INSTANCE_NUM 8  // UART 实例数量
+#define TIM_INSTANCE_NUM 7   // TIM 实例数量
+#endif
+
+#if DEVELOPMENT_BOARD == DJI_A
+#define CAN_INSTANCE_NUM 0  // CAN 订阅者数量
+#define I2C_INSTANCE_NUM 0  // I2C 设备数量
+#define SPI_INSTANCE_NUM 0  // SPI 设备数量
+#define GPIO_INSTANCE_NUM 0 // GPIO 实例数量
+#define UART_INSTANCE_NUM 0 // UART 实例数量
+#define TIM_INSTANCE_NUM 0  // TIM 实例数量
+#endif
+
+#if DEVELOPMENT_BOARD == DJI_C
+#define CAN_INSTANCE_NUM 0  // CAN 订阅者数量
+#define I2C_INSTANCE_NUM 0  // I2C 设备数量
+#define SPI_INSTANCE_NUM 0  // SPI 设备数量
+#define GPIO_INSTANCE_NUM 0 // GPIO 实例数量
+#define UART_INSTANCE_NUM 0 // UART 实例数量
+#define TIM_INSTANCE_NUM 0  // TIM 实例数量
+#endif
+
+/*============================================
  *              板载资源枚举
  *============================================*/
 
+#if DEVELOPMENT_BOARD == STM32F407VET6
+
 /**
  * @brief 板载GPIO枚举
- * @note 用于索引板级映射数组，APP层通过此枚举访问GPIO
  */
 typedef enum
 {
@@ -63,7 +166,6 @@ typedef enum
 
 /**
  * @brief 板载TIM枚举
- * @note PWM每个通道单独枚举，编码器单独枚举
  */
 typedef enum
 {
@@ -91,6 +193,234 @@ typedef enum
 
     UART_NUM_MAX // UART数量上限
 } BoardUART_e;
+
+/**
+ * @brief 板载CAN枚举
+ */
+typedef enum
+{
+    CAN_NUM_MAX // CAN数量上限
+} BoardCAN_e;
+
+/**
+ * @brief 板载SPI枚举
+ */
+typedef enum
+{
+    SPI_NUM_MAX // SPI数量上限
+} BoardSPI_e;
+
+/**
+ * @brief 板载I2C枚举
+ */
+typedef enum
+{
+    I2C_NUM_MAX // I2C数量上限
+} BoardI2C_e;
+
+#endif // STM32F407VET6
+
+#if DEVELOPMENT_BOARD == DM_MC02
+
+/**
+ * @brief 板载GPIO枚举
+ */
+typedef enum
+{
+    // BMI088 控制
+    GPIO_BMI088_CS1 = 0, // BMI088 CS1 PC0
+    GPIO_BMI088_CS2,     // BMI088 CS2 PC3
+    GPIO_BMI088_INT1,    // BMI088 INT1 PE10
+    GPIO_BMI088_INT3,    // BMI088 INT3 PE12
+
+    // 电源控制
+    GPIO_POWER_24V_OUT1, // 24V输出1 PC14
+    GPIO_POWER_24V_OUT2, // 24V输出2 PC13
+    GPIO_POWER_5V_EN,    // 5V使能 PC15
+
+    // 按键输入
+    GPIO_KEY_LCD_1, // LCD按键1 PA5
+    GPIO_KEY_LCD_2, // LCD按键2 PD10
+    GPIO_KEY_EX,    // 扩展按键 PA15
+    GPIO_KEY_USER,  // 用户按键 PE14
+
+    GPIO_NUM_MAX // GPIO数量上限
+} BoardGPIO_e;
+
+/**
+ * @brief 板载TIM枚举
+ */
+typedef enum
+{
+    // PWM定时器
+    TIM_PWM_1 = 0, // PWM输出1 TIM2_CH1 PA0
+    TIM_PWM_2,     // PWM输出2 TIM2_CH3 PA2
+    TIM_PWM_3,     // PWM输出3 TIM1_CH1 PE9
+    TIM_PWM_4,     // PWM输出4 TIM1_CH3 PE13
+
+    // 特殊功能定时器
+    TIM_WS2812, // WS2812 LED TIM8_CH1N PA7
+    TIM_BUZZER, // 蜂鸣器 TIM12_CH2 PB15
+    TIM_HEATER, // BMI088加热 TIM3_CH4 PB1
+
+    TIM_NUM_MAX // TIM数量上限
+} BoardTIM_e;
+
+/**
+ * @brief 板载UART枚举
+ */
+typedef enum
+{
+    UART_DEBUG = 0, // 调试串口 USART1 PA9/PA10
+    UART_DBUS,      // 遥控接收 UART5 PD2
+    UART_RS485_1,   // RS485-1 USART2 PD4/PD5/PD6
+    UART_RS485_2,   // RS485-2 USART3 PB14/PD8/PD9
+    UART_EX_1,      // 扩展串口1 UART7 PE7/PE8
+    UART_EX_2,      // 扩展串口2 UART8 PE0/PE1
+    UART_EX_3,      // 扩展串口3 UART9 PD14/PD15
+    UART_EX_4,      // 扩展串口4 USART10 PE2/PE3
+
+    UART_NUM_MAX // UART数量上限
+} BoardUART_e;
+
+/**
+ * @brief 板载CAN枚举
+ */
+typedef enum
+{
+    CAN_1 = 0, // CAN1 PD0/PD1
+    CAN_2,     // CAN2 PB5/PB6
+    CAN_3,     // CAN3 PD12/PD13
+
+    CAN_NUM_MAX // CAN数量上限
+} BoardCAN_e;
+
+/**
+ * @brief 板载SPI枚举
+ */
+typedef enum
+{
+    SPI_LCD = 0, // SPI1 LCD PB3/PB4/PD7/PE15
+    SPI_BMI088,  // SPI2 BMI088 PB13/PC1/PC2
+
+    SPI_NUM_MAX // SPI数量上限
+} BoardSPI_e;
+
+/**
+ * @brief 板载I2C枚举
+ */
+typedef enum
+{
+    I2C_LCD = 0, // I2C2 LCD PB10/PB11
+
+    I2C_NUM_MAX // I2C数量上限
+} BoardI2C_e;
+
+#endif // DM_MC02
+
+#if DEVELOPMENT_BOARD == DJI_A
+
+/**
+ * @brief 板载GPIO枚举
+ */
+typedef enum
+{
+    GPIO_NUM_MAX // GPIO数量上限
+} BoardGPIO_e;
+
+/**
+ * @brief 板载TIM枚举
+ */
+typedef enum
+{
+    TIM_NUM_MAX // TIM数量上限
+} BoardTIM_e;
+
+/**
+ * @brief 板载UART枚举
+ */
+typedef enum
+{
+    UART_NUM_MAX // UART数量上限
+} BoardUART_e;
+
+/**
+ * @brief 板载CAN枚举
+ */
+typedef enum
+{
+    CAN_NUM_MAX // CAN数量上限
+} BoardCAN_e;
+
+/**
+ * @brief 板载SPI枚举
+ */
+typedef enum
+{
+    SPI_NUM_MAX // SPI数量上限
+} BoardSPI_e;
+
+/**
+ * @brief 板载I2C枚举
+ */
+typedef enum
+{
+    I2C_NUM_MAX // I2C数量上限
+} BoardI2C_e;
+
+#endif // DJI_A
+
+#if DEVELOPMENT_BOARD == DJI_C
+
+/**
+ * @brief 板载GPIO枚举
+ */
+typedef enum
+{
+    GPIO_NUM_MAX // GPIO数量上限
+} BoardGPIO_e;
+
+/**
+ * @brief 板载TIM枚举
+ */
+typedef enum
+{
+    TIM_NUM_MAX // TIM数量上限
+} BoardTIM_e;
+
+/**
+ * @brief 板载UART枚举
+ */
+typedef enum
+{
+    UART_NUM_MAX // UART数量上限
+} BoardUART_e;
+
+/**
+ * @brief 板载CAN枚举
+ */
+typedef enum
+{
+    CAN_NUM_MAX // CAN数量上限
+} BoardCAN_e;
+
+/**
+ * @brief 板载SPI枚举
+ */
+typedef enum
+{
+    SPI_NUM_MAX // SPI数量上限
+} BoardSPI_e;
+
+/**
+ * @brief 板载I2C枚举
+ */
+typedef enum
+{
+    I2C_NUM_MAX // I2C数量上限
+} BoardI2C_e;
+
+#endif // DJI_C
 
 /*============================================
  *              硬件映射结构体
@@ -122,6 +452,30 @@ typedef struct
     UART_HandleTypeDef *handle; // UART句柄
 } UART_Map_t;
 
+/**
+ * @brief CAN映射结构体
+ */
+// typedef struct
+// {
+//     CAN_HandleTypeDef *handle; // CAN句柄
+// } CAN_Map_t;
+
+/**
+ * @brief SPI映射结构体
+ */
+typedef struct
+{
+    SPI_HandleTypeDef *handle; // SPI句柄
+} SPI_Map_t;
+
+/**
+ * @brief I2C映射结构体
+ */
+typedef struct
+{
+    I2C_HandleTypeDef *handle; // I2C句柄
+} I2C_Map_t;
+
 /*============================================
  *              硬件映射数组声明
  *============================================*/
@@ -129,147 +483,8 @@ typedef struct
 extern const GPIO_Map_t gpio_map[];
 extern const TIM_Map_t tim_map[];
 extern const UART_Map_t uart_map[];
-
-/*============================================
- *              BSP通用配置
- *============================================*/
-
-#define USART_BLOCK_TIMEOUT_MS 100 // 阻塞模式发送超时时间（毫秒）
-
-/*============================================
- *              开发板硬件配置
- *============================================*/
-
-#if DEVELOPMENT_BOARD == STM32F407VET6
-/*---------- CPU频率 ----------*/
-#define CPU_FREQ_MHZ 168
-
-/*---------- 逻辑实例数量（APP/DRV 层可注册的最大实例数）----------*/
-/* 总线类外设：多个逻辑实例可共用同一物理硬件 */
-#define CAN_INSTANCE_NUM 0 // CAN 订阅者数量（如电机驱动、IMU 等）
-#define I2C_INSTANCE_NUM 0 // I2C 设备数量（如传感器、EEPROM 等）
-#define SPI_INSTANCE_NUM 0 // SPI 设备数量（如 Flash、屏幕等）
-
-/* 独占类外设：逻辑实例与物理硬件一一对应 */
-#define GPIO_INSTANCE_NUM 10 // GPIO 实例数量
-#define UART_INSTANCE_NUM 1  // UART 实例数量
-#define TIM_INSTANCE_NUM 8   // TIM 实例数量（4 PWM + 4 编码器）
-
-/*---------- 硬件加速特性 ----------*/
-#define HAS_FPU 1    // Cortex-M4F 单精度浮点
-#define HAS_DSP 1    // DSP指令集
-#define HAS_CORDIC 0 // 无CORDIC协处理器
-#define HAS_CRC 1    // 硬件CRC
-#define HAS_FMAC 0   // 无滤波数学加速器
-#define HAS_MPU 1    // 内存保护单元（可选）
-#define HAS_RAMECC 0 // 无RAM错误校正
-
-/*---------- CMSIS-DSP 库支持 ----------*/
-#if HAS_DSP
-#define HAS_CMSIS_DSP 1 // 有DSP指令集时可使用CMSIS-DSP加速
-#else
-#define HAS_CMSIS_DSP 0
-#endif
-
-#endif // STM32F407VET6
-
-#if DEVELOPMENT_BOARD == DM_MC02
-/*---------- CPU频率 ----------*/
-#define CPU_FREQ_MHZ 550
-
-/*---------- 逻辑实例数量（APP/DRV 层可注册的最大实例数）----------*/
-/* 总线类外设：多个逻辑实例可共用同一物理硬件 */
-#define CAN_INSTANCE_NUM 0 // CAN 订阅者数量
-#define I2C_INSTANCE_NUM 0 // I2C 设备数量
-#define SPI_INSTANCE_NUM 0 // SPI 设备数量
-
-/* 独占类外设：逻辑实例与物理硬件一一对应 */
-#define GPIO_INSTANCE_NUM 0 // GPIO 实例数量
-#define UART_INSTANCE_NUM 0 // UART 实例数量
-#define TIM_INSTANCE_NUM 0  // TIM 实例数量（根据实际配置）
-
-/*---------- 硬件加速特性 ----------*/
-#define HAS_FPU 1    // Cortex-M7 双精度浮点
-#define HAS_DSP 1    // DSP指令集
-#define HAS_CORDIC 1 // CORDIC协处理器
-#define HAS_CRC 1    // 硬件CRC
-#define HAS_FMAC 1   // 滤波数学加速器
-#define HAS_MPU 1    // 内存保护单元
-#define HAS_RAMECC 1 // RAM错误校正
-
-/*---------- CMSIS-DSP 库支持 ----------*/
-#if HAS_DSP
-#define HAS_CMSIS_DSP 1
-#else
-#define HAS_CMSIS_DSP 0
-#endif
-
-#endif // DM_MC02
-
-#if DEVELOPMENT_BOARD == DJI_A
-/*---------- CPU频率 ----------*/
-#define CPU_FREQ_MHZ 180
-
-/*---------- 逻辑实例数量（APP/DRV 层可注册的最大实例数）----------*/
-/* 总线类外设：多个逻辑实例可共用同一物理硬件 */
-#define CAN_INSTANCE_NUM 0 // CAN 订阅者数量
-#define I2C_INSTANCE_NUM 0 // I2C 设备数量
-#define SPI_INSTANCE_NUM 0 // SPI 设备数量
-
-/* 独占类外设：逻辑实例与物理硬件一一对应 */
-#define GPIO_INSTANCE_NUM 0 // GPIO 实例数量
-#define UART_INSTANCE_NUM 0 // UART 实例数量
-#define TIM_INSTANCE_NUM 0  // TIM 实例数量（根据实际配置）
-
-/*---------- 硬件加速特性 ----------*/
-#define HAS_FPU 1    // Cortex-M4F 单精度浮点
-#define HAS_DSP 1    // DSP指令集
-#define HAS_CORDIC 0 // 无CORDIC协处理器
-#define HAS_CRC 1    // 硬件CRC
-#define HAS_FMAC 0   // 无滤波数学加速器
-#define HAS_MPU 1    // 内存保护单元（可选）
-#define HAS_RAMECC 0 // 无RAM错误校正
-
-/*---------- CMSIS-DSP 库支持 ----------*/
-#if HAS_DSP
-#define HAS_CMSIS_DSP 1
-#else
-#define HAS_CMSIS_DSP 0
-#endif
-
-#endif // DJI_A
-
-#if DEVELOPMENT_BOARD == DJI_C
-/*---------- CPU频率 ----------*/
-#define CPU_FREQ_MHZ 168
-
-/*---------- 逻辑实例数量（APP/DRV 层可注册的最大实例数）----------*/
-/* 总线类外设：多个逻辑实例可共用同一物理硬件 */
-#define CAN_INSTANCE_NUM 0 // CAN 订阅者数量
-#define I2C_INSTANCE_NUM 0 // I2C 设备数量
-#define SPI_INSTANCE_NUM 0 // SPI 设备数量
-
-/* 独占类外设：逻辑实例与物理硬件一一对应 */
-#define GPIO_INSTANCE_NUM 00 // GPIO 实例数量
-#define UART_INSTANCE_NUM 0  // UART 实例数量
-#define TIM_INSTANCE_NUM 0   // TIM 实例数量（根据实际配置）
-
-/*---------- 硬件加速特性 ----------*/
-#define HAS_FPU 1    // Cortex-M4F 单精度浮点
-#define HAS_DSP 1    // DSP指令集
-#define HAS_CORDIC 0 // 无CORDIC协处理器
-#define HAS_CRC 1    // 硬件CRC
-#define HAS_FMAC 0   // 无滤波数学加速器
-#define HAS_MPU 1    // 内存保护单元（可选）
-#define HAS_RAMECC 0 // 无RAM错误校正
-
-/*---------- CMSIS-DSP 库支持 ----------*/
-#if HAS_DSP
-#define HAS_CMSIS_DSP 1
-#else
-#define HAS_CMSIS_DSP 0
-#endif
-
-#endif // DJI_C
+// extern const CAN_Map_t can_map[];
+extern const SPI_Map_t spi_map[];
+extern const I2C_Map_t i2c_map[];
 
 #endif // __BSP_CFG_H

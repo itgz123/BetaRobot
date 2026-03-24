@@ -50,6 +50,7 @@
             ],
             "defines": [
                 "USE_HAL_DRIVER",
+                "USE_PWR_LDO_SUPPLY",
                 "STM32H723xx",
                 "DEVELOPMENT_BOARD=1"
             ],
