@@ -97,12 +97,12 @@ $(HAL_DIR)/Drivers/CMSIS/DSP/Source/CommonTables/arm_common_tables.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/CommonTables/arm_const_structs.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_sin_f32.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c \
-$(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c \
 bsp/src/bsp_usart.c \
 bsp/src/bsp_tim.c \
 drv/src/drv_sbus.c \
 bsp/src/bsp_spi.c \
 drv/src/drv_bmi088.c \
+# $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c \
 
 ######################################
 # 修正 ASM_SOURCES

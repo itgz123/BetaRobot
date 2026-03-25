@@ -1,0 +1,11 @@
+1. 调试bsp_spi和drv_bmi088
+2. bmi088使用bsp_math
+3. 自定义分配m7内存。只要itcm，dtcm，sram（用于dma）
+4. taskstart，taskrun，freertos内核tasks，queue放到itcm
+5. freertos考虑使用mpu
+6. total_heap_size设置为0
+7. 修改任务大小
+8. 底盘反馈调节
+9. uart和spi超时时间
+10. 协议bsp。eg:uart，spi
+11. drv_bmi088使用pid控制温度

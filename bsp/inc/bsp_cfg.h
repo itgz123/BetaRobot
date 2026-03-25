@@ -108,43 +108,43 @@
  */
 
 #if DEVELOPMENT_BOARD == STM32F407VET6
-#define CAN_INSTANCE_NUM 0      // CAN 订阅者数量
-#define I2C_INSTANCE_NUM 0      // I2C 设备数量
-#define SPI_INSTANCE_NUM 0      // SPI 设备数量
-#define GPIO_INSTANCE_NUM 10    // GPIO 实例数量
-#define UART_INSTANCE_NUM 1     // UART 实例数量
-#define PWM_INSTANCE_NUM 4      // PWM 实例数量
-#define ENCODER_INSTANCE_NUM 4  // 编码器实例数量
+#define CAN_INSTANCE_NUM 0     // CAN 订阅者数量
+#define I2C_INSTANCE_NUM 0     // I2C 设备数量
+#define SPI_INSTANCE_NUM 0     // SPI 设备数量
+#define GPIO_INSTANCE_NUM 10   // GPIO 实例数量
+#define UART_INSTANCE_NUM 1    // UART 实例数量
+#define PWM_INSTANCE_NUM 4     // PWM 实例数量
+#define ENCODER_INSTANCE_NUM 4 // 编码器实例数量
 #endif
 
 #if DEVELOPMENT_BOARD == DM_MC02
-#define CAN_INSTANCE_NUM 0      // CAN 订阅者数量
-#define I2C_INSTANCE_NUM 0      // I2C 设备数量
-#define SPI_INSTANCE_NUM 0      // SPI 设备数量
-#define GPIO_INSTANCE_NUM 11    // GPIO 实例数量
-#define UART_INSTANCE_NUM 8     // UART 实例数量
-#define PWM_INSTANCE_NUM 6      // PWM 实例数量
-#define ENCODER_INSTANCE_NUM 0  // 编码器实例数量
+#define CAN_INSTANCE_NUM 0     // CAN 订阅者数量
+#define I2C_INSTANCE_NUM 0     // I2C 设备数量
+#define SPI_INSTANCE_NUM 1     // SPI 设备数量（BMI088）
+#define GPIO_INSTANCE_NUM 11   // GPIO 实例数量
+#define UART_INSTANCE_NUM 8    // UART 实例数量
+#define PWM_INSTANCE_NUM 6     // PWM 实例数量
+#define ENCODER_INSTANCE_NUM 0 // 编码器实例数量
 #endif
 
 #if DEVELOPMENT_BOARD == DJI_A
-#define CAN_INSTANCE_NUM 0      // CAN 订阅者数量
-#define I2C_INSTANCE_NUM 0      // I2C 设备数量
-#define SPI_INSTANCE_NUM 0      // SPI 设备数量
-#define GPIO_INSTANCE_NUM 0     // GPIO 实例数量
-#define UART_INSTANCE_NUM 0     // UART 实例数量
-#define PWM_INSTANCE_NUM 0      // PWM 实例数量
-#define ENCODER_INSTANCE_NUM 0  // 编码器实例数量
+#define CAN_INSTANCE_NUM 0     // CAN 订阅者数量
+#define I2C_INSTANCE_NUM 0     // I2C 设备数量
+#define SPI_INSTANCE_NUM 0     // SPI 设备数量
+#define GPIO_INSTANCE_NUM 0    // GPIO 实例数量
+#define UART_INSTANCE_NUM 0    // UART 实例数量
+#define PWM_INSTANCE_NUM 0     // PWM 实例数量
+#define ENCODER_INSTANCE_NUM 0 // 编码器实例数量
 #endif
 
 #if DEVELOPMENT_BOARD == DJI_C
-#define CAN_INSTANCE_NUM 0      // CAN 订阅者数量
-#define I2C_INSTANCE_NUM 0      // I2C 设备数量
-#define SPI_INSTANCE_NUM 0      // SPI 设备数量
-#define GPIO_INSTANCE_NUM 0     // GPIO 实例数量
-#define UART_INSTANCE_NUM 0     // UART 实例数量
-#define PWM_INSTANCE_NUM 0      // PWM 实例数量
-#define ENCODER_INSTANCE_NUM 0  // 编码器实例数量
+#define CAN_INSTANCE_NUM 0     // CAN 订阅者数量
+#define I2C_INSTANCE_NUM 0     // I2C 设备数量
+#define SPI_INSTANCE_NUM 0     // SPI 设备数量
+#define GPIO_INSTANCE_NUM 0    // GPIO 实例数量
+#define UART_INSTANCE_NUM 0    // UART 实例数量
+#define PWM_INSTANCE_NUM 0     // PWM 实例数量
+#define ENCODER_INSTANCE_NUM 0 // 编码器实例数量
 #endif
 
 /*============================================
