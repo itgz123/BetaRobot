@@ -2,8 +2,6 @@
  * @file drv_bmi088.c
  * @brief BMI088 六轴 IMU 驱动实现
  *
- * @note 使用 DMA 非阻塞模式进行 SPI 数据读取
- * @note 片选由 DRV 层通过 GPIO 接口控制
  */
 
 #include "drv_bmi088.h"
@@ -63,7 +61,6 @@ static uint8_t BMI088_GyroWriteAndVerify(BMI088Instance *inst, uint8_t reg,
 
 static uint8_t BMI088_AccelInit(BMI088Instance *inst);
 static uint8_t BMI088_GyroInit(BMI088Instance *inst);
-static uint8_t BMI088_EnableDataSync(BMI088Instance *inst);
 
 static void BMI088_StartAccelRead(BMI088Instance *inst);
 static void BMI088_StartGyroRead(BMI088Instance *inst);
@@ -398,7 +395,7 @@ static uint8_t BMI088_GyroInit(BMI088Instance *inst)
                                        BMI088_GYRO_NORMAL_MODE, BMI088_GYRO_LPM1_ERROR);
 
     /* 控制寄存器：数据就绪中断使能 */
-    error |= BMI088_GyroWriteAndVerify(inst, BMI088_GYRO_CTRL_REG,
+    error |= BMI088_GyroWriteAndVerify(inst, BMI088_GYRO_INT_CTRL_REG,
                                        BMI088_DRDY_ON, BMI088_GYRO_CTRL_ERROR);
 
     /* INT3/INT4 引脚配置 */
@@ -409,39 +406,6 @@ static uint8_t BMI088_GyroInit(BMI088Instance *inst)
     /* 中断映射 */
     error |= BMI088_GyroWriteAndVerify(inst, BMI088_GYRO_INT3_INT4_IO_MAP_REG,
                                        BMI088_DRDY_IO_INT3, BMI088_GYRO_INT_MAP_ERROR);
-
-    return error;
-}
-
-/**
- * @brief 启用 BMI088 数据同步功能
- * @note 数据同步功能使加速度计和陀螺仪数据时间戳对齐
- */
-static uint8_t BMI088_EnableDataSync(BMI088Instance *inst)
-{
-    uint8_t error = BMI088_NO_ERROR;
-
-    if (inst->sync_mode == BMI088_SYNC_DISABLE)
-    {
-        return BMI088_NO_ERROR;
-    }
-
-    /* 数据同步配置：
-     * - BMI088_SYNC_MODE_2KHZ: 同步频率 2kHz，适用于 ODR >= 800Hz
-     * - BMI088_SYNC_DRDY_INT_EN: 使能同步数据就绪中断
-     * - BMI088_SYNC_DRDY_POL_HIGH: 高电平有效
-     * - BMI088_SYNC_DRDY_EDGE: 边沿触发
-     */
-    uint8_t sync_config = BMI088_SYNC_MODE_2KHZ | BMI088_SYNC_DRDY_INT_EN |
-                          BMI088_SYNC_DRDY_POL_HIGH | BMI088_SYNC_DRDY_EDGE;
-
-    error |= BMI088_AccelWriteAndVerify(inst, BMI088_ACC_SYNC_CONFIG_REG,
-                                        sync_config, BMI088_INT_MAP_DATA_ERROR);
-
-    if (error == BMI088_NO_ERROR)
-    {
-        LOGINFO("[BMI088] Data sync enabled");
-    }
 
     return error;
 }
@@ -604,12 +568,6 @@ int8_t BMI088Register(BMI088Instance *inst)
     /* 初始化加速度计和陀螺仪 */
     error |= BMI088_AccelInit(inst);
     error |= BMI088_GyroInit(inst);
-
-    /* 启用数据同步功能 */
-    if (error == BMI088_NO_ERROR)
-    {
-        error |= BMI088_EnableDataSync(inst);
-    }
 
     if (error != BMI088_NO_ERROR)
     {
