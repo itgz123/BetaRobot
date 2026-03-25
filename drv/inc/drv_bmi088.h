@@ -16,120 +16,239 @@
 #include "bsp_log.h"
 #include <math.h>
 
-/*============================ 寄存器定义 ============================*/
+/*============================ 寄存器地址定义 ============================*/
 
 /*------- 加速度计寄存器地址 -------*/
-#define BMI088_ACC_CHIP_ID 0x00       // Who Am I 寄存器地址
-#define BMI088_ACC_CHIP_ID_VALUE 0x1E // Who Am I 期望值
-
-#define BMI088_ACC_ERR_REG 0x02    // 错误标志寄存器
-#define BMI088_ACC_STATUS 0x03     // 状态寄存器
-#define BMI088_ACCEL_DRDY (1 << 7) // 数据就绪标志位
-
-#define BMI088_ACCEL_XOUT_L 0x12 // X轴加速度低字节
-#define BMI088_ACCEL_XOUT_H 0x13 // X轴加速度高字节
-#define BMI088_ACCEL_YOUT_L 0x14 // Y轴加速度低字节
-#define BMI088_ACCEL_YOUT_H 0x15 // Y轴加速度高字节
-#define BMI088_ACCEL_ZOUT_L 0x16 // Z轴加速度低字节
-#define BMI088_ACCEL_ZOUT_H 0x17 // Z轴加速度高字节
-
-#define BMI088_TEMP_M 0x22 // 温度数据高字节
-#define BMI088_TEMP_L 0x23 // 温度数据低字节
-
-#define BMI088_ACC_CONF 0x40          // 加速度计配置寄存器
-#define BMI088_ACC_CONF_MUST_SET 0x80 // 配置寄存器必须设置的位
-#define BMI088_ACC_NORMAL (0x02 << 4) // 正常工作模式
-#define BMI088_ACC_800_HZ (0x0B << 0) // 800Hz 输出数据率
-
-#define BMI088_ACC_RANGE 0x41     // 量程配置寄存器
-#define BMI088_ACC_RANGE_3G 0x00  // ±3g 量程
-#define BMI088_ACC_RANGE_6G 0x01  // ±6g 量程
-#define BMI088_ACC_RANGE_12G 0x02 // ±12g 量程
-#define BMI088_ACC_RANGE_24G 0x03 // ±24g 量程
-
-#define BMI088_INT1_IO_CTRL 0x53       // INT1 引脚配置寄存器
-#define BMI088_INT1_IO_ENABLE (1 << 3) // INT1 输出使能
-#define BMI088_INT1_GPIO_PP (0 << 2)   // 推挽输出模式
-#define BMI088_INT1_GPIO_LOW (0 << 1)  // 低电平有效
-
-#define BMI088_INT_MAP_DATA 0x58            // 中断映射寄存器
-#define BMI088_INT1_DRDY_INTERRUPT (1 << 2) // 数据就绪中断映射到 INT1
-
-#define BMI088_ACC_PWR_CONF 0x7C    // 电源配置寄存器
-#define BMI088_ACC_PWR_ACTIVE 0x00  // 激活模式
-#define BMI088_ACC_PWR_SUSPEND 0x03 // 挂起模式
-
-#define BMI088_ACC_PWR_CTRL 0x7D // 电源控制寄存器
-#define BMI088_ACC_ENABLE 0x04   // 加速度计使能
-#define BMI088_ACC_DISABLE 0x00  // 加速度计禁用
-
-#define BMI088_ACC_SOFTRESET 0x7E       // 软复位寄存器
-#define BMI088_ACC_SOFTRESET_VALUE 0xB6 // 软复位命令值
+#define BMI088_ACC_CHIP_ID_REG 0x00     // Who Am I 寄存器地址
+#define BMI088_ACC_ERR_REG 0x02         // 错误标志寄存器
+#define BMI088_ACC_STATUS_REG 0x03      // 状态寄存器
+#define BMI088_ACCEL_XOUT_L 0x12        // X轴加速度低字节
+#define BMI088_ACCEL_XOUT_H 0x13        // X轴加速度高字节
+#define BMI088_ACCEL_YOUT_L 0x14        // Y轴加速度低字节
+#define BMI088_ACCEL_YOUT_H 0x15        // Y轴加速度高字节
+#define BMI088_ACCEL_ZOUT_L 0x16        // Z轴加速度低字节
+#define BMI088_ACCEL_ZOUT_H 0x17        // Z轴加速度高字节
+#define BMI088_TEMP_M 0x22              // 温度数据高字节
+#define BMI088_TEMP_L 0x23              // 温度数据低字节
+#define BMI088_ACC_CONF_REG 0x40        // 加速度计配置寄存器
+#define BMI088_ACC_RANGE_REG 0x41       // 量程配置寄存器
+#define BMI088_FIFO_CONFIG_0_REG 0x48   // FIFO 配置寄存器0
+#define BMI088_FIFO_CONFIG_1_REG 0x49   // FIFO 配置寄存器1
+#define BMI088_FIFO_DOWNS_REG 0x4A      // FIFO 下采样配置
+#define BMI088_FIFO_WTM_REG 0x4B        // FIFO 水印配置
+#define BMI088_FIFO_DATA_REG 0x4C       // FIFO 数据寄存器
+#define BMI088_ACC_SYNC_CONFIG_REG 0x50 // 数据同步配置寄存器
+#define BMI088_ACC_SYNC_DATA_REG 0x51   // 同步数据寄存器
+#define BMI088_ACC_TRIM_GP0_REG 0x52    // 修剪参数寄存器
+#define BMI088_INT1_IO_CTRL_REG 0x53    // INT1 引脚配置寄存器
+#define BMI088_INT2_IO_CTRL_REG 0x54    // INT2 引脚配置寄存器
+#define BMI088_INT_LATCH_REG 0x55       // 中断锁存配置
+#define BMI088_INT1_MAP_REG 0x56        // INT1 映射寄存器
+#define BMI088_INT2_MAP_REG 0x57        // INT2 映射寄存器
+#define BMI088_INT_MAP_DATA_REG 0x58    // 中断映射寄存器
+#define BMI088_INT_MAP_FIFO_REG 0x59    // FIFO 中断映射
+#define BMI088_FEATURE_CTRL_REG 0x5E    // 功能控制寄存器
+#define BMI088_ACC_PWR_CONF_REG 0x7C    // 电源配置寄存器
+#define BMI088_ACC_PWR_CTRL_REG 0x7D    // 电源控制寄存器
+#define BMI088_ACC_SOFTRESET_REG 0x7E   // 软复位寄存器
 
 /*------- 陀螺仪寄存器地址 -------*/
-#define BMI088_GYRO_CHIP_ID 0x00       // Who Am I 寄存器地址
-#define BMI088_GYRO_CHIP_ID_VALUE 0x0F // Who Am I 期望值
+#define BMI088_GYRO_CHIP_ID_REG 0x00           // Who Am I 寄存器地址
+#define BMI088_GYRO_X_L 0x02                   // X轴角速度低字节
+#define BMI088_GYRO_X_H 0x03                   // X轴角速度高字节
+#define BMI088_GYRO_Y_L 0x04                   // Y轴角速度低字节
+#define BMI088_GYRO_Y_H 0x05                   // Y轴角速度高字节
+#define BMI088_GYRO_Z_L 0x06                   // Z轴角速度低字节
+#define BMI088_GYRO_Z_H 0x07                   // Z轴角速度高字节
+#define BMI088_GYRO_INT_STAT_1 0x0A            // 中断状态寄存器
+#define BMI088_GYRO_RANGE_REG 0x0F             // 量程配置寄存器
+#define BMI088_GYRO_BANDWIDTH_REG 0x10         // 带宽配置寄存器
+#define BMI088_GYRO_LPM1_REG 0x11              // 低功耗模式配置寄存器
+#define BMI088_GYRO_SOFTRESET_REG 0x14         // 软复位寄存器
+#define BMI088_GYRO_CTRL_REG 0x15              // 控制寄存器
+#define BMI088_GYRO_INT3_INT4_IO_CONF_REG 0x16 // INT3/INT4 引脚配置寄存器
+#define BMI088_GYRO_INT3_INT4_IO_MAP_REG 0x18  // 中断映射寄存器
 
-#define BMI088_GYRO_X_L 0x02 // X轴角速度低字节
-#define BMI088_GYRO_X_H 0x03 // X轴角速度高字节
-#define BMI088_GYRO_Y_L 0x04 // Y轴角速度低字节
-#define BMI088_GYRO_Y_H 0x05 // Y轴角速度高字节
-#define BMI088_GYRO_Z_L 0x06 // Z轴角速度低字节
-#define BMI088_GYRO_Z_H 0x07 // Z轴角速度高字节
+/*============================ 固定值定义 ============================*/
 
-#define BMI088_GYRO_INT_STAT_1 0x0A // 中断状态寄存器
-#define BMI088_GYRO_DRDY (1 << 7)   // 数据就绪标志位
+/*------- 加速度计固定值 -------*/
+#define BMI088_ACC_CHIP_ID_VALUE 0x1E   // Who Am I 期望值
+#define BMI088_ACC_SOFTRESET_VALUE 0xB6 // 软复位命令值
 
-#define BMI088_GYRO_RANGE 0x0F // 量程配置寄存器
-#define BMI088_GYRO_2000 0x00  // ±2000°/s 量程
-#define BMI088_GYRO_1000 0x01  // ±1000°/s 量程
-#define BMI088_GYRO_500 0x02   // ±500°/s 量程
-#define BMI088_GYRO_250 0x03   // ±250°/s 量程
-#define BMI088_GYRO_125 0x04   // ±125°/s 量程
-
-#define BMI088_GYRO_BANDWIDTH 0x10   // 带宽配置寄存器
-#define BMI088_GYRO_BW_MUST_SET 0x80 // 带宽寄存器必须设置的位
-#define BMI088_GYRO_2000_230HZ 0x01  // 2000Hz ODR, 230Hz 带宽
-#define BMI088_GYRO_1000_116HZ 0x02  // 1000Hz ODR, 116Hz 带宽
-
-#define BMI088_GYRO_LPM1 0x11         // 低功耗模式配置寄存器
-#define BMI088_GYRO_NORMAL_MODE 0x00  // 正常工作模式
-#define BMI088_GYRO_SUSPEND_MODE 0x80 // 挂起模式
-
-#define BMI088_GYRO_SOFTRESET 0x14       // 软复位寄存器
+/*------- 陀螺仪固定值 -------*/
+#define BMI088_GYRO_CHIP_ID_VALUE 0x0F   // Who Am I 期望值
 #define BMI088_GYRO_SOFTRESET_VALUE 0xB6 // 软复位命令值
 
-#define BMI088_GYRO_CTRL 0x15 // 控制寄存器
-#define BMI088_DRDY_ON 0x80   // 数据就绪中断使能
+/*============================ 位域/掩码定义 ============================*/
 
-#define BMI088_GYRO_INT3_INT4_IO_CONF 0x16 // INT3/INT4 引脚配置寄存器
-#define BMI088_GYRO_INT3_PP (0 << 1)       // INT3 推挽输出模式
-#define BMI088_GYRO_INT3_LOW (0 << 0)      // INT3 低电平有效
+/*------- 加速度计状态位 -------*/
+#define BMI088_ACCEL_DRDY (1U << 7) // 数据就绪标志位
 
-#define BMI088_GYRO_INT3_INT4_IO_MAP 0x18 // 中断映射寄存器
-#define BMI088_DRDY_IO_INT3 0x01          // 数据就绪中断映射到 INT3
+/*------- 加速度计配置位 -------*/
+#define BMI088_ACC_CONF_MUST_SET (1U << 7)  // 配置寄存器必须设置的位
+#define BMI088_ACC_NORMAL_MODE (0x02U << 4) // 正常工作模式
 
-/*------- 灵敏度系数 -------*/
-/* 加速度计灵敏度：将原始值转换为 g，单位 g/LSB */
-#define BMI088_ACCEL_3G_SEN 0.0008974358974f  // ±3g 量程灵敏度
-#define BMI088_ACCEL_6G_SEN 0.00179443359375f // ±6g 量程灵敏度
-#define BMI088_ACCEL_12G_SEN 0.0035888671875f // ±12g 量程灵敏度
-#define BMI088_ACCEL_24G_SEN 0.007177734375f  // ±24g 量程灵敏度
+/*------- 加速度计电源控制位 -------*/
+#define BMI088_ACC_ENABLE 0x04U  // 加速度计使能
+#define BMI088_ACC_DISABLE 0x00U // 加速度计禁用
 
-/* 陀螺仪灵敏度：将原始值转换为 rad/s，单位 rad/s/LSB */
-#define BMI088_GYRO_2000_SEN 0.00106526443603169529841533860381f    // ±2000°/s 量程灵敏度
-#define BMI088_GYRO_1000_SEN 0.00053263221801584764920766930190693f // ±1000°/s 量程灵敏度
-#define BMI088_GYRO_500_SEN 0.00026631610900792382460383465095346f  // ±500°/s 量程灵敏度
-#define BMI088_GYRO_250_SEN 0.00013315805450396191230191732547673f  // ±250°/s 量程灵敏度
-#define BMI088_GYRO_125_SEN 0.000066579027251980956150958662738366f // ±125°/s 量程灵敏度
+/*------- 加速度计电源配置位 -------*/
+#define BMI088_ACC_PWR_ACTIVE 0x00U  // 激活模式
+#define BMI088_ACC_PWR_SUSPEND 0x03U // 挂起模式
 
-/* 温度转换系数 */
+/*------- 加速度计中断配置位 -------*/
+#define BMI088_INT1_IO_ENABLE (1U << 3)      // INT1 输出使能
+#define BMI088_INT1_GPIO_PP (0U << 2)        // 推挽输出模式
+#define BMI088_INT1_GPIO_LOW (0U << 1)       // 低电平有效
+#define BMI088_INT1_DRDY_INTERRUPT (1U << 2) // 数据就绪中断映射到 INT1
+
+/*------- 数据同步配置位 -------*/
+#define BMI088_SYNC_MODE_DISABLE 0x00U      // 禁用同步
+#define BMI088_SYNC_MODE_400HZ 0x01U        // 同步模式 400Hz
+#define BMI088_SYNC_MODE_1KHZ 0x02U         // 同步模式 1kHz
+#define BMI088_SYNC_MODE_2KHZ 0x03U         // 同步模式 2kHz
+#define BMI088_SYNC_DRDY_INT_EN (1U << 6)   // 同步数据就绪中断使能
+#define BMI088_SYNC_DRDY_POL_HIGH (1U << 1) // 同步中断高电平有效
+#define BMI088_SYNC_DRDY_EDGE (0U << 0)     // 边沿触发
+
+/*------- 陀螺仪状态位 -------*/
+#define BMI088_GYRO_DRDY (1U << 7) // 数据就绪标志位
+
+/*------- 陀螺仪配置位 -------*/
+#define BMI088_GYRO_BW_MUST_SET (1U << 7) // 带宽寄存器必须设置的位
+#define BMI088_GYRO_NORMAL_MODE 0x00U     // 正常工作模式
+#define BMI088_GYRO_SUSPEND_MODE 0x80U    // 挂起模式
+
+/*------- 陀螺仪控制位 -------*/
+#define BMI088_DRDY_ON 0x80U // 数据就绪中断使能
+
+/*------- 陀螺仪中断配置位 -------*/
+#define BMI088_GYRO_INT3_PP (0U << 1)  // INT3 推挽输出模式
+#define BMI088_GYRO_INT3_LOW (0U << 0) // INT3 低电平有效
+#define BMI088_DRDY_IO_INT3 0x01U      // 数据就绪中断映射到 INT3
+
+/*============================ 配置枚举定义 ============================*/
+
+/**
+ * @brief 加速度计 ODR（输出数据率）枚举
+ * @note 写入 ACC_CONF 寄存器 bits[3:0]
+ */
+typedef enum
+{
+    BMI088_ACC_ODR_12_5_HZ = 0x05, // 12.5Hz  输出数据率
+    BMI088_ACC_ODR_25_HZ = 0x06,   // 25Hz    输出数据率
+    BMI088_ACC_ODR_50_HZ = 0x07,   // 50Hz    输出数据率
+    BMI088_ACC_ODR_100_HZ = 0x08,  // 100Hz   输出数据率
+    BMI088_ACC_ODR_200_HZ = 0x09,  // 200Hz   输出数据率
+    BMI088_ACC_ODR_400_HZ = 0x0A,  // 400Hz   输出数据率
+    BMI088_ACC_ODR_800_HZ = 0x0B,  // 800Hz   输出数据率
+    BMI088_ACC_ODR_1600_HZ = 0x0C, // 1600Hz  输出数据率
+} BMI088_AccODR_e;
+
+/**
+ * @brief 加速度计量程枚举
+ * @note 写入 ACC_RANGE 寄存器 bits[1:0]
+ *       灵敏度通过 BMI088_AccSenTable[range] 查表获取
+ */
+typedef enum
+{
+    BMI088_ACC_RANGE_3G = 0x00,  // ±3g   量程, 灵敏度 0.000897 g/LSB
+    BMI088_ACC_RANGE_6G = 0x01,  // ±6g   量程, 灵敏度 0.001794 g/LSB
+    BMI088_ACC_RANGE_12G = 0x02, // ±12g  量程, 灵敏度 0.003589 g/LSB
+    BMI088_ACC_RANGE_24G = 0x03, // ±24g  量程, 灵敏度 0.007178 g/LSB
+} BMI088_AccRange_e;
+
+/**
+ * @brief 加速度计量程数量
+ */
+#define BMI088_ACC_RANGE_NUM 4
+
+/**
+ * @brief 陀螺仪量程枚举
+ * @note 写入 GYRO_RANGE 寄存器 bits[2:0]
+ *       灵敏度通过 BMI088_GyroSenTable[range] 查表获取
+ */
+typedef enum
+{
+    BMI088_GYRO_RANGE_2000 = 0x00, // ±2000°/s  量程, 灵敏度 0.001065 rad/s/LSB
+    BMI088_GYRO_RANGE_1000 = 0x01, // ±1000°/s  量程, 灵敏度 0.000533 rad/s/LSB
+    BMI088_GYRO_RANGE_500 = 0x02,  // ±500°/s   量程, 灵敏度 0.000266 rad/s/LSB
+    BMI088_GYRO_RANGE_250 = 0x03,  // ±250°/s   量程, 灵敏度 0.000133 rad/s/LSB
+    BMI088_GYRO_RANGE_125 = 0x04,  // ±125°/s   量程, 灵敏度 0.000067 rad/s/LSB
+} BMI088_GyroRange_e;
+
+/**
+ * @brief 陀螺仪量程数量
+ */
+#define BMI088_GYRO_RANGE_NUM 5
+
+/**
+ * @brief 陀螺仪带宽（ODR / Bandwidth）枚举
+ * @note 写入 GYRO_BANDWIDTH 寄存器 bits[2:0]
+ */
+typedef enum
+{
+    BMI088_GYRO_BW_2000_532HZ = 0x00, // ODR 2000Hz, 带宽 532Hz
+    BMI088_GYRO_BW_2000_230HZ = 0x01, // ODR 2000Hz, 带宽 230Hz
+    BMI088_GYRO_BW_1000_116HZ = 0x02, // ODR 1000Hz, 带宽 116Hz
+    BMI088_GYRO_BW_400_47HZ = 0x03,   // ODR 400Hz,  带宽 47Hz
+    BMI088_GYRO_BW_200_23HZ = 0x04,   // ODR 200Hz,  带宽 23Hz
+    BMI088_GYRO_BW_100_12HZ = 0x05,   // ODR 100Hz,  带宽 12Hz
+    BMI088_GYRO_BW_200_64HZ = 0x06,   // ODR 200Hz,  带宽 64Hz
+    BMI088_GYRO_BW_100_32HZ = 0x07,   // ODR 100Hz,  带宽 32Hz
+} BMI088_GyroBW_e;
+
+/*============================ 灵敏度查找表 ============================*/
+
+/**
+ * @brief 加速度计灵敏度查找表
+ * @note 单位：g/LSB，通过量程枚举值索引
+ */
+extern const float BMI088_AccSenTable[BMI088_ACC_RANGE_NUM];
+
+/**
+ * @brief 陀螺仪灵敏度查找表
+ * @note 单位：rad/s/LSB，通过量程枚举值索引
+ */
+extern const float BMI088_GyroSenTable[BMI088_GYRO_RANGE_NUM];
+
+/*============================ 其他常量定义 ============================*/
+
+/*------- SPI 通信参数 -------*/
+#define BMI088_SPI_READ_FLAG 0x80 // SPI 读命令标志位（或上寄存器地址）
+#define BMI088_DUMMY_BYTE 0x55    // SPI 空闲字节（用于发送时接收数据）
+
+/*------- 数据缓冲区索引 -------*/
+/* 加速度计 DMA 读取：1字节读命令 + 1字节dummy + 6字节数据 */
+#define BMI088_ACC_RX_DUMMY_LEN 2 // 加速度计接收数据起始索引（跳过 dummy）
+/* 陀螺仪 DMA 读取：1字节读命令 + 1字节CHIP_ID + 6字节数据 */
+#define BMI088_GYRO_RX_CHIPID_IDX 0 // 陀螺仪接收 CHIP_ID 索引
+#define BMI088_GYRO_RX_DATA_IDX 1   // 陀螺仪接收数据起始索引
+/* 温度 DMA 读取：1字节读命令 + 1字节dummy + 2字节数据 */
+#define BMI088_TEMP_RX_DUMMY_LEN 2 // 温度接收数据起始索引
+
+/*------- 温度转换参数 -------*/
 #define BMI088_TEMP_FACTOR 0.125f // 温度分辨率 °C/LSB
 #define BMI088_TEMP_OFFSET 23.0f  // 温度偏移量 °C
 
 /*------- 延时参数 -------*/
-#define BMI088_COM_WAIT_TIME_MS 80 // 通信等待时间
-#define BMI088_INIT_DELAY_MS 1     // 初始化延时
+#define BMI088_COM_WAIT_TIME_MS 80 // 通信等待时间 ms（软复位后）
+#define BMI088_INIT_DELAY_MS 1     // 初始化延时 ms（寄存器写入后）
+#define BMI088_PWR_CTRL_DELAY_MS 5 // ACC_PWR_CTRL 写入后延时 ms（必须至少 5ms）
+
+/*------- 温度控制参数 -------*/
+#define BMI088_HEATER_HYSTERESIS 1.0f // 温度控制迟滞值 °C
+#define BMI088_HEATER_DUTY_RATIO 0.5f // 加热 PWM 默认占空比
+
+/*------- 标定参数 -------*/
+#define BMI088_CALI_SAMPLES 6000         // 标定采样次数
+#define BMI088_CALI_ACC_THRESHOLD 0.5f   // 加速度标定运动阈值 g
+#define BMI088_CALI_GYRO_THRESHOLD 0.15f // 陀螺仪标定运动阈值 rad/s
+#define BMI088_CALI_INTERVAL_MS 0.5f     // 标定采样间隔 ms
+
+/*------- 错误恢复参数 -------*/
+#define BMI088_STATE_TIMEOUT_MS 10   // 状态机超时时间 ms
+#define BMI088_STATE_TIMEOUT_MAX 100 // 状态机超时最大计数
 
 /*============================ 类型定义 ============================*/
 
@@ -140,7 +259,7 @@ typedef enum
 {
     BMI088_BLOCK_MODE, // 阻塞模式（用于初始化）
     BMI088_DMA_MODE,   // DMA 非阻塞模式（运行时）
-} BMI088_Work_Mode_e;
+} BMI088_WorkMode_e;
 
 /**
  * @brief BMI088 标定模式枚举
@@ -149,7 +268,16 @@ typedef enum
 {
     BMI088_CALI_ONLINE, // 在线标定
     BMI088_CALI_PRESET, // 使用预标定参数
-} BMI088_Cali_Mode_e;
+} BMI088_CaliMode_e;
+
+/**
+ * @brief BMI088 数据同步模式枚举
+ */
+typedef enum
+{
+    BMI088_SYNC_DISABLE, // 禁用数据同步
+    BMI088_SYNC_ENABLE,  // 启用数据同步
+} BMI088_SyncMode_e;
 
 /**
  * @brief BMI088 读取状态机枚举
@@ -208,12 +336,21 @@ typedef struct BMI088Instance
     PWMInstance heater_pwm; // 加热 PWM（可选）
 
     /* 配置 */
-    BMI088_Work_Mode_e work_mode; // 工作模式
-    BMI088_Cali_Mode_e cali_mode; // 标定模式
+    BMI088_WorkMode_e work_mode;   // 工作模式
+    BMI088_CaliMode_e cali_mode;   // 标定模式
+    BMI088_SyncMode_e sync_mode;   // 数据同步模式
+    BMI088_AccODR_e acc_odr;       // 加速度计输出数据率
+    BMI088_AccRange_e acc_range;   // 加速度计量程
+    BMI088_GyroRange_e gyro_range; // 陀螺仪量程
+    BMI088_GyroBW_e gyro_bw;       // 陀螺仪带宽
 
     /* 状态机 */
     BMI088_ReadState_e read_state; // 读取状态
     uint8_t temp_read_cnt;         // 温度读取计数器
+    uint32_t state_timeout_cnt;    // 状态机超时计数器
+
+    /* DMA 缓冲区 */
+    uint8_t tx_buff[8]; // DMA 发送缓冲区（实例级，避免数据竞争）
 
     /* 数据 */
     BMI088_Data_t data;   // IMU 数据
@@ -222,8 +359,8 @@ typedef struct BMI088Instance
     float g_norm;         // 重力加速度模长
 
     /* 灵敏度 */
-    float acc_sen;  // 加速度计灵敏度
-    float gyro_sen; // 陀螺仪灵敏度
+    float acc_sen;  // 加速度计灵敏度 (g/LSB)
+    float gyro_sen; // 陀螺仪灵敏度 (rad/s/LSB)
 
     /* 标志位 */
     volatile uint8_t imu_ready;    // IMU 数据就绪标志
@@ -244,46 +381,55 @@ typedef struct BMI088Instance
  * @brief 静态定义 BMI088 实例
  * @param name      实例名称
  * @param spi_idx   SPI 枚举 (BoardSPI_e)
- * @param cs_acc    加速度计 CS 枚举 (BoardGPIO_e)
- * @param cs_gyro   陀螺仪 CS 枚举 (BoardGPIO_e)
- * @param int_acc   加速度计 INT 枚举 (BoardGPIO_e)
- * @param int_gyro  陀螺仪 INT 枚举 (BoardGPIO_e，可为 GPIO_NUM_MAX 表示不使用)
- * @param heater    加热 TIM 枚举 (BoardTIM_e，可为 TIM_NUM_MAX 表示不使用)
+ * @param cs_acc_pin    加速度计 CS 枚举 (BoardGPIO_e)
+ * @param cs_gyro_pin   陀螺仪 CS 枚举 (BoardGPIO_e)
+ * @param int_acc_pin   加速度计 INT 枚举 (BoardGPIO_e)
+ * @param int_gyro_pin  陀螺仪 INT 枚举 (BoardGPIO_e，可为 GPIO_NUM_MAX 表示不使用)
+ * @param heater_pin    加热 TIM 枚举 (BoardTIM_e，可为 TIM_NUM_MAX 表示不使用)
  * @param app_cb    APP 回调函数
+ *
+ * @note 灵敏度在 BMI088Register() 中根据配置枚举自动设置
  */
-#define BMI088_INSTANCE_DEF(name, spi_idx, cs_acc, cs_gyro, int_acc, int_gyro, heater, app_cb) \
-    static uint8_t name##_spi_rx_buff[16] __attribute__((section(".ram_d1"))) = {0};           \
-    static BMI088Instance name = {                                                             \
-        .spi_inst = {                                                                          \
-            .spi_e = spi_idx,                                                                  \
-            .handle = NULL,                                                                    \
-            .work_mode = SPI_DMA_MODE,                                                         \
-            .rx_buff = name##_spi_rx_buff,                                                     \
-            .buff_size = 16,                                                                   \
-            .rx_len = 0,                                                                       \
-            .rx_callback = NULL,                                                               \
-        },                                                                                     \
-        .cs_acc = {.gpio_e = cs_acc, .callback = NULL},                                        \
-        .cs_gyro = {.gpio_e = cs_gyro, .callback = NULL},                                      \
-        .int_acc = {.gpio_e = int_acc, .callback = NULL},                                      \
-        .int_gyro = {.gpio_e = int_gyro, .callback = NULL},                                    \
-        .heater_pwm = {.tim_e = heater, .dutyratio = 0.0f},                                    \
-        .work_mode = BMI088_DMA_MODE,                                                          \
-        .cali_mode = BMI088_CALI_ONLINE,                                                       \
-        .read_state = BMI088_STATE_IDLE,                                                       \
-        .temp_read_cnt = 0,                                                                    \
-        .data = {.gyro = {0}, .acc = {0}, .temp = 0},                                          \
-        .gyro_offset = {0},                                                                    \
-        .acc_scale = 1.0f,                                                                     \
-        .g_norm = 9.81f,                                                                       \
-        .acc_sen = BMI088_ACCEL_6G_SEN,                                                        \
-        .gyro_sen = BMI088_GYRO_2000_SEN,                                                      \
-        .imu_ready = 0,                                                                        \
-        .acc_updated = 0,                                                                      \
-        .gyro_updated = 0,                                                                     \
-        .app_callback = app_cb,                                                                \
-        .target_temp = 45.0f,                                                                  \
-        .heater_enabled = 0,                                                                   \
+#define BMI088_INSTANCE_DEF(name, spi_idx, cs_acc_pin, cs_gyro_pin, int_acc_pin, int_gyro_pin, heater_pin, app_cb) \
+    static uint8_t name##_spi_rx_buff[16] __attribute__((section(".ram_d1"))) = {0};                               \
+    static BMI088Instance name = {                                                                                 \
+        .spi_inst = {                                                                                              \
+            .spi_e = spi_idx,                                                                                      \
+            .handle = NULL,                                                                                        \
+            .work_mode = SPI_DMA_MODE,                                                                             \
+            .rx_buff = name##_spi_rx_buff,                                                                         \
+            .buff_size = 16,                                                                                       \
+            .rx_len = 0,                                                                                           \
+            .rx_callback = NULL,                                                                                   \
+        },                                                                                                         \
+        .cs_acc = {.gpio_e = cs_acc_pin, .callback = NULL},                                                        \
+        .cs_gyro = {.gpio_e = cs_gyro_pin, .callback = NULL},                                                      \
+        .int_acc = {.gpio_e = int_acc_pin, .callback = NULL},                                                      \
+        .int_gyro = {.gpio_e = int_gyro_pin, .callback = NULL},                                                    \
+        .heater_pwm = {.tim_e = heater_pin, .dutyratio = 0.0f},                                                    \
+        .work_mode = BMI088_DMA_MODE,                                                                              \
+        .cali_mode = BMI088_CALI_ONLINE,                                                                           \
+        .sync_mode = BMI088_SYNC_ENABLE,                                                                           \
+        .acc_odr = BMI088_ACC_ODR_800_HZ,                                                                          \
+        .acc_range = BMI088_ACC_RANGE_6G,                                                                          \
+        .gyro_range = BMI088_GYRO_RANGE_2000,                                                                      \
+        .gyro_bw = BMI088_GYRO_BW_2000_230HZ,                                                                      \
+        .read_state = BMI088_STATE_IDLE,                                                                           \
+        .temp_read_cnt = 0,                                                                                        \
+        .state_timeout_cnt = 0,                                                                                    \
+        .tx_buff = {0},                                                                                            \
+        .data = {.gyro = {0}, .acc = {0}, .temp = 0},                                                              \
+        .gyro_offset = {0},                                                                                        \
+        .acc_scale = 1.0f,                                                                                         \
+        .g_norm = 9.81f,                                                                                           \
+        .acc_sen = 0.0f,                                                                                           \
+        .gyro_sen = 0.0f,                                                                                          \
+        .imu_ready = 0,                                                                                            \
+        .acc_updated = 0,                                                                                          \
+        .gyro_updated = 0,                                                                                         \
+        .app_callback = app_cb,                                                                                    \
+        .target_temp = 45.0f,                                                                                      \
+        .heater_enabled = 0,                                                                                       \
     }
 
 /*============================ 公开接口声明 ============================*/
@@ -293,6 +439,8 @@ typedef struct BMI088Instance
  * @param inst BMI088 实例指针（需先通过宏定义）
  * @retval 0 成功
  * @retval -1 失败
+ *
+ * @note 灵敏度根据实例中的 acc_range 和 gyro_range 自动设置
  */
 int8_t BMI088Register(BMI088Instance *inst);
 

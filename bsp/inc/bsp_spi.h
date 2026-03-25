@@ -30,13 +30,14 @@ typedef enum
  */
 typedef struct SPIInstance
 {
-    BoardSPI_e spi_e;                          // 板载SPI枚举（注册时用于查找映射）
-    SPI_HandleTypeDef *handle;                 // SPI句柄（注册时自动填充）
-    SPI_Work_Mode_e work_mode;                 // 工作模式
-    uint8_t *rx_buff;                          // 接收缓冲区指针
-    uint16_t buff_size;                        // 缓冲区大小
-    uint16_t rx_len;                           // 接收数据长度
-    void (*rx_callback)(struct SPIInstance *); // DMA接收完成回调
+    BoardSPI_e spi_e;                             // 板载SPI枚举（注册时用于查找映射）
+    SPI_HandleTypeDef *handle;                    // SPI句柄（注册时自动填充）
+    SPI_Work_Mode_e work_mode;                    // 工作模式
+    uint8_t *rx_buff;                             // 接收缓冲区指针
+    uint16_t buff_size;                           // 缓冲区大小
+    uint16_t rx_len;                              // 接收数据长度
+    void (*rx_callback)(struct SPIInstance *);    // DMA接收完成回调
+    void (*error_callback)(struct SPIInstance *); // DMA错误回调
 } SPIInstance;
 
 /*------------- 实例定义宏 --------------*/
