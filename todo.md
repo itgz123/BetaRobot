@@ -9,3 +9,4 @@
 9. uart和spi超时时间
 10. 协议bsp。eg:uart，spi
 11. drv_bmi088使用pid控制温度
+12. 所有原始数据都需要时间戳（sbus通过dma接收到的原始25字节，bmi通过dma接收到的14字节），sbus，bmi
