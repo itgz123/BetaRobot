@@ -26,38 +26,38 @@
 /*============================ 寄存器地址定义 ============================*/
 
 /*------- 加速度计寄存器地址 -------*/
-#define BMI088_ACC_CHIP_ID_REG 0x00    // Who Am I 寄存器地址
-#define BMI088_ACC_ERR_REG 0x02        // 错误标志寄存器
-#define BMI088_ACC_STATUS_REG 0x03     // 状态寄存器
-#define BMI088_ACC_INT_STAT_1_REG 0x1D // 中断状态寄存器 1
-#define BMI088_ACCEL_XOUT_L 0x12       // X 轴加速度低字节
-#define BMI088_ACCEL_XOUT_H 0x13       // X 轴加速度高字节
-#define BMI088_ACCEL_YOUT_L 0x14       // Y 轴加速度低字节
-#define BMI088_ACCEL_YOUT_H 0x15       // Y 轴加速度高字节
-#define BMI088_ACCEL_ZOUT_L 0x16       // Z 轴加速度低字节
-#define BMI088_ACCEL_ZOUT_H 0x17       // Z 轴加速度高字节
-#define BMI088_SENSORTIME_0_REG 0x18   // 传感器时间低字节
-#define BMI088_SENSORTIME_1_REG 0x19   // 传感器时间中字节
-#define BMI088_SENSORTIME_2_REG 0x1A   // 传感器时间高字节
-#define BMI088_TEMP_L 0x23             // 温度数据低字节
-#define BMI088_TEMP_M 0x22             // 温度数据高字节
-#define BMI088_ACC_FIFO_LENGTH_L 0x24  // FIFO 数据长度低字节
-#define BMI088_ACC_FIFO_LENGTH_H 0x25  // FIFO 数据长度高字节
-#define BMI088_ACC_FIFO_DATA_REG 0x26  // FIFO 数据寄存器
-#define BMI088_ACC_CONF_REG 0x40       // 加速度计配置寄存器
-#define BMI088_ACC_RANGE_REG 0x41      // 量程配置寄存器
-#define BMI088_ACC_FIFO_DOWNS_REG 0x45 // FIFO 降采样配置寄存器
-#define BMI088_ACC_FIFO_WTM_L 0x46     // FIFO 水印低字节
-#define BMI088_ACC_FIFO_WTM_H 0x47     // FIFO 水印高字节
+#define BMI088_ACC_CHIP_ID_REG 0x00       // Who Am I 寄存器地址
+#define BMI088_ACC_ERR_REG 0x02           // 错误标志寄存器
+#define BMI088_ACC_STATUS_REG 0x03        // 状态寄存器
+#define BMI088_ACC_INT_STAT_1_REG 0x1D    // 中断状态寄存器 1
+#define BMI088_ACCEL_XOUT_L 0x12          // X 轴加速度低字节
+#define BMI088_ACCEL_XOUT_H 0x13          // X 轴加速度高字节
+#define BMI088_ACCEL_YOUT_L 0x14          // Y 轴加速度低字节
+#define BMI088_ACCEL_YOUT_H 0x15          // Y 轴加速度高字节
+#define BMI088_ACCEL_ZOUT_L 0x16          // Z 轴加速度低字节
+#define BMI088_ACCEL_ZOUT_H 0x17          // Z 轴加速度高字节
+#define BMI088_SENSORTIME_0_REG 0x18      // 传感器时间低字节
+#define BMI088_SENSORTIME_1_REG 0x19      // 传感器时间中字节
+#define BMI088_SENSORTIME_2_REG 0x1A      // 传感器时间高字节
+#define BMI088_TEMP_L 0x23                // 温度数据低字节
+#define BMI088_TEMP_M 0x22                // 温度数据高字节
+#define BMI088_ACC_FIFO_LENGTH_L 0x24     // FIFO 数据长度低字节
+#define BMI088_ACC_FIFO_LENGTH_H 0x25     // FIFO 数据长度高字节
+#define BMI088_ACC_FIFO_DATA_REG 0x26     // FIFO 数据寄存器
+#define BMI088_ACC_CONF_REG 0x40          // 加速度计配置寄存器
+#define BMI088_ACC_RANGE_REG 0x41         // 量程配置寄存器
+#define BMI088_ACC_FIFO_DOWNS_REG 0x45    // FIFO 降采样配置寄存器
+#define BMI088_ACC_FIFO_WTM_L 0x46        // FIFO 水印低字节
+#define BMI088_ACC_FIFO_WTM_H 0x47        // FIFO 水印高字节
 #define BMI088_ACC_FIFO_CONFIG_0_REG 0x48 // FIFO 配置寄存器 0
 #define BMI088_ACC_FIFO_CONFIG_1_REG 0x49 // FIFO 配置寄存器 1
-#define BMI088_INT1_IO_CTRL_REG 0x53   // INT1 引脚配置寄存器
-#define BMI088_INT2_IO_CTRL_REG 0x54   // INT2 引脚配置寄存器
-#define BMI088_INT_MAP_DATA_REG 0x58   // 中断映射寄存器
-#define BMI088_ACC_SELF_TEST_REG 0x6D  // 自检寄存器
-#define BMI088_ACC_PWR_CONF_REG 0x7C   // 电源配置寄存器
-#define BMI088_ACC_PWR_CTRL_REG 0x7D   // 电源控制寄存器
-#define BMI088_ACC_SOFTRESET_REG 0x7E  // 软复位寄存器
+#define BMI088_INT1_IO_CTRL_REG 0x53      // INT1 引脚配置寄存器
+#define BMI088_INT2_IO_CTRL_REG 0x54      // INT2 引脚配置寄存器
+#define BMI088_INT_MAP_DATA_REG 0x58      // 中断映射寄存器
+#define BMI088_ACC_SELF_TEST_REG 0x6D     // 自检寄存器
+#define BMI088_ACC_PWR_CONF_REG 0x7C      // 电源配置寄存器
+#define BMI088_ACC_PWR_CTRL_REG 0x7D      // 电源控制寄存器
+#define BMI088_ACC_SOFTRESET_REG 0x7E     // 软复位寄存器
 
 /*------- 陀螺仪寄存器地址 -------*/
 #define BMI088_GYRO_CHIP_ID_REG 0x00           // Who Am I 寄存器地址
