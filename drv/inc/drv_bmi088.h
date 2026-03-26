@@ -41,8 +41,16 @@
 #define BMI088_SENSORTIME_2_REG 0x1A   // 传感器时间高字节
 #define BMI088_TEMP_L 0x23             // 温度数据低字节
 #define BMI088_TEMP_M 0x22             // 温度数据高字节
+#define BMI088_ACC_FIFO_LENGTH_L 0x24  // FIFO 数据长度低字节
+#define BMI088_ACC_FIFO_LENGTH_H 0x25  // FIFO 数据长度高字节
+#define BMI088_ACC_FIFO_DATA_REG 0x26  // FIFO 数据寄存器
 #define BMI088_ACC_CONF_REG 0x40       // 加速度计配置寄存器
 #define BMI088_ACC_RANGE_REG 0x41      // 量程配置寄存器
+#define BMI088_ACC_FIFO_DOWNS_REG 0x45 // FIFO 降采样配置寄存器
+#define BMI088_ACC_FIFO_WTM_L 0x46     // FIFO 水印低字节
+#define BMI088_ACC_FIFO_WTM_H 0x47     // FIFO 水印高字节
+#define BMI088_ACC_FIFO_CONFIG_0_REG 0x48 // FIFO 配置寄存器 0
+#define BMI088_ACC_FIFO_CONFIG_1_REG 0x49 // FIFO 配置寄存器 1
 #define BMI088_INT1_IO_CTRL_REG 0x53   // INT1 引脚配置寄存器
 #define BMI088_INT2_IO_CTRL_REG 0x54   // INT2 引脚配置寄存器
 #define BMI088_INT_MAP_DATA_REG 0x58   // 中断映射寄存器
@@ -73,6 +81,7 @@
 #define BMI088_GYRO_SELF_TEST_REG 0x3C         // 自检寄存器
 #define BMI088_GYRO_FIFO_CONFIG_0_REG 0x3D     // FIFO 配置寄存器 0
 #define BMI088_GYRO_FIFO_CONFIG_1_REG 0x3E     // FIFO 配置寄存器 1
+#define BMI088_GYRO_FIFO_DATA_REG 0x3F         // FIFO 数据寄存器
 
 /*============================ 固定值定义 ============================*/
 
@@ -243,7 +252,7 @@ extern const float BMI088_GyroSenTable[BMI088_GYRO_RANGE_NUM];
 #define BMI088_GYRO_RX_CHIPID_IDX 0 // 陀螺仪接收 CHIP_ID 索引
 #define BMI088_GYRO_RX_DATA_IDX 1   // 陀螺仪接收数据起始索引
 /* 温度 DMA 读取：1 字节读命令 + 1 字节 dummy + 2 字节数据 */
-#define BMI088_TEMP_RX_DUMMY_LEN 2 // 温度接收数据起始索引
+#define BMI088_TEMP_RX_DUMMY_LEN 1 // 温度接收数据起始索引（跳过第1个dummy字节）
 
 /*------- 温度转换参数 -------*/
 #define BMI088_TEMP_FACTOR 0.125f // 温度分辨率 °C/LSB
@@ -348,6 +357,7 @@ typedef struct BMI088Instance
     BMI088_WorkMode_e work_mode;   // 工作模式
     BMI088_CaliMode_e cali_mode;   // 标定模式
     BMI088_AccODR_e acc_odr;       // 加速度计输出数据率
+    BMI088_AccBW_e acc_bw;         // 加速度计带宽配置
     BMI088_AccRange_e acc_range;   // 加速度计量程
     BMI088_GyroRange_e gyro_range; // 陀螺仪量程
     BMI088_GyroBW_e gyro_bw;       // 陀螺仪带宽
@@ -418,6 +428,7 @@ typedef struct BMI088Instance
         .work_mode = BMI088_DMA_MODE,                                                                              \
         .cali_mode = BMI088_CALI_ONLINE,                                                                           \
         .acc_odr = BMI088_ACC_ODR_800_HZ,                                                                          \
+        .acc_bw = BMI088_ACC_BW_NORMAL,                                                                            \
         .acc_range = BMI088_ACC_RANGE_6G,                                                                          \
         .gyro_range = BMI088_GYRO_RANGE_2000,                                                                      \
         .gyro_bw = BMI088_GYRO_BW_2000_230HZ,                                                                      \

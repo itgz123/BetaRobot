@@ -333,8 +333,8 @@ static uint8_t BMI088_AccelInit(BMI088Instance *inst)
     error |= BMI088_AccelWriteAndVerify(inst, BMI088_ACC_PWR_CONF_REG,
                                         BMI088_ACC_PWR_ACTIVE, BMI088_ACC_PWR_CONF_ERROR);
 
-    /* 配置 ODR 和工作模式 */
-    uint8_t acc_conf_val = BMI088_ACC_CONF_MUST_SET | BMI088_ACC_NORMAL_MODE | inst->acc_odr;
+    /* 配置带宽和ODR */
+    uint8_t acc_conf_val = BMI088_ACC_CONF_MUST_SET | (inst->acc_bw << 4) | inst->acc_odr;
     error |= BMI088_AccelWriteAndVerify(inst, BMI088_ACC_CONF_REG,
                                         acc_conf_val, BMI088_ACC_CONF_ERROR);
 
@@ -605,7 +605,7 @@ int8_t BMI088Register(BMI088Instance *inst)
     {
         inst->spi_inst.work_mode = SPI_DMA_MODE;
         inst->spi_inst.rx_callback = BMI088_SPI_RxCallback;
-        inst->spi_inst.error_callback = BMI088_SPI_ErrorCallback;
+        // inst->spi_inst.error_callback = BMI088_SPI_ErrorCallback;
 
         /* 注册中断 GPIO */
         inst->int_acc.callback = BMI088_AccINTCallback;

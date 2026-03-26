@@ -166,11 +166,6 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
                        (error_code & HAL_SPI_ERROR_FRE) ? 1 : 0,  // 帧错误
                        (error_code & HAL_SPI_ERROR_DMA) ? 1 : 0); // DMA错误
 
-            // 调用实例错误回调
-            if (s_spi_instance[i]->error_callback != NULL)
-            {
-                s_spi_instance[i]->error_callback(s_spi_instance[i]);
-            }
             return;
         }
     }

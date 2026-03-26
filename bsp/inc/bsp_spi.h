@@ -37,7 +37,6 @@ typedef struct SPIInstance
     uint16_t buff_size;                           // 缓冲区大小
     uint16_t rx_len;                              // 接收数据长度
     void (*rx_callback)(struct SPIInstance *);    // DMA接收完成回调
-    void (*error_callback)(struct SPIInstance *); // DMA错误回调
 } SPIInstance;
 
 /*------------- 实例定义宏 --------------*/
