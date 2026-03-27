@@ -467,7 +467,8 @@ typedef struct BMI088Instance
     PWMInstance heater_pwm; // 加热 PWM（可选）
 
     /* 发送缓冲区 */
-    uint8_t tx_buff[BMI088_BUFF_SIZE]; // 发送缓冲区
+    uint8_t *tx_buff; // 发送缓冲区指针
+    uint8_t tx_len;   // 发送数据长度
 
     /* 加速度计配置 */
     BMI088_AccRange_e acc_range; // 量程
@@ -507,6 +508,8 @@ typedef struct BMI088Instance
                             int_acc_idx, int_gyro_idx, heater_idx)  \
     static uint8_t name##_rx_buff[BMI088_BUFF_SIZE]                 \
         __attribute__((section(".ram_d1"))) = {0};                  \
+    static uint8_t name##_tx_buff[BMI088_BUFF_SIZE]                 \
+        __attribute__((section(".ram_d1"))) = {0};                  \
     static BMI088Instance name = {                                  \
         .spi_inst.spi_e = spi_idx,                                  \
         .spi_inst.handle = NULL,                                    \
@@ -525,11 +528,14 @@ typedef struct BMI088Instance
         .int_gyro.callback = NULL,                                  \
         .heater_pwm.tim_e = heater_idx,                             \
         .heater_pwm.dutyratio = 0.0f,                               \
+        .tx_buff = name##_tx_buff,                                  \
+        .tx_len = 0,                                                \
     }
 #else
 #define BMI088_INSTANCE_DEF(name, spi_idx, cs_acc_idx, cs_gyro_idx, \
                             int_acc_idx, int_gyro_idx, heater_idx)  \
     static uint8_t name##_rx_buff[BMI088_BUFF_SIZE] = {0};          \
+    static uint8_t name##_tx_buff[BMI088_BUFF_SIZE] = {0};          \
     static BMI088Instance name = {                                  \
         .spi_inst.spi_e = spi_idx,                                  \
         .spi_inst.handle = NULL,                                    \
@@ -548,6 +554,8 @@ typedef struct BMI088Instance
         .int_gyro.callback = NULL,                                  \
         .heater_pwm.tim_e = heater_idx,                             \
         .heater_pwm.dutyratio = 0.0f,                               \
+        .tx_buff = name##_tx_buff,                                  \
+        .tx_len = 0,                                                \
     }
 #endif
 
