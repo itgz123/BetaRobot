@@ -21,6 +21,7 @@
 
 /*------- 加速度计寄存器地址 -------*/
 #define BMI088_ACC_CHIP_ID_REG 0x00    // Who Am I 寄存器地址
+#define BMI088_ACC_CHIP_ID_VAL 0x1E    // 加速度计 CHIP_ID 值
 #define BMI088_ACC_ERR_REG 0x02        // 错误标志寄存器
 #define BMI088_ACC_STATUS_REG 0x03     // 状态寄存器
 #define BMI088_ACC_INT_STAT_1_REG 0x1D // 中断状态寄存器 1
@@ -54,14 +55,15 @@
 #define BMI088_ACC_SOFTRESET_REG 0x7E // 软复位寄存器
 
 /*------- 陀螺仪寄存器地址 -------*/
-#define BMI088_GYRO_CHIP_ID_REG 0x00 // Who Am I 寄存器地址
-#define BMI088_GYRO_X_L 0x02         // X 轴角速度低字节
-#define BMI088_GYRO_X_H 0x03         // X 轴角速度高字节
-#define BMI088_GYRO_Y_L 0x04         // Y 轴角速度低字节
-#define BMI088_GYRO_Y_H 0x05         // Y 轴角速度高字节
-#define BMI088_GYRO_Z_L 0x06         // Z 轴角速度低字节
-#define BMI088_GYRO_Z_H 0x07         // Z 轴角速度高字节
-#define BMI088_GYRO_INT_STAT_1 0x0A  // 中断状态寄存器 1
+#define BMI088_GYRO_CHIP_ID_REG 0x00   // Who Am I 寄存器地址
+#define BMI088_GYRO_CHIP_ID_VALUE 0x0F // 陀螺仪 CHIP_ID 值
+#define BMI088_GYRO_X_L 0x02           // X 轴角速度低字节
+#define BMI088_GYRO_X_H 0x03           // X 轴角速度高字节
+#define BMI088_GYRO_Y_L 0x04           // Y 轴角速度低字节
+#define BMI088_GYRO_Y_H 0x05           // Y 轴角速度高字节
+#define BMI088_GYRO_Z_L 0x06           // Z 轴角速度低字节
+#define BMI088_GYRO_Z_H 0x07           // Z 轴角速度高字节
+#define BMI088_GYRO_INT_STAT_1 0x0A    // 中断状态寄存器 1
 // #define BMI088_GYRO_FIFO_STATUS_REG 0x0E       // FIFO 状态寄存器
 #define BMI088_GYRO_RANGE_REG 0x0F             // 量程配置寄存器
 #define BMI088_GYRO_BANDWIDTH_REG 0x10         // 带宽配置寄存器
@@ -164,40 +166,40 @@ typedef enum
 typedef enum
 {
     // bit[4] - int1_in: 启用输入引脚
-    BMI088_INT1_IN = 1 << 4, // 启用 INT1 作为输入引脚
+    // BMI088_INT1_IN = 1 << 4, // 启用 INT1 作为输入引脚
 
     // bit[3] - int1_out: 启用输出引脚
     BMI088_INT1_OUT = 1 << 3, // 启用 INT1 作为输出引脚
 
     // bit[2] - int1_od: 引脚行为
-    BMI088_INT1_OD_OPEN_DRAIN = 1 << 2, // 开漏输出 (默认推挽)
+    // BMI088_INT1_OD_OPEN_DRAIN = 1 << 2, // 开漏输出 (默认推挽)
 
     // bit[1] - int1_lvl: 有效状态
     BMI088_INT1_LVL_HIGH = 1 << 1, // 高电平有效 (默认低电平)
 } BMI088_Int1IoCtrl_e;
 
-/**
- * @brief INT2_IO_CTRL_REG (0x54) INT2 引脚配置寄存器
- * @note bit[4] - int2_in: 启用 INT2 作为输入引脚
- * @note bit[3] - int2_out: 启用 INT2 作为输出引脚
- * @note bit[2] - int2_od: 引脚行为 (0=推挽, 1=开漏)
- * @note bit[1] - int2_lvl: 有效状态 (0=低电平有效, 1=高电平有效)
- * @note 访问: RW
- */
-typedef enum
-{
-    // bit[4] - int2_in: 启用输入引脚
-    BMI088_INT2_IN = 1 << 4, // 启用 INT2 作为输入引脚
+// /**
+//  * @brief INT2_IO_CTRL_REG (0x54) INT2 引脚配置寄存器
+//  * @note bit[4] - int2_in: 启用 INT2 作为输入引脚
+//  * @note bit[3] - int2_out: 启用 INT2 作为输出引脚
+//  * @note bit[2] - int2_od: 引脚行为 (0=推挽, 1=开漏)
+//  * @note bit[1] - int2_lvl: 有效状态 (0=低电平有效, 1=高电平有效)
+//  * @note 访问: RW
+//  */
+// typedef enum
+// {
+//     // bit[4] - int2_in: 启用输入引脚
+//     BMI088_INT2_IN = 1 << 4, // 启用 INT2 作为输入引脚
 
-    // bit[3] - int2_out: 启用输出引脚
-    BMI088_INT2_OUT = 1 << 3, // 启用 INT2 作为输出引脚
+//     // bit[3] - int2_out: 启用输出引脚
+//     BMI088_INT2_OUT = 1 << 3, // 启用 INT2 作为输出引脚
 
-    // bit[2] - int2_od: 引脚行为
-    BMI088_INT2_OD_OPEN_DRAIN = 1 << 2, // 开漏输出 (默认推挽)
+//     // bit[2] - int2_od: 引脚行为
+//     BMI088_INT2_OD_OPEN_DRAIN = 1 << 2, // 开漏输出 (默认推挽)
 
-    // bit[1] - int2_lvl: 有效状态
-    BMI088_INT2_LVL_HIGH = 1 << 1, // 高电平有效 (默认低电平)
-} BMI088_Int2IoCtrl_e;
+//     // bit[1] - int2_lvl: 有效状态
+//     BMI088_INT2_LVL_HIGH = 1 << 1, // 高电平有效 (默认低电平)
+// } BMI088_Int2IoCtrl_e;
 
 /**
  * @brief INT_MAP_DATA_REG (0x58) 中断映射寄存器
@@ -212,14 +214,15 @@ typedef enum
 typedef enum
 {
     // INT2 中断映射
-    BMI088_INT2_DRDY = 1 << 6, // 数据就绪中断映射到 INT2
-    BMI088_INT2_FWM = 1 << 5,  // FIFO 水印中断映射到 INT2
-    BMI088_INT2_FULL = 1 << 4, // FIFO 满中断映射到 INT2
+    // BMI088_INT2_DRDY = 1 << 6, // 数据就绪中断映射到 INT2
+    // BMI088_INT2_FWM = 1 << 5,  // FIFO 水印中断映射到 INT2
+    // BMI088_INT2_FULL = 1 << 4, // FIFO 满中断映射到 INT2
 
     // INT1 中断映射
     BMI088_INT1_DRDY = 1 << 2, // 数据就绪中断映射到 INT1
-    BMI088_INT1_FWM = 1 << 1,  // FIFO 水印中断映射到 INT1
-    BMI088_INT1_FULL = 1 << 0, // FIFO 满中断映射到 INT1
+
+    // BMI088_INT1_FWM = 1 << 1,  // FIFO 水印中断映射到 INT1
+    // BMI088_INT1_FULL = 1 << 0, // FIFO 满中断映射到 INT1
 } BMI088_IntMapData_e;
 
 /**
@@ -241,8 +244,8 @@ typedef enum
  */
 typedef enum
 {
-    BMI088_ACC_PWR_SAVE_ACTIVE = 0x00,  // 活动模式
-    BMI088_ACC_PWR_SAVE_SUSPEND = 0x03, // 挂起模式
+    BMI088_ACC_PWR_SAVE_ACTIVE = 0x00, // 活动模式
+    // BMI088_ACC_PWR_SAVE_SUSPEND = 0x03, // 挂起模式
 } BMI088_AccPwrConf_e;
 
 /**
@@ -252,8 +255,8 @@ typedef enum
  */
 typedef enum
 {
-    BMI088_ACC_ENABLE_OFF = 0x00, // 加速度计关闭
-    BMI088_ACC_ENABLE_ON = 0x04,  // 加速度计开启
+    // BMI088_ACC_ENABLE_OFF = 0x00, // 加速度计关闭
+    BMI088_ACC_ENABLE_ON = 0x04, // 加速度计开启
 } BMI088_AccPwrCtrl_e;
 
 /**
@@ -297,20 +300,34 @@ typedef enum
 
 /**
  * @brief GYRO_BANDWIDTH (0x10) 陀螺仪带宽配置寄存器
- * @note bit[7:0] - gyro_bw: 输出数据速率和滤波器带宽
+ * @note bit[7] - must_set: 保留位，必须写入1
+ * @note bit[6:4] - gyro_odr: 输出数据速率标识
+ * @note bit[3:0] - gyro_bw: 滤波器带宽
+ * @note ODR与BW绑定，需选择兼容组合
  * @note 访问: RW
  */
 typedef enum
 {
-    BMI088_GYRO_BW_2000_532 = 0x00, // ODR=2000Hz, BW=532Hz
-    BMI088_GYRO_BW_2000_230 = 0x01, // ODR=2000Hz, BW=230Hz
-    BMI088_GYRO_BW_1000_116 = 0x02, // ODR=1000Hz, BW=116Hz
-    BMI088_GYRO_BW_400_47 = 0x03,   // ODR=400Hz, BW=47Hz
-    BMI088_GYRO_BW_200_23 = 0x04,   // ODR=200Hz, BW=23Hz
-    BMI088_GYRO_BW_100_12 = 0x05,   // ODR=100Hz, BW=12Hz
-    BMI088_GYRO_BW_200_64 = 0x06,   // ODR=200Hz, BW=64Hz
-    BMI088_GYRO_BW_100_32 = 0x07,   // ODR=100Hz, BW=32Hz
-} BMI088_GyroBandwidth_e;
+    // bit[7] - must_set: 保留位，必须写入1
+    BMI088_GYRO_BW_MUST_SET = 0x80,
+
+    // bit[6:4] - gyro_odr: 输出数据速率标识
+    BMI088_GYRO_ODR_2000 = 0x00 << 4, // 2000 Hz
+    BMI088_GYRO_ODR_1000 = 0x01 << 4, // 1000 Hz
+    BMI088_GYRO_ODR_400 = 0x02 << 4,  // 400 Hz
+    BMI088_GYRO_ODR_200 = 0x03 << 4,  // 200 Hz
+    BMI088_GYRO_ODR_100 = 0x04 << 4,  // 100 Hz
+
+    // bit[3:0] - gyro_bw: 滤波器带宽
+    BMI088_GYRO_BW_532 = 0x00, // 532 Hz (ODR=2000)
+    BMI088_GYRO_BW_230 = 0x01, // 230 Hz (ODR=2000)
+    BMI088_GYRO_BW_116 = 0x02, // 116 Hz (ODR=1000)
+    BMI088_GYRO_BW_47 = 0x03,  // 47 Hz (ODR=400)
+    BMI088_GYRO_BW_23 = 0x04,  // 23 Hz (ODR=200)
+    BMI088_GYRO_BW_12 = 0x05,  // 12 Hz (ODR=100)
+    BMI088_GYRO_BW_64 = 0x06,  // 64 Hz (ODR=200)
+    BMI088_GYRO_BW_32 = 0x07,  // 32 Hz (ODR=100)
+} BMI088_GyroConf_e;
 
 /**
  * @brief GYRO_LPM1 (0x11) 低功耗模式配置寄存器
@@ -319,9 +336,9 @@ typedef enum
  */
 typedef enum
 {
-    BMI088_GYRO_PM_NORMAL = 0x00,       // 正常模式
-    BMI088_GYRO_PM_SUSPEND = 0x80,      // 挂起模式
-    BMI088_GYRO_PM_DEEP_SUSPEND = 0x20, // 深度挂起模式
+    BMI088_GYRO_PM_NORMAL = 0x00, // 正常模式
+    // BMI088_GYRO_PM_SUSPEND = 0x80,      // 挂起模式
+    // BMI088_GYRO_PM_DEEP_SUSPEND = 0x20, // 深度挂起模式
 } BMI088_GyroPm_e;
 
 /**
@@ -343,7 +360,7 @@ typedef enum
     BMI088_GYRO_INT_DATA_EN = 1 << 7, // 启用新数据中断
 
     // bit[6] - fifo_en: FIFO 中断使能
-    BMI088_GYRO_INT_FIFO_EN = 1 << 6, // 启用 FIFO 中断
+    // BMI088_GYRO_INT_FIFO_EN = 1 << 6, // 启用 FIFO 中断
 } BMI088_GyroIntCtrl_e;
 
 /**
@@ -357,13 +374,13 @@ typedef enum
 typedef enum
 {
     // bit[3] - int4_od: INT4 引脚行为
-    BMI088_INT4_OD_OPEN_DRAIN = 1 << 3, // INT4 开漏输出 (默认推挽)
+    // BMI088_INT4_OD_OPEN_DRAIN = 1 << 3, // INT4 开漏输出 (默认推挽)
 
     // bit[2] - int4_lvl: INT4 有效状态
-    BMI088_INT4_LVL_HIGH = 1 << 2, // INT4 高电平有效 (默认低电平)
+    // BMI088_INT4_LVL_HIGH = 1 << 2, // INT4 高电平有效 (默认低电平)
 
     // bit[1] - int3_od: INT3 引脚行为
-    BMI088_INT3_OD_OPEN_DRAIN = 1 << 1, // INT3 开漏输出 (默认推挽)
+    // BMI088_INT3_OD_OPEN_DRAIN = 1 << 1, // INT3 开漏输出 (默认推挽)
 
     // bit[0] - int3_lvl: INT3 有效状态
     BMI088_INT3_LVL_HIGH = 1 << 0, // INT3 高电平有效 (默认低电平)
@@ -380,11 +397,11 @@ typedef enum
 typedef enum
 {
     // INT4 中断映射
-    BMI088_INT4_DATA = 1 << 7, // 数据就绪中断映射到 INT4
-    BMI088_INT4_FIFO = 1 << 5, // FIFO 中断映射到 INT4
+    // BMI088_INT4_DATA = 1 << 7, // 数据就绪中断映射到 INT4
+    // BMI088_INT4_FIFO = 1 << 5, // FIFO 中断映射到 INT4
 
     // INT3 中断映射
-    BMI088_INT3_FIFO = 1 << 2, // FIFO 中断映射到 INT3
+    // BMI088_INT3_FIFO = 1 << 2, // FIFO 中断映射到 INT3
     BMI088_INT3_DATA = 1 << 0, // 数据就绪中断映射到 INT3
 } BMI088_Int3Int4IoMap_e;
 
@@ -412,6 +429,19 @@ typedef enum
 } BMI088_GyroSelfTest_e;
 
 /**
+ * @brief BMI088 工作模式枚举
+ */
+typedef enum
+{
+    BMI088_MODE_POLLING = 0, // 阻塞模式：主动轮询读取6轴数据
+    BMI088_MODE_INT,         // 中断模式：数据就绪后中断通知主控
+} BMI088_WorkMode_e;
+
+/*============================ 缓冲区大小定义 ============================*/
+
+#define BMI088_BUFF_SIZE 8 // SPI缓冲区大小：1地址 + 1虚拟 + 6数据（最大）
+
+/**
  * @brief IMU 数据结构体
  */
 typedef struct
@@ -424,7 +454,7 @@ typedef struct
 
 /**
  * @brief BMI088 实例结构体
- * @note 内嵌 BSP 实例，使用 container_of 获取父指针
+ * @note 内嵌 BSP 实例
  */
 typedef struct BMI088Instance
 {
@@ -436,8 +466,112 @@ typedef struct BMI088Instance
     GPIOInstance int_gyro;  // 陀螺仪中断（可选）
     PWMInstance heater_pwm; // 加热 PWM（可选）
 
+    /* 发送缓冲区 */
+    uint8_t tx_buff[BMI088_BUFF_SIZE]; // 发送缓冲区
+
+    /* 加速度计配置 */
+    BMI088_AccRange_e acc_range; // 量程
+    uint8_t acc_bwp;             // 低通滤波器带宽
+    uint8_t acc_odr;             // 输出数据速率
+
+    /* 陀螺仪配置 */
+    BMI088_GyroRange_e gyro_range; // 量程
+    uint8_t gyro_odr;              // 输出数据速率
+    uint8_t gyro_bw;               // 滤波器带宽
+
+    /* 工作模式 */
+    BMI088_WorkMode_e work_mode; // 工作模式
+
 } BMI088Instance;
 
+/*============================ 实例定义宏 ============================*/
+
+/**
+ * @brief BMI088实例静态定义宏
+ * @param name        实例名称
+ * @param spi_idx     板载SPI枚举
+ * @param cs_acc_idx  加速度计片选GPIO枚举
+ * @param cs_gyro_idx 陀螺仪片选GPIO枚举
+ * @param int_acc_idx 加速度计中断GPIO枚举
+ * @param int_gyro_idx 陀螺仪中断GPIO枚举（无则填0）
+ * @param heater_idx  加热PWM枚举（无则填0）
+ *
+ * @note 初始化时默认使用阻塞模式，初始化完成后可切换到DMA模式
+ *
+ * @example
+ *   BMI088_INSTANCE_DEF(bmi088, SPI_BMI088, GPIO_BMI088_CS1, GPIO_BMI088_CS2,
+ *                       GPIO_BMI088_INT1, GPIO_BMI088_INT3, TIM_HEATER);
+ */
+#if CPU_CORE == CORTEX_M7
+#define BMI088_INSTANCE_DEF(name, spi_idx, cs_acc_idx, cs_gyro_idx, \
+                            int_acc_idx, int_gyro_idx, heater_idx)  \
+    static uint8_t name##_rx_buff[BMI088_BUFF_SIZE]                 \
+        __attribute__((section(".ram_d1"))) = {0};                  \
+    static BMI088Instance name = {                                  \
+        .spi_inst.spi_e = spi_idx,                                  \
+        .spi_inst.handle = NULL,                                    \
+        .spi_inst.work_mode = SPI_BLOCK_MODE,                       \
+        .spi_inst.rx_buff = name##_rx_buff,                         \
+        .spi_inst.buff_size = BMI088_BUFF_SIZE,                     \
+        .spi_inst.rx_len = 0,                                       \
+        .spi_inst.rx_callback = NULL,                               \
+        .cs_acc.gpio_e = cs_acc_idx,                                \
+        .cs_acc.callback = NULL,                                    \
+        .cs_gyro.gpio_e = cs_gyro_idx,                              \
+        .cs_gyro.callback = NULL,                                   \
+        .int_acc.gpio_e = int_acc_idx,                              \
+        .int_acc.callback = NULL,                                   \
+        .int_gyro.gpio_e = int_gyro_idx,                            \
+        .int_gyro.callback = NULL,                                  \
+        .heater_pwm.tim_e = heater_idx,                             \
+        .heater_pwm.dutyratio = 0.0f,                               \
+    }
+#else
+#define BMI088_INSTANCE_DEF(name, spi_idx, cs_acc_idx, cs_gyro_idx, \
+                            int_acc_idx, int_gyro_idx, heater_idx)  \
+    static uint8_t name##_rx_buff[BMI088_BUFF_SIZE] = {0};          \
+    static BMI088Instance name = {                                  \
+        .spi_inst.spi_e = spi_idx,                                  \
+        .spi_inst.handle = NULL,                                    \
+        .spi_inst.work_mode = SPI_BLOCK_MODE,                       \
+        .spi_inst.rx_buff = name##_rx_buff,                         \
+        .spi_inst.buff_size = BMI088_BUFF_SIZE,                     \
+        .spi_inst.rx_len = 0,                                       \
+        .spi_inst.rx_callback = NULL,                               \
+        .cs_acc.gpio_e = cs_acc_idx,                                \
+        .cs_acc.callback = NULL,                                    \
+        .cs_gyro.gpio_e = cs_gyro_idx,                              \
+        .cs_gyro.callback = NULL,                                   \
+        .int_acc.gpio_e = int_acc_idx,                              \
+        .int_acc.callback = NULL,                                   \
+        .int_gyro.gpio_e = int_gyro_idx,                            \
+        .int_gyro.callback = NULL,                                  \
+        .heater_pwm.tim_e = heater_idx,                             \
+        .heater_pwm.dutyratio = 0.0f,                               \
+    }
+#endif
+
 /*============================ 公开接口声明 ============================*/
+
+/**
+ * @brief 注册BMI088实例
+ * @param inst BMI088实例指针
+ * @return 0成功，-1失败
+ */
+int8_t BMI088Register(BMI088Instance *inst);
+
+/**
+ * @brief 设置BMI088配置并写入寄存器
+ * @param inst       BMI088实例指针
+ * @param acc_range  加速度计量程
+ * @param acc_bwp    加速度计低通滤波器带宽
+ * @param acc_odr    加速度计输出数据速率
+ * @param gyro_range 陀螺仪量程
+ * @param gyro_odr   陀螺仪输出数据速率
+ * @param gyro_bw    陀螺仪滤波器带宽
+ * @param work_mode  工作模式
+ * @return 0成功，-1失败
+ */
+int8_t BMI088SetConfig(BMI088Instance *inst, BMI088_AccRange_e acc_range, uint8_t acc_bwp, uint8_t acc_odr, BMI088_GyroRange_e gyro_range, uint8_t gyro_odr, uint8_t gyro_bw, BMI088_WorkMode_e work_mode);
 
 #endif /* __DRV_BMI088_H */
