@@ -8,8 +8,7 @@
 
 // 定义 BMI088 实例（一次性定义所有子实例）
 // 参数：name, spi_idx, cs_acc_idx, cs_gyro_idx, int_acc_idx, int_gyro_idx, heater_idx
-BMI088_INSTANCE_DEF(bmi088, SPI_BMI088, GPIO_BMI088_CS1, GPIO_BMI088_CS2,
-                    GPIO_BMI088_INT1, GPIO_BMI088_INT3, TIM_HEATER);
+BMI088_INSTANCE_DEF(bmi088, SPI_BMI088, GPIO_BMI088_CS1, GPIO_BMI088_CS2, GPIO_BMI088_INT1, GPIO_BMI088_INT3, TIM_HEATER);
 
 /*============================ 初始化函数 ============================*/
 
@@ -19,23 +18,15 @@ static void MOTORInit(void)
     if (BMI088Register(&bmi088) != 0)
     {
         LOGERROR("BMI088 register failed");
-        return;
     }
 
     // 配置并初始化 BMI088
     // 加速度计：±3G量程，正常滤波模式，400Hz ODR
     // 陀螺仪：±2000°/s量程，2000Hz ODR，230Hz带宽
-    if (BMI088SetConfig(&bmi088,
-                        BMI088_ACC_RANGE_3G, BMI088_ACC_BWP_NORMAL, BMI088_ACC_ODR_400,
-                        BMI088_GYRO_RANGE_2000, BMI088_GYRO_ODR_2000, BMI088_GYRO_BW_230,
-                        BMI088_MODE_POLLING) != 0)
+    if (BMI088SetConfig(&bmi088, BMI088_ACC_RANGE_3G, BMI088_ACC_BWP_NORMAL, BMI088_ACC_ODR_400, BMI088_GYRO_RANGE_2000, BMI088_GYRO_ODR_2000, BMI088_GYRO_BW_230, BMI088_MODE_POLLING) != 0)
     {
         LOGERROR("BMI088 config failed");
-        return;
     }
-
-    // 初始化完成后，切换到 DMA 模式（用于后续数据读取）
-    bmi088.spi_inst.work_mode = SPI_DMA_MODE;
 
     LOGINFO("BMI088 init success");
 }
@@ -44,8 +35,7 @@ static void MOTORInit(void)
 
 static void MOTORTask(void)
 {
-    // TODO: 后续添加 BMI088 数据读取
-    vTaskDelay(pdMS_TO_TICKS(1000));
+    DWT_Delay(0.0005f);
 }
 
 /*============================ 公开接口 ============================*/
@@ -67,6 +57,7 @@ __attribute__((noreturn)) void StartMotorTask(void *argument)
         MOTORTask();
         dt = DWT_GetTimeline_us() - start;
         if ((dt / 1000) > MOTOR_FREQ_MS)
-            vTaskDelay(pdMS_TO_TICKS(MOTOR_FREQ_MS));
+            LOGERROR("[freeRTOS] MOTOR Task is being DELAY! dt = %d(ms)", (dt / 1000));
+        vTaskDelay(pdMS_TO_TICKS(MOTOR_FREQ_MS));
     }
 }
