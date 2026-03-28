@@ -59,7 +59,7 @@ int8_t GPIORegister(GPIOInstance *instance)
     instance->map = gpio_map[instance->gpio_e];
 
     s_gpio_instance[s_idx++] = instance;
-    LOGINFO("[bsp_gpio] Instance registered, idx=%d", s_idx - 1);
+    LOGINFO("[bsp_gpio] GPIO instance registered, idx=%d", s_idx - 1);
     return 0;
 }
 

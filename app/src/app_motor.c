@@ -23,12 +23,7 @@ static void MOTORInit(void)
     // 配置并初始化 BMI088
     // 加速度计：±3G量程，正常滤波模式，400Hz ODR
     // 陀螺仪：±2000°/s量程，2000Hz ODR，230Hz带宽
-    if (BMI088SetConfig(&bmi088, BMI088_ACC_RANGE_3G, BMI088_ACC_BWP_NORMAL, BMI088_ACC_ODR_400, BMI088_GYRO_RANGE_2000, BMI088_GYRO_ODR_2000, BMI088_GYRO_BW_230, BMI088_MODE_POLLING) != 0)
-    {
-        LOGERROR("BMI088 config failed");
-    }
-
-    LOGINFO("BMI088 init success");
+    BMI088SetConfig(&bmi088, BMI088_ACC_RANGE_3G, BMI088_ACC_BWP_NORMAL, BMI088_ACC_ODR_400, BMI088_GYRO_RANGE_2000, BMI088_GYRO_ODR_2000, BMI088_GYRO_BW_230, BMI088_MODE_POLLING);
 }
 
 /*============================ 任务函数 ============================*/

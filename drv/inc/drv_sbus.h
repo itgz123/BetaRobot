@@ -64,41 +64,50 @@ typedef struct
     uint8_t failsafe;                          // 失控保护标志 (0: 正常, 1: 失控)
 } SBUS_Data_t;
 
+/*------------- 外部函数声明（供 DEF 宏使用）--------------*/
+void SBUSUARTRxCallback(USARTInstance *usart_inst);
+
 /*------------- 实例定义宏 --------------*/
 /**
  * @brief 静态定义 SBUS 实例（同时定义缓冲区）
- * @param name 实例名称
+ * @param name     实例名称
+ * @param uart_idx 板载 UART 枚举（BoardUART_e）
+ * @param app_cb   APP 层回调函数
  *
- * @note handle 和 callback 在注册时设置
- *       Cortex-M7 缓冲区放入 RAM_D1 以支持 DMA 访问
+ * @note Cortex-M7 缓冲区放入 RAM_D1 以支持 DMA 访问
+ *       parent 指向 SBUSInstance 自身，用于 BSP 回调时获取 DRV 实例
  *
  * @example
- *   SBUS_INSTANCE_DEF(sbus_inst);
+ *   SBUS_INSTANCE_DEF(sbus_inst, UART_SBUS, AppCallback);
  */
 #if CPU_CORE == CORTEX_M7
-#define SBUS_INSTANCE_DEF(name)                                                  \
-    static uint8_t name##_rx_buff[25] __attribute__((section(".ram_d1"))) = {0}; \
-    SBUSInstance name = {                                                        \
-        .usart_inst = {                                                          \
-            .handle = NULL,                                                      \
-            .tx_mode = USART_DMA_MODE,                                           \
-            .rx_buff = name##_rx_buff,                                           \
-            .rx_buff_size = 25,                                                  \
-            .rx_len = 0,                                                         \
-            .rx_callback = NULL},                                                \
-        .app_callback = NULL}
+#define SBUS_INSTANCE_DEF(name, uart_idx, app_cb)                                    \
+    static uint8_t name##_rx_buff[25] __attribute__((section(".ram_d1"))) = {0};     \
+    SBUSInstance name = {                                                            \
+        .usart_inst = {                                                              \
+            .parent = &name,                                                         \
+            .uart_e = uart_idx,                                                      \
+            .handle = NULL,                                                          \
+            .tx_mode = USART_DMA_MODE,                                               \
+            .rx_buff = name##_rx_buff,                                               \
+            .rx_buff_size = 25,                                                      \
+            .rx_len = 0,                                                             \
+            .rx_callback = SBUSUARTRxCallback},                                      \
+        .app_callback = app_cb}
 #else
-#define SBUS_INSTANCE_DEF(name)              \
-    static uint8_t name##_rx_buff[25] = {0}; \
-    SBUSInstance name = {                    \
-        .usart_inst = {                      \
-            .handle = NULL,                  \
-            .tx_mode = USART_DMA_MODE,       \
-            .rx_buff = name##_rx_buff,       \
-            .rx_buff_size = 25,              \
-            .rx_len = 0,                     \
-            .rx_callback = NULL},            \
-        .app_callback = NULL}
+#define SBUS_INSTANCE_DEF(name, uart_idx, app_cb)                \
+    static uint8_t name##_rx_buff[25] = {0};                     \
+    SBUSInstance name = {                                        \
+        .usart_inst = {                                          \
+            .parent = &name,                                     \
+            .uart_e = uart_idx,                                  \
+            .handle = NULL,                                      \
+            .tx_mode = USART_DMA_MODE,                           \
+            .rx_buff = name##_rx_buff,                           \
+            .rx_buff_size = 25,                                  \
+            .rx_len = 0,                                         \
+            .rx_callback = SBUSUARTRxCallback},                  \
+        .app_callback = app_cb}
 #endif
 
 /*------------- 外部接口声明 --------------*/
@@ -106,12 +115,12 @@ typedef struct
 /**
  * @brief 注册 SBUS 实例
  * @param instance SBUS 实例指针（需先通过宏定义）
- * @param uart_e 板载 UART 枚举（BoardUART_e）
- * @param app_callback APP 层回调函数
  * @retval 0 成功
  * @retval -1 失败
+ *
+ * @note 所有参数通过 SBUS_INSTANCE_DEF 宏预设，注册时只需传入实例指针
  */
-int8_t SBUSRegister(SBUSInstance *instance, BoardUART_e uart_e, void (*app_callback)(SBUSInstance *));
+int8_t SBUSRegister(SBUSInstance *instance);
 
 /**
  * @brief 解析 SBUS 数据帧

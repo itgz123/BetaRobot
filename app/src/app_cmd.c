@@ -20,10 +20,14 @@ float ch2 = 0;
 float ch3 = 0;
 float ch4 = 0;
 
+/*============= 私有函数声明 =============*/
+
+static void SBUSCallback(SBUSInstance *inst);
+
 /*============= 静态内存分配 =============*/
 
-// SBUS 实例定义
-SBUS_INSTANCE_DEF(sbus_inst);
+// SBUS 实例定义（所有参数在宏中预设）
+SBUS_INSTANCE_DEF(sbus_inst, UART_DBUS, SBUSCallback);
 
 // SBUS 原始帧队列（长度为1的覆盖式队列）
 #define SBUS_QUEUE_LENGTH 1
@@ -35,10 +39,6 @@ static QueueHandle_t sbus_queue;
 
 // SBUS 解析后的数据
 static SBUS_Data_t sbus_data;
-
-/*============= 私有函数声明 =============*/
-
-static void SBUSCallback(SBUSInstance *inst);
 
 /*============= 初始化 =============*/
 
@@ -52,8 +52,8 @@ static void CmdInit(void)
         &sbus_queue_buffer);
     configASSERT(sbus_queue != NULL);
 
-    // 注册 SBUS 实例
-    if (SBUSRegister(&sbus_inst, UART_DBUS, SBUSCallback) != 0)
+    // 注册 SBUS 实例（只需传入实例指针）
+    if (SBUSRegister(&sbus_inst) != 0)
     {
         LOGERROR("[app_cmd] SBUS register failed!");
     }

@@ -29,6 +29,7 @@ typedef enum
  */
 typedef struct USARTInstance
 {
+    void *parent;                                // 父实例指针（由 DRV 层设置）
     BoardUART_e uart_e;                          // 板载UART枚举（注册时用于查找映射）
     UART_HandleTypeDef *handle;                  // UART句柄（注册时自动填充）
     USART_Work_Mode_e tx_mode;                   // 发送模式
@@ -58,6 +59,7 @@ typedef struct USARTInstance
 #define USART_INSTANCE_DEF(name, uart_idx, mode, buff_sz, cb)                         \
     static uint8_t name##_rx_buff[buff_sz] __attribute__((section(".ram_d1"))) = {0}; \
     static USARTInstance name = {                                                     \
+        .parent = NULL,                                                               \
         .uart_e = uart_idx,                                                           \
         .handle = NULL,                                                               \
         .tx_mode = mode,                                                              \
@@ -69,6 +71,7 @@ typedef struct USARTInstance
 #define USART_INSTANCE_DEF(name, uart_idx, mode, buff_sz, cb) \
     static uint8_t name##_rx_buff[buff_sz] = {0};             \
     static USARTInstance name = {                             \
+        .parent = NULL,                                       \
         .uart_e = uart_idx,                                   \
         .handle = NULL,                                       \
         .tx_mode = mode,                                      \
