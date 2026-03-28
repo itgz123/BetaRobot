@@ -6,6 +6,9 @@
  */
 
 #include "bsp_spi.h"
+
+#if SPI_INSTANCE_NUM > 0
+
 #include "bsp_log.h"
 
 /*------------- 私有类型定义 --------------*/
@@ -280,3 +283,5 @@ void SPITransmitReceive(SPIInstance *instance, uint8_t *tx_data, uint16_t len)
     instance->rx_len = 0;
     transmit_receive_funcs[instance->work_mode](instance->handle, tx_data, instance->rx_buff, len, SPI_BLOCK_TIMEOUT_MS);
 }
+
+#endif

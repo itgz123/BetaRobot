@@ -27,7 +27,7 @@ static void SBUSCallback(SBUSInstance *inst);
 /*============= 静态内存分配 =============*/
 
 // SBUS 实例定义（所有参数在宏中预设）
-SBUS_INSTANCE_DEF(sbus_inst, UART_DBUS, SBUSCallback);
+SBUS_INSTANCE_DEF(sbus_inst, UART_SBUS, SBUSCallback);
 
 // SBUS 原始帧队列（长度为1的覆盖式队列）
 #define SBUS_QUEUE_LENGTH 1

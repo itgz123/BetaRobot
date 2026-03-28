@@ -8,8 +8,11 @@
 #ifndef __BSP_USART_H
 #define __BSP_USART_H
 
-#include "main.h"
 #include "bsp_cfg.h"
+
+#if UART_INSTANCE_NUM > 0
+
+#include "main.h"
 #include "stdint.h"
 
 /*------------- 类型定义 --------------*/
@@ -107,5 +110,7 @@ void USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len);
  * @note 用于错误恢复或手动重启接收
  */
 void USARTRestartReceive(USARTInstance *instance);
+
+#endif
 
 #endif /* __BSP_USART_H */

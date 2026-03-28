@@ -8,8 +8,11 @@
 #ifndef __BSP_TIM_H
 #define __BSP_TIM_H
 
-#include "main.h"
 #include "bsp_cfg.h"
+
+#if (ENCODER_INSTANCE_NUM > 0) || (PWM_INSTANCE_NUM > 0)
+
+#include "main.h"
 #include "stdint.h"
 
 /*------------- 类型定义 --------------*/
@@ -125,5 +128,7 @@ void EncoderClearCount(EncoderInstance *instance);
  *   }
  */
 void BSPTim_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
+
+#endif
 
 #endif /* __BSP_TIM_H */

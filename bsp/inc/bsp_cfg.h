@@ -115,6 +115,7 @@
 #define UART_INSTANCE_NUM 1    // UART 实例数量
 #define PWM_INSTANCE_NUM 4     // PWM 实例数量
 #define ENCODER_INSTANCE_NUM 4 // 编码器实例数量
+#define ADC_INSTANCE_NUM 0     // ADC 实例数量
 #endif
 
 #if DEVELOPMENT_BOARD == DM_MC02
@@ -136,6 +137,7 @@
 #define UART_INSTANCE_NUM 0    // UART 实例数量
 #define PWM_INSTANCE_NUM 0     // PWM 实例数量
 #define ENCODER_INSTANCE_NUM 0 // 编码器实例数量
+#define ADC_INSTANCE_NUM 0     // ADC 实例数量
 #endif
 
 #if DEVELOPMENT_BOARD == DJI_C
@@ -146,6 +148,7 @@
 #define UART_INSTANCE_NUM 0    // UART 实例数量
 #define PWM_INSTANCE_NUM 0     // PWM 实例数量
 #define ENCODER_INSTANCE_NUM 0 // 编码器实例数量
+#define ADC_INSTANCE_NUM 0     // ADC 实例数量
 #endif
 
 /*============================================
@@ -205,30 +208,6 @@ typedef enum
 
     UART_NUM_MAX // UART数量上限
 } BoardUART_e;
-
-/**
- * @brief 板载CAN枚举
- */
-typedef enum
-{
-    CAN_NUM_MAX // CAN数量上限
-} BoardCAN_e;
-
-/**
- * @brief 板载SPI枚举
- */
-typedef enum
-{
-    SPI_NUM_MAX // SPI数量上限
-} BoardSPI_e;
-
-/**
- * @brief 板载I2C枚举
- */
-typedef enum
-{
-    I2C_NUM_MAX // I2C数量上限
-} BoardI2C_e;
 
 #endif // STM32F407VET6
 
@@ -343,105 +322,9 @@ typedef enum
 
 #if DEVELOPMENT_BOARD == DJI_A
 
-/**
- * @brief 板载GPIO枚举
- */
-typedef enum
-{
-    GPIO_NUM_MAX // GPIO数量上限
-} BoardGPIO_e;
-
-/**
- * @brief 板载TIM枚举
- */
-typedef enum
-{
-    TIM_NUM_MAX // TIM数量上限
-} BoardTIM_e;
-
-/**
- * @brief 板载UART枚举
- */
-typedef enum
-{
-    UART_NUM_MAX // UART数量上限
-} BoardUART_e;
-
-/**
- * @brief 板载CAN枚举
- */
-typedef enum
-{
-    CAN_NUM_MAX // CAN数量上限
-} BoardCAN_e;
-
-/**
- * @brief 板载SPI枚举
- */
-typedef enum
-{
-    SPI_NUM_MAX // SPI数量上限
-} BoardSPI_e;
-
-/**
- * @brief 板载I2C枚举
- */
-typedef enum
-{
-    I2C_NUM_MAX // I2C数量上限
-} BoardI2C_e;
-
 #endif // DJI_A
 
 #if DEVELOPMENT_BOARD == DJI_C
-
-/**
- * @brief 板载GPIO枚举
- */
-typedef enum
-{
-    GPIO_NUM_MAX // GPIO数量上限
-} BoardGPIO_e;
-
-/**
- * @brief 板载TIM枚举
- */
-typedef enum
-{
-    TIM_NUM_MAX // TIM数量上限
-} BoardTIM_e;
-
-/**
- * @brief 板载UART枚举
- */
-typedef enum
-{
-    UART_NUM_MAX // UART数量上限
-} BoardUART_e;
-
-/**
- * @brief 板载CAN枚举
- */
-typedef enum
-{
-    CAN_NUM_MAX // CAN数量上限
-} BoardCAN_e;
-
-/**
- * @brief 板载SPI枚举
- */
-typedef enum
-{
-    SPI_NUM_MAX // SPI数量上限
-} BoardSPI_e;
-
-/**
- * @brief 板载I2C枚举
- */
-typedef enum
-{
-    I2C_NUM_MAX // I2C数量上限
-} BoardI2C_e;
 
 #endif // DJI_C
 
@@ -449,6 +332,7 @@ typedef enum
  *              硬件映射结构体
  *============================================*/
 
+#if GPIO_INSTANCE_NUM > 0
 /**
  * @brief GPIO映射结构体
  */
@@ -457,7 +341,9 @@ typedef struct
     GPIO_TypeDef *port; // GPIO端口
     uint16_t pin;       // 引脚号
 } GPIO_Map_t;
+#endif
 
+#if (ENCODER_INSTANCE_NUM > 0) || (PWM_INSTANCE_NUM > 0)
 /**
  * @brief TIM映射结构体
  */
@@ -466,7 +352,9 @@ typedef struct
     TIM_HandleTypeDef *htim; // TIM句柄
     uint32_t channel;        // 通道（仅PWM使用，编码器填0）
 } TIM_Map_t;
+#endif
 
+#if UART_INSTANCE_NUM > 0
 /**
  * @brief UART映射结构体
  */
@@ -474,15 +362,19 @@ typedef struct
 {
     UART_HandleTypeDef *handle; // UART句柄
 } UART_Map_t;
+#endif
 
+#if CAN_INSTANCE_NUM > 0
 /**
  * @brief CAN映射结构体
  */
-// typedef struct
-// {
-//     CAN_HandleTypeDef *handle; // CAN句柄
-// } CAN_Map_t;
+typedef struct
+{
+    CAN_HandleTypeDef *handle; // CAN句柄
+} CAN_Map_t;
+#endif
 
+#if SPI_INSTANCE_NUM > 0
 /**
  * @brief SPI映射结构体
  */
@@ -490,7 +382,9 @@ typedef struct
 {
     SPI_HandleTypeDef *handle; // SPI句柄
 } SPI_Map_t;
+#endif
 
+#if I2C_INSTANCE_NUM > 0
 /**
  * @brief I2C映射结构体
  */
@@ -498,7 +392,9 @@ typedef struct
 {
     I2C_HandleTypeDef *handle; // I2C句柄
 } I2C_Map_t;
+#endif
 
+#if ADC_INSTANCE_NUM > 0
 /**
  * @brief ADC映射结构体
  */
@@ -507,17 +403,33 @@ typedef struct
     ADC_HandleTypeDef *handle; // ADC句柄
     uint32_t channel;          // ADC通道
 } ADC_Map_t;
+#endif
 
 /*============================================
  *              硬件映射数组声明
  *============================================*/
-
+#if DEVELOPMENT_BOARD == STM32F407VET6
 extern const GPIO_Map_t gpio_map[];
 extern const TIM_Map_t tim_map[];
 extern const UART_Map_t uart_map[];
-// extern const CAN_Map_t can_map[];
+#endif // STM32F407VET6
+
+#if DEVELOPMENT_BOARD == DM_MC02
+extern const GPIO_Map_t gpio_map[];
+extern const TIM_Map_t tim_map[];
+extern const UART_Map_t uart_map[];
+extern const CAN_Map_t can_map[];
 extern const SPI_Map_t spi_map[];
 extern const I2C_Map_t i2c_map[];
 extern const ADC_Map_t adc_map[];
+#endif // DM_MC02
+
+#if DEVELOPMENT_BOARD == DJI_A
+
+#endif // DJI_A
+
+#if DEVELOPMENT_BOARD == DJI_C
+
+#endif // DJI_C
 
 #endif // __BSP_CFG_H

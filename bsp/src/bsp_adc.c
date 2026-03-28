@@ -4,6 +4,9 @@
  */
 
 #include "bsp_adc.h"
+
+#if ADC_INSTANCE_NUM > 0
+
 #include "bsp_log.h"
 
 /*============================================
@@ -84,3 +87,5 @@ uint16_t ADCGetValue(ADCInstance *instance)
 
     return value;
 }
+
+#endif

@@ -6,6 +6,9 @@
  */
 
 #include "bsp_usart.h"
+
+#if UART_INSTANCE_NUM > 0
+
 #include "bsp_log.h"
 #include "string.h"
 
@@ -160,3 +163,5 @@ void USARTRestartReceive(USARTInstance *instance)
     // 关闭DMA半传输中断，防止两次进入HAL_UARTEx_RxEventCallback()
     __HAL_DMA_DISABLE_IT(instance->handle->hdmarx, DMA_IT_HT);
 }
+
+#endif

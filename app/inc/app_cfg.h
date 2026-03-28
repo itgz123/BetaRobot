@@ -33,7 +33,7 @@
 #define DJI_C 3
 
 // 修改此处切换开发板
-#define DEVELOPMENT_BOARD DM_MC02
+#define DEVELOPMENT_BOARD STM32F407VET6
 
 /*============================================
  *              应用参数配置
