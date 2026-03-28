@@ -31,15 +31,6 @@
 
 #define BMI088_GRAVITY 9.80665f // 重力加速度 (m/s²)
 
-/*============================ 私有函数声明 ============================*/
-
-static void BMI088_AccReadReg(BMI088Instance *inst, uint8_t reg, uint16_t len);
-static void BMI088_AccWriteReg(BMI088Instance *inst, uint8_t reg, uint8_t data);
-static uint8_t BMI088_AccWriteRegWithCheck(BMI088Instance *inst, uint8_t reg, uint8_t data);
-static void BMI088_GyroReadReg(BMI088Instance *inst, uint8_t reg, uint16_t len);
-static void BMI088_GyroWriteReg(BMI088Instance *inst, uint8_t reg, uint8_t data);
-static uint8_t BMI088_GyroWriteRegWithCheck(BMI088Instance *inst, uint8_t reg, uint8_t data);
-
 /*============================ 灵敏度查找表 ============================*/
 
 /* 加速度计灵敏度查找表：将原始值转换为 g，单位 g/LSB */
@@ -58,6 +49,15 @@ const float BMI088_GyroSenTable[BMI088_GYRO_RANGE_NUM] = {
     0.00013315805450396191230191732547673f,  // ±250°/s 量程灵敏度
     0.000066579027251980956150958662738366f, // ±125°/s 量程灵敏度
 };
+
+/*============================ 私有函数声明 ============================*/
+
+static void BMI088_AccReadReg(BMI088Instance *inst, uint8_t reg, uint16_t len);
+static void BMI088_AccWriteReg(BMI088Instance *inst, uint8_t reg, uint8_t data);
+static uint8_t BMI088_AccWriteRegWithCheck(BMI088Instance *inst, uint8_t reg, uint8_t data);
+static void BMI088_GyroReadReg(BMI088Instance *inst, uint8_t reg, uint16_t len);
+static void BMI088_GyroWriteReg(BMI088Instance *inst, uint8_t reg, uint8_t data);
+static uint8_t BMI088_GyroWriteRegWithCheck(BMI088Instance *inst, uint8_t reg, uint8_t data);
 
 /*============================ 私有函数实现 ============================*/
 
@@ -478,7 +478,7 @@ int8_t BMI088Calibrate(BMI088Instance *inst, uint16_t samples)
     inst->gyro_offset[1] = gyro_sum[1] / (float)samples;
     inst->gyro_offset[2] = gyro_sum[2] / (float)samples;
 
-    LOGINFO("[drv_bmi088] Calibration done", inst->acc_offset[0], inst->acc_offset[1], inst->acc_offset[2], inst->gyro_offset[0], inst->gyro_offset[1], inst->gyro_offset[2]);
+    LOGINFO("[drv_bmi088] Calibration done");
 
     return 0;
 }
