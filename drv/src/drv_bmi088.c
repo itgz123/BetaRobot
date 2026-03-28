@@ -17,6 +17,20 @@
 
 #define BMI088_DELAY_MS 0.08f // 统一延时80ms
 
+/*============================ 标定参数宏定义 ============================*/
+
+#define BMI088_CALIB_SAMPLES 100     // 默认标定采样次数
+#define BMI088_CALIB_INTERVAL 0.002f // 标定采样间隔 (s)
+
+/*============================ 温度转换参数 ============================*/
+
+#define BMI088_TEMP_SENS 0.125f  // 温度灵敏度 (°C/LSB)
+#define BMI088_TEMP_OFFSET 23.0f // 温度偏移 (°C)
+
+/*============================ 物理常量 ============================*/
+
+#define BMI088_GRAVITY 9.80665f // 重力加速度 (m/s²)
+
 /*============================ 私有函数声明 ============================*/
 
 static void BMI088_AccReadReg(BMI088Instance *inst, uint8_t reg, uint16_t len);
@@ -328,7 +342,13 @@ int8_t BMI088SetConfig(BMI088Instance *inst, BMI088_AccRange_e acc_range, uint8_
         return -1;
     }
 
-    // 阻塞模式
+    // 执行零偏标定
+    if (BMI088Calibrate(inst, BMI088_CALIB_SAMPLES) != 0)
+    {
+        LOGWARNING("[drv_bmi088] Calibration failed, using default offset");
+    }
+
+    // 中断模式
     if (work_mode == BMI088_MODE_INT)
     {
         LOGWARNING("[drv_bmi088] INT mode not support now!");
@@ -337,7 +357,162 @@ int8_t BMI088SetConfig(BMI088Instance *inst, BMI088_AccRange_e acc_range, uint8_
         // 设置回调函数
         return -1;
     }
-
     LOGINFO("[drv_bmi088] BMI088 init success");
     return 0;
+}
+
+/*============================ 数据读取接口 ============================*/
+
+/**
+ * @brief 阻塞读取BMI088数据
+ * @param inst BMI088实例指针
+ * @return BMI088_Data_t 结构体，包含加速度、陀螺仪、温度和时间戳
+ * @note 此函数会阻塞等待数据读取完成
+ */
+BMI088_Data_t BMI088ReadBlocking(BMI088Instance *inst)
+{
+    BMI088_Data_t data = {0};
+    int16_t raw_data[3] = {0};
+    int16_t raw_temp = 0;
+
+    if (inst == NULL)
+    {
+        LOGERROR("[drv_bmi088] Instance is NULL");
+        return data;
+    }
+
+    /* 读取加速度计数据（X/Y/Z 三轴，6 字节） */
+    BMI088_AccReadReg(inst, BMI088_ACCEL_XOUT_L, 6);
+    raw_data[0] = (int16_t)((inst->spi_inst.rx_buff[3] << 8) | inst->spi_inst.rx_buff[2]);
+    raw_data[1] = (int16_t)((inst->spi_inst.rx_buff[5] << 8) | inst->spi_inst.rx_buff[4]);
+    raw_data[2] = (int16_t)((inst->spi_inst.rx_buff[7] << 8) | inst->spi_inst.rx_buff[6]);
+
+    /* 转换为物理单位并减去标定偏移量 */
+    float acc_sen = BMI088_AccSenTable[inst->acc_range];
+    data.acc[0] = (float)raw_data[0] * acc_sen * BMI088_GRAVITY - inst->acc_offset[0];
+    data.acc[1] = (float)raw_data[1] * acc_sen * BMI088_GRAVITY - inst->acc_offset[1];
+    data.acc[2] = (float)raw_data[2] * acc_sen * BMI088_GRAVITY - inst->acc_offset[2];
+
+    /* 读取陀螺仪数据（X/Y/Z 三轴，6 字节） */
+    BMI088_GyroReadReg(inst, BMI088_GYRO_X_L, 6);
+    raw_data[0] = (int16_t)((inst->spi_inst.rx_buff[2] << 8) | inst->spi_inst.rx_buff[1]);
+    raw_data[1] = (int16_t)((inst->spi_inst.rx_buff[4] << 8) | inst->spi_inst.rx_buff[3]);
+    raw_data[2] = (int16_t)((inst->spi_inst.rx_buff[6] << 8) | inst->spi_inst.rx_buff[5]);
+
+    /* 转换为物理单位并减去标定偏移量 */
+    float gyro_sen = BMI088_GyroSenTable[inst->gyro_range];
+    data.gyro[0] = (float)raw_data[0] * gyro_sen - inst->gyro_offset[0];
+    data.gyro[1] = (float)raw_data[1] * gyro_sen - inst->gyro_offset[1];
+    data.gyro[2] = (float)raw_data[2] * gyro_sen - inst->gyro_offset[2];
+
+    /* 读取温度数据（2 字节） */
+    BMI088_AccReadReg(inst, BMI088_TEMP_L, 2);
+    raw_temp = (int16_t)((inst->spi_inst.rx_buff[3] << 8) | inst->spi_inst.rx_buff[2]);
+
+    /* 温度转换公式 */
+    data.temp = (float)raw_temp * BMI088_TEMP_SENS + BMI088_TEMP_OFFSET;
+
+    /* 记录时间戳 */
+    data.time_stamp = DWT_GetTimeline_ms();
+
+    return data;
+}
+
+/*============================ 标定接口 ============================*/
+
+/**
+ * @brief 标定BMI088零偏
+ * @param inst    BMI088实例指针
+ * @param samples 采样次数（建议100~200）
+ * @return 0成功，-1失败
+ * @note 调用时传感器应处于静止状态
+ */
+int8_t BMI088Calibrate(BMI088Instance *inst, uint16_t samples)
+{
+    if (inst == NULL || samples == 0)
+    {
+        LOGERROR("[drv_bmi088] Invalid params for calibration");
+        return -1;
+    }
+
+    float acc_sum[3] = {0.0f, 0.0f, 0.0f};
+    float gyro_sum[3] = {0.0f, 0.0f, 0.0f};
+    int16_t raw_data[3] = {0};
+
+    LOGINFO("[drv_bmi088] Start calibration, samples: %d", samples);
+
+    /* 采集 N 次静止状态下的数据 */
+    for (uint16_t i = 0; i < samples; i++)
+    {
+        /* 读取加速度计数据 */
+        BMI088_AccReadReg(inst, BMI088_ACCEL_XOUT_L, 6);
+        raw_data[0] = (int16_t)((inst->spi_inst.rx_buff[3] << 8) | inst->spi_inst.rx_buff[2]);
+        raw_data[1] = (int16_t)((inst->spi_inst.rx_buff[5] << 8) | inst->spi_inst.rx_buff[4]);
+        raw_data[2] = (int16_t)((inst->spi_inst.rx_buff[7] << 8) | inst->spi_inst.rx_buff[6]);
+
+        float acc_sen = BMI088_AccSenTable[inst->acc_range];
+        acc_sum[0] += (float)raw_data[0] * acc_sen * BMI088_GRAVITY;
+        acc_sum[1] += (float)raw_data[1] * acc_sen * BMI088_GRAVITY;
+        acc_sum[2] += (float)raw_data[2] * acc_sen * BMI088_GRAVITY;
+
+        /* 读取陀螺仪数据 */
+        BMI088_GyroReadReg(inst, BMI088_GYRO_X_L, 6);
+        raw_data[0] = (int16_t)((inst->spi_inst.rx_buff[2] << 8) | inst->spi_inst.rx_buff[1]);
+        raw_data[1] = (int16_t)((inst->spi_inst.rx_buff[4] << 8) | inst->spi_inst.rx_buff[3]);
+        raw_data[2] = (int16_t)((inst->spi_inst.rx_buff[6] << 8) | inst->spi_inst.rx_buff[5]);
+
+        float gyro_sen = BMI088_GyroSenTable[inst->gyro_range];
+        gyro_sum[0] += (float)raw_data[0] * gyro_sen;
+        gyro_sum[1] += (float)raw_data[1] * gyro_sen;
+        gyro_sum[2] += (float)raw_data[2] * gyro_sen;
+
+        DWT_Delay(BMI088_CALIB_INTERVAL);
+    }
+
+    /* 计算平均值作为零偏 */
+    inst->acc_offset[0] = acc_sum[0] / (float)samples;
+    inst->acc_offset[1] = acc_sum[1] / (float)samples;
+    inst->acc_offset[2] = acc_sum[2] / (float)samples;
+
+    inst->gyro_offset[0] = gyro_sum[0] / (float)samples;
+    inst->gyro_offset[1] = gyro_sum[1] / (float)samples;
+    inst->gyro_offset[2] = gyro_sum[2] / (float)samples;
+
+    LOGINFO("[drv_bmi088] Calibration done", inst->acc_offset[0], inst->acc_offset[1], inst->acc_offset[2], inst->gyro_offset[0], inst->gyro_offset[1], inst->gyro_offset[2]);
+
+    return 0;
+}
+
+/*============================ 加热控制接口 ============================*/
+
+/**
+ * @brief 设置加热PWM占空比
+ * @param inst        BMI088实例指针
+ * @param duty_ratio  占空比（0~1）
+ * @note 阻塞模式直接设置，中断模式预留PID控制接口
+ */
+void BMI088SetHeater(BMI088Instance *inst, float duty_ratio)
+{
+    if (inst == NULL)
+    {
+        LOGERROR("[drv_bmi088] Instance is NULL");
+        return;
+    }
+
+    /* 钳位占空比范围 */
+    if (duty_ratio < 0.0f)
+        duty_ratio = 0.0f;
+    if (duty_ratio > 1.0f)
+        duty_ratio = 1.0f;
+
+    /* 阻塞模式：直接设置 PWM 占空比 */
+    if (inst->work_mode == BMI088_MODE_POLLING)
+    {
+        PWMSetDutyRatio(&inst->heater_pwm, duty_ratio);
+    }
+    else
+    {
+        /* 中断模式：预留 PID 控制接口（后续实现） */
+        PWMSetDutyRatio(&inst->heater_pwm, duty_ratio);
+    }
 }
