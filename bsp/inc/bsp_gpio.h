@@ -19,6 +19,7 @@
  */
 typedef struct GPIOInstance
 {
+    void *parent;                            // 父实例指针（由 DRV 层设置）
     BoardGPIO_e gpio_e;                      // 板载GPIO枚举（注册时用于查找映射）
     GPIO_Map_t map;                          // GPIO映射（注册时自动填充）
     GPIO_PinState pin_state;                 // 引脚状态
@@ -38,6 +39,7 @@ typedef struct GPIOInstance
  */
 #define GPIO_INSTANCE_DEF(name, gpio_idx, cb) \
     GPIOInstance name = {                     \
+        .parent = NULL,                       \
         .gpio_e = gpio_idx,                   \
         .map = {0},                           \
         .pin_state = GPIO_PIN_RESET,          \

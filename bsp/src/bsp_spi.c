@@ -160,7 +160,7 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
         if (hspi == s_spi_instance[i]->handle)
         {
             uint32_t error_code = hspi->ErrorCode;
-            LOGWARNING("[bsp_spi] Error detected, idx[%d], code=0x%lX (MODF:%d OVR:%d FRE:%d DMA:%d)", i, error_code,
+            LOGWARNING("[spi] Error detected, idx[%d], code=0x%lX (MODF:%d OVR:%d FRE:%d DMA:%d)", i, error_code,
                        (error_code & HAL_SPI_ERROR_MODF) ? 1 : 0, // 模式错误
                        (error_code & HAL_SPI_ERROR_OVR) ? 1 : 0,  // 溢出错误
                        (error_code & HAL_SPI_ERROR_FRE) ? 1 : 0,  // 帧错误
@@ -200,7 +200,7 @@ int8_t SPIRegister(SPIInstance *instance)
 
     s_spi_instance[s_idx++] = instance;
 
-    LOGINFO("[bsp_spi] SPI Instance registered, idx=%d", s_idx - 1);
+    LOGINFO("[bsp_spi] SPI instance registered, idx=%d", s_idx - 1);
     return 0;
 }
 

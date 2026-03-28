@@ -11,20 +11,9 @@
 #include "bsp_log.h"
 #include "stddef.h"
 
-/*------------- 私有宏定义 --------------*/
-
-/**
- * @brief 从成员指针获取结构体指针
- */
-#define container_of(ptr, type, member) \
-    ((type *)((char *)(ptr) - offsetof(type, member)))
-
-/*------------- 私有函数声明 --------------*/
-static void SBUSUARTRxCallback(USARTInstance *usart_inst);
-
 /*------------- 外部接口实现 --------------*/
 
-int8_t SBUSRegister(SBUSInstance *instance, BoardUART_e uart_e, void (*app_callback)(SBUSInstance *))
+int8_t SBUSRegister(SBUSInstance *instance)
 {
     // 参数检查
     if (instance == NULL)
@@ -33,26 +22,17 @@ int8_t SBUSRegister(SBUSInstance *instance, BoardUART_e uart_e, void (*app_callb
         return -1;
     }
 
-    if (uart_e >= UART_NUM_MAX)
+    if (instance->usart_inst.uart_e >= UART_NUM_MAX)
     {
-        LOGERROR("[drv_sbus] Invalid uart_e: %d", uart_e);
+        LOGERROR("[drv_sbus] Invalid uart_e: %d", instance->usart_inst.uart_e);
         return -1;
     }
 
-    if (app_callback == NULL)
+    if (instance->app_callback == NULL)
     {
         LOGERROR("[drv_sbus] app_callback is NULL!");
         return -1;
     }
-
-    // 【关键】设置 uart_e，USARTRegister 会用它查找 handle
-    instance->usart_inst.uart_e = uart_e;
-
-    // 设置 BSP 层回调（DRV 层回调）
-    instance->usart_inst.rx_callback = SBUSUARTRxCallback;
-
-    // 设置 APP 回调
-    instance->app_callback = app_callback;
 
     // 注册 BSP 层实例（会自动根据 uart_e 填充 handle）
     if (USARTRegister(&instance->usart_inst) != 0)
@@ -160,9 +140,9 @@ SBUS_Data_t SBUSDecodeFrame(const uint8_t *data, uint16_t len)
 /**
  * @brief BSP 层 UART 接收回调
  * @param usart_inst USART 实例指针
- * @note 从 USARTInstance 反推 SBUSInstance，调用 APP 回调
+ * @note 通过 parent 字段获取 SBUSInstance，调用 APP 回调
  */
-static void SBUSUARTRxCallback(USARTInstance *usart_inst)
+void SBUSUARTRxCallback(USARTInstance *usart_inst)
 {
     // 参数检查
     if (usart_inst == NULL)
@@ -177,11 +157,11 @@ static void SBUSUARTRxCallback(USARTInstance *usart_inst)
         return;
     }
 
-    // 从 USARTInstance 指针获取 SBUSInstance 指针
-    SBUSInstance *sbus_inst = container_of(usart_inst, SBUSInstance, usart_inst);
+    // 通过 parent 字段获取 SBUSInstance 指针
+    SBUSInstance *sbus_inst = (SBUSInstance *)usart_inst->parent;
 
     // 调用 APP 层回调（不解析！）
-    if (sbus_inst->app_callback != NULL)
+    if (sbus_inst != NULL && sbus_inst->app_callback != NULL)
     {
         sbus_inst->app_callback(sbus_inst);
     }

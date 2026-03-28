@@ -30,6 +30,7 @@ typedef enum
  */
 typedef struct SPIInstance
 {
+    void *parent;                                 // 父实例指针（由 DRV 层设置）
     BoardSPI_e spi_e;                             // 板载SPI枚举（注册时用于查找映射）
     SPI_HandleTypeDef *handle;                    // SPI句柄（注册时自动填充）
     SPI_Work_Mode_e work_mode;                    // 工作模式
@@ -59,6 +60,7 @@ typedef struct SPIInstance
 #define SPI_INSTANCE_DEF(name, spi_idx, mode, buff_sz, rx_cb)                         \
     static uint8_t name##_rx_buff[buff_sz] __attribute__((section(".ram_d1"))) = {0}; \
     static SPIInstance name = {                                                       \
+        .parent = NULL,                                                               \
         .spi_e = spi_idx,                                                             \
         .handle = NULL,                                                               \
         .work_mode = mode,                                                            \
@@ -70,6 +72,7 @@ typedef struct SPIInstance
 #define SPI_INSTANCE_DEF(name, spi_idx, mode, buff_sz, rx_cb) \
     static uint8_t name##_rx_buff[buff_sz] = {0};             \
     static SPIInstance name = {                               \
+        .parent = NULL,                                       \
         .spi_e = spi_idx,                                     \
         .handle = NULL,                                       \
         .work_mode = mode,                                    \

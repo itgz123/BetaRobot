@@ -58,7 +58,7 @@ int8_t PWMRegister(PWMInstance *instance)
 
     s_pwm_instance[s_pwm_idx++] = instance;
 
-    LOGINFO("[bsp_tim] PWM registered, idx=%d, channel=%lu", s_pwm_idx - 1, instance->map.channel);
+    LOGINFO("[bsp_tim] PWM instance registered, idx=%d", s_pwm_idx - 1);
     return 0;
 }
 
@@ -130,7 +130,7 @@ int8_t EncoderRegister(EncoderInstance *instance)
 
     s_encoder_instance[s_encoder_idx++] = instance;
 
-    LOGINFO("[bsp_tim] Encoder registered, idx=%d", s_encoder_idx - 1);
+    LOGINFO("[bsp_tim] Encoder instance registered, idx=%d", s_encoder_idx - 1);
     return 0;
 }
 
