@@ -32,7 +32,7 @@ static void MOTORInit(void)
 
 /*============================ 任务函数 ============================*/
 
-static void MOTORTask(void)
+__attribute__((section(".itcmram"))) static void MOTORTask(void)
 {
     data = BMI088ReadBlocking(&bmi088);
     ax = data.acc[0];
@@ -51,7 +51,7 @@ static void MOTORTask(void)
  * @param  argument: 未使用
  * @retval None
  */
-__attribute__((noreturn)) void StartMotorTask(void *argument)
+__attribute__((section(".itcmram"), noreturn)) void StartMotorTask(void *argument)
 {
     MOTORInit();
     static uint64_t start;

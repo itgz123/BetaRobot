@@ -193,6 +193,18 @@ SECTIONS
   {
     . = ALIGN(4);
     _sitcmram = .;
+    
+    /* FreeRTOS 内核代码 */
+    */tasks.o(.text .text.*)
+    */queue.o(.text .text.*)
+    */list.o(.text .text.*)
+    */timers.o(.text .text.*)
+    */event_groups.o(.text .text.*)
+    */stream_buffer.o(.text .text.*)
+    */port.o(.text .text.*)
+    */port_asm.o(.text .text.*)
+    
+    /* 用户通过属性指定的代码 */
     *(.itcmram)
     *(.itcmram*)
     . = ALIGN(4);
