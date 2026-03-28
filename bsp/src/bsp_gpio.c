@@ -6,6 +6,9 @@
  */
 
 #include "bsp_gpio.h"
+
+#if GPIO_INSTANCE_NUM > 0
+
 #include "bsp_log.h"
 
 /*------------- 私有变量 --------------*/
@@ -112,3 +115,5 @@ void GPIOWrite(GPIOInstance *instance, GPIO_PinState state)
     }
     HAL_GPIO_WritePin(instance->map.port, instance->map.pin, state);
 }
+
+#endif

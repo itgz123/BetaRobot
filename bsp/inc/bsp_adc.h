@@ -18,6 +18,8 @@
 
 #include "bsp_cfg.h"
 
+#if ADC_INSTANCE_NUM > 0
+
 /*============================================
  *              ADC实例结构体
  *============================================*/
@@ -62,5 +64,7 @@ int8_t ADCRegister(ADCInstance *instance);
  * @return ADC转换值（16位）
  */
 uint16_t ADCGetValue(ADCInstance *instance);
+
+#endif
 
 #endif // __BSP_ADC_H

@@ -9,8 +9,11 @@
 #ifndef __BSP_SPI_H
 #define __BSP_SPI_H
 
-#include "main.h"
 #include "bsp_cfg.h"
+
+#if SPI_INSTANCE_NUM > 0
+
+#include "main.h"
 #include "stdint.h"
 
 /*------------- 类型定义 --------------*/
@@ -30,14 +33,14 @@ typedef enum
  */
 typedef struct SPIInstance
 {
-    void *parent;                                 // 父实例指针（由 DRV 层设置）
-    BoardSPI_e spi_e;                             // 板载SPI枚举（注册时用于查找映射）
-    SPI_HandleTypeDef *handle;                    // SPI句柄（注册时自动填充）
-    SPI_Work_Mode_e work_mode;                    // 工作模式
-    uint8_t *rx_buff;                             // 接收缓冲区指针
-    uint16_t buff_size;                           // 缓冲区大小
-    uint16_t rx_len;                              // 接收数据长度
-    void (*rx_callback)(struct SPIInstance *);    // DMA接收完成回调
+    void *parent;                              // 父实例指针（由 DRV 层设置）
+    BoardSPI_e spi_e;                          // 板载SPI枚举（注册时用于查找映射）
+    SPI_HandleTypeDef *handle;                 // SPI句柄（注册时自动填充）
+    SPI_Work_Mode_e work_mode;                 // 工作模式
+    uint8_t *rx_buff;                          // 接收缓冲区指针
+    uint16_t buff_size;                        // 缓冲区大小
+    uint16_t rx_len;                           // 接收数据长度
+    void (*rx_callback)(struct SPIInstance *); // DMA接收完成回调
 } SPIInstance;
 
 /*------------- 实例定义宏 --------------*/
@@ -120,5 +123,7 @@ void SPIReceive(SPIInstance *instance, uint16_t len);
  *       DMA/IT模式：通过回调通知传输完成
  */
 void SPITransmitReceive(SPIInstance *instance, uint8_t *tx_data, uint16_t len);
+
+#endif
 
 #endif /* __BSP_SPI_H */

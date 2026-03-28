@@ -8,8 +8,11 @@
 #ifndef __BSP_GPIO_H
 #define __BSP_GPIO_H
 
-#include "main.h"
 #include "bsp_cfg.h"
+
+#if GPIO_INSTANCE_NUM > 0
+
+#include "main.h"
 #include "stdint.h"
 
 /*------------- 类型定义 --------------*/
@@ -86,5 +89,7 @@ GPIO_PinState GPIORead(GPIOInstance *instance);
  * @param state 引脚状态
  */
 void GPIOWrite(GPIOInstance *instance, GPIO_PinState state);
+
+#endif
 
 #endif /* __BSP_GPIO_H */
