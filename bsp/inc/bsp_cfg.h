@@ -125,6 +125,7 @@
 #define UART_INSTANCE_NUM 8    // UART 实例数量
 #define PWM_INSTANCE_NUM 6     // PWM 实例数量
 #define ENCODER_INSTANCE_NUM 0 // 编码器实例数量
+#define ADC_INSTANCE_NUM 1     // ADC 实例数量
 #endif
 
 #if DEVELOPMENT_BOARD == DJI_A
@@ -326,6 +327,18 @@ typedef enum
     I2C_NUM_MAX // I2C数量上限
 } BoardI2C_e;
 
+/**
+ * @brief 板载ADC枚举
+ */
+typedef enum
+{
+    ADC_BAT_VOLTAGE = 0, // 电池电压 PC04 -> ADC1_INP4
+
+    ADC_NUM_MAX // ADC数量上限
+} BoardADC_e;
+// 电压值转换(3.3*11/65536=0.00055389404296875)
+#define VOLTAGE_TRANFER 0.00055389404296875f
+
 #endif // DM_MC02
 
 #if DEVELOPMENT_BOARD == DJI_A
@@ -486,6 +499,15 @@ typedef struct
     I2C_HandleTypeDef *handle; // I2C句柄
 } I2C_Map_t;
 
+/**
+ * @brief ADC映射结构体
+ */
+typedef struct
+{
+    ADC_HandleTypeDef *handle; // ADC句柄
+    uint32_t channel;          // ADC通道
+} ADC_Map_t;
+
 /*============================================
  *              硬件映射数组声明
  *============================================*/
@@ -496,5 +518,6 @@ extern const UART_Map_t uart_map[];
 // extern const CAN_Map_t can_map[];
 extern const SPI_Map_t spi_map[];
 extern const I2C_Map_t i2c_map[];
+extern const ADC_Map_t adc_map[];
 
 #endif // __BSP_CFG_H
