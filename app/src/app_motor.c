@@ -9,16 +9,20 @@
 // 定义 BMI088 实例（一次性定义所有子实例）
 // 参数：name, spi_idx, cs_acc_idx, cs_gyro_idx, int_acc_idx, int_gyro_idx, heater_idx
 BMI088_INSTANCE_DEF(bmi088, SPI_BMI088, GPIO_BMI088_CS1, GPIO_BMI088_CS2, GPIO_BMI088_INT1, GPIO_BMI088_INT3, TIM_HEATER);
-
+BMI088_Data_t data;
+float ax;
+float ay;
+float az;
+float gx;
+float gy;
+float gz;
+float temperature;
 /*============================ 初始化函数 ============================*/
 
 static void MOTORInit(void)
 {
     // 注册 BMI088 实例
-    if (BMI088Register(&bmi088) != 0)
-    {
-        LOGERROR("BMI088 register failed");
-    }
+    BMI088Register(&bmi088);
 
     // 配置并初始化 BMI088
     // 加速度计：±3G量程，正常滤波模式，400Hz ODR
@@ -30,7 +34,14 @@ static void MOTORInit(void)
 
 static void MOTORTask(void)
 {
-    DWT_Delay(0.0005f);
+    data = BMI088ReadBlocking(&bmi088);
+    ax = data.acc[0];
+    ay = data.acc[1];
+    az = data.acc[2];
+    gx = data.gyro[0];
+    gy = data.gyro[1];
+    gz = data.gyro[2];
+    temperature = data.temp;
 }
 
 /*============================ 公开接口 ============================*/
