@@ -84,6 +84,7 @@ const I2C_Map_t i2c_map[I2C_NUM_MAX] = {
 #include "tim.h"
 #include "usart.h"
 #include "spi.h"
+#include "adc.h"
 
 /*============================================
  *              GPIO 映射数组
@@ -162,6 +163,13 @@ const SPI_Map_t spi_map[SPI_NUM_MAX] = {
 const I2C_Map_t i2c_map[I2C_NUM_MAX] = {
     // 注意：I2C 需要在 CubeMX 配置后才能使用
     // [I2C_LCD] = {&hi2c2}, // I2C2 LCD PB10/PB11
+};
+
+/*============================================
+ *              ADC 映射数组
+ *============================================*/
+const ADC_Map_t adc_map[ADC_NUM_MAX] = {
+    [ADC_BAT_VOLTAGE] = {&hadc1, ADC_CHANNEL_4}, // 电池电压 PC04 -> ADC1_INP4
 };
 
 #endif // DM_MC02
