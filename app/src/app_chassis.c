@@ -7,7 +7,7 @@ static void ChassisInit(void)
 {
 }
 
-__attribute__((section(".itcmram"))) static void ChassisTask(void)
+ITCM_RAM static void ChassisTask(void)
 {
 }
 
@@ -16,7 +16,7 @@ __attribute__((section(".itcmram"))) static void ChassisTask(void)
  * @param  argument: 未使用
  * @retval None
  */
-__attribute__((section(".itcmram"), noreturn)) void StartChassisTask(void *argument)
+ITCM_RAM __attribute__((noreturn)) void StartChassisTask(void *argument)
 {
     ChassisInit();
     static uint64_t start;

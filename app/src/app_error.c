@@ -8,7 +8,7 @@
  * @param  argument: 未使用
  * @retval None
  */
-__attribute__((section(".itcmram"), noreturn)) void StartErrorTask(void *argument)
+ITCM_RAM __attribute__((noreturn)) void StartErrorTask(void *argument)
 {
     for (;;)
     {
