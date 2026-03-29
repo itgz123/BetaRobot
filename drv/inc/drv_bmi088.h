@@ -90,19 +90,17 @@ typedef struct BMI088Instance
  * @param int_gyro_idx 陀螺仪中断GPIO枚举（无则填0）
  * @param heater_idx  加热PWM枚举（无则填0）
  *
- * @note 初始化时默认使用阻塞模式，初始化完成后可切换到DMA模式
+ * @note DMA_RAM 宏在 Cortex-M7 上将缓冲区放入 RAM_D1 以支持 DMA 访问
+ *       初始化时默认使用阻塞模式，初始化完成后可切换到DMA模式
  *
  * @example
  *   BMI088_INSTANCE_DEF(bmi088, SPI_BMI088, GPIO_BMI088_CS1, GPIO_BMI088_CS2,
  *                       GPIO_BMI088_INT1, GPIO_BMI088_INT3, TIM_HEATER);
  */
-#if CPU_CORE == CORTEX_M7
 #define BMI088_INSTANCE_DEF(name, spi_idx, cs_acc_idx, cs_gyro_idx, \
                             int_acc_idx, int_gyro_idx, heater_idx)  \
-    static uint8_t name##_rx_buff[BMI088_BUFF_SIZE]                 \
-        __attribute__((section(".ram_d1"))) = {0};                  \
-    static uint8_t name##_tx_buff[BMI088_BUFF_SIZE]                 \
-        __attribute__((section(".ram_d1"))) = {0};                  \
+    static uint8_t name##_rx_buff[BMI088_BUFF_SIZE] DMA_RAM = {0};  \
+    static uint8_t name##_tx_buff[BMI088_BUFF_SIZE] DMA_RAM = {0};  \
     static BMI088Instance name = {                                  \
         .spi_inst.parent = &name,                                   \
         .spi_inst.spi_e = spi_idx,                                  \
@@ -140,49 +138,6 @@ typedef struct BMI088Instance
         .acc_offset = {0.0f, 0.0f, 0.0f},                           \
         .gyro_offset = {0.0f, 0.0f, 0.0f},                          \
     }
-#else
-#define BMI088_INSTANCE_DEF(name, spi_idx, cs_acc_idx, cs_gyro_idx, \
-                            int_acc_idx, int_gyro_idx, heater_idx)  \
-    static uint8_t name##_rx_buff[BMI088_BUFF_SIZE] = {0};          \
-    static uint8_t name##_tx_buff[BMI088_BUFF_SIZE] = {0};          \
-    static BMI088Instance name = {                                  \
-        .spi_inst.parent = &name,                                   \
-        .spi_inst.spi_e = spi_idx,                                  \
-        .spi_inst.handle = NULL,                                    \
-        .spi_inst.work_mode = SPI_BLOCK_MODE,                       \
-        .spi_inst.rx_buff = name##_rx_buff,                         \
-        .spi_inst.buff_size = BMI088_BUFF_SIZE,                     \
-        .spi_inst.rx_len = 0,                                       \
-        .spi_inst.rx_callback = NULL,                               \
-        .cs_acc.parent = &name,                                     \
-        .cs_acc.gpio_e = cs_acc_idx,                                \
-        .cs_acc.map = {0},                                          \
-        .cs_acc.pin_state = GPIO_PIN_RESET,                         \
-        .cs_acc.callback = NULL,                                    \
-        .cs_gyro.parent = &name,                                    \
-        .cs_gyro.gpio_e = cs_gyro_idx,                              \
-        .cs_gyro.map = {0},                                         \
-        .cs_gyro.pin_state = GPIO_PIN_RESET,                        \
-        .cs_gyro.callback = NULL,                                   \
-        .int_acc.parent = &name,                                    \
-        .int_acc.gpio_e = int_acc_idx,                              \
-        .int_acc.map = {0},                                         \
-        .int_acc.pin_state = GPIO_PIN_RESET,                        \
-        .int_acc.callback = NULL,                                   \
-        .int_gyro.parent = &name,                                   \
-        .int_gyro.gpio_e = int_gyro_idx,                            \
-        .int_gyro.map = {0},                                        \
-        .int_gyro.pin_state = GPIO_PIN_RESET,                       \
-        .int_gyro.callback = NULL,                                  \
-        .heater_pwm.tim_e = heater_idx,                             \
-        .heater_pwm.map = {NULL, 0},                                \
-        .heater_pwm.dutyratio = 0.0f,                               \
-        .tx_buff = name##_tx_buff,                                  \
-        .tx_len = 0,                                                \
-        .acc_offset = {0.0f, 0.0f, 0.0f},                           \
-        .gyro_offset = {0.0f, 0.0f, 0.0f},                          \
-    }
-#endif
 
 /*============================ 公开接口声明 ============================*/
 

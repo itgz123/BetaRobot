@@ -99,6 +99,24 @@
 #endif
 
 /*============================================
+ *              内存属性宏
+ *============================================*/
+/**
+ * @brief 内存区域属性宏定义
+ * @note Cortex-M7 特有内存区域：
+ *       - ITCM_RAM：指令紧耦合内存，CPU取指最快，用于高频任务函数
+ *       - DMA_RAM：D1域RAM，DMA可访问，用于DMA缓冲区
+ *       Cortex-M4 无这些区域，定义为空
+ */
+#if CPU_CORE == CORTEX_M7
+#define ITCM_RAM __attribute__((section(".itcmram")))
+#define DMA_RAM __attribute__((section(".ram_d1")))
+#else
+#define ITCM_RAM
+#define DMA_RAM
+#endif
+
+/*============================================
  *              逻辑实例数量配置
  *============================================*/
 /**

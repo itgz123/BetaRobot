@@ -87,7 +87,7 @@ static void SBUSCallback(SBUSInstance *inst)
 
 /*============= 任务函数 =============*/
 
-__attribute__((section(".itcmram"))) static void CmdTask(void)
+ITCM_RAM static void CmdTask(void)
 {
     SBUS_RawFrame_t raw_frame;
 
@@ -112,7 +112,7 @@ __attribute__((section(".itcmram"))) static void CmdTask(void)
  * @param  argument: 未使用
  * @retval None
  */
-__attribute__((section(".itcmram"), noreturn)) void StartCmdTask(void *argument)
+ITCM_RAM __attribute__((noreturn)) void StartCmdTask(void *argument)
 {
     CmdInit();
     static uint64_t start;
