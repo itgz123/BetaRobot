@@ -10,6 +10,8 @@
 #include "task.h"
 #include "main.h"
 
+extern float ch1;
+
 /*------------- 任务函数 --------------*/
 __attribute__((noreturn)) void StartCmdTask(void *argument);
 
