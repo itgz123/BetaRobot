@@ -6,25 +6,45 @@
 
 #include "app_cmd.h"
 float speed1 = 0;
-float set_duty = 0;
+float set_speed;
 /*============================ 实例定义 ============================*/
 
-// 电机1：编码器 11 PPR，减速比 9.6:1，滤波系数 0.01
-DCMOTOR_INSTANCE_DEF(motor1, TIM_PWM_1, TIM_ENCODER_1, GPIO_MOTOR_1_IN1, GPIO_MOTOR_1_IN2, 11, 9.6f, 0.01f);
+// 电机1：PWM TIM1, 编码器 TIM2, GPIO IN1/IN2
+DCMOTOR_INSTANCE_DEF(motor1, TIM_PWM_1, TIM_ENCODER_1, GPIO_MOTOR_1_IN1, GPIO_MOTOR_1_IN2);
 
 /*============================ 初始化函数 ============================*/
 
 static void MOTORInit(void)
 {
-    DCMotorRegister(&motor1);
-    LOGINFO("[app_motor] Motor1 registered");
+    // 1. 初始化电机：注册外设 + 设置基本参数
+    // 编码器 11 PPR，减速比 9.6:1，滤波系数 0.01
+    DCMotorInit(&motor1, 11, 9.6f, 0.3f);
+
+    // 2. 配置 PID 和前馈参数
+    // kp=0.5, ki=0.1, kd=0, integral_limit=10
+    // 前馈使用下边界：kf=0.00655, offset=0.25, max_speed=130
+    DCMotorSetPID(&motor1, 0.9f, 0.005f, 0.0f, 0.5f, 0.00655f, 0.25f, 120.0f);
+
+    LOGINFO("[app_motor] Motor1 initialized");
 }
 
 /*============================ 任务函数 ============================*/
 
 ITCM_RAM static void MOTORTask(void)
 {
-    DCMotorSetDutyRatio(&motor1, set_duty);
+    static float dt = 0.0f;
+    static uint64_t last_time = 0;
+
+    // 计算时间间隔
+    uint64_t current_time = DWT_GetTimeline_us();
+    if (last_time > 0)
+    {
+        dt = (current_time - last_time) / 1000000.0f; // us -> s
+    }
+    last_time = current_time;
+    set_speed = ch1 * motor1.max_speed;
+    // 速度控制
+    DCMotorSetSpeed(&motor1, set_speed, dt);
     speed1 = DCMotorGetSpeed(&motor1);
 }
 

@@ -14,7 +14,7 @@
 
 /*------------- 外部接口实现 --------------*/
 
-int8_t DCMotorRegister(DCMotorInstance *instance)
+int8_t DCMotorInit(DCMotorInstance *instance, uint16_t encoder_ppr, float reduction_ratio, float lpf_alpha)
 {
     // 参数检查
     if (instance == NULL)
@@ -38,16 +38,22 @@ int8_t DCMotorRegister(DCMotorInstance *instance)
     }
 
     // 检查编码器参数
-    if (instance->encoder_ppr == 0)
+    if (encoder_ppr == 0)
     {
         LOGERROR("[drv_dcmotor] encoder_ppr cannot be 0!");
         return -1;
     }
 
-    if (instance->reduction_ratio <= 0.0f)
+    if (reduction_ratio <= 0.0f)
     {
         LOGERROR("[drv_dcmotor] reduction_ratio must be positive!");
         return -1;
+    }
+
+    if (lpf_alpha < 0.0f || lpf_alpha > 1.0f)
+    {
+        LOGWARNING("[drv_dcmotor] lpf_alpha should be in [0, 1], using 0.5");
+        lpf_alpha = 0.5f;
     }
 
     // 注册 GPIO 实例
@@ -81,8 +87,44 @@ int8_t DCMotorRegister(DCMotorInstance *instance)
     GPIOReset(&instance->in1_inst);
     GPIOReset(&instance->in2_inst);
 
-    LOGINFO("[drv_dcmotor] DC Motor instance registered");
+    // 设置基本参数
+    instance->encoder_ppr = encoder_ppr;
+    instance->reduction_ratio = reduction_ratio;
+    instance->alpha = lpf_alpha;
+
+    // 初始化速度状态
+    instance->speed = 0.0f;
+    instance->target_speed = 0.0f;
+
+    // 初始化 PID 控制器（参数为 0，由 DCMotorSetPID 配置）
+    PIDInit(&instance->pid, 0.0f, 0.0f, 0.0f);
+
+    LOGINFO("[drv_dcmotor] DC Motor initialized");
     return 0;
+}
+
+void DCMotorSetPID(DCMotorInstance *instance, float kp, float ki, float kd, float integral_limit, float feedforward_k, float feedforward_offset, float max_speed)
+{
+    if (instance == NULL)
+    {
+        LOGWARNING("[drv_dcmotor] Instance is NULL!");
+        return;
+    }
+
+    // 设置 PID 参数
+    instance->pid.kp = kp;
+    instance->pid.ki = ki;
+    instance->pid.kd = kd;
+    instance->pid.integral_limit = integral_limit;
+
+    // 设置前馈参数
+    instance->feedforward_k = feedforward_k;
+    instance->feedforward_offset = feedforward_offset;
+
+    // 设置最大速度
+    instance->max_speed = max_speed;
+
+    LOGINFO("[drv_dcmotor] PID configured");
 }
 
 void DCMotorSetDutyRatio(DCMotorInstance *instance, float dutyratio)
@@ -159,4 +201,43 @@ void DCMotorClearEncoder(DCMotorInstance *instance)
     }
 
     EncoderClearCount(&instance->encoder_inst);
+}
+
+void DCMotorSetSpeed(DCMotorInstance *instance, float target_speed, float dt)
+{
+    if (instance == NULL)
+    {
+        LOGWARNING("[drv_dcmotor] Instance is NULL!");
+        return;
+    }
+
+    // 检查 max_speed 是否有效
+    if (instance->max_speed <= 0.0f)
+    {
+        LOGWARNING("[drv_dcmotor] max_speed not configured!");
+        return;
+    }
+
+    // 保存目标速度
+    instance->target_speed = target_speed;
+
+    // 获取当前速度并归一化
+    float measure = DCMotorGetSpeed(instance);
+    float measure_norm = measure / instance->max_speed;
+
+    // 归一化目标速度
+    float setpoint_norm = target_speed / instance->max_speed;
+
+    // 计算归一化前馈值
+    // 前馈公式：feedforward = (feedforward_k * |target_speed| + feedforward_offset) * sign(target_speed)
+    // 归一化：feedforward_norm = feedforward / max_speed
+    float sign = (target_speed >= 0.0f) ? 1.0f : -1.0f;
+    float feedforward = (instance->feedforward_k * fabsf(target_speed) + instance->feedforward_offset) * sign;
+    float feedforward_norm = feedforward / instance->max_speed;
+
+    // PID 计算（输入和输出都是归一化的 [-1, 1]）
+    float output = PIDCalculate(&instance->pid, setpoint_norm, measure_norm, dt, feedforward_norm);
+
+    // 设置占空比
+    DCMotorSetDutyRatio(instance, output);
 }
