@@ -78,7 +78,6 @@ int8_t DCMotorRegister(DCMotorInstance *instance)
     }
 
     // 初始化方向为停止
-    instance->direction = DCMOTOR_STOP;
     GPIOReset(&instance->in1_inst);
     GPIOReset(&instance->in2_inst);
 
@@ -94,54 +93,42 @@ void DCMotorSetDutyRatio(DCMotorInstance *instance, float dutyratio)
         return;
     }
 
+    // 根据正负自动设置方向
+    if (dutyratio > 0.0f)
+    {
+        // 正转：IN1=1, IN2=0
+        GPIOSet(&instance->in1_inst);
+        GPIOReset(&instance->in2_inst);
+        // 钳位占空比
+        if (dutyratio > 1.0f)
+            dutyratio = 1.0f;
+    }
+    else if (dutyratio < 0.0f)
+    {
+        // 反转：IN1=0, IN2=1
+        GPIOReset(&instance->in1_inst);
+        GPIOSet(&instance->in2_inst);
+        // 钳位占空比（取绝对值）
+        dutyratio = -dutyratio;
+        if (dutyratio > 1.0f)
+            dutyratio = 1.0f;
+    }
+    else
+    {
+        // 停止：IN1=0, IN2=0
+        GPIOReset(&instance->in1_inst);
+        GPIOReset(&instance->in2_inst);
+    }
+
     PWMSetDutyRatio(&instance->pwm_inst, dutyratio);
 }
 
-void DCMotorSetDirection(DCMotorInstance *instance, DCMotorDirection_e direction)
-{
-    if (instance == NULL)
-    {
-        LOGWARNING("[drv_dcmotor] Instance is NULL!");
-        return;
-    }
-
-    instance->direction = direction;
-
-    switch (direction)
-    {
-    case DCMOTOR_FORWARD:
-        // IN1=1, IN2=0 正转
-        GPIOSet(&instance->in1_inst);
-        GPIOReset(&instance->in2_inst);
-        break;
-
-    case DCMOTOR_BACKWARD:
-        // IN1=0, IN2=1 反转
-        GPIOReset(&instance->in1_inst);
-        GPIOSet(&instance->in2_inst);
-        break;
-
-    case DCMOTOR_STOP:
-    default:
-        // IN1=0, IN2=0 滑行停止
-        GPIOReset(&instance->in1_inst);
-        GPIOReset(&instance->in2_inst);
-        break;
-    }
-}
-
-float DCMotorGetSpeed(DCMotorInstance *instance, float alpha)
+float DCMotorGetSpeed(DCMotorInstance *instance)
 {
     if (instance == NULL)
     {
         return 0.0f;
     }
-
-    // 钳位滤波系数到有效范围
-    if (alpha < 0.0f)
-        alpha = 0.0f;
-    if (alpha > 1.0f)
-        alpha = 1.0f;
 
     // 获取编码器速度（脉冲/秒）
     // EncoderGetSpeed 返回带符号的速度，正值为正转，负值为反转
@@ -158,7 +145,7 @@ float DCMotorGetSpeed(DCMotorInstance *instance, float alpha)
     float speed_raw = motor_speed_rad_s / instance->reduction_ratio;
 
     // 一阶低通滤波：speed = alpha * speed_raw + (1 - alpha) * speed_last
-    instance->speed = alpha * speed_raw + (1.0f - alpha) * instance->speed;
+    instance->speed = instance->alpha * speed_raw + (1.0f - instance->alpha) * instance->speed;
 
     return instance->speed;
 }
