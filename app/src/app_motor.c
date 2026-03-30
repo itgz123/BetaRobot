@@ -6,10 +6,11 @@
 
 #include "app_cmd.h"
 float speed1 = 0;
+float set_duty = 0;
 /*============================ 实例定义 ============================*/
 
-// 电机1：编码器 512 PPR，减速比 30:1
-DCMOTOR_INSTANCE_DEF(motor1, TIM_PWM_1, TIM_ENCODER_1, GPIO_MOTOR_1_IN1, GPIO_MOTOR_1_IN2, 11, 9.6f);
+// 电机1：编码器 11 PPR，减速比 9.6:1，滤波系数 0.01
+DCMOTOR_INSTANCE_DEF(motor1, TIM_PWM_1, TIM_ENCODER_1, GPIO_MOTOR_1_IN1, GPIO_MOTOR_1_IN2, 11, 9.6f, 0.01f);
 
 /*============================ 初始化函数 ============================*/
 
@@ -17,7 +18,6 @@ static void MOTORInit(void)
 {
     DCMotorRegister(&motor1);
     LOGINFO("[app_motor] Motor1 registered");
-    DCMotorSetDirection(&motor1, DCMOTOR_FORWARD);
 }
 
 /*============================ 任务函数 ============================*/
@@ -25,7 +25,7 @@ static void MOTORInit(void)
 ITCM_RAM static void MOTORTask(void)
 {
     DCMotorSetDutyRatio(&motor1, ch1);
-    speed1 = DCMotorGetSpeed(&motor1, 0.3f);
+    speed1 = DCMotorGetSpeed(&motor1);
 }
 
 /*============================ 公开接口 ============================*/
