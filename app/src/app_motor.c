@@ -24,7 +24,7 @@ static void MOTORInit(void)
 
 ITCM_RAM static void MOTORTask(void)
 {
-    DCMotorSetDutyRatio(&motor1, ch1);
+    DCMotorSetDutyRatio(&motor1, set_duty);
     speed1 = DCMotorGetSpeed(&motor1);
 }
 
