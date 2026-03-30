@@ -11,6 +11,9 @@
 #include "main.h"
 
 extern float ch1;
+extern float ch2;
+extern float ch3;
+extern float ch4;
 
 /*------------- 任务函数 --------------*/
 __attribute__((noreturn)) void StartCmdTask(void *argument);
