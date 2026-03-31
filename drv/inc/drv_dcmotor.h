@@ -49,10 +49,14 @@ typedef struct DCMotorInstance
     // PID 控制器
     PIDInstance pid;
 
-    // 前馈模型参数 (由用户根据电机特性配置)
-    // 建议使用下边界直线参数，前馈略大，PID只需负向修正
-    float feedforward_k;      // 前馈系数 (duty/speed)，约 0.00655
-    float feedforward_offset; // 启动偏移，下边界约 0.25
+    // 两段前馈参数 (由用户根据电机特性配置)
+    // 低速段：启动需较大占空比克服静摩擦
+    // 高速段：效率下降，斜率变缓
+    float ff_k_low;       // 低速段前馈系数 (duty/speed)
+    float ff_offset_low;  // 低速段启动偏移
+    float ff_k_high;      // 高速段前馈系数
+    float ff_offset_high; // 高速段启动偏移
+    float ff_split_speed; // 分界速度 (rad/s)
 
     // 速度控制参数
     float max_speed;    // 最大转速 (rad/s)，用于 PID 归一化
@@ -112,8 +116,11 @@ typedef struct DCMotorInstance
         .alpha = 0.0f,                                                     \
         .speed = 0.0f,                                                     \
         .pid = {0},                                                        \
-        .feedforward_k = 0.0f,                                             \
-        .feedforward_offset = 0.0f,                                        \
+        .ff_k_low = 0.0f,                                                  \
+        .ff_offset_low = 0.0f,                                             \
+        .ff_k_high = 0.0f,                                                 \
+        .ff_offset_high = 0.0f,                                            \
+        .ff_split_speed = 0.0f,                                            \
         .max_speed = 0.0f,                                                 \
         .target_speed = 0.0f}
 // clang-format on
@@ -134,19 +141,24 @@ typedef struct DCMotorInstance
 int8_t DCMotorInit(DCMotorInstance *instance, uint16_t encoder_ppr, float reduction_ratio, float lpf_alpha);
 
 /**
- * @brief 设置 PID 和前馈参数
+ * @brief 设置 PID 和两段前馈参数
  * @param instance        DC 电机实例指针
  * @param kp              比例系数
  * @param ki              积分系数
  * @param kd              微分系数
  * @param integral_limit  积分限幅（建议设为 1/ki）
- * @param feedforward_k   前馈系数 (duty/speed)
- * @param feedforward_offset 启动偏移
  * @param max_speed       最大转速 (rad/s)，用于 PID 归一化
+ * @param ff_k_low        低速段前馈系数 (duty/speed)
+ * @param ff_offset_low   低速段启动偏移
+ * @param ff_k_high       高速段前馈系数
+ * @param ff_offset_high  高速段启动偏移
+ * @param ff_split_speed  分界速度 (rad/s)
  *
  * @note 调用此函数后才能使用 DCMotorSetSpeed 进行速度控制
+ *       两段前馈根据速度分段使用不同参数，提高拟合精度
  */
-void DCMotorSetPID(DCMotorInstance *instance, float kp, float ki, float kd, float integral_limit, float feedforward_k, float feedforward_offset, float max_speed);
+void DCMotorSetPID(DCMotorInstance *instance, float kp, float ki, float kd, float integral_limit, float max_speed,
+                   float ff_k_low, float ff_offset_low, float ff_k_high, float ff_offset_high, float ff_split_speed);
 
 /**
  * @brief 设置 PWM 占空比（自动控制方向）
@@ -171,12 +183,15 @@ float DCMotorGetSpeed(DCMotorInstance *instance);
 void DCMotorClearEncoder(DCMotorInstance *instance);
 
 /**
- * @brief 设置电机转速（PID + 前馈控制）
+ * @brief 设置电机转速（PID + 两段前馈控制）
  * @param instance     DC 电机实例指针
  * @param target_speed 目标转速，正值正转，负值反转
  * @param dt           时间间隔 (秒)，由 APP 层通过 DWT 获取后传入
- * @note 需在任务中周期性调用，使用前需配置 pid 参数 (kp, ki, kd, integral_limit)
- *       前馈公式：feedforward = feedforward_k * |target_speed| + feedforward_offset * sign(target_speed)
+ * @note 需在任务中周期性调用，使用前需配置 pid 参数
+ *       两段前馈公式：
+ *       - 低速 (|speed| < split): feedforward = ff_k_low * |speed| + ff_offset_low
+ *       - 高速 (|speed| >= split): feedforward = ff_k_high * |speed| + ff_offset_high
+ *       最终: feedforward *= sign(speed)
  */
 void DCMotorSetSpeed(DCMotorInstance *instance, float target_speed, float dt);
 
