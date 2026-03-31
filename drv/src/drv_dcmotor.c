@@ -103,7 +103,8 @@ int8_t DCMotorInit(DCMotorInstance *instance, uint16_t encoder_ppr, float reduct
     return 0;
 }
 
-void DCMotorSetPID(DCMotorInstance *instance, float kp, float ki, float kd, float integral_limit, float feedforward_k, float feedforward_offset, float max_speed)
+void DCMotorSetPID(DCMotorInstance *instance, float kp, float ki, float kd, float integral_limit, float max_speed,
+                   float ff_k_low, float ff_offset_low, float ff_k_high, float ff_offset_high, float ff_split_speed)
 {
     if (instance == NULL)
     {
@@ -117,9 +118,12 @@ void DCMotorSetPID(DCMotorInstance *instance, float kp, float ki, float kd, floa
     instance->pid.kd = kd;
     instance->pid.integral_limit = integral_limit;
 
-    // 设置前馈参数
-    instance->feedforward_k = feedforward_k;
-    instance->feedforward_offset = feedforward_offset;
+    // 设置两段前馈参数
+    instance->ff_k_low = ff_k_low;
+    instance->ff_offset_low = ff_offset_low;
+    instance->ff_k_high = ff_k_high;
+    instance->ff_offset_high = ff_offset_high;
+    instance->ff_split_speed = ff_split_speed;
 
     // 设置最大速度
     instance->max_speed = max_speed;
@@ -228,11 +232,24 @@ void DCMotorSetSpeed(DCMotorInstance *instance, float target_speed, float dt)
     // 归一化目标速度
     float setpoint_norm = target_speed / instance->max_speed;
 
-    // 计算归一化前馈值
-    // 前馈公式：feedforward = (feedforward_k * |target_speed| + feedforward_offset) * sign(target_speed)
-    // 归一化：feedforward_norm = feedforward / max_speed
+    // 计算两段前馈值
     float sign = (target_speed >= 0.0f) ? 1.0f : -1.0f;
-    float feedforward = (instance->feedforward_k * fabsf(target_speed) + instance->feedforward_offset) * sign;
+    float abs_speed = fabsf(target_speed);
+    float feedforward;
+
+    if (abs_speed < instance->ff_split_speed)
+    {
+        // 低速段：ff_k_low * speed + ff_offset_low
+        feedforward = instance->ff_k_low * abs_speed + instance->ff_offset_low;
+    }
+    else
+    {
+        // 高速段：ff_k_high * speed + ff_offset_high
+        feedforward = instance->ff_k_high * abs_speed + instance->ff_offset_high;
+    }
+    feedforward *= sign; // 整体取反，确定方向
+
+    // 归一化前馈值
     float feedforward_norm = feedforward / instance->max_speed;
 
     // PID 计算（输入和输出都是归一化的 [-1, 1]）
