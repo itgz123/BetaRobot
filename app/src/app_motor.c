@@ -8,13 +8,13 @@
 float speed1 = 0;
 float set_speed = 0;
 float set_duty = 0;
-float kp = 2.2f;
-float ki = 0.053f;
-float kd = 0.012f;
-float i_max = 10.0f;
+float kp = 3.5f;
+float ki = 0.016f;
+float kd = 0.018f;
+float i_max = 5.0f;
 float max_speed = 110;
-float kl = 0.00663f;
-float bl = 0.4f;
+float kl = 0.003979f;
+float bl = 0.50f;
 float kh = 0.004528;
 float bh = 0.47928f;
 float v_v = 65.0f;
@@ -27,7 +27,7 @@ DCMOTOR_INSTANCE_DEF(motor1, TIM_PWM_1, TIM_ENCODER_1, GPIO_MOTOR_1_IN1, GPIO_MO
 
 static void MOTORInit(void)
 {
-    DCMotorInit(&motor1, 11, 9.6f, 0.05f);
+    DCMotorInit(&motor1, 11, 9.6f, 0.01f);
     DCMotorSetPID(&motor1, kp, ki, kd, i_max, max_speed, kl, bl, kh, bh, v_v);
     LOGINFO("[app_motor] Motor1 initialized");
 }
@@ -49,6 +49,8 @@ ITCM_RAM static void MOTORTask(void)
     DCMotorSetPID(&motor1, kp, ki, kd, i_max, max_speed, kl, bl, kh, bh, v_v);
     // 速度控制
     DCMotorSetSpeed(&motor1, set_speed, dt);
+
+    // DCMotorSetDutyRatio(&motor1, set_duty);
     speed1 = DCMotorGetSpeed(&motor1);
 }
 
