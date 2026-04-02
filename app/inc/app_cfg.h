@@ -67,11 +67,31 @@
  *============================================*/
 
 #define WHEEL_RADIUS 0.068f // 轮半径 (m)
-#define WHEELBASE_A 0.2f    // 麦轮: 前后轮距的一半 (m)
-#define WHEELBASE_B 0.2f    // 麦轮: 左右轮距的一半 (m)
-#define OMNI_L 0.2f         // 全向轮: 轮到中心距离 (m)
-// 添加脉轮到中心的距离
-// 全向轮改为左右和前后
+
+// 矩形底盘参数（麦轮X/O型、全向轮X型共用）
+#define WHEELBASE_A 0.3f // 中心到前后轮的纵向距离 (m)
+#define WHEELBASE_B 0.3f // 中心到左右轮的横向距离 (m)
+
+// 中心到轮子距离：L = sqrt(a² + b²)
+// 手动计算示例：若 a=0.2, b=0.2，则 L = sqrt(0.08) ≈ 0.2828
+// 编译时提醒：若修改了 WHEELBASE_A 或 WHEELBASE_B，需重新计算 CHASSIS_L
+// CHASSIS_L = sqrt(WHEELBASE_A^2 + WHEELBASE_B^2)
+#define CHASSIS_L 0.4242f // 中心到轮子距离 (m)，手动计算
+// #warning "WHEELBASE_A or WHEELBASE_B changed! Please recalculate CHASSIS_L = sqrt(a^2 + b^2)"
+
+// 十字型全向轮参数（支持矩形）
+#define OMNI_CROSS_A 0.2f // 中心到前后轮距离 (m)
+#define OMNI_CROSS_B 0.2f // 中心到左右轮距离 (m)
+
+// 解算系数宏定义
+#define K_INVERSE (CHASSIS_L / WHEEL_RADIUS)    // 逆解系数：麦轮/全向轮X型
+#define K_FORWARD (WHEEL_RADIUS / CHASSIS_L)    // 正解系数：麦轮/全向轮X型
+#define K_CROSS_A (OMNI_CROSS_A / WHEEL_RADIUS) // 十字型逆解系数：前后轮
+#define K_CROSS_B (OMNI_CROSS_B / WHEEL_RADIUS) // 十字型逆解系数：左右轮
+
+// 全向轮X型 √2 系数
+#define SQRT2 1.41421356f
+
 /**
  * @brief 任务STACK大小
  */

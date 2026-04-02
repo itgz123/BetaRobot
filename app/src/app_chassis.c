@@ -41,6 +41,10 @@
 #define MOTOR_GEAR_RATIO 9.6f
 #define MOTOR_LPF_ALPHA 0.01f
 
+// 底盘最大速度
+#define CHASSIS_MAX_SPEED 3
+#define CHASSIS_MAX_W 0.5f
+
 /*============================================
  *              电机实例定义
  *============================================*/
@@ -118,14 +122,19 @@ ITCM_RAM static void ChassisTask(void)
     //     // 无头模式：根据陀螺仪修正方向
     // }
 
+    // 转换速度
+    chassis_cmd.vx *= CHASSIS_MAX_SPEED;
+    chassis_cmd.vy *= CHASSIS_MAX_SPEED;
+    chassis_cmd.w *= CHASSIS_MAX_W;
+
     // 运动学逆解：底盘速度 -> 轮子速度
     wheel_speed = ChassisInverseKinematics(&chassis_cmd);
 
     // 速度控制（乘以最大速度得到实际目标速度）
-    DCMotorSetSpeed(&motor_lf, wheel_speed.w1 * MOTOR_MAX_SPEED, dt);
-    DCMotorSetSpeed(&motor_lb, wheel_speed.w2 * MOTOR_MAX_SPEED, dt);
-    DCMotorSetSpeed(&motor_rb, wheel_speed.w3 * MOTOR_MAX_SPEED, dt);
-    DCMotorSetSpeed(&motor_rf, wheel_speed.w4 * MOTOR_MAX_SPEED, dt);
+    DCMotorSetSpeed(&motor_lf, wheel_speed.w1, dt);
+    DCMotorSetSpeed(&motor_lb, wheel_speed.w2, dt);
+    DCMotorSetSpeed(&motor_rb, wheel_speed.w3, dt);
+    DCMotorSetSpeed(&motor_rf, wheel_speed.w4, dt);
 }
 
 /*============================================
