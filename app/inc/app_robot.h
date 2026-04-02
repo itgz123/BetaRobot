@@ -3,6 +3,7 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
 #include "main.h"
 //
 #include "app_cmd.h"
@@ -15,6 +16,9 @@ extern TaskHandle_t errorTaskHandle;
 extern TaskHandle_t cmdTaskHandle;
 extern TaskHandle_t chassisTaskHandle;
 extern TaskHandle_t motorTaskHandle;
+
+/* 跨任务队列声明 */
+extern QueueHandle_t chassis_cmd_queue;
 
 /* 任务创建函数 */
 void function_in_main_c(void);

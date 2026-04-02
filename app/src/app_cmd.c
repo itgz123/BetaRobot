@@ -9,16 +9,13 @@
  */
 
 #include "app_cmd.h"
+#include "app_robot.h"
 #include "bsp_log.h"
 #include "bsp_dwt.h"
 #include "app_cfg.h"
 #include "drv_sbus.h"
+#include "drv_chassis.h"
 #include "queue.h"
-
-float ch1 = 0;
-float ch2 = 0;
-float ch3 = 0;
-float ch4 = 0;
 
 /*============= 私有函数声明 =============*/
 
@@ -44,7 +41,7 @@ static SBUS_Data_t sbus_data;
 
 static void CmdInit(void)
 {
-    // 创建覆盖式队列
+    // 创建 SBUS 覆盖式队列
     sbus_queue = xQueueCreateStatic(
         SBUS_QUEUE_LENGTH,
         SBUS_ITEM_SIZE,
@@ -89,7 +86,12 @@ static void SBUSCallback(SBUSInstance *inst)
 
 ITCM_RAM static void CmdTask(void)
 {
+    float ch1 = 0;
+    float ch3 = 0;
+    float ch4 = 0;
+    float ch5 = 0;
     SBUS_RawFrame_t raw_frame;
+    ChassisVelCmd_t chassis_cmd;
 
     // 从队列获取数据（阻塞等待）
     if (xQueueReceive(sbus_queue, &raw_frame, portMAX_DELAY) == pdTRUE)
@@ -98,12 +100,41 @@ ITCM_RAM static void CmdTask(void)
         sbus_data = SBUSDecodeFrame(raw_frame.data, raw_frame.len);
 
         ch1 = sbus_data.ch[0];
-        ch2 = sbus_data.ch[1];
         ch3 = sbus_data.ch[2];
         ch4 = sbus_data.ch[3];
+        ch5 = sbus_data.ch[4];
 
-        // TODO: 在这里使用解析后的数据
-        // 例如：根据通道值控制机器人
+        // 填充底盘命令
+        // 通道映射：ch1->vx, ch2->vy, ch3->w, ch4->模式开关
+        chassis_cmd.vx = ch3;
+        chassis_cmd.vy = -ch1;
+        chassis_cmd.w = -ch4;
+
+        // 模式切换（三段开关）
+        if (ch5 < -0.5f)
+        {
+            chassis_cmd.mode = CHASSIS_MODE_DISABLE;
+        }
+        else if (ch5 > 0.5f)
+        {
+            chassis_cmd.mode = CHASSIS_MODE_HEADLESS;
+        }
+        else
+        {
+            chassis_cmd.mode = CHASSIS_MODE_ENABLE;
+        }
+
+        // 失控保护
+        if (sbus_data.failsafe || sbus_data.frame_lost)
+        {
+            chassis_cmd.vx = 0;
+            chassis_cmd.vy = 0;
+            chassis_cmd.w = 0;
+            chassis_cmd.mode = CHASSIS_MODE_DISABLE;
+        }
+
+        // 发送到底盘命令队列（覆盖式）
+        xQueueOverwrite(chassis_cmd_queue, &chassis_cmd);
     }
 }
 
