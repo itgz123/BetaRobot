@@ -7,7 +7,6 @@
  *       2. 不使用 FreeRTOS
  *       3. 底盘类型由 app_cfg.h 中的 CHASSIS_TYPE 宏编译时确定
  */
-
 #ifndef __DRV_CHASSIS_H
 #define __DRV_CHASSIS_H
 
@@ -18,11 +17,8 @@
  *============================================*/
 
 /**
-
  * @brief 底盘模式枚举
-
  */
-
 typedef enum
 {
     CHASSIS_MODE_DISABLE = 0, // 失能
@@ -31,13 +27,9 @@ typedef enum
 } ChassisMode_e;
 
 /**
-
  * @brief 底盘速度命令结构体
-
  * @note  用于 app_cmd 向 app_chassis 传递速度命令
-
  */
-
 typedef struct
 {
     float vx;           // 前向速度 (m/s)，向前为正
@@ -49,13 +41,14 @@ typedef struct
 /**
  * @brief 轮子速度结构体
  * @note  运动学逆解输出，电机1-4对应左前、左后、右后、右前
+ *        轮子转向：前进方向为正
  */
 typedef struct
 {
-    float w1; // 左前轮 LF (rad/s)，面朝轮子逆时针为正
-    float w2; // 左后轮 LB (rad/s)
-    float w3; // 右后轮 RB (rad/s)
-    float w4; // 右前轮 RF (rad/s)
+    float w1; // 左前轮 LF (rad/s)，前进方向为正
+    float w2; // 左后轮 LB (rad/s)，前进方向为正
+    float w3; // 右后轮 RB (rad/s)，前进方向为正
+    float w4; // 右前轮 RF (rad/s)，前进方向为正
 } WheelSpeed_t;
 
 /*============================================
