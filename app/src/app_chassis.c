@@ -1,15 +1,136 @@
+/**
+ * @file app_chassis.c
+ * @brief 底盘控制任务模块
+ *
+ * @note APP 层职责：
+ *       1. 定义电机实例并初始化
+ *       2. 从 app_cmd 接收速度命令
+ *       3. 调用 DRV 层运动学解算
+ *       4. 控制电机速度
+ */
+
 #include "app_chassis.h"
+#include "app_cmd.h"
+#include "app_robot.h"
+#include "app_cfg.h"
+#include "drv_dcmotor.h"
+#include "drv_chassis.h"
 #include "bsp_log.h"
 #include "bsp_dwt.h"
-#include "app_cfg.h"
+
+/*============================================
+ *              电机参数配置
+ *============================================*/
+
+// PID 参数
+#define MOTOR_KP 3.5f
+#define MOTOR_KI 0.016f
+#define MOTOR_KD 0.018f
+#define MOTOR_I_MAX 5.0f
+#define MOTOR_MAX_SPEED 110.0f // 最大速度 rad/s
+
+// 前馈参数
+#define MOTOR_KL 0.003979f
+#define MOTOR_BL 0.50f
+#define MOTOR_KH 0.004528f
+#define MOTOR_BH 0.47928f
+#define MOTOR_V_V 65.0f
+
+// 电机编码器线数、减速比和低通滤波系数
+#define MOTOR_ENCODER_NUM 11
+#define MOTOR_GEAR_RATIO 9.6f
+#define MOTOR_LPF_ALPHA 0.01f
+
+/*============================================
+ *              电机实例定义
+ *============================================*/
+
+// 电机1: 左前 LF
+DCMOTOR_INSTANCE_DEF(motor_lf, TIM_PWM_1, TIM_ENCODER_1, GPIO_MOTOR_1_IN1, GPIO_MOTOR_1_IN2);
+// 电机2: 左后 LB
+DCMOTOR_INSTANCE_DEF(motor_lb, TIM_PWM_2, TIM_ENCODER_2, GPIO_MOTOR_2_IN1, GPIO_MOTOR_2_IN2);
+// 电机3: 右后 RB
+DCMOTOR_INSTANCE_DEF(motor_rb, TIM_PWM_3, TIM_ENCODER_3, GPIO_MOTOR_3_IN1, GPIO_MOTOR_3_IN2);
+// 电机4: 右前 RF
+DCMOTOR_INSTANCE_DEF(motor_rf, TIM_PWM_4, TIM_ENCODER_4, GPIO_MOTOR_4_IN1, GPIO_MOTOR_4_IN2);
+
+/*============================================
+ *              私有变量
+ *============================================*/
+
+static ChassisVelCmd_t chassis_cmd = {0};
+static WheelSpeed_t wheel_speed;
+static float dt = 0.0f;
+static uint64_t last_time = 0;
+
+/*============================================
+ *              初始化函数
+ *============================================*/
 
 static void ChassisInit(void)
 {
+    // 初始化 4 个电机
+    DCMotorInit(&motor_lf, MOTOR_ENCODER_NUM, MOTOR_GEAR_RATIO, MOTOR_LPF_ALPHA);
+    DCMotorInit(&motor_lb, MOTOR_ENCODER_NUM, MOTOR_GEAR_RATIO, MOTOR_LPF_ALPHA);
+    DCMotorInit(&motor_rb, MOTOR_ENCODER_NUM, MOTOR_GEAR_RATIO, MOTOR_LPF_ALPHA);
+    DCMotorInit(&motor_rf, MOTOR_ENCODER_NUM, MOTOR_GEAR_RATIO, MOTOR_LPF_ALPHA);
+
+    // 设置 PID 参数
+    DCMotorSetPID(&motor_lf, MOTOR_KP, MOTOR_KI, MOTOR_KD, MOTOR_I_MAX, MOTOR_MAX_SPEED, MOTOR_KL, MOTOR_BL, MOTOR_KH, MOTOR_BH, MOTOR_V_V);
+    DCMotorSetPID(&motor_lb, MOTOR_KP, MOTOR_KI, MOTOR_KD, MOTOR_I_MAX, MOTOR_MAX_SPEED, MOTOR_KL, MOTOR_BL, MOTOR_KH, MOTOR_BH, MOTOR_V_V);
+    DCMotorSetPID(&motor_rb, MOTOR_KP, MOTOR_KI, MOTOR_KD, MOTOR_I_MAX, MOTOR_MAX_SPEED, MOTOR_KL, MOTOR_BL, MOTOR_KH, MOTOR_BH, MOTOR_V_V);
+    DCMotorSetPID(&motor_rf, MOTOR_KP, MOTOR_KI, MOTOR_KD, MOTOR_I_MAX, MOTOR_MAX_SPEED, MOTOR_KL, MOTOR_BL, MOTOR_KH, MOTOR_BH, MOTOR_V_V);
+
+    LOGINFO("[app_chassis] Chassis initialized with 4 motors");
 }
+
+/*============================================
+ *              任务函数
+ *============================================*/
 
 ITCM_RAM static void ChassisTask(void)
 {
+    // 计算时间间隔
+    uint64_t current_time = DWT_GetTimeline_us();
+    if (last_time > 0)
+    {
+        dt = (current_time - last_time) / 1000000.0f; // us -> s
+    }
+    last_time = current_time;
+
+    // 从队列获取底盘命令（非阻塞，使用最新数据）
+    xQueuePeek(chassis_cmd_queue, &chassis_cmd, 0);
+
+    // 检查模式
+    if (chassis_cmd.mode == CHASSIS_MODE_DISABLE)
+    {
+        // 失能模式：停止所有电机
+        DCMotorSetDutyRatio(&motor_lf, 0);
+        DCMotorSetDutyRatio(&motor_lb, 0);
+        DCMotorSetDutyRatio(&motor_rb, 0);
+        DCMotorSetDutyRatio(&motor_rf, 0);
+        return;
+    }
+
+    // TODO: 无头模式需要陀螺仪数据
+    // if (chassis_cmd.mode == CHASSIS_MODE_HEADLESS)
+    // {
+    //     // 无头模式：根据陀螺仪修正方向
+    // }
+
+    // 运动学逆解：底盘速度 -> 轮子速度
+    wheel_speed = ChassisInverseKinematics(&chassis_cmd);
+
+    // 速度控制（乘以最大速度得到实际目标速度）
+    DCMotorSetSpeed(&motor_lf, wheel_speed.w1 * MOTOR_MAX_SPEED, dt);
+    DCMotorSetSpeed(&motor_lb, wheel_speed.w2 * MOTOR_MAX_SPEED, dt);
+    DCMotorSetSpeed(&motor_rb, wheel_speed.w3 * MOTOR_MAX_SPEED, dt);
+    DCMotorSetSpeed(&motor_rf, wheel_speed.w4 * MOTOR_MAX_SPEED, dt);
 }
+
+/*============================================
+ *              公开接口
+ *============================================*/
 
 /**
  * @brief  Chassis 任务函数

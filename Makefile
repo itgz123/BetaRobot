@@ -104,6 +104,7 @@ bsp/src/bsp_spi.c \
 bsp/src/bsp_adc.c \
 drv/src/drv_dcmotor.c \
 drv/src/drv_pid.c \
+drv/src/drv_chassis.c \
 # drv/src/drv_bmi088.c \
 # $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c \
 

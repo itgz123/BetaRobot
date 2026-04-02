@@ -47,6 +47,22 @@ const TIM_Map_t tim_map[TIM_NUM_MAX] = {
     [TIM_ENCODER_2] = {&htim3, 0}, // 编码器2 TIM3
     [TIM_ENCODER_3] = {&htim4, 0}, // 编码器3 TIM4
     [TIM_ENCODER_4] = {&htim8, 0}, // 编码器4 TIM8
+    // PE9     ------> TIM1_CH1
+    // PE11     ------> TIM1_CH2
+    // PE13     ------> TIM1_CH3
+    // PA11     ------> TIM1_CH4
+
+    // PA0-WKUP     ------> TIM2_CH1
+    // PB3     ------> TIM2_CH2
+
+    // PB4     ------> TIM3_CH1
+    // PB5     ------> TIM3_CH2
+
+    // PD12     ------> TIM4_CH1
+    // PD13     ------> TIM4_CH2
+
+    // PC6     ------> TIM8_CH1
+    // PC7     ------> TIM8_CH2
 };
 
 /*============================================

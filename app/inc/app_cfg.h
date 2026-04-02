@@ -43,10 +43,35 @@
  * @brief 任务频率设置
  */
 #define CMD_FREQ_MS 100   // 10Hz 遥控
-#define CHASSIS_FREQ_MS 5 // 200Hz 底盘
+#define CHASSIS_FREQ_MS 1 // 1000Hz 底盘
 #define MOTOR_FREQ_MS 1   // 1000Hz 电机
 #define ERROR_FREQ_MS 100 // 10Hz 错误
 
+/*============================================
+ *              底盘类型选择
+ *============================================*/
+
+/**
+ * @brief 底盘类型定义（编译时选择）
+ */
+#define CHASSIS_MECANUM_X 0  // 麦轮 X 型
+#define CHASSIS_MECANUM_O 1  // 麦轮 O 型
+#define CHASSIS_OMNI_X 2     // 全向轮 X 型
+#define CHASSIS_OMNI_CROSS 3 // 全向轮十字型
+
+// 修改此处切换底盘类型
+#define CHASSIS_TYPE CHASSIS_MECANUM_X
+
+/*============================================
+ *              底盘几何参数
+ *============================================*/
+
+#define WHEEL_RADIUS 0.068f // 轮半径 (m)
+#define WHEELBASE_A 0.2f    // 麦轮: 前后轮距的一半 (m)
+#define WHEELBASE_B 0.2f    // 麦轮: 左右轮距的一半 (m)
+#define OMNI_L 0.2f         // 全向轮: 轮到中心距离 (m)
+// 添加脉轮到中心的距离
+// 全向轮改为左右和前后
 /**
  * @brief 任务STACK大小
  */
