@@ -1,6 +1,7 @@
 #include "app_robot.h"
 #include "bsp_log.h"
 #include "bsp_dwt.h"
+#include "bsp_math.h"
 #include "app_cfg.h"
 #include "drv_chassis.h"
 
@@ -44,8 +45,9 @@ void function_in_main_c(void)
     __disable_irq();
     DWT_Init();
     BSPLogInit();
+    BSP_Math_Init();
     __enable_irq();
-    LOGINFO("[robot] DWT_Init() and BSPLogInit() done");
+    LOGINFO("[robot] DWT_Init(), BSPLogInit() and BSP_Math_Init() done");
 
     // 创建跨任务队列
     chassis_cmd_queue = xQueueCreateStatic(

@@ -1,83 +1,33 @@
 /**
  * @file bsp_math.c
- * @brief BSP层数学加速封装实现
+ * @brief BSP层数学函数封装实现
  *
- * @note 三层回退机制：
- *       1. 硬件加速（CORDIC）- 仅部分STM32有（H7/G4系列）
- *       2. CMSIS-DSP库 - 有DSP指令集时可用
- *       3. 标准库math.h - 兜底实现
+ * @note 三角函数已在 bsp_math.h 中使用 static inline 实现
+ *       本文件仅包含初始化和 CRC 相关函数
  */
 
 #include "bsp_math.h"
 #include "bsp_log.h"
-#include <math.h>
 #include <string.h>
 
 /*============================================
  *              条件包含
  *============================================*/
 
-#if HAS_CRC
+#ifdef HAL_CRC_MODULE_ENABLED
 #if DEVELOPMENT_BOARD == DM_MC02
-#include "stm32h7xx_hal_crc.h"
+#include "stm32f7xx_hal_crc.h"
 #else
 #include "stm32f4xx_hal_crc.h"
 #endif
-#endif
-
-#if HAS_CORDIC
-#if DEVELOPMENT_BOARD == DM_MC02
-#include "stm32h7xx_hal_cordic.h"
-#else
-#include "stm32f4xx_hal_cordic.h"
-#endif
-#endif
-
-#if HAS_FMAC
-#if DEVELOPMENT_BOARD == DM_MC02
-#include "stm32h7xx_hal_fmac.h"
-#else
-#include "stm32f4xx_hal_fmac.h"
-#endif
-#endif
-
-#if HAS_DSP
-#include "arm_math.h"
 #endif
 
 /*============================================
  *              私有变量
  *============================================*/
 
-#if HAS_CRC
+#ifdef HAL_CRC_MODULE_ENABLED
 static CRC_HandleTypeDef *s_hcrc = NULL;
-#endif
-
-#if HAS_CORDIC
-static CORDIC_HandleTypeDef *s_hcordic = NULL;
-#endif
-
-#if HAS_FMAC
-static FMAC_HandleTypeDef *s_hfmac = NULL;
-static BSP_FMAC_FilterConfig_t s_fmac_config;
-#endif
-
-/*============================================
- *              私有辅助函数
- *============================================*/
-
-#if HAS_CORDIC
-/**
- * @brief 角度归一化到[-PI, PI]
- */
-static float normalize_angle(float theta)
-{
-    while (theta > M_PI)
-        theta -= 2.0f * M_PI;
-    while (theta < -M_PI)
-        theta += 2.0f * M_PI;
-    return theta;
-}
 #endif
 
 /*============================================
@@ -95,277 +45,19 @@ void BSP_Math_Init(void)
     LOGINFO("[bsp_math] CMSIS-DSP available");
 #endif
 
-#if HAS_CORDIC
-    if (s_hcordic != NULL)
-    {
-        /* CORDIC默认配置：三角函数模式 */
-        CORDIC_ConfigTypeDef cordic_config = {0};
-        cordic_config.Function = CORDIC_FUNCTION_SINE;
-        cordic_config.Precision = CORDIC_PRECISION_6CYCLES;
-        cordic_config.Scale = CORDIC_SCALE_0;
-        cordic_config.InSize = CORDIC_INSIZE_32BITS;
-        cordic_config.OutSize = CORDIC_OUTSIZE_32BITS;
-        cordic_config.NbWrite = CORDIC_NBWRITE_1;
-        cordic_config.NbRead = CORDIC_NBREAD_1;
-
-        if (HAL_CORDIC_Configure(s_hcordic, &cordic_config) != HAL_OK)
-        {
-            LOGERROR("[bsp_math] CORDIC config failed");
-        }
-        else
-        {
-            LOGINFO("[bsp_math] CORDIC initialized");
-        }
-    }
-#endif
-
-#if HAS_CRC
+#ifdef HAL_CRC_MODULE_ENABLED
     if (s_hcrc != NULL)
     {
         LOGINFO("[bsp_math] CRC initialized");
     }
 #endif
-
-#if HAS_FMAC
-    if (s_hfmac != NULL)
-    {
-        LOGINFO("[bsp_math] FMAC initialized");
-    }
-#endif
-
-#if HAS_MPU
-    /* MPU配置通常在启动代码中完成，此处仅记录 */
-    LOGINFO("[bsp_math] MPU available");
-#endif
-
-#if HAS_RAMECC
-    LOGINFO("[bsp_math] RAMECC available");
-#endif
-}
-
-/*============================================
- *              三角函数接口实现
- *          三层回退：CORDIC -> CMSIS-DSP -> 标准库
- *============================================*/
-
-float BSP_Math_Sin(float theta)
-{
-#if HAS_CORDIC
-    /* 第一层：CORDIC硬件加速 */
-    if (s_hcordic != NULL)
-    {
-        theta = normalize_angle(theta);
-
-        CORDIC_ConfigTypeDef config = {0};
-        config.Function = CORDIC_FUNCTION_SINE;
-        config.Precision = CORDIC_PRECISION_6CYCLES;
-        config.Scale = CORDIC_SCALE_0;
-        config.InSize = CORDIC_INSIZE_32BITS;
-        config.OutSize = CORDIC_OUTSIZE_32BITS;
-        config.NbWrite = CORDIC_NBWRITE_1;
-        config.NbRead = CORDIC_NBREAD_1;
-
-        HAL_CORDIC_Configure(s_hcordic, &config);
-
-        int32_t input = (int32_t)(theta / M_PI * 2147483648.0f);
-        int32_t output = 0;
-
-        HAL_CORDIC_Calculate(s_hcordic, &input, &output, 1, HAL_MAX_DELAY);
-
-        return (float)output / 2147483648.0f;
-    }
-#endif
-
-#if HAS_DSP
-    /* 第二层：CMSIS-DSP快速逼近 */
-    return arm_sin_f32(theta);
-#endif
-
-    /* 第三层：标准库 */
-    return sinf(theta);
-}
-
-float BSP_Math_Cos(float theta)
-{
-#if HAS_CORDIC
-    /* 第一层：CORDIC硬件加速 */
-    if (s_hcordic != NULL)
-    {
-        theta = normalize_angle(theta);
-
-        CORDIC_ConfigTypeDef config = {0};
-        config.Function = CORDIC_FUNCTION_COSINE;
-        config.Precision = CORDIC_PRECISION_6CYCLES;
-        config.Scale = CORDIC_SCALE_0;
-        config.InSize = CORDIC_INSIZE_32BITS;
-        config.OutSize = CORDIC_OUTSIZE_32BITS;
-        config.NbWrite = CORDIC_NBWRITE_1;
-        config.NbRead = CORDIC_NBREAD_1;
-
-        HAL_CORDIC_Configure(s_hcordic, &config);
-
-        int32_t input = (int32_t)(theta / M_PI * 2147483648.0f);
-        int32_t output = 0;
-
-        HAL_CORDIC_Calculate(s_hcordic, &input, &output, 1, HAL_MAX_DELAY);
-
-        return (float)output / 2147483648.0f;
-    }
-#endif
-
-#if HAS_DSP
-    /* 第二层：CMSIS-DSP快速逼近 */
-    return arm_cos_f32(theta);
-#endif
-
-    /* 第三层：标准库 */
-    return cosf(theta);
-}
-
-void BSP_Math_SinCos(float theta, float *p_sin, float *p_cos)
-{
-    if (p_sin == NULL || p_cos == NULL)
-    {
-        return;
-    }
-
-#if HAS_CORDIC
-    /* 第一层：CORDIC硬件加速（同时计算sin和cos，效率最高） */
-    if (s_hcordic != NULL)
-    {
-        theta = normalize_angle(theta);
-
-        CORDIC_ConfigTypeDef config = {0};
-        config.Function = CORDIC_FUNCTION_SINE;
-        config.Precision = CORDIC_PRECISION_6CYCLES;
-        config.Scale = CORDIC_SCALE_0;
-        config.InSize = CORDIC_INSIZE_32BITS;
-        config.OutSize = CORDIC_OUTSIZE_32BITS;
-        config.NbWrite = CORDIC_NBWRITE_1;
-        config.NbRead = CORDIC_NBREAD_2; /* 同时读取sin和cos */
-
-        HAL_CORDIC_Configure(s_hcordic, &config);
-
-        int32_t input = (int32_t)(theta / M_PI * 2147483648.0f);
-        int32_t output[2] = {0};
-
-        HAL_CORDIC_Calculate(s_hcordic, &input, output, 1, HAL_MAX_DELAY);
-
-        *p_sin = (float)output[0] / 2147483648.0f;
-        *p_cos = (float)output[1] / 2147483648.0f;
-        return;
-    }
-#endif
-
-#if HAS_DSP
-    /* 第二层：CMSIS-DSP快速逼近 */
-    *p_sin = arm_sin_f32(theta);
-    *p_cos = arm_cos_f32(theta);
-    return;
-#endif
-
-    /* 第三层：标准库 */
-    *p_sin = sinf(theta);
-    *p_cos = cosf(theta);
-}
-
-float BSP_Math_Atan2(float y, float x)
-{
-#if HAS_CORDIC
-    /* 第一层：CORDIC硬件加速 */
-    if (s_hcordic != NULL)
-    {
-        CORDIC_ConfigTypeDef config = {0};
-        config.Function = CORDIC_FUNCTION_PHASE;
-        config.Precision = CORDIC_PRECISION_6CYCLES;
-        config.Scale = CORDIC_SCALE_0;
-        config.InSize = CORDIC_INSIZE_32BITS;
-        config.OutSize = CORDIC_OUTSIZE_32BITS;
-        config.NbWrite = CORDIC_NBWRITE_2;
-        config.NbRead = CORDIC_NBREAD_1;
-
-        HAL_CORDIC_Configure(s_hcordic, &config);
-
-        float mag = sqrtf(x * x + y * y);
-        if (mag < 1e-10f)
-        {
-            return 0.0f;
-        }
-
-        int32_t input[2];
-        input[0] = (int32_t)(x / mag * 2147483647.0f);
-        input[1] = (int32_t)(y / mag * 2147483647.0f);
-        int32_t output = 0;
-
-        HAL_CORDIC_Calculate(s_hcordic, input, &output, 1, HAL_MAX_DELAY);
-
-        return (float)output / 2147483648.0f;
-    }
-#endif
-
-    /* CMSIS-DSP 没有 atan2 函数，直接使用标准库 */
-    return atan2f(y, x);
-}
-
-float BSP_Math_Sqrt(float x)
-{
-    if (x < 0.0f)
-    {
-        return 0.0f;
-    }
-
-#if HAS_CORDIC
-    /* 第一层：CORDIC硬件加速 */
-    if (s_hcordic != NULL)
-    {
-        CORDIC_ConfigTypeDef config = {0};
-        config.Function = CORDIC_FUNCTION_SQUAREROOT;
-        config.Precision = CORDIC_PRECISION_6CYCLES;
-        config.Scale = CORDIC_SCALE_0;
-        config.InSize = CORDIC_INSIZE_32BITS;
-        config.OutSize = CORDIC_OUTSIZE_32BITS;
-        config.NbWrite = CORDIC_NBWRITE_1;
-        config.NbRead = CORDIC_NBREAD_1;
-
-        HAL_CORDIC_Configure(s_hcordic, &config);
-
-        float scale = 1.0f;
-        while (x >= 1.0f)
-        {
-            x *= 0.25f;
-            scale *= 2.0f;
-        }
-        while (x < 0.5f && x > 0.0f)
-        {
-            x *= 4.0f;
-            scale *= 0.5f;
-        }
-
-        int32_t input = (int32_t)(x * 2147483647.0f);
-        int32_t output = 0;
-
-        HAL_CORDIC_Calculate(s_hcordic, &input, &output, 1, HAL_MAX_DELAY);
-
-        return (float)output / 2147483647.0f * scale;
-    }
-#endif
-
-#if HAS_DSP
-    /* 第二层：CMSIS-DSP（使用VSQRT指令或优化实现） */
-    float result;
-    arm_sqrt_f32(x, &result);
-    return result;
-#endif
-
-    /* 第三层：标准库 */
-    return sqrtf(x);
 }
 
 /*============================================
  *              CRC 接口实现
  *============================================*/
 
-#if HAS_CRC
+#ifdef HAL_CRC_MODULE_ENABLED
 
 uint8_t BSP_Math_CRC7(const uint8_t *data, uint32_t len, uint8_t init_val)
 {
@@ -522,10 +214,7 @@ uint32_t BSP_Math_CRC32(const uint8_t *data, uint32_t len, uint32_t init_val)
     /* 32位写入 */
     for (uint32_t i = 0; i + 3 < len; i += 4)
     {
-        uint32_t word = (uint32_t)data[i] |
-                        ((uint32_t)data[i + 1] << 8) |
-                        ((uint32_t)data[i + 2] << 16) |
-                        ((uint32_t)data[i + 3] << 24);
+        uint32_t word = (uint32_t)data[i] | ((uint32_t)data[i + 1] << 8) | ((uint32_t)data[i + 2] << 16) | ((uint32_t)data[i + 3] << 24);
         s_hcrc->Instance->DR = word;
     }
 
@@ -545,8 +234,7 @@ uint32_t BSP_Math_CRC32(const uint8_t *data, uint32_t len, uint32_t init_val)
     return s_hcrc->Instance->DR;
 }
 
-uint32_t BSP_Math_CRC_Custom(const BSP_CRC_Config_t *config,
-                             const uint8_t *data, uint32_t len)
+uint32_t BSP_Math_CRC_Custom(const BSP_CRC_Config_t *config, const uint8_t *data, uint32_t len)
 {
     if (config == NULL || data == NULL || len == 0)
     {
@@ -646,116 +334,13 @@ uint32_t BSP_Math_CRC_Custom(const BSP_CRC_Config_t *config,
     return crc;
 }
 
-#endif /* HAS_CRC */
-
-/*============================================
- *              FMAC 接口实现
- *============================================*/
-
-#if HAS_FMAC
-
-int8_t BSP_Math_FMAC_Init(const BSP_FMAC_FilterConfig_t *config)
-{
-    if (config == NULL || s_hfmac == NULL)
-    {
-        return -1;
-    }
-
-    memcpy(&s_fmac_config, config, sizeof(BSP_FMAC_FilterConfig_t));
-
-    FMAC_FilterConfigTypeDef fmac_conf = {0};
-
-    if (config->type == FMAC_FILTER_FIR)
-    {
-        fmac_conf.InputBaseAddress = 0;
-        fmac_conf.InputBufferSize = 64; /* 输入缓冲区大小 */
-        fmac_conf.InputThreshold = FMAC_THRESHOLD_1;
-        fmac_conf.CoeffBaseAddress = 64;
-        fmac_conf.CoeffBufferSize = config->coeff_num;
-        fmac_conf.OutputBaseAddress = 64 + config->coeff_num;
-        fmac_conf.OutputBufferSize = 64;
-        fmac_conf.OutputThreshold = FMAC_THRESHOLD_1;
-        fmac_conf.pCoeffA = config->p_coeffs;
-        fmac_conf.CoeffASize = config->coeff_num;
-        fmac_conf.Filter = FMAC_FUNC_LOAD;
-    }
-    else /* FMAC_FILTER_IIR */
-    {
-        fmac_conf.InputBaseAddress = 0;
-        fmac_conf.InputBufferSize = 64;
-        fmac_conf.InputThreshold = FMAC_THRESHOLD_1;
-        fmac_conf.CoeffBaseAddress = 64;
-        fmac_conf.CoeffBufferSize = config->coeff_num;
-        fmac_conf.OutputBaseAddress = 64 + config->coeff_num;
-        fmac_conf.OutputBufferSize = 64;
-        fmac_conf.OutputThreshold = FMAC_THRESHOLD_1;
-        fmac_conf.pCoeffA = config->p_coeffs;
-        fmac_conf.CoeffASize = config->coeff_num / 2;
-        fmac_conf.pCoeffB = config->p_coeffs + config->coeff_num / 2;
-        fmac_conf.CoeffBSize = config->coeff_num / 2;
-        fmac_conf.Filter = FMAC_FUNC_LOAD;
-    }
-
-    fmac_conf.InputAccess = FMAC_BUFFER_ACCESS_NONE;
-    fmac_conf.OutputAccess = FMAC_BUFFER_ACCESS_NONE;
-    fmac_conf.CoeffAFormat = FMAC_FORMAT_Q1_15;
-    fmac_conf.CoeffBFormat = FMAC_FORMAT_Q1_15;
-    fmac_conf.InputShift = config->input_shift;
-    fmac_conf.OutputShift = config->output_shift;
-    fmac_conf.Accumulator = 0;
-    fmac_conf.P = config->coeff_num;
-    fmac_conf.Q = 0;
-    fmac_conf.R = 0;
-
-    if (HAL_FMAC_FilterConfig(s_hfmac, &fmac_conf) != HAL_OK)
-    {
-        LOGERROR("[bsp_math] FMAC config failed");
-        return -2;
-    }
-
-    LOGINFO("[bsp_math] FMAC filter initialized");
-    return 0;
-}
-
-uint16_t BSP_Math_FMAC_Filter(const int16_t *input, int16_t *output, uint16_t len)
-{
-    if (input == NULL || output == NULL || len == 0 || s_hfmac == NULL)
-    {
-        return 0;
-    }
-
-    if (HAL_FMAC_FilterStart(s_hfmac, output, NULL) != HAL_OK)
-    {
-        LOGERROR("[bsp_math] FMAC start failed");
-        return 0;
-    }
-
-    uint16_t processed = 0;
-
-    for (uint16_t i = 0; i < len; i++)
-    {
-        if (HAL_FMAC_AppendFilterData(s_hfmac, &input[i], 1) != HAL_OK)
-        {
-            break;
-        }
-        processed++;
-    }
-
-    /* 等待处理完成 */
-    HAL_FMAC_PollFilterData(s_hfmac, len, HAL_MAX_DELAY);
-
-    HAL_FMAC_FilterStop(s_hfmac);
-
-    return processed;
-}
-
-#endif /* HAS_FMAC */
+#endif /* HAL_CRC_MODULE_ENABLED */
 
 /*============================================
  *              句柄注册接口
  *============================================*/
 
-#if HAS_CRC
+#ifdef HAL_CRC_MODULE_ENABLED
 /**
  * @brief 注册CRC句柄
  * @param hcrc CRC外设句柄
@@ -763,27 +348,5 @@ uint16_t BSP_Math_FMAC_Filter(const int16_t *input, int16_t *output, uint16_t le
 void BSP_Math_RegisterCRC(CRC_HandleTypeDef *hcrc)
 {
     s_hcrc = hcrc;
-}
-#endif
-
-#if HAS_CORDIC
-/**
- * @brief 注册CORDIC句柄
- * @param hcordic CORDIC外设句柄
- */
-void BSP_Math_RegisterCORDIC(CORDIC_HandleTypeDef *hcordic)
-{
-    s_hcordic = hcordic;
-}
-#endif
-
-#if HAS_FMAC
-/**
- * @brief 注册FMAC句柄
- * @param hfmac FMAC外设句柄
- */
-void BSP_Math_RegisterFMAC(FMAC_HandleTypeDef *hfmac)
-{
-    s_hfmac = hfmac;
 }
 #endif
