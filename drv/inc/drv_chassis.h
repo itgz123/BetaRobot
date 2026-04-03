@@ -120,7 +120,7 @@ struct ChassisInstance
     MotorInstance *motors[4]; // 四个电机指针 (LF, LB, RB, RF)
 
     // ===== 传感器指针 =====
-    void *imu; // 姿态传感器指针（预留）
+    void *imu; // 姿态传感器指针（预留）（这个也要和电机一样使用多态）
 
     // ===== 运行状态 =====
     ChassisVelCmd_t vel_cmd;  // 当前速度命令
