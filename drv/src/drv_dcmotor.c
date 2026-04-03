@@ -10,8 +10,85 @@
 
 #include "drv_dcmotor.h"
 #include "bsp_log.h"
+#include "bsp_dwt.h"
 
-/*------------- 外部接口实现 --------------*/
+/*============================================
+ *              私有函数声明
+ *============================================*/
+
+// 虚函数实现（静态，用于填充 vtable）
+static void DCMotor_Enable(MotorInstance *inst);
+static void DCMotor_Stop(MotorInstance *inst);
+static void DCMotor_SetRef(MotorInstance *inst, float ref);
+static void DCMotor_SetSpeed_VTable(MotorInstance *inst, float speed);
+static void DCMotor_GetStatus(MotorInstance *inst, MotorStatus_t *status);
+
+/*============================================
+ *              虚函数表定义
+ *============================================*/
+
+const MotorInterface_s g_dc_motor_interface = {
+    .enable = DCMotor_Enable,
+    .stop = DCMotor_Stop,
+    .set_ref = DCMotor_SetRef,
+    .set_speed = DCMotor_SetSpeed_VTable,
+    .set_outer_loop = NULL, // DC 电机固定速度环
+    .get_status = DCMotor_GetStatus,
+};
+
+/*============================================
+ *              虚函数实现
+ *============================================*/
+
+static void DCMotor_Enable(MotorInstance *inst)
+{
+    // DC 电机不需要显式使能，直接返回
+    (void)inst;
+}
+
+static void DCMotor_Stop(MotorInstance *inst)
+{
+    if (inst == NULL)
+    {
+        return;
+    }
+    DCMotorInstance *dc_inst = (DCMotorInstance *)inst;
+    DCMotorSetDutyRatio(dc_inst, 0.0f);
+}
+
+static void DCMotor_SetRef(MotorInstance *inst, float ref)
+{
+    // DC 电机的 set_ref 等同于 set_speed
+    DCMotor_SetSpeed_VTable(inst, ref);
+}
+
+static void DCMotor_SetSpeed_VTable(MotorInstance *inst, float speed)
+{
+    if (inst == NULL)
+    {
+        return;
+    }
+    DCMotorInstance *dc_inst = (DCMotorInstance *)inst;
+    DCMotorSetSpeed(dc_inst, speed);
+}
+
+static void DCMotor_GetStatus(MotorInstance *inst, MotorStatus_t *status)
+{
+    if (inst == NULL || status == NULL)
+    {
+        return;
+    }
+    DCMotorInstance *dc_inst = (DCMotorInstance *)inst;
+    status->speed = dc_inst->speed;
+    status->angle = 0.0f;       // DC 电机无角度反馈
+    status->current = 0.0f;     // DC 电机无电流反馈
+    status->temperature = 0.0f; // DC 电机无温度反馈
+    status->online = 1;         // 假设始终在线
+}
+
+/*============================================
+ *              外部接口实现
+ *============================================*/
 
 int8_t DCMotorInit(DCMotorInstance *instance, uint16_t encoder_ppr, float reduction_ratio, float lpf_alpha)
 {
@@ -94,9 +171,15 @@ int8_t DCMotorInit(DCMotorInstance *instance, uint16_t encoder_ppr, float reduct
     // 初始化速度状态
     instance->speed = 0.0f;
     instance->target_speed = 0.0f;
+    instance->last_time = 0;
 
     // 初始化 PID 控制器（参数为 0，由 DCMotorSetPID 配置）
     PIDInit(&instance->pid, 0.0f, 0.0f, 0.0f);
+
+    // 设置虚函数表指针（已在宏中设置，此处确保）
+    instance->base.vtable = &g_dc_motor_interface;
+    instance->base.type = MOTOR_TYPE_DC;
+    instance->base.impl = instance;
 
     LOGINFO("[drv_dcmotor] DC Motor initialized");
     return 0;
@@ -177,20 +260,17 @@ float DCMotorGetSpeed(DCMotorInstance *instance)
     }
 
     // 获取编码器速度（脉冲/秒）
-    // EncoderGetSpeed 返回带符号的速度，正值为正转，负值为反转
     float pulse_per_sec = EncoderGetSpeed(&instance->encoder_inst);
 
     // 计算电机轴转速（rad/s）
-    // 公式：speed = (pulse_per_sec / PPR) * 2π / reduction_ratio
-    // 注意：STM32 编码器模式为 4 倍频（A/B 两相上升沿和下降沿都计数）
-    // 所以实际脉冲数 = 编码器线数 * 4
+    // STM32 编码器模式为 4 倍频
     float motor_rps = pulse_per_sec / ((float)instance->encoder_ppr * 4.0f);
     float motor_speed_rad_s = motor_rps * DCMOTOR_2PI;
 
     // 输出轴转速（考虑减速比）
     float speed_raw = motor_speed_rad_s / instance->reduction_ratio;
 
-    // 一阶低通滤波：speed = alpha * speed_raw + (1 - alpha) * speed_last
+    // 一阶低通滤波
     instance->speed = instance->alpha * speed_raw + (1.0f - instance->alpha) * instance->speed;
 
     return instance->speed;
@@ -207,7 +287,7 @@ void DCMotorClearEncoder(DCMotorInstance *instance)
     EncoderClearCount(&instance->encoder_inst);
 }
 
-void DCMotorSetSpeed(DCMotorInstance *instance, float target_speed, float dt)
+void DCMotorSetSpeed(DCMotorInstance *instance, float target_speed)
 {
     if (instance == NULL)
     {
@@ -220,6 +300,21 @@ void DCMotorSetSpeed(DCMotorInstance *instance, float target_speed, float dt)
     {
         LOGWARNING("[drv_dcmotor] max_speed not configured!");
         return;
+    }
+
+    // 计算 dt
+    uint64_t current_time = DWT_GetTimeline_us();
+    float dt = 0.0f;
+    if (instance->last_time > 0)
+    {
+        dt = (current_time - instance->last_time) / 1000000.0f; // us -> s
+    }
+    instance->last_time = current_time;
+
+    // 防止 dt 为 0 或异常
+    if (dt <= 0.0f || dt > 1.0f)
+    {
+        dt = 0.001f; // 默认 1ms
     }
 
     // 保存目标速度
@@ -239,20 +334,18 @@ void DCMotorSetSpeed(DCMotorInstance *instance, float target_speed, float dt)
 
     if (abs_speed < instance->ff_split_speed)
     {
-        // 低速段：ff_k_low * speed + ff_offset_low
         feedforward = instance->ff_k_low * abs_speed + instance->ff_offset_low;
     }
     else
     {
-        // 高速段：ff_k_high * speed + ff_offset_high
         feedforward = instance->ff_k_high * abs_speed + instance->ff_offset_high;
     }
-    feedforward *= sign; // 整体取反，确定方向
+    feedforward *= sign;
 
     // 归一化前馈值
     float feedforward_norm = feedforward / instance->max_speed;
 
-    // PID 计算（输入和输出都是归一化的 [-1, 1]）
+    // PID 计算
     float output = PIDCalculate(&instance->pid, setpoint_norm, measure_norm, dt, feedforward_norm);
 
     // 设置占空比
