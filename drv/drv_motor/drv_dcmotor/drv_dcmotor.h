@@ -17,13 +17,10 @@
 #include "bsp_gpio.h"
 #include "drv_motor_base.h"
 #include "drv_pid.h"
+#include "bsp_math.h"
 #include "stdint.h"
-#include "math.h"
 
 /*------------- 宏定义 --------------*/
-
-// 速度计算常数
-#define DCMOTOR_2PI 6.283185307179586f // 2 * PI
 
 /*------------- 类型定义 --------------*/
 

@@ -265,7 +265,7 @@ float DCMotorGetSpeed(DCMotorInstance *instance)
     // 计算电机轴转速（rad/s）
     // STM32 编码器模式为 4 倍频
     float motor_rps = pulse_per_sec / ((float)instance->encoder_ppr * 4.0f);
-    float motor_speed_rad_s = motor_rps * DCMOTOR_2PI;
+    float motor_speed_rad_s = motor_rps * M_2PI;
 
     // 输出轴转速（考虑减速比）
     float speed_raw = motor_speed_rad_s / instance->reduction_ratio;
@@ -329,7 +329,7 @@ void DCMotorSetSpeed(DCMotorInstance *instance, float target_speed)
 
     // 计算两段前馈值
     float sign = (target_speed >= 0.0f) ? 1.0f : -1.0f;
-    float abs_speed = fabsf(target_speed);
+    float abs_speed = MATH_FABS(target_speed);
     float feedforward;
 
     if (abs_speed < instance->ff_split_speed)
