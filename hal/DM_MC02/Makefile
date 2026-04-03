@@ -221,15 +221,6 @@ $(BUILD_DIR)/%.hex: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
 $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
 	$(BIN) $< $@	
 	
-$(BUILD_DIR):
-	mkdir $@		
-
-#######################################
-# clean up
-#######################################
-clean:
-	-rm -fR $(BUILD_DIR)
-  
 #######################################
 # dependencies
 #######################################

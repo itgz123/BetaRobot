@@ -14,7 +14,7 @@
 # 从 app_cfg.h 读取 DEVELOPMENT_BOARD 值
 ######################################
 # DEVELOPMENT_BOARD 定义格式: #define DEVELOPMENT_BOARD STM32F407VET6 (或 0/1/2/3)
-BOARD_VALUE := $(shell grep -E "^#define DEVELOPMENT_BOARD" app/inc/app_cfg.h | awk '{print $$3}')
+BOARD_VALUE := $(shell grep -E "^#define DEVELOPMENT_BOARD" app/app_cfg.h | awk '{print $$3}')
 
 # 根据值选择开发板名称和 hal 目录
 # 值为 0/STM32F407VET6 -> hal/STM32F407VET6
@@ -84,28 +84,30 @@ C_SOURCES := $(addprefix $(HAL_DIR)/,$(filter-out Core/Src/main.c,$(C_SOURCES)))
 C_SOURCES += main.c \
 Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT_printf.c \
 Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT.c \
-bsp/src/bsp_cfg.c \
-bsp/src/bsp_dwt.c \
-bsp/src/bsp_gpio.c \
-bsp/src/bsp_log.c \
-app/src/app_robot.c \
-app/src/app_cmd.c \
-app/src/app_chassis.c \
-app/src/app_motor.c \
-app/src/app_error.c \
+app/app_robot/app_robot.c \
+app/app_cmd/app_cmd.c \
+app/app_chassis/app_chassis.c \
+app/app_motor/app_motor.c \
+app/app_error/app_error.c \
+bsp/bsp_cfg/bsp_cfg.c \
+bsp/bsp_dwt/bsp_dwt.c \
+bsp/bsp_gpio/bsp_gpio.c \
+bsp/bsp_log/bsp_log.c \
+bsp/bsp_math/bsp_math.c \
+bsp/bsp_spi/bsp_spi.c \
+bsp/bsp_tim/bsp_tim.c \
+bsp/bsp_usart/bsp_usart.c \
+bsp/bsp_adc/bsp_adc.c \
+drv/drv_motor/drv_dcmotor/drv_dcmotor.c \
+drv/drv_pid/drv_pid.c \
+drv/drv_chassis/drv_chassis.c \
+drv/drv_sbus/drv_sbus.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/CommonTables/arm_common_tables.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/CommonTables/arm_const_structs.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_sin_f32.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c \
-bsp/src/bsp_usart.c \
-bsp/src/bsp_tim.c \
-drv/src/drv_sbus.c \
-bsp/src/bsp_spi.c \
-bsp/src/bsp_adc.c \
-drv/src/drv_dcmotor.c \
-drv/src/drv_pid.c \
-drv/src/drv_chassis.c \
-# drv/src/drv_bmi088.c \
+# bsp/bsp_module/bsp_module.c \
+# drv/drv_bmi088/drv_bmi088.c \
 # $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c \
 
 ######################################
@@ -122,12 +124,24 @@ C_INCLUDES := $(patsubst -I%,-I$(HAL_DIR)/%,$(C_INCLUDES))
 AS_INCLUDES := $(patsubst -I%,-I$(HAL_DIR)/%,$(AS_INCLUDES))
 
 ######################################
-# 添加公共头文件路径
+# 递归搜索 app, bsp, drv 的头文件目录
 ######################################
-C_INCLUDES += -Iapp/inc \
--Ibsp/inc \
--Idrv/inc \
--IMiddlewares/Third_Party/SEGGER/RTT \
+# 需要递归搜索的目录
+PROJ_DIRS = app bsp drv
+
+# Windows (PowerShell) 递归获取所有子目录
+# 获取完整路径后转换为相对路径，并将 \ 替换为 /
+ALL_DIRS := $(foreach dire, $(PROJ_DIRS), $(subst \,/,$(patsubst $(CURDIR)\%,%,$(shell powershell -Command "(Get-ChildItem -Path $(dire) -Recurse -Directory).FullName"))))
+ALL_DIRS += $(PROJ_DIRS)
+
+# Linux/Unix（取消注释以使用）
+# ALL_DIRS := $(foreach dire, $(PROJ_DIRS), $(shell find $(dire) -maxdepth 10 -type d))
+
+# 添加 -I 前缀
+C_INCLUDES += $(addprefix -I,$(ALL_DIRS))
+
+# 添加其他公共头文件路径
+C_INCLUDES += -IMiddlewares/Third_Party/SEGGER/RTT \
 -IMiddlewares/Third_Party/SEGGER/Config \
 -I$(HAL_DIR)/Drivers/CMSIS/DSP/Include \
 -I$(HAL_DIR)/Drivers/CMSIS/DSP/PrivateInclude \
@@ -189,17 +203,26 @@ download_dap: all
 download_jlink: all
 	JLink.exe -CommanderScript hal/$(BOARD_NAME)/jlink_download.jlink
 
-# ######################################
-# # build 目录创建（覆盖子 Makefile）
-# ######################################
-# $(BUILD_DIR):
-# 	powershell -Command "New-Item -ItemType Directory -Force -Path build | Out-Null"
+######################################
+# build 目录创建（Windows 和 Linux 兼容）
+######################################
+# Windows (PowerShell)
+$(BUILD_DIR):
+	powershell -Command "New-Item -ItemType Directory -Force -Path build | Out-Null"
 
-# ######################################
-# # 清理目标（覆盖子 Makefile）
-# ######################################
-# .PHONY: clean
+# Linux/Unix（取消注释以使用）
+# $(BUILD_DIR):
+# 	mkdir -p $@
+
+######################################
+# 清理目标（Windows 和 Linux 兼容）
+######################################
+.PHONY: clean
+clean:
+	powershell -Command "if (Test-Path build) { Remove-Item -Recurse -Force build/* }"
+
+# Linux/Unix（取消注释以使用）
 # clean:
-# 	powershell -Command "if (Test-Path build) { Remove-Item -Recurse -Force build/* }"
+# 	rm -rf $(BUILD_DIR)
 
 # *** EOF ***
