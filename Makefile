@@ -66,6 +66,24 @@ OPT ?= -Og
 override OPT := $(OPT)
 
 ######################################
+# 平台检测
+######################################
+# 检测操作系统（Git Bash/MinGW 下 uname -s 返回 MINGW64_NT-x.x 或 MSYS_NT-x.x）
+UNAME_S := $(shell uname -s 2>/dev/null || echo Windows)
+# 判断是否为 Windows（包含 NT 或 MINGW 或 MSYS 或 Windows）
+ifneq ($(findstring NT,$(UNAME_S)),)
+    IS_WINDOWS := 1
+else ifneq ($(findstring MINGW,$(UNAME_S)),)
+    IS_WINDOWS := 1
+else ifneq ($(findstring MSYS,$(UNAME_S)),)
+    IS_WINDOWS := 1
+else ifneq ($(findstring Windows,$(UNAME_S)),)
+    IS_WINDOWS := 1
+else
+    IS_WINDOWS := 0
+endif
+
+######################################
 # 在 include 之前覆盖 TARGET
 # 这样子 Makefile 解析规则时会使用我们的 TARGET
 ######################################
@@ -129,13 +147,15 @@ AS_INCLUDES := $(patsubst -I%,-I$(HAL_DIR)/%,$(AS_INCLUDES))
 # 需要递归搜索的目录
 PROJ_DIRS = app bsp drv
 
+# 根据平台自动选择递归获取子目录的方式
+ifeq ($(IS_WINDOWS), 1)
 # Windows (PowerShell) 递归获取所有子目录
-# 获取完整路径后转换为相对路径，并将 \ 替换为 /
 ALL_DIRS := $(foreach dire, $(PROJ_DIRS), $(subst \,/,$(patsubst $(CURDIR)\%,%,$(shell powershell -Command "(Get-ChildItem -Path $(dire) -Recurse -Directory).FullName"))))
+else
+# Linux/Unix 使用 find 命令
+ALL_DIRS := $(foreach dire, $(PROJ_DIRS), $(shell find $(dire) -maxdepth 10 -type d))
+endif
 ALL_DIRS += $(PROJ_DIRS)
-
-# Linux/Unix（取消注释以使用）
-# ALL_DIRS := $(foreach dire, $(PROJ_DIRS), $(shell find $(dire) -maxdepth 10 -type d))
 
 # 添加 -I 前缀
 C_INCLUDES += $(addprefix -I,$(ALL_DIRS))
@@ -204,25 +224,24 @@ download_jlink: all
 	JLink.exe -CommanderScript hal/$(BOARD_NAME)/jlink_download.jlink
 
 ######################################
-# build 目录创建（Windows 和 Linux 兼容）
+# build 目录创建（自动检测平台）
 ######################################
-# Windows (PowerShell)
 $(BUILD_DIR):
+ifeq ($(IS_WINDOWS), 1)
 	powershell -Command "New-Item -ItemType Directory -Force -Path build | Out-Null"
-
-# Linux/Unix（取消注释以使用）
-# $(BUILD_DIR):
-# 	mkdir -p $@
+else
+	mkdir -p $@
+endif
 
 ######################################
-# 清理目标（Windows 和 Linux 兼容）
+# 清理目标（自动检测平台）
 ######################################
 .PHONY: clean
 clean:
+ifeq ($(IS_WINDOWS), 1)
 	powershell -Command "if (Test-Path build) { Remove-Item -Recurse -Force build/* }"
-
-# Linux/Unix（取消注释以使用）
-# clean:
-# 	rm -rf $(BUILD_DIR)
+else
+	rm -rf $(BUILD_DIR)
+endif
 
 # *** EOF ***
