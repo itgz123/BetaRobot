@@ -157,8 +157,7 @@ int8_t DCMotorInit(DCMotorInstance *instance, uint16_t encoder_ppr, float reduct
  * @note 调用此函数后才能使用 DCMotorSetSpeed 进行速度控制
  *       两段前馈根据速度分段使用不同参数，提高拟合精度
  */
-void DCMotorSetPID(DCMotorInstance *instance, float kp, float ki, float kd, float integral_limit, float max_speed,
-                   float ff_k_low, float ff_offset_low, float ff_k_high, float ff_offset_high, float ff_split_speed);
+void DCMotorSetPID(DCMotorInstance *instance, float kp, float ki, float kd, float integral_limit, float max_speed, float ff_k_low, float ff_offset_low, float ff_k_high, float ff_offset_high, float ff_split_speed);
 
 /**
  * @brief 设置 PWM 占空比（自动控制方向）
