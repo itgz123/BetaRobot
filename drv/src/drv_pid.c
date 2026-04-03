@@ -5,19 +5,18 @@
  * @note 功能特性：
  *       1. 积分限幅 (抗积分饱和)：限制积分项累加上限
  *       2. 梯形积分：提高积分精度
- *       3. 变速积分：误差大时减弱积分，兼具积分分离效果 (默认启用)
- *       4. 微分先行：仅对测量值微分，避免设定值突变冲击
+ *       3. 变速积分：误差大时减弱积分，兼具积分分离效果 (默认禁用)
+ *       4. 微分先行：仅对测量值微分，避免设定值突变冲击 (默认启用)
  *       5. 微分滤波：一阶低通滤波抑制高频噪声
  *       6. 死区控制：误差小于死区时不输出
  *       7. 输出限幅：输出限制在 [-1, 1]
  *       8. 前馈控制：提高系统响应速度
  *
  * @note 拓展功能启用规则：
- *       - 参数为 0 时功能不启用
- *       - integral_limit != 0 → 启用积分限幅
- *       - d_lpf_rc > 0 → 启用微分滤波
- *       - deadband > 0 → 启用死区控制
- *       - coef_a > 0 → 启用变速积分
+ *       - 不需要掩码的功能（参数为 0 时禁用）：
+ *         deadband、d_lpf_rc、coef_a、kf
+ *       - 需要掩码的功能（设置参数为 0 会影响功能使用）：
+ *         integral_limit、微分先行
  */
 
 #include "drv_pid.h"
@@ -30,6 +29,7 @@ static void f_Trapezoid_Intergral(PIDInstance *pid);
 static void f_Changing_Integration_Rate(PIDInstance *pid);
 static void f_Integral_Limit(PIDInstance *pid);
 static void f_Derivative_On_Measurement(PIDInstance *pid);
+static void f_Derivative_On_Error(PIDInstance *pid);
 static void f_Derivative_Filter(PIDInstance *pid);
 
 /*------------- 私有函数实现 --------------*/
@@ -140,6 +140,23 @@ static void f_Derivative_On_Measurement(PIDInstance *pid)
 }
 
 /**
+ * @brief 对误差微分
+ *        标准微分方式，对误差进行微分
+ *        Dout = Kd * (Err - Last_Err) / dt
+ */
+static void f_Derivative_On_Error(PIDInstance *pid)
+{
+    if (pid->dt > 0.0001f)
+    {
+        pid->d_out = pid->kd * (pid->error - pid->last_error) / pid->dt;
+    }
+    else
+    {
+        pid->d_out = 0;
+    }
+}
+
+/**
  * @brief 微分滤波
  *        一阶低通滤波，抑制高频噪声
  *        Dout = Dout * dt / (RC + dt) + Last_Dout * RC / (RC + dt)
@@ -179,6 +196,9 @@ void PIDInit(PIDInstance *instance, float kp, float ki, float kd)
     instance->d_lpf_rc = 0.0f;       // 微分滤波默认禁用
     instance->deadband = 0.0f;       // 死区默认禁用
     instance->kf = 0.0f;             // 前馈系数默认 0
+
+    // 功能掩码：微分先行默认启用
+    instance->config_mask = PID_IMPROVE_NONE;
 }
 
 void PIDReset(PIDInstance *instance)
@@ -250,15 +270,24 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float d
     // 累加积分
     instance->i_out += instance->i_term;
 
-    // 积分限幅 (integral_limit != 0 时启用)
-    if (instance->integral_limit > 0.0001f)
+    // 积分限幅 (需要掩码启用)
+    if ((instance->config_mask & PID_ENABLE_INTEGRAL_LIMIT) && instance->integral_limit > 0.0001f)
     {
         f_Integral_Limit(instance);
     }
 
     // 5. 微分项
-    // 微分先行：仅对测量值微分
-    f_Derivative_On_Measurement(instance);
+    // 根据掩码选择微分方式
+    if (instance->config_mask & PID_ENABLE_DERIVATIVE_ON_MEAS)
+    {
+        // 微分先行：仅对测量值微分
+        f_Derivative_On_Measurement(instance);
+    }
+    else
+    {
+        // 标准微分：对误差微分
+        f_Derivative_On_Error(instance);
+    }
 
     // 微分滤波 (d_lpf_rc > 0 时启用)
     if (instance->d_lpf_rc > 0.0001f)
@@ -281,4 +310,67 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float d
     instance->last_d_out = instance->d_out;
 
     return instance->output;
+}
+
+/*------------- 配置函数实现 --------------*/
+
+void PIDSetDeadband(PIDInstance *instance, float deadband)
+{
+    if (instance == NULL)
+    {
+        return;
+    }
+    instance->deadband = deadband;
+}
+
+void PIDSetIntegralLimit(PIDInstance *instance, float limit, uint8_t enable)
+{
+    if (instance == NULL)
+    {
+        return;
+    }
+    instance->integral_limit = limit;
+    if (enable)
+    {
+        instance->config_mask |= PID_ENABLE_INTEGRAL_LIMIT;
+    }
+    else
+    {
+        instance->config_mask &= ~PID_ENABLE_INTEGRAL_LIMIT;
+    }
+}
+
+void PIDSetChangingIntegration(PIDInstance *instance, float coef_a, float coef_b)
+{
+    if (instance == NULL)
+    {
+        return;
+    }
+    instance->coef_a = coef_a;
+    instance->coef_b = coef_b;
+}
+
+void PIDSetDerivativeFilter(PIDInstance *instance, float rc)
+{
+    if (instance == NULL)
+    {
+        return;
+    }
+    instance->d_lpf_rc = rc;
+}
+
+void PIDSetDerivativeOnMeasurement(PIDInstance *instance, uint8_t enable)
+{
+    if (instance == NULL)
+    {
+        return;
+    }
+    if (enable)
+    {
+        instance->config_mask |= PID_ENABLE_DERIVATIVE_ON_MEAS;
+    }
+    else
+    {
+        instance->config_mask &= ~PID_ENABLE_DERIVATIVE_ON_MEAS;
+    }
 }

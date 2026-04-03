@@ -10,7 +10,6 @@
 
 #include "drv_dcmotor.h"
 #include "bsp_log.h"
-#include "stddef.h"
 
 /*------------- 外部接口实现 --------------*/
 
@@ -103,8 +102,7 @@ int8_t DCMotorInit(DCMotorInstance *instance, uint16_t encoder_ppr, float reduct
     return 0;
 }
 
-void DCMotorSetPID(DCMotorInstance *instance, float kp, float ki, float kd, float integral_limit, float max_speed,
-                   float ff_k_low, float ff_offset_low, float ff_k_high, float ff_offset_high, float ff_split_speed)
+void DCMotorSetPID(DCMotorInstance *instance, float kp, float ki, float kd, float integral_limit, float max_speed, float ff_k_low, float ff_offset_low, float ff_k_high, float ff_offset_high, float ff_split_speed)
 {
     if (instance == NULL)
     {
@@ -112,11 +110,13 @@ void DCMotorSetPID(DCMotorInstance *instance, float kp, float ki, float kd, floa
         return;
     }
 
-    // 设置 PID 参数
+    // 设置 PID 基本参数
     instance->pid.kp = kp;
     instance->pid.ki = ki;
     instance->pid.kd = kd;
-    instance->pid.integral_limit = integral_limit;
+
+    // 设置积分限幅（integral_limit > 0 时启用）
+    PIDSetIntegralLimit(&instance->pid, integral_limit, integral_limit > 0.0001f ? 1 : 0);
 
     // 设置两段前馈参数
     instance->ff_k_low = ff_k_low;

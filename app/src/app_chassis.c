@@ -42,8 +42,8 @@
 #define MOTOR_LPF_ALPHA 0.01f
 
 // 底盘最大速度
-#define CHASSIS_MAX_SPEED 3
-#define CHASSIS_MAX_W 0.5f
+#define CHASSIS_MAX_SPEED 2.5f
+#define CHASSIS_MAX_W 0.2f
 
 /*============================================
  *              电机实例定义
