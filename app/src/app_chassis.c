@@ -41,10 +41,6 @@
 #define MOTOR_GEAR_RATIO 9.6f
 #define MOTOR_LPF_ALPHA 0.01f
 
-// 底盘最大速度
-#define CHASSIS_MAX_SPEED 2.5f
-#define CHASSIS_MAX_W 0.2f
-
 /*============================================
  *              电机实例定义
  *============================================*/
@@ -59,19 +55,22 @@ DCMOTOR_INSTANCE_DEF(motor_rb, TIM_PWM_3, TIM_ENCODER_3, GPIO_MOTOR_3_IN1, GPIO_
 DCMOTOR_INSTANCE_DEF(motor_rf, TIM_PWM_4, TIM_ENCODER_4, GPIO_MOTOR_4_IN1, GPIO_MOTOR_4_IN2);
 
 /*============================================
+ *              底盘实例定义
+ *============================================*/
+
+static ChassisInstance chassis;
+
+/*============================================
  *              私有变量
  *============================================*/
 
 static ChassisVelCmd_t chassis_cmd = {0};
-static WheelSpeed_t wheel_speed;
-static float dt = 0.0f;
-static uint64_t last_time = 0;
 
 /*============================================
  *              初始化函数
  *============================================*/
 
-static void ChassisInit(void)
+static void ChassisInitTask(void)
 {
     // 初始化 4 个电机
     DCMotorInit(&motor_lf, MOTOR_ENCODER_NUM, MOTOR_GEAR_RATIO, MOTOR_LPF_ALPHA);
@@ -85,6 +84,9 @@ static void ChassisInit(void)
     DCMotorSetPID(&motor_rb, MOTOR_KP, MOTOR_KI, MOTOR_KD, MOTOR_I_MAX, MOTOR_MAX_SPEED, MOTOR_KL, MOTOR_BL, MOTOR_KH, MOTOR_BH, MOTOR_V_V);
     DCMotorSetPID(&motor_rf, MOTOR_KP, MOTOR_KI, MOTOR_KD, MOTOR_I_MAX, MOTOR_MAX_SPEED, MOTOR_KL, MOTOR_BL, MOTOR_KH, MOTOR_BH, MOTOR_V_V);
 
+    // 初始化底盘实例
+    ChassisInit(&chassis, &motor_lf.base, &motor_lb.base, &motor_rb.base, &motor_rf.base, WHEEL_RADIUS, WHEELBASE_A, WHEELBASE_B, CHASSIS_L, OMNI_CROSS_A, OMNI_CROSS_B, (ChassisType_e)CHASSIS_TYPE, CHASSIS_MAX_SPEED, CHASSIS_MAX_W);
+
     LOGINFO("[app_chassis] Chassis initialized with 4 motors");
 }
 
@@ -94,47 +96,11 @@ static void ChassisInit(void)
 
 ITCM_RAM static void ChassisTask(void)
 {
-    // 计算时间间隔
-    uint64_t current_time = DWT_GetTimeline_us();
-    if (last_time > 0)
-    {
-        dt = (current_time - last_time) / 1000000.0f; // us -> s
-    }
-    last_time = current_time;
-
     // 从队列获取底盘命令（非阻塞，使用最新数据）
     xQueuePeek(chassis_cmd_queue, &chassis_cmd, 0);
 
-    // 检查模式
-    if (chassis_cmd.mode == CHASSIS_MODE_DISABLE)
-    {
-        // 失能模式：停止所有电机
-        DCMotorSetDutyRatio(&motor_lf, 0);
-        DCMotorSetDutyRatio(&motor_lb, 0);
-        DCMotorSetDutyRatio(&motor_rb, 0);
-        DCMotorSetDutyRatio(&motor_rf, 0);
-        return;
-    }
-
-    // TODO: 无头模式需要陀螺仪数据
-    // if (chassis_cmd.mode == CHASSIS_MODE_HEADLESS)
-    // {
-    //     // 无头模式：根据陀螺仪修正方向
-    // }
-
-    // 转换速度
-    chassis_cmd.vx *= CHASSIS_MAX_SPEED;
-    chassis_cmd.vy *= CHASSIS_MAX_SPEED;
-    chassis_cmd.w *= CHASSIS_MAX_W;
-
-    // 运动学逆解：底盘速度 -> 轮子速度
-    wheel_speed = ChassisInverseKinematics(&chassis_cmd);
-
-    // 速度控制（乘以最大速度得到实际目标速度）
-    DCMotorSetSpeed(&motor_lf, wheel_speed.w1, dt);
-    DCMotorSetSpeed(&motor_lb, wheel_speed.w2, dt);
-    DCMotorSetSpeed(&motor_rb, wheel_speed.w3, dt);
-    DCMotorSetSpeed(&motor_rf, wheel_speed.w4, dt);
+    // 使用实例接口控制底盘（模式判断已在 ChassisSetVel 内部处理）
+    ChassisSetVel(&chassis, &chassis_cmd);
 }
 
 /*============================================
@@ -148,7 +114,7 @@ ITCM_RAM static void ChassisTask(void)
  */
 ITCM_RAM __attribute__((noreturn)) void StartChassisTask(void *argument)
 {
-    ChassisInit();
+    ChassisInitTask();
     static uint64_t start;
     static uint64_t dt;
     LOGINFO("[freeRTOS] CHASSIS Task Start");
