@@ -5,6 +5,9 @@
  */
 
 #include "drv_bmi088.h"
+
+#if defined(HAL_SPI_MODULE_ENABLED) && defined(HAL_GPIO_MODULE_ENABLED)
+
 #include <string.h>
 
 /*============================ SPI通信宏定义 ============================*/
@@ -516,3 +519,5 @@ void BMI088SetHeater(BMI088Instance *inst, float duty_ratio)
         PWMSetDutyRatio(&inst->heater_pwm, duty_ratio);
     }
 }
+
+#endif /* defined(HAL_SPI_MODULE_ENABLED) && defined(HAL_GPIO_MODULE_ENABLED) */

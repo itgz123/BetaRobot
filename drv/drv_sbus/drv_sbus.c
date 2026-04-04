@@ -8,6 +8,9 @@
  */
 
 #include "drv_sbus.h"
+
+#ifdef HAL_UART_MODULE_ENABLED
+
 #include "bsp_log.h"
 
 /*------------- 外部接口实现 --------------*/
@@ -165,3 +168,5 @@ void SBUSUARTRxCallback(USARTInstance *usart_inst)
         sbus_inst->app_callback(sbus_inst);
     }
 }
+
+#endif /* HAL_UART_MODULE_ENABLED */

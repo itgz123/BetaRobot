@@ -12,6 +12,9 @@
 #define __DRV_SBUS_H
 
 #include "main.h"
+
+#ifdef HAL_UART_MODULE_ENABLED
+
 #include "bsp_cfg.h"
 #include "bsp_usart.h"
 #include "stdint.h"
@@ -113,5 +116,7 @@ int8_t SBUSRegister(SBUSInstance *instance);
  * @note 在任务上下文中调用
  */
 SBUS_Data_t SBUSDecodeFrame(const uint8_t *data, uint16_t len);
+
+#endif /* HAL_UART_MODULE_ENABLED */
 
 #endif /* __DRV_SBUS_H */

@@ -9,6 +9,9 @@
  */
 
 #include "drv_dcmotor.h"
+
+#ifdef HAL_TIM_MODULE_ENABLED
+
 #include "bsp_log.h"
 #include "bsp_dwt.h"
 
@@ -351,3 +354,5 @@ void DCMotorSetSpeed(DCMotorInstance *instance, float target_speed)
     // 设置占空比
     DCMotorSetDutyRatio(instance, output);
 }
+
+#endif /* HAL_TIM_MODULE_ENABLED */

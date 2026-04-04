@@ -126,8 +126,7 @@ $(HAL_DIR)/Drivers/CMSIS/DSP/Source/CommonTables/arm_const_structs.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_sin_f32.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c \
-# bsp/bsp_module/bsp_module.c \
-# drv/drv_bmi088/drv_bmi088.c \
+drv/drv_bmi088/drv_bmi088.c \
 
 ######################################
 # 修正 ASM_SOURCES

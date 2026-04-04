@@ -10,6 +10,10 @@
 #ifndef __DRV_BMI088_H
 #define __DRV_BMI088_H
 
+#include "main.h"
+
+#if defined(HAL_SPI_MODULE_ENABLED) && defined(HAL_GPIO_MODULE_ENABLED)
+
 #include "bsp_spi.h"
 #include "bsp_gpio.h"
 #include "bsp_tim.h"
@@ -186,5 +190,7 @@ int8_t BMI088Calibrate(BMI088Instance *inst, uint16_t samples);
  * @note 阻塞模式直接设置，中断模式预留PID控制接口
  */
 void BMI088SetHeater(BMI088Instance *inst, float duty_ratio);
+
+#endif /* defined(HAL_SPI_MODULE_ENABLED) && defined(HAL_GPIO_MODULE_ENABLED) */
 
 #endif /* __DRV_BMI088_H */

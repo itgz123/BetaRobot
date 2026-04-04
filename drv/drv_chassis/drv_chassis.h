@@ -11,6 +11,10 @@
 #ifndef __DRV_CHASSIS_H
 #define __DRV_CHASSIS_H
 
+#include "main.h"
+
+#ifdef HAL_TIM_MODULE_ENABLED
+
 #include <stdint.h>
 #include "drv_motor_base.h"
 
@@ -166,5 +170,7 @@ void ChassisSetVel(ChassisInstance *inst, ChassisVelCmd_t *cmd);
  * @param  inst 底盘实例指针
  */
 void ChassisStop(ChassisInstance *inst);
+
+#endif /* HAL_TIM_MODULE_ENABLED */
 
 #endif // __DRV_CHASSIS_H
