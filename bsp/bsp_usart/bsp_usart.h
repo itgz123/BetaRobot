@@ -10,6 +10,7 @@
 
 #include "bsp_cfg.h"
 
+#ifdef HAL_UART_MODULE_ENABLED
 #if UART_INSTANCE_NUM > 0
 
 #include "main.h"
@@ -98,5 +99,6 @@ void USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len);
 void USARTRestartReceive(USARTInstance *instance);
 
 #endif
+#endif // HAL_UART_MODULE_ENABLED
 
 #endif /* __BSP_USART_H */

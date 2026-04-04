@@ -3,8 +3,10 @@
  * @brief ADC外设封装层实现
  */
 
+#include "main.h"  // 确保 HAL 宏已定义
 #include "bsp_adc.h"
 
+#ifdef HAL_ADC_MODULE_ENABLED
 #if ADC_INSTANCE_NUM > 0
 
 #include "bsp_log.h"
@@ -41,13 +43,20 @@ int8_t ADCRegister(ADCInstance *instance)
     // 自动填充硬件映射
     instance->adc_map = adc_map[instance->adc_e];
 
-    // ADC校准
+    // ADC校准（仅H7系列支持，F4系列无校准API）
     ADC_HandleTypeDef *hadc = instance->adc_map.handle;
+#if CPU_CORE == CORTEX_M7
+    // H7系列：需要指定校准类型和差分模式
     if (HAL_ADCEx_Calibration_Start(hadc, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED) != HAL_OK)
     {
         LOGERROR("[BSP_ADC] Calibration failed: adc_e=%d", instance->adc_e);
         return -1;
     }
+#else
+    // F4系列：无校准API，跳过
+    (void)hadc; // 避免未使用警告
+    LOGINFO("[BSP_ADC] ADC calibration skipped (not supported on F4 series)");
+#endif
 
     // 保存实例指针
     s_adc_instance[s_idx++] = instance;
@@ -89,3 +98,4 @@ uint16_t ADCGetValue(ADCInstance *instance)
 }
 
 #endif
+#endif // HAL_ADC_MODULE_ENABLED

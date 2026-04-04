@@ -8,6 +8,9 @@
  */
 
 #include "drv_chassis.h"
+
+#ifdef HAL_TIM_MODULE_ENABLED
+
 #include "app_cfg.h"
 #include "bsp_log.h"
 
@@ -283,3 +286,5 @@ void ChassisSetVel(ChassisInstance *inst, ChassisVelCmd_t *cmd)
     if (inst->motors[3])
         MotorSetSpeed(inst->motors[3], inst->wheel_speed.w4);
 }
+
+#endif /* HAL_TIM_MODULE_ENABLED */

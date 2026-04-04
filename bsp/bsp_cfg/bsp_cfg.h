@@ -159,14 +159,14 @@
 #endif
 
 #if DEVELOPMENT_BOARD == DJI_C
-#define CAN_INSTANCE_NUM 0     // CAN 订阅者数量
-#define I2C_INSTANCE_NUM 0     // I2C 设备数量
-#define SPI_INSTANCE_NUM 0     // SPI 设备数量
-#define GPIO_INSTANCE_NUM 0    // GPIO 实例数量
-#define UART_INSTANCE_NUM 0    // UART 实例数量
-#define PWM_INSTANCE_NUM 0     // PWM 实例数量
-#define ENCODER_INSTANCE_NUM 0 // 编码器实例数量
-#define ADC_INSTANCE_NUM 0     // ADC 实例数量
+#define CAN_INSTANCE_NUM 0     // CAN 订阅者数量（无CAN）
+#define I2C_INSTANCE_NUM 1     // I2C 设备数量（IST8310磁力计）
+#define SPI_INSTANCE_NUM 1     // SPI 设备数量（BMI088 IMU）
+#define GPIO_INSTANCE_NUM 7    // GPIO 实例数量
+#define UART_INSTANCE_NUM 1    // UART 实例数量
+#define PWM_INSTANCE_NUM 8     // PWM 实例数量
+#define ENCODER_INSTANCE_NUM 0 // 编码器实例数量（无编码器）
+#define ADC_INSTANCE_NUM 1     // ADC 实例数量（电压检测）
 #endif
 
 /*============================================
@@ -222,7 +222,7 @@ typedef enum
  */
 typedef enum
 {
-    UART_SBUS = 0, // SBUS遥控接收 UART2
+    UART_SBUS = 0, // SBUS/DBUS遥控接收 UART2
 
     UART_NUM_MAX // UART数量上限
 } BoardUART_e;
@@ -280,7 +280,7 @@ typedef enum
 typedef enum
 {
     UART_DEBUG = 0, // 调试串口 USART1 PA9/PA10
-    UART_DBUS,      // 遥控接收 UART5 PD2
+    UART_SBUS,      // SBUS/DBUS遥控接收 UART5 PD2
     UART_RS485_1,   // RS485-1 USART2 PD4/PD5/PD6
     UART_RS485_2,   // RS485-2 USART3 PB14/PD8/PD9
     UART_EX_1,      // 扩展串口1 UART7 PE7/PE8
@@ -344,11 +344,96 @@ typedef enum
 
 #if DEVELOPMENT_BOARD == DJI_C
 
-#endif // DJI_C
+/**
+ * @brief 板载GPIO枚举
+ */
+typedef enum
+{
+    // 用户按键
+    GPIO_KEY_USER = 0, // 用户按键 PA0
 
-/*============================================
- *              硬件映射结构体
- *============================================*/
+    // BMI088 控制
+    GPIO_BMI088_CS1_ACCEL,  // BMI088 CS1_Accel PA4
+    GPIO_BMI088_CS1_GYRO,   // BMI088 CS1_Gyro PB0
+    GPIO_BMI088_INT1_ACCEL, // BMI088 INT1_Accel PC4
+    GPIO_BMI088_INT1_GYRO,  // BMI088 INT1_Gyro PC5
+
+    // IST8310 控制
+    GPIO_IST8310_DRDY, // IST8310 DRDY PG3
+    GPIO_IST8310_RSTN, // IST8310 RSTN PG6
+
+    GPIO_NUM_MAX // GPIO数量上限
+} BoardGPIO_e;
+
+/**
+ * @brief 板载TIM枚举
+ */
+typedef enum
+{
+    // PWM定时器（TIM1 4通道）
+    TIM_PWM_1 = 0, // 电机PWM CH1 PE9
+    TIM_PWM_2,     // 电机PWM CH2 PE11
+    TIM_PWM_3,     // 电机PWM CH3 PE13
+    TIM_PWM_4,     // 电机PWM CH4 PE14
+
+    // PWM定时器（TIM5 3通道 LED）
+    TIM_LED_B, // LED蓝 PH10
+    TIM_LED_G, // LED绿 PH11
+    TIM_LED_R, // LED红 PH12
+
+    // PWM定时器（TIM8 2通道）
+    TIM_PWM_5, // PWM CH1 PC6
+    TIM_PWM_6, // PWM CH2 PI6
+
+    // 特殊功能定时器
+    TIM_LASER,  // 激光 TIM3_CH3 PC8
+    TIM_BUZZER, // 蜂鸣器 TIM4_CH3 PD14
+    TIM_HEATER, // BMI088加热 TIM10_CH1 PF6
+
+    TIM_NUM_MAX // TIM数量上限
+} BoardTIM_e;
+
+/**
+ * @brief 板载UART枚举
+ */
+typedef enum
+{
+    UART_SBUS = 0, // SBUS/DBUS遥控接收 USART3 PC11
+
+    UART_NUM_MAX // UART数量上限
+} BoardUART_e;
+
+/**
+ * @brief 板载SPI枚举
+ */
+typedef enum
+{
+    SPI_BMI088 = 0, // SPI1 BMI088 PA7/PB3/PB4
+
+    SPI_NUM_MAX // SPI数量上限
+} BoardSPI_e;
+
+/**
+ * @brief 板载I2C枚举
+ */
+typedef enum
+{
+    I2C_IST8310 = 0, // I2C3 IST8310磁力计 PA8/PC9
+
+    I2C_NUM_MAX // I2C数量上限
+} BoardI2C_e;
+
+/**
+ * @brief 板载ADC枚举
+ */
+typedef enum
+{
+    ADC_BAT_VOLTAGE = 0, // 电池电压 ADC3_IN8 PF10
+
+    ADC_NUM_MAX // ADC数量上限
+} BoardADC_e;
+
+#endif // DJI_C
 
 #if GPIO_INSTANCE_NUM > 0
 /**
@@ -447,7 +532,12 @@ extern const ADC_Map_t adc_map[];
 #endif // DJI_A
 
 #if DEVELOPMENT_BOARD == DJI_C
-
+extern const GPIO_Map_t gpio_map[];
+extern const TIM_Map_t tim_map[];
+extern const UART_Map_t uart_map[];
+extern const SPI_Map_t spi_map[];
+extern const I2C_Map_t i2c_map[];
+extern const ADC_Map_t adc_map[];
 #endif // DJI_C
 
 #endif // __BSP_CFG_H

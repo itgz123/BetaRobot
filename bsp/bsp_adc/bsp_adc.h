@@ -18,6 +18,7 @@
 
 #include "bsp_cfg.h"
 
+#ifdef HAL_ADC_MODULE_ENABLED
 #if ADC_INSTANCE_NUM > 0
 
 /*============================================
@@ -66,5 +67,6 @@ int8_t ADCRegister(ADCInstance *instance);
 uint16_t ADCGetValue(ADCInstance *instance);
 
 #endif
+#endif // HAL_ADC_MODULE_ENABLED
 
 #endif // __BSP_ADC_H

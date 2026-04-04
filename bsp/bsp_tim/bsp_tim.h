@@ -10,6 +10,7 @@
 
 #include "bsp_cfg.h"
 
+#ifdef HAL_TIM_MODULE_ENABLED
 #if (ENCODER_INSTANCE_NUM > 0) || (PWM_INSTANCE_NUM > 0)
 
 #include "main.h"
@@ -130,5 +131,6 @@ void EncoderClearCount(EncoderInstance *instance);
 void BSPTim_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 
 #endif
+#endif // HAL_TIM_MODULE_ENABLED
 
 #endif /* __BSP_TIM_H */

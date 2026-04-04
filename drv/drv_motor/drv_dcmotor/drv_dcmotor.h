@@ -12,6 +12,9 @@
 #define __DRV_DCMOTOR_H
 
 #include "main.h"
+
+#ifdef HAL_TIM_MODULE_ENABLED
+
 #include "bsp_cfg.h"
 #include "bsp_tim.h"
 #include "bsp_gpio.h"
@@ -174,5 +177,7 @@ void DCMotorClearEncoder(DCMotorInstance *instance);
  * @note dt 由内部使用 DWT 自动计算
  */
 void DCMotorSetSpeed(DCMotorInstance *instance, float target_speed);
+
+#endif /* HAL_TIM_MODULE_ENABLED */
 
 #endif /* __DRV_DCMOTOR_H */

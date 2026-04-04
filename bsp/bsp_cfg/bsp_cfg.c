@@ -169,10 +169,83 @@ const ADC_Map_t adc_map[ADC_NUM_MAX] = {
 
 #endif // DM_MC02
 
-#if DEVELOPMENT_BOARD == DJI_A
-
-#endif // DJI_A
-
 #if DEVELOPMENT_BOARD == DJI_C
+
+#include "tim.h"
+#include "usart.h"
+#include "spi.h"
+#include "i2c.h"
+#include "adc.h"
+
+/*============================================
+ *              GPIO 映射数组
+ *============================================*/
+const GPIO_Map_t gpio_map[GPIO_NUM_MAX] = {
+    // 用户按键
+    [GPIO_KEY_USER] = {GPIOA, GPIO_PIN_0}, // 用户按键 PA0
+
+    // BMI088 控制
+    [GPIO_BMI088_CS1_ACCEL] = {GPIOA, GPIO_PIN_4},  // BMI088 CS1_Accel PA4
+    [GPIO_BMI088_CS1_GYRO] = {GPIOB, GPIO_PIN_0},   // BMI088 CS1_Gyro PB0
+    [GPIO_BMI088_INT1_ACCEL] = {GPIOC, GPIO_PIN_4}, // BMI088 INT1_Accel PC4
+    [GPIO_BMI088_INT1_GYRO] = {GPIOC, GPIO_PIN_5},  // BMI088 INT1_Gyro PC5
+
+    // IST8310 控制
+    [GPIO_IST8310_DRDY] = {GPIOG, GPIO_PIN_3}, // IST8310 DRDY PG3
+    [GPIO_IST8310_RSTN] = {GPIOG, GPIO_PIN_6}, // IST8310 RSTN PG6
+};
+
+/*============================================
+ *              TIM 映射数组
+ *============================================*/
+const TIM_Map_t tim_map[TIM_NUM_MAX] = {
+    // PWM定时器（TIM1 4通道）
+    [TIM_PWM_1] = {&htim1, TIM_CHANNEL_1}, // 电机PWM CH1 PE9
+    [TIM_PWM_2] = {&htim1, TIM_CHANNEL_2}, // 电机PWM CH2 PE11
+    [TIM_PWM_3] = {&htim1, TIM_CHANNEL_3}, // 电机PWM CH3 PE13
+    [TIM_PWM_4] = {&htim1, TIM_CHANNEL_4}, // 电机PWM CH4 PE14
+
+    // PWM定时器（TIM5 3通道 LED）
+    [TIM_LED_B] = {&htim5, TIM_CHANNEL_1}, // LED蓝 PH10
+    [TIM_LED_G] = {&htim5, TIM_CHANNEL_2}, // LED绿 PH11
+    [TIM_LED_R] = {&htim5, TIM_CHANNEL_3}, // LED红 PH12
+
+    // PWM定时器（TIM8 2通道）
+    [TIM_PWM_5] = {&htim8, TIM_CHANNEL_1}, // PWM CH1 PC6
+    [TIM_PWM_6] = {&htim8, TIM_CHANNEL_2}, // PWM CH2 PI6
+
+    // 特殊功能定时器
+    [TIM_LASER] = {&htim3, TIM_CHANNEL_3},  // 激光 TIM3_CH3 PC8
+    [TIM_BUZZER] = {&htim4, TIM_CHANNEL_3}, // 蜂鸣器 TIM4_CH3 PD14
+    [TIM_HEATER] = {&htim10, TIM_CHANNEL_1}, // BMI088加热 TIM10_CH1 PF6
+};
+
+/*============================================
+ *              UART 映射数组
+ *============================================*/
+const UART_Map_t uart_map[UART_NUM_MAX] = {
+    [UART_SBUS] = {&huart3}, // SBUS/DBUS遥控接收 USART3 PC11
+};
+
+/*============================================
+ *              SPI 映射数组
+ *============================================*/
+const SPI_Map_t spi_map[SPI_NUM_MAX] = {
+    [SPI_BMI088] = {&hspi1}, // SPI1 BMI088 PA7/PB3/PB4
+};
+
+/*============================================
+ *              I2C 映射数组
+ *============================================*/
+const I2C_Map_t i2c_map[I2C_NUM_MAX] = {
+    [I2C_IST8310] = {&hi2c3}, // I2C3 IST8310磁力计 PA8/PC9
+};
+
+/*============================================
+ *              ADC 映射数组
+ *============================================*/
+const ADC_Map_t adc_map[ADC_NUM_MAX] = {
+    [ADC_BAT_VOLTAGE] = {&hadc3, ADC_CHANNEL_8}, // 电池电压 ADC3_IN8 PF10
+};
 
 #endif // DJI_C

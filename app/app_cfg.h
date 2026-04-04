@@ -33,7 +33,7 @@
 #define DJI_C 3
 
 // 修改此处切换开发板
-#define DEVELOPMENT_BOARD STM32F407VET6
+#define DEVELOPMENT_BOARD DJI_C
 
 /*============================================
  *              任务频率设置
