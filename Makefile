@@ -14,6 +14,7 @@
 # 从 app_cfg.h 读取 DEVELOPMENT_BOARD 值
 ######################################
 # DEVELOPMENT_BOARD 定义格式: #define DEVELOPMENT_BOARD STM32F407VET6 (或 0/1/2/3)
+# 这个必须要有git或者msys，因为使用了grep和swk
 BOARD_VALUE := $(shell grep -E "^#define DEVELOPMENT_BOARD" app/app_cfg.h | awk '{print $$3}')
 
 # 根据值选择开发板名称和 hal 目录
@@ -142,20 +143,33 @@ C_INCLUDES := $(patsubst -I%,-I$(HAL_DIR)/%,$(C_INCLUDES))
 AS_INCLUDES := $(patsubst -I%,-I$(HAL_DIR)/%,$(AS_INCLUDES))
 
 ######################################
-# 递归搜索 app, bsp, drv 的头文件目录
+# 手动维护的头文件目录
 ######################################
-# 需要递归搜索的目录
-PROJ_DIRS = app bsp drv
-
-# 根据平台自动选择递归获取子目录的方式
-ifeq ($(IS_WINDOWS), 1)
-# Windows (PowerShell) 递归获取所有子目录
-ALL_DIRS := $(foreach dire, $(PROJ_DIRS), $(subst \,/,$(patsubst $(CURDIR)\%,%,$(shell powershell -Command "(Get-ChildItem -Path $(dire) -Recurse -Directory).FullName"))))
-else
-# Linux/Unix 使用 find 命令
-ALL_DIRS := $(foreach dire, $(PROJ_DIRS), $(shell find $(dire) -maxdepth 10 -type d))
-endif
-ALL_DIRS += $(PROJ_DIRS)
+# app 目录及其子目录
+ALL_DIRS = app \
+app/app_chassis \
+app/app_cmd \
+app/app_error \
+app/app_motor \
+app/app_robot \
+bsp \
+bsp/bsp_adc \
+bsp/bsp_cfg \
+bsp/bsp_dwt \
+bsp/bsp_gpio \
+bsp/bsp_log \
+bsp/bsp_math \
+bsp/bsp_module \
+bsp/bsp_spi \
+bsp/bsp_tim \
+bsp/bsp_usart \
+drv \
+drv/drv_bmi088 \
+drv/drv_chassis \
+drv/drv_motor \
+drv/drv_motor/drv_dcmotor \
+drv/drv_pid \
+drv/drv_sbus
 
 # 添加 -I 前缀
 C_INCLUDES += $(addprefix -I,$(ALL_DIRS))
