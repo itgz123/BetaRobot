@@ -127,6 +127,7 @@ $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_sin_f32.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c \
 drv/drv_bmi088/drv_bmi088.c \
+app/app_sensor/app_sensor.c \
 
 ######################################
 # 修正 ASM_SOURCES
@@ -168,7 +169,8 @@ drv/drv_chassis \
 drv/drv_motor \
 drv/drv_motor/drv_dcmotor \
 drv/drv_pid \
-drv/drv_sbus
+drv/drv_sbus \
+app/app_sensor
 
 # 添加 -I 前缀
 C_INCLUDES += $(addprefix -I,$(ALL_DIRS))

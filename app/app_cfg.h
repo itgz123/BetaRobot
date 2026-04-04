@@ -42,6 +42,7 @@
 #define CMD_FREQ_MS 100   // 10Hz 遥控
 #define CHASSIS_FREQ_MS 1 // 1000Hz 底盘
 #define MOTOR_FREQ_MS 1   // 1000Hz 电机
+#define SENSOR_FREQ_MS 1  // 1000Hz 传感器
 #define ERROR_FREQ_MS 100 // 10Hz 错误
 
 /*============================================
@@ -79,6 +80,7 @@
 #define CMD_STACK_SIZE 256
 #define CHASSIS_STACK_SIZE 256
 #define MOTOR_STACK_SIZE 256
+#define SENSOR_STACK_SIZE 256
 #define ERROR_STACK_SIZE 256
 
 #endif // __APP_CFG_H
