@@ -113,6 +113,7 @@ void assert_failed(uint8_t *file, uint32_t line)
 
 #include "main.h"
 #include "cmsis_os.h"
+#include "crc.h"
 #include "adc.h"
 #include "dma.h"
 #include "spi.h"
@@ -141,6 +142,7 @@ int main(void)
     MX_TIM12_Init();
     MX_UART5_Init();
     MX_SPI2_Init();
+    MX_CRC_Init();
 
     MX_FREERTOS_Init();
     function_in_main_c();
@@ -311,16 +313,16 @@ void SystemClock_Config(void)
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-
     if (htim->Instance == TIM14)
     {
         HAL_IncTick();
     }
+    // bsp层tim回调
+    BSPTim_PeriodElapsedCallback(htim);
 }
 
 void Error_Handler(void)
 {
-
     __disable_irq();
     while (1)
     {

@@ -16,7 +16,9 @@
 
 #ifdef HAL_CRC_MODULE_ENABLED
 #if DEVELOPMENT_BOARD == DM_MC02
-#include "stm32f7xx_hal_crc.h"
+#include "stm32h7xx_hal_crc.h"
+#elif DEVELOPMENT_BOARD == DJI_A
+#include "stm32f4xx_hal_crc.h"
 #else
 #include "stm32f4xx_hal_crc.h"
 #endif
