@@ -9,6 +9,7 @@
 #include "app_cmd.h"
 #include "app_chassis.h"
 #include "app_motor.h"
+#include "app_sensor.h"
 #include "app_error.h"
 
 /* 任务句柄声明 */
@@ -16,6 +17,7 @@ extern TaskHandle_t errorTaskHandle;
 extern TaskHandle_t cmdTaskHandle;
 extern TaskHandle_t chassisTaskHandle;
 extern TaskHandle_t motorTaskHandle;
+extern TaskHandle_t sensorTaskHandle;
 
 /* 跨任务队列声明 */
 extern QueueHandle_t chassis_cmd_queue;

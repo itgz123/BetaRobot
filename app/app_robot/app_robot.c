@@ -10,18 +10,21 @@ TaskHandle_t errorTaskHandle;
 TaskHandle_t cmdTaskHandle;
 TaskHandle_t chassisTaskHandle;
 TaskHandle_t motorTaskHandle;
+TaskHandle_t sensorTaskHandle;
 
 /* 任务栈定义 */
 static StackType_t errorTaskStack[ERROR_STACK_SIZE];
 static StackType_t cmdTaskStack[CMD_STACK_SIZE];
 static StackType_t chassisTaskStack[CHASSIS_STACK_SIZE];
 static StackType_t motorTaskStack[MOTOR_STACK_SIZE];
+static StackType_t sensorTaskStack[SENSOR_STACK_SIZE];
 
 /* 任务控制块定义 */
 static StaticTask_t errorTaskTCB;
 static StaticTask_t cmdTaskTCB;
 static StaticTask_t chassisTaskTCB;
 static StaticTask_t motorTaskTCB;
+static StaticTask_t sensorTaskTCB;
 
 /*============================================
  *              跨任务队列
@@ -58,19 +61,13 @@ void function_in_main_c(void)
     configASSERT(chassis_cmd_queue != NULL);
 
     // 创建任务（静态分配）
-    errorTaskHandle = xTaskCreateStatic(
-        StartErrorTask, "errorTask", ERROR_STACK_SIZE,
-        NULL, 0, errorTaskStack, &errorTaskTCB);
+    errorTaskHandle = xTaskCreateStatic(StartErrorTask, "errorTask", ERROR_STACK_SIZE, NULL, -1, errorTaskStack, &errorTaskTCB);
 
-    cmdTaskHandle = xTaskCreateStatic(
-        StartCmdTask, "cmdTask", CMD_STACK_SIZE,
-        NULL, 1, cmdTaskStack, &cmdTaskTCB);
+    cmdTaskHandle = xTaskCreateStatic(StartCmdTask, "cmdTask", CMD_STACK_SIZE, NULL, 0, cmdTaskStack, &cmdTaskTCB);
 
-    chassisTaskHandle = xTaskCreateStatic(
-        StartChassisTask, "chassisTask", CHASSIS_STACK_SIZE,
-        NULL, 2, chassisTaskStack, &chassisTaskTCB);
+    chassisTaskHandle = xTaskCreateStatic(StartChassisTask, "chassisTask", CHASSIS_STACK_SIZE, NULL, 1, chassisTaskStack, &chassisTaskTCB);
 
-    motorTaskHandle = xTaskCreateStatic(
-        StartMotorTask, "motorTask", MOTOR_STACK_SIZE,
-        NULL, 3, motorTaskStack, &motorTaskTCB);
+    motorTaskHandle = xTaskCreateStatic(StartMotorTask, "motorTask", MOTOR_STACK_SIZE, NULL, 2, motorTaskStack, &motorTaskTCB);
+
+    sensorTaskHandle = xTaskCreateStatic(StartSensorTask, "sensorTask", SENSOR_STACK_SIZE, NULL, 3, sensorTaskStack, &sensorTaskTCB);
 }
