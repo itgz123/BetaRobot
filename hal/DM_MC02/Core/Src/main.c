@@ -20,6 +20,7 @@
 #include "main.h"
 #include "cmsis_os.h"
 #include "adc.h"
+#include "crc.h"
 #include "dma.h"
 #include "spi.h"
 #include "tim.h"
@@ -106,6 +107,7 @@ int main(void)
   MX_TIM12_Init();
   MX_UART5_Init();
   MX_SPI2_Init();
+  MX_CRC_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
