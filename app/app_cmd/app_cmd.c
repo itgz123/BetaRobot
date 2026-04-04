@@ -39,7 +39,7 @@ static SBUS_Data_t sbus_data;
 
 /*============= 初始化 =============*/
 
-static void CmdInit(void)
+static void Init(void)
 {
     // 创建 SBUS 覆盖式队列
     sbus_queue = xQueueCreateStatic(
@@ -84,7 +84,7 @@ static void SBUSCallback(SBUSInstance *inst)
 
 /*============= 任务函数 =============*/
 
-ITCM_RAM static void CmdTask(void)
+ITCM_RAM static void Run(void)
 {
     float ch1 = 0;
     float ch3 = 0;
@@ -145,14 +145,14 @@ ITCM_RAM static void CmdTask(void)
  */
 ITCM_RAM __attribute__((noreturn)) void StartCmdTask(void *argument)
 {
-    CmdInit();
+    Init();
     static uint64_t start;
     static uint64_t dt;
     LOGINFO("[freeRTOS] CMD Task Start");
     for (;;)
     {
         start = DWT_GetTimeline_us();
-        CmdTask();
+        Run();
         dt = DWT_GetTimeline_us() - start;
         if ((dt / 1000) > CMD_FREQ_MS)
             LOGERROR("[freeRTOS] CMD Task is being DELAY! dt = %d(ms)", (dt / 1000));
