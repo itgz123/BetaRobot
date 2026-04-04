@@ -70,7 +70,7 @@
  *              初始化函数
  *============================================*/
 
-static void ChassisInitTask(void)
+static void Init(void)
 {
     // // 初始化 4 个电机
     // DCMotorInit(&motor_lf, MOTOR_ENCODER_NUM, MOTOR_GEAR_RATIO, MOTOR_LPF_ALPHA);
@@ -94,7 +94,7 @@ static void ChassisInitTask(void)
  *              任务函数
  *============================================*/
 
-ITCM_RAM static void ChassisTask(void)
+ITCM_RAM static void Run(void)
 {
     // // 从队列获取底盘命令（非阻塞，使用最新数据）
     // xQueuePeek(chassis_cmd_queue, &chassis_cmd, 0);
@@ -114,14 +114,14 @@ ITCM_RAM static void ChassisTask(void)
  */
 ITCM_RAM __attribute__((noreturn)) void StartChassisTask(void *argument)
 {
-    ChassisInitTask();
+    Init();
     static uint64_t start;
     static uint64_t dt;
     LOGINFO("[freeRTOS] CHASSIS Task Start");
     for (;;)
     {
         start = DWT_GetTimeline_us();
-        ChassisTask();
+        Run();
         dt = DWT_GetTimeline_us() - start;
         if ((dt / 1000) > CHASSIS_FREQ_MS)
             LOGERROR("[freeRTOS] CHASSIS Task is being DELAY! dt = %d(ms)", (dt / 1000));
