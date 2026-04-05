@@ -256,7 +256,7 @@ int main(void)
     MX_USART1_UART_Init();
 
     MX_FREERTOS_Init();
-    // function_in_main_c();
+    function_in_main_c();
     osKernelStart();
 }
 
