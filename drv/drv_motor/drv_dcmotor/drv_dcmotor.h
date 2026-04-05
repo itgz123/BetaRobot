@@ -16,6 +16,10 @@
 #ifdef HAL_TIM_MODULE_ENABLED
 
 #include "bsp_cfg.h"
+
+// 只有当 PWM、编码器、GPIO 实例都存在时才编译直流电机驱动
+#if (PWM_INSTANCE_NUM > 0) && (ENCODER_INSTANCE_NUM > 0) && (GPIO_INSTANCE_NUM > 0)
+
 #include "bsp_tim.h"
 #include "bsp_gpio.h"
 #include "drv_motor_base.h"
@@ -177,6 +181,8 @@ void DCMotorClearEncoder(DCMotorInstance *instance);
  * @note dt 由内部使用 DWT 自动计算
  */
 void DCMotorSetSpeed(DCMotorInstance *instance, float target_speed);
+
+#endif // (PWM_INSTANCE_NUM > 0) && (ENCODER_INSTANCE_NUM > 0) && (GPIO_INSTANCE_NUM > 0)
 
 #endif /* HAL_TIM_MODULE_ENABLED */
 

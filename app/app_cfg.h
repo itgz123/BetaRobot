@@ -33,7 +33,7 @@
 #define DJI_C 3
 
 // 修改此处切换开发板
-#define DEVELOPMENT_BOARD DJI_C
+#define DEVELOPMENT_BOARD DJI_A
 
 /*============================================
  *              任务频率设置

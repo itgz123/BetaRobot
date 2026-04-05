@@ -115,6 +115,8 @@ float EncoderGetSpeed(EncoderInstance *instance);
  */
 void EncoderClearCount(EncoderInstance *instance);
 
+#endif
+
 /*------------- 溢出回调接口（供main.c调用） --------------*/
 
 /**
@@ -130,7 +132,6 @@ void EncoderClearCount(EncoderInstance *instance);
  */
 void BSPTim_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 
-#endif
 #endif // HAL_TIM_MODULE_ENABLED
 
 #endif /* __BSP_TIM_H */

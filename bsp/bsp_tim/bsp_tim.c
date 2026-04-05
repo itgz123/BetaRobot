@@ -179,6 +179,10 @@ void EncoderClearCount(EncoderInstance *instance)
 
 /*============= 溢出回调分发 =============*/
 
+#endif
+
+#if (ENCODER_INSTANCE_NUM > 0)
+
 void BSPTim_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
     // 匹配编码器实例
@@ -198,6 +202,14 @@ void BSPTim_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
             return;
         }
     }
+}
+
+#else
+
+// 没有编码器实例时提供空实现
+void BSPTim_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    (void)htim;
 }
 
 #endif
