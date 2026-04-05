@@ -69,7 +69,7 @@
 #define HAS_DSP 1          // DSP指令集
 #define HAS_CORDIC 1       // CORDIC协处理器
 #define HAS_CRC 1          // 硬件CRC
-#define HAS_FMAC 0         // 滤波数学加速器（暂时禁用）
+#define HAS_FMAC 1         // 滤波数学加速器
 #define HAS_MPU 1          // 内存保护单元
 #define HAS_RAMECC 1       // RAM错误校正
 #endif
@@ -521,9 +521,9 @@ extern const UART_Map_t uart_map[];
 extern const GPIO_Map_t gpio_map[];
 extern const TIM_Map_t tim_map[];
 extern const UART_Map_t uart_map[];
-extern const CAN_Map_t can_map[];
+// extern const CAN_Map_t can_map[];
 extern const SPI_Map_t spi_map[];
-extern const I2C_Map_t i2c_map[];
+// extern const I2C_Map_t i2c_map[];
 extern const ADC_Map_t adc_map[];
 #endif // DM_MC02
 

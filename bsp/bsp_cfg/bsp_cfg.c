@@ -124,7 +124,7 @@ const TIM_Map_t tim_map[TIM_NUM_MAX] = {
 const UART_Map_t uart_map[UART_NUM_MAX] = {
     // 注意：以下 UART 需要在 CubeMX 配置后才能使用
     [UART_DEBUG] = {NULL},   // 调试串口 USART1 PA9/PA10
-    [UART_DBUS] = {&huart5}, // 遥控接收 UART5 PD2
+    [UART_SBUS] = {&huart5}, // 遥控接收 UART5 PD2
     [UART_RS485_1] = {NULL}, // RS485-1 USART2 PD4/PD5/PD6
     [UART_RS485_2] = {NULL}, // RS485-2 USART3 PB14/PD8/PD9
     [UART_EX_1] = {NULL},    // 扩展串口1 UART7 PE7/PE8
@@ -155,10 +155,10 @@ const SPI_Map_t spi_map[SPI_NUM_MAX] = {
 /*============================================
  *              I2C 映射数组
  *============================================*/
-const I2C_Map_t i2c_map[I2C_NUM_MAX] = {
-    // 注意：I2C 需要在 CubeMX 配置后才能使用
-    // [I2C_LCD] = {&hi2c2}, // I2C2 LCD PB10/PB11
-};
+// const I2C_Map_t i2c_map[I2C_NUM_MAX] = {
+//     // 注意：I2C 需要在 CubeMX 配置后才能使用
+//     // [I2C_LCD] = {&hi2c2}, // I2C2 LCD PB10/PB11
+// };
 
 /*============================================
  *              ADC 映射数组
