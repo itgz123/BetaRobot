@@ -36,6 +36,10 @@ static QueueHandle_t sbus_queue;
 
 // SBUS 解析后的数据
 static SBUS_Data_t sbus_data;
+float ch1 = 0;
+float ch3 = 0;
+float ch4 = 0;
+float ch5 = 0;
 
 /*============= 初始化 =============*/
 
@@ -86,10 +90,6 @@ static void SBUSCallback(SBUSInstance *inst)
 
 ITCM_RAM static void Run(void)
 {
-    float ch1 = 0;
-    float ch3 = 0;
-    float ch4 = 0;
-    float ch5 = 0;
     SBUS_RawFrame_t raw_frame;
     ChassisVelCmd_t chassis_cmd;
 
