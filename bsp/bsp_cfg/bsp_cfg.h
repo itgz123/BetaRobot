@@ -80,7 +80,7 @@
 #define HAS_FPU 1          // Cortex-M4F 单精度浮点
 #define HAS_DSP 1          // DSP指令集
 #define HAS_CORDIC 0       // 无CORDIC协处理器
-#define HAS_CRC 1          // 硬件CRC
+#define HAS_CRC 0          // 无硬件CRC（CubeMX未启用）
 #define HAS_FMAC 0         // 无滤波数学加速器
 #define HAS_MPU 1          // 内存保护单元（可选）
 #define HAS_RAMECC 0       // 无RAM错误校正
@@ -152,7 +152,7 @@
 #define I2C_INSTANCE_NUM 0     // I2C 设备数量
 #define SPI_INSTANCE_NUM 0     // SPI 设备数量
 #define GPIO_INSTANCE_NUM 0    // GPIO 实例数量
-#define UART_INSTANCE_NUM 0    // UART 实例数量
+#define UART_INSTANCE_NUM 1    // UART 实例数量（USART1 SBUS）
 #define PWM_INSTANCE_NUM 0     // PWM 实例数量
 #define ENCODER_INSTANCE_NUM 0 // 编码器实例数量
 #define ADC_INSTANCE_NUM 0     // ADC 实例数量
@@ -339,6 +339,16 @@ typedef enum
 #endif // DM_MC02
 
 #if DEVELOPMENT_BOARD == DJI_A
+
+/**
+ * @brief 板载UART枚举
+ */
+typedef enum
+{
+    UART_SBUS = 0, // SBUS遥控接收 USART1 PB6/PB7
+
+    UART_NUM_MAX // UART数量上限
+} BoardUART_e;
 
 #endif // DJI_A
 
@@ -528,7 +538,7 @@ extern const ADC_Map_t adc_map[];
 #endif // DM_MC02
 
 #if DEVELOPMENT_BOARD == DJI_A
-
+extern const UART_Map_t uart_map[];
 #endif // DJI_A
 
 #if DEVELOPMENT_BOARD == DJI_C

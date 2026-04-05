@@ -8,6 +8,7 @@
 #include "bsp_dwt.h"
 #include "app_cfg.h"
 
+#if (SPI_INSTANCE_NUM > 0) && (GPIO_INSTANCE_NUM > 0)
 #include "drv_bmi088.h"
 /*============================ 私有变量 ============================*/
 BMI088_INSTANCE_DEF(bmi088, SPI_BMI088, GPIO_BMI088_CS1_ACCEL, GPIO_BMI088_CS1_GYRO, GPIO_BMI088_INT1_ACCEL, GPIO_BMI088_INT1_GYRO, TIM_HEATER);
@@ -19,11 +20,13 @@ float gx;
 float gy;
 float gz;
 float temperature;
+#endif
 
 /*============================ 初始化函数 ============================*/
 
 static void Init(void)
 {
+#if (SPI_INSTANCE_NUM > 0) && (GPIO_INSTANCE_NUM > 0)
     // 注册 BMI088 实例
     BMI088Register(&bmi088);
 
@@ -31,12 +34,14 @@ static void Init(void)
     // 加速度计：±3G量程，正常滤波模式，400Hz ODR
     // 陀螺仪：±2000°/s量程，2000Hz ODR，230Hz带宽
     BMI088SetConfig(&bmi088, BMI088_ACC_RANGE_3G, BMI088_ACC_BWP_NORMAL, BMI088_ACC_ODR_400, BMI088_GYRO_RANGE_2000, BMI088_GYRO_ODR_2000, BMI088_GYRO_BW_230, BMI088_MODE_POLLING);
+#endif
 }
 
 /*============================ 任务函数 ============================*/
 
 ITCM_RAM static void Run(void)
 {
+#if (SPI_INSTANCE_NUM > 0) && (GPIO_INSTANCE_NUM > 0)
     data = BMI088ReadBlocking(&bmi088);
     ax = data.acc[0];
     ay = data.acc[1];
@@ -45,6 +50,7 @@ ITCM_RAM static void Run(void)
     gy = data.gyro[1];
     gz = data.gyro[2];
     temperature = data.temp;
+#endif
 }
 /**
  * @brief 传感器任务入口函数

@@ -2,7 +2,10 @@
 #include "bsp_log.h"
 #include "bsp_dwt.h"
 #include "app_cfg.h"
+
+#if (PWM_INSTANCE_NUM > 0) && (ENCODER_INSTANCE_NUM > 0) && (GPIO_INSTANCE_NUM > 0)
 #include "drv_dcmotor.h"
+#endif
 
 // #include "app_cmd.h"
 // float set_speed;

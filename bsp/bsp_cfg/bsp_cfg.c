@@ -169,6 +169,19 @@ const ADC_Map_t adc_map[ADC_NUM_MAX] = {
 
 #endif // DM_MC02
 
+#if DEVELOPMENT_BOARD == DJI_A
+
+#include "usart.h"
+
+/*============================================
+ *              UART 映射数组
+ *============================================*/
+const UART_Map_t uart_map[UART_NUM_MAX] = {
+    [UART_SBUS] = {&huart1}, // SBUS遥控接收 USART1 PB6/PB7
+};
+
+#endif // DJI_A
+
 #if DEVELOPMENT_BOARD == DJI_C
 
 #include "tim.h"

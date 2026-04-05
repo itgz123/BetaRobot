@@ -13,10 +13,13 @@
 #include "app_cmd.h"
 #include "app_robot.h"
 #include "app_cfg.h"
-#include "drv_dcmotor.h"
-#include "drv_chassis.h"
 #include "bsp_log.h"
 #include "bsp_dwt.h"
+
+#if (PWM_INSTANCE_NUM > 0) && (ENCODER_INSTANCE_NUM > 0) && (GPIO_INSTANCE_NUM > 0)
+#include "drv_dcmotor.h"
+#include "drv_chassis.h"
+#endif
 
 /*============================================
  *              电机参数配置

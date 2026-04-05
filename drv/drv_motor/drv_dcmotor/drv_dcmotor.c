@@ -10,7 +10,7 @@
 
 #include "drv_dcmotor.h"
 
-#ifdef HAL_TIM_MODULE_ENABLED
+#if defined(HAL_TIM_MODULE_ENABLED) && (PWM_INSTANCE_NUM > 0) && (ENCODER_INSTANCE_NUM > 0) && (GPIO_INSTANCE_NUM > 0)
 
 #include "bsp_log.h"
 #include "bsp_dwt.h"
@@ -355,4 +355,4 @@ void DCMotorSetSpeed(DCMotorInstance *instance, float target_speed)
     DCMotorSetDutyRatio(instance, output);
 }
 
-#endif /* HAL_TIM_MODULE_ENABLED */
+#endif // defined(HAL_TIM_MODULE_ENABLED) && (PWM_INSTANCE_NUM > 0) && (ENCODER_INSTANCE_NUM > 0) && (GPIO_INSTANCE_NUM > 0)
