@@ -14,6 +14,7 @@
                 "${workspaceFolder}/hal/STM32F407VET6/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS",
                 "${workspaceFolder}/hal/STM32F407VET6/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
                 "${workspaceFolder}/hal/STM32F407VET6/Drivers/CMSIS/DSP/Include",
+                "${workspaceFolder}/hal/STM32F407VET6/Drivers/CMSIS/DSP/PrivateInclude",
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/RTT",
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/Config",
                 "${workspaceFolder}/app",
@@ -44,7 +45,8 @@
             "defines": [
                 "USE_HAL_DRIVER",
                 "STM32F407xx",
-                "DEVELOPMENT_BOARD=0"
+                "DEVELOPMENT_BOARD=0",
+                "ARM_MATH_CM4"
             ],
             "cStandard": "c11",
             "cppStandard": "c++17"
@@ -63,6 +65,7 @@
                 "${workspaceFolder}/hal/DM_MC02/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS",
                 "${workspaceFolder}/hal/DM_MC02/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
                 "${workspaceFolder}/hal/DM_MC02/Drivers/CMSIS/DSP/Include",
+                "${workspaceFolder}/hal/DM_MC02/Drivers/CMSIS/DSP/PrivateInclude",
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/RTT",
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/Config",
                 "${workspaceFolder}/app",
@@ -94,7 +97,8 @@
                 "USE_HAL_DRIVER",
                 "USE_PWR_LDO_SUPPLY",
                 "STM32H723xx",
-                "DEVELOPMENT_BOARD=1"
+                "DEVELOPMENT_BOARD=1",
+                "ARM_MATH_CM4"
             ],
             "cStandard": "c11",
             "cppStandard": "c++17"
@@ -113,6 +117,7 @@
                 "${workspaceFolder}/hal/DJI_A/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS",
                 "${workspaceFolder}/hal/DJI_A/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
                 "${workspaceFolder}/hal/DJI_A/Drivers/CMSIS/DSP/Include",
+                "${workspaceFolder}/hal/DJI_A/Drivers/CMSIS/DSP/PrivateInclude",
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/RTT",
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/Config",
                 "${workspaceFolder}/app",
@@ -143,7 +148,8 @@
             "defines": [
                 "USE_HAL_DRIVER",
                 "STM32F427xx",
-                "DEVELOPMENT_BOARD=2"
+                "DEVELOPMENT_BOARD=2",
+                "ARM_MATH_CM4"
             ],
             "cStandard": "c11",
             "cppStandard": "c++17"
@@ -162,6 +168,7 @@
                 "${workspaceFolder}/hal/DJI_C/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS",
                 "${workspaceFolder}/hal/DJI_C/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
                 "${workspaceFolder}/hal/DJI_C/Drivers/CMSIS/DSP/Include",
+                "${workspaceFolder}/hal/DJI_C/Drivers/CMSIS/DSP/PrivateInclude",
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/RTT",
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/Config",
                 "${workspaceFolder}/app",
@@ -192,7 +199,8 @@
             "defines": [
                 "USE_HAL_DRIVER",
                 "STM32F407xx",
-                "DEVELOPMENT_BOARD=3"
+                "DEVELOPMENT_BOARD=3",
+                "ARM_MATH_CM4"
             ],
             "cStandard": "c11",
             "cppStandard": "c++17"

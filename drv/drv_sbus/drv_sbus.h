@@ -12,10 +12,9 @@
 #define __DRV_SBUS_H
 
 #include "main.h"
-
-#ifdef HAL_UART_MODULE_ENABLED
-
 #include "bsp_cfg.h"
+
+#ifdef BSP_UART_MODULE_ENABLED
 #include "bsp_usart.h"
 #include "stdint.h"
 
@@ -81,7 +80,7 @@ void SBUSUARTRxCallback(USARTInstance *usart_inst);
  *       parent 指向 SBUSInstance 自身，用于 BSP 回调时获取 DRV 实例
  *
  * @example
- *   SBUS_INSTANCE_DEF(sbus_inst, UART_SBUS, AppCallback);
+ *   SBUS_INSTANCE_DEF(sbus_inst, UART_SBUS_2, AppCallback);
  */
 #define SBUS_INSTANCE_DEF(name, uart_idx, app_cb)    \
     static uint8_t name##_rx_buff[25] DMA_RAM = {0}; \
@@ -117,6 +116,6 @@ int8_t SBUSRegister(SBUSInstance *instance);
  */
 SBUS_Data_t SBUSDecodeFrame(const uint8_t *data, uint16_t len);
 
-#endif /* HAL_UART_MODULE_ENABLED */
+#endif /* BSP_UART_MODULE_ENABLED */
 
 #endif /* __DRV_SBUS_H */

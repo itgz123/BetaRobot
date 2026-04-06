@@ -11,8 +11,7 @@
 
 #include "bsp_cfg.h"
 
-#ifdef HAL_SPI_MODULE_ENABLED
-#if SPI_INSTANCE_NUM > 0
+#ifdef BSP_SPI_MODULE_ENABLED
 
 #include "main.h"
 #include "stdint.h"
@@ -111,7 +110,6 @@ void SPIReceive(SPIInstance *instance, uint16_t len);
  */
 void SPITransmitReceive(SPIInstance *instance, uint8_t *tx_data, uint16_t len);
 
-#endif
-#endif // HAL_SPI_MODULE_ENABLED
+#endif // BSP_SPI_MODULE_ENABLED
 
 #endif /* __BSP_SPI_H */

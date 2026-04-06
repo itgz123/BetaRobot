@@ -18,7 +18,7 @@
 
 #include "main.h"
 #include "cmsis_os.h"
-#include "crc.h"
+// #include "crc.h"  // 注释：统一使用软件CRC
 #include "dma.h"
 #include "tim.h"
 #include "usart.h"
@@ -40,7 +40,7 @@ int main(void)
     MX_TIM4_Init();
     MX_TIM8_Init();
     MX_USART2_UART_Init();
-    MX_CRC_Init();
+    // MX_CRC_Init();  // 注释：统一使用软件CRC
 
     MX_FREERTOS_Init();
     function_in_main_c();

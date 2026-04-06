@@ -11,8 +11,9 @@
 #define __DRV_BMI088_H
 
 #include "main.h"
+#include "bsp_cfg.h"
 
-#if defined(HAL_SPI_MODULE_ENABLED) && defined(HAL_GPIO_MODULE_ENABLED)
+#if defined(BSP_SPI_MODULE_ENABLED) && defined(BSP_GPIO_MODULE_ENABLED)
 
 #include "bsp_spi.h"
 #include "bsp_gpio.h"
@@ -98,8 +99,8 @@ typedef struct BMI088Instance
  *       初始化时默认使用阻塞模式，初始化完成后可切换到DMA模式
  *
  * @example
- *   BMI088_INSTANCE_DEF(bmi088, SPI_BMI088, GPIO_BMI088_CS1, GPIO_BMI088_CS2,
- *                       GPIO_BMI088_INT1, GPIO_BMI088_INT3, TIM_HEATER);
+ *   BMI088_INSTANCE_DEF(bmi088, SPI_BMI088_2, GPIO_BMI088_CS_ACCEL, GPIO_BMI088_CS_GYRO,
+ *                       GPIO_BMI088_INT_ACCEL, GPIO_BMI088_INT_GYRO, TIM_HEATER);
  */
 #define BMI088_INSTANCE_DEF(name, spi_idx, cs_acc_idx, cs_gyro_idx, \
                             int_acc_idx, int_gyro_idx, heater_idx)  \
@@ -191,6 +192,6 @@ int8_t BMI088Calibrate(BMI088Instance *inst, uint16_t samples);
  */
 void BMI088SetHeater(BMI088Instance *inst, float duty_ratio);
 
-#endif /* defined(HAL_SPI_MODULE_ENABLED) && defined(HAL_GPIO_MODULE_ENABLED) */
+#endif /* defined(BSP_SPI_MODULE_ENABLED) && defined(BSP_GPIO_MODULE_ENABLED) */
 
 #endif /* __DRV_BMI088_H */

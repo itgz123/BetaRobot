@@ -10,8 +10,7 @@
 
 #include "bsp_cfg.h"
 
-#ifdef HAL_TIM_MODULE_ENABLED
-#if (ENCODER_INSTANCE_NUM > 0) || (PWM_INSTANCE_NUM > 0)
+#ifdef BSP_TIM_MODULE_ENABLED
 
 #include "main.h"
 #include "stdint.h"
@@ -115,8 +114,6 @@ float EncoderGetSpeed(EncoderInstance *instance);
  */
 void EncoderClearCount(EncoderInstance *instance);
 
-#endif
-
 /*------------- 溢出回调接口（供main.c调用） --------------*/
 
 /**
@@ -132,6 +129,6 @@ void EncoderClearCount(EncoderInstance *instance);
  */
 void BSPTim_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 
-#endif // HAL_TIM_MODULE_ENABLED
+#endif // BSP_TIM_MODULE_ENABLED
 
 #endif /* __BSP_TIM_H */
