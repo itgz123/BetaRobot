@@ -125,9 +125,14 @@ $(HAL_DIR)/Drivers/CMSIS/DSP/Source/CommonTables/arm_common_tables.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/CommonTables/arm_const_structs.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_sin_f32.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c \
-$(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c \
 drv/drv_bmi088/drv_bmi088.c \
 app/app_sensor/app_sensor.c \
+
+# arm_atan2_f32.c 仅在 CMSIS-DSP V1.9.0+ 中存在
+# DJI_A 使用 V1.10.0，支持此文件
+ifneq ($(filter $(BOARD_VALUE),DJI_A 2),)
+C_SOURCES += $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c
+endif
 
 ######################################
 # 修正 ASM_SOURCES

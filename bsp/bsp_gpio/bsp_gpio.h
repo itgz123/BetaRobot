@@ -10,8 +10,7 @@
 
 #include "bsp_cfg.h"
 
-#ifdef HAL_GPIO_MODULE_ENABLED
-#if GPIO_INSTANCE_NUM > 0
+#ifdef BSP_GPIO_MODULE_ENABLED
 
 #include "main.h"
 #include "stdint.h"
@@ -91,7 +90,6 @@ GPIO_PinState GPIORead(GPIOInstance *instance);
  */
 void GPIOWrite(GPIOInstance *instance, GPIO_PinState state);
 
-#endif
-#endif // HAL_GPIO_MODULE_ENABLED
+#endif // BSP_GPIO_MODULE_ENABLED
 
 #endif /* __BSP_GPIO_H */

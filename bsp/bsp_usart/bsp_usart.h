@@ -10,8 +10,7 @@
 
 #include "bsp_cfg.h"
 
-#ifdef HAL_UART_MODULE_ENABLED
-#if UART_INSTANCE_NUM > 0
+#ifdef BSP_UART_MODULE_ENABLED
 
 #include "main.h"
 #include "stdint.h"
@@ -57,7 +56,7 @@ typedef struct USARTInstance
  *       在 Cortex-M4 上定义为空
  *
  * @example
- *   USART_INSTANCE_DEF(sbus_uart, UART_SBUS, USART_DMA_MODE, 64, sbus_callback);
+ *   USART_INSTANCE_DEF(sbus_uart, UART_SBUS_2, USART_DMA_MODE, 64, sbus_callback);
  */
 #define USART_INSTANCE_DEF(name, uart_idx, mode, buff_sz, cb) \
     static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};     \
@@ -98,7 +97,6 @@ void USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len);
  */
 void USARTRestartReceive(USARTInstance *instance);
 
-#endif
-#endif // HAL_UART_MODULE_ENABLED
+#endif // BSP_UART_MODULE_ENABLED
 
 #endif /* __BSP_USART_H */

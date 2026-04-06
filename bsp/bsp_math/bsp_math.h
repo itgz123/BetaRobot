@@ -14,7 +14,6 @@
  * @note 硬件特性由 bsp_cfg.h 中的宏定义控制：
  *       - HAS_FPU:     浮点运算单元
  *       - HAS_DSP:     DSP指令集
- *       - HAS_CRC:     硬件CRC
  */
 
 #ifndef __BSP_MATH_H
@@ -63,19 +62,6 @@ static inline uint8_t BSP_Math_HasDSP(void)
 #endif
 }
 
-/**
- * @brief 检查硬件CRC是否可用
- * @return 1-可用, 0-不可用
- */
-static inline uint8_t BSP_Math_HasCRC(void)
-{
-#if HAS_CRC
-    return 1;
-#else
-    return 0;
-#endif
-}
-
 /*============================================
  *              初始化接口
  *============================================*/
@@ -84,7 +70,6 @@ static inline uint8_t BSP_Math_HasCRC(void)
  * @brief 初始化数学模块
  * @note 根据硬件特性自动初始化：
  *       - FPU: 启用浮点运算（已在启动代码中完成）
- *       - CRC: 初始化CRC外设（如果可用）
  */
 void BSP_Math_Init(void);
 
@@ -149,11 +134,14 @@ static inline void BSP_Math_SinCos(float theta, float *p_sin, float *p_cos)
  * @param y Y坐标
  * @param x X坐标
  * @return atan2(y, x)（弧度）
- * @note 优先级：CMSIS-DSP > 标准库
+ * @note 优先级：CMSIS-DSP (V1.9.0+) > 标准库
+ * @note arm_atan2_f32 仅在 CMSIS-DSP V1.9.0+ 版本中可用
+ *       DJI_A 使用 V1.10.0，支持 arm_atan2_f32
+ *       其他开发板使用旧版本，回退到标准库
  */
 static inline float BSP_Math_Atan2(float y, float x)
 {
-#if HAS_DSP
+#if HAS_DSP && (DEVELOPMENT_BOARD == DJI_A)
     float result;
     arm_atan2_f32(y, x, &result);
     return result;
@@ -195,10 +183,9 @@ static inline float BSP_Math_Fabs(float x)
 }
 
 /*============================================
- *              CRC 计算接口
+ *              CRC 计算接口（纯软件实现）
  *============================================*/
 
-#if HAS_CRC
 /**
  * @brief CRC计算配置结构体
  */
@@ -255,7 +242,6 @@ uint32_t BSP_Math_CRC32(const uint8_t *data, uint32_t len, uint32_t init_val);
  * @return CRC校验值
  */
 uint32_t BSP_Math_CRC_Custom(const BSP_CRC_Config_t *config, const uint8_t *data, uint32_t len);
-#endif // HAS_CRC
 
 /*============================================
  *              通用数学宏定义
@@ -315,17 +301,5 @@ uint32_t BSP_Math_CRC_Custom(const BSP_CRC_Config_t *config, const uint8_t *data
 
 /* 平方 */
 #define SQ(x) ((x) * (x))
-
-/*============================================
- *              句柄注册接口
- *============================================*/
-
-#if HAS_CRC
-/**
- * @brief 注册CRC句柄
- * @param hcrc CRC外设句柄
- */
-void BSP_Math_RegisterCRC(CRC_HandleTypeDef *hcrc);
-#endif
 
 #endif // __BSP_MATH_H
