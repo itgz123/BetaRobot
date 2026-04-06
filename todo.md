@@ -1,9 +1,5 @@
-1. 调试bsp_spi和drv_bmi088
-2. bmi088使用bsp_math
-3. freertos考虑使用mpu
-4. uart和spi超时时间
-5.  协议bsp。eg:uart，spi
-6.  drv_bmi088使用pid控制温度
-7.  所有原始数据都需要时间戳（sbus通过dma接收到的原始25字节，bmi通过dma接收到的14字节），sbus，bmi
-8.  bsp_math添加查表三角函数
-9.  中断和dma优先级
+1. freertos考虑使用mpu
+2. uart和spi超时时间
+3.  协议bsp。eg:uart，spi
+4.  所有原始数据都需要时间戳（sbus通过dma接收到的原始25字节，bmi通过dma接收到的14字节），sbus，bmi
+5.  中断和dma优先级

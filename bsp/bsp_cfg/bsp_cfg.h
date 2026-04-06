@@ -663,6 +663,8 @@ typedef struct
     GPIO_TypeDef *port; // GPIO端口
     uint16_t pin;       // 引脚号
 } GPIO_Map_t;
+
+extern const GPIO_Map_t gpio_map[];
 #endif
 
 #ifdef BSP_TIM_MODULE_ENABLED
@@ -674,6 +676,8 @@ typedef struct
     TIM_HandleTypeDef *htim; // TIM句柄
     uint32_t channel;        // 通道（仅PWM使用，编码器填0）
 } TIM_Map_t;
+
+extern const TIM_Map_t tim_map[];
 #endif
 
 #ifdef BSP_UART_MODULE_ENABLED
@@ -684,6 +688,8 @@ typedef struct
 {
     UART_HandleTypeDef *handle; // UART句柄
 } UART_Map_t;
+
+extern const UART_Map_t uart_map[];
 #endif
 
 #ifdef BSP_CAN_MODULE_ENABLED
@@ -698,6 +704,8 @@ typedef struct
     CAN_HandleTypeDef *handle; // CAN句柄
 #endif
 } CAN_Map_t;
+
+extern const CAN_Map_t can_map[];
 #endif
 
 #ifdef BSP_SPI_MODULE_ENABLED
@@ -708,6 +716,8 @@ typedef struct
 {
     SPI_HandleTypeDef *handle; // SPI句柄
 } SPI_Map_t;
+
+extern const SPI_Map_t spi_map[];
 #endif
 
 #ifdef BSP_I2C_MODULE_ENABLED
@@ -718,6 +728,8 @@ typedef struct
 {
     I2C_HandleTypeDef *handle; // I2C句柄
 } I2C_Map_t;
+
+extern const I2C_Map_t i2c_map[];
 #endif
 
 #ifdef BSP_ADC_MODULE_ENABLED
@@ -729,6 +741,8 @@ typedef struct
     ADC_HandleTypeDef *handle; // ADC句柄
     uint32_t channel;          // ADC通道
 } ADC_Map_t;
+
+extern const ADC_Map_t adc_map[];
 #endif
 
 #ifdef BSP_DAC_MODULE_ENABLED
@@ -740,40 +754,7 @@ typedef struct
     DAC_HandleTypeDef *handle; // DAC句柄
     uint32_t channel;          // DAC通道
 } DAC_Map_t;
-#endif
 
-/*============================================
- *              硬件映射数组声明
- *============================================*/
-#ifdef BSP_GPIO_MODULE_ENABLED
-extern const GPIO_Map_t gpio_map[];
-#endif
-
-#ifdef BSP_TIM_MODULE_ENABLED
-extern const TIM_Map_t tim_map[];
-#endif
-
-#ifdef BSP_UART_MODULE_ENABLED
-extern const UART_Map_t uart_map[];
-#endif
-
-#ifdef BSP_CAN_MODULE_ENABLED
-extern const CAN_Map_t can_map[];
-#endif
-
-#ifdef BSP_SPI_MODULE_ENABLED
-extern const SPI_Map_t spi_map[];
-#endif
-
-#ifdef BSP_I2C_MODULE_ENABLED
-extern const I2C_Map_t i2c_map[];
-#endif
-
-#ifdef BSP_ADC_MODULE_ENABLED
-extern const ADC_Map_t adc_map[];
-#endif
-
-#ifdef BSP_DAC_MODULE_ENABLED
 extern const DAC_Map_t dac_map[];
 #endif
 
