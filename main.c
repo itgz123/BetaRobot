@@ -127,7 +127,6 @@ void MX_FREERTOS_Init(void);
 
 int main(void)
 {
-
     SCB_EnableICache();
 
     HAL_Init();
