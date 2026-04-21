@@ -96,7 +96,7 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
         if (hspi == s_spi_instance[i]->handle)
         {
             // 保存接收长度
-            s_spi_instance[i]->rx_len = s_spi_instance[i]->buff_size;
+            s_spi_instance[i]->rx_len = s_spi_instance[i]->last_xfer_len;
 
             // 调用接收回调
             if (s_spi_instance[i]->rx_callback != NULL)
@@ -119,6 +119,7 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
     {
         if (hspi == s_spi_instance[i]->handle)
         {
+            s_spi_instance[i]->rx_len = 0;
             // 发送完成也调用接收回调（统一接口）
             if (s_spi_instance[i]->rx_callback != NULL)
             {
@@ -140,7 +141,7 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
         if (hspi == s_spi_instance[i]->handle)
         {
             // 保存接收长度
-            s_spi_instance[i]->rx_len = s_spi_instance[i]->buff_size;
+            s_spi_instance[i]->rx_len = s_spi_instance[i]->last_xfer_len;
 
             // 调用接收回调
             if (s_spi_instance[i]->rx_callback != NULL)
@@ -192,6 +193,13 @@ int8_t SPIRegister(SPIInstance *instance)
         return -1;
     }
 
+    // 枚举边界检查
+    if (instance->spi_e >= SPI_NUM_MAX)
+    {
+        LOGERROR("[bsp_spi] spi_e out of range!");
+        return -1;
+    }
+
     // 根据枚举自动填充硬件句柄
     instance->handle = spi_map[instance->spi_e].handle;
 
@@ -225,6 +233,7 @@ void SPITransmit(SPIInstance *instance, uint8_t *data, uint16_t len)
         }
     }
 
+    instance->last_xfer_len = len;
     transmit_funcs[instance->work_mode](instance->handle, data, len, SPI_BLOCK_TIMEOUT_MS);
 }
 
@@ -253,6 +262,7 @@ void SPIReceive(SPIInstance *instance, uint16_t len)
     }
 
     instance->rx_len = 0;
+    instance->last_xfer_len = len;
     receive_funcs[instance->work_mode](instance->handle, instance->rx_buff, len, SPI_BLOCK_TIMEOUT_MS);
 }
 
@@ -281,6 +291,7 @@ void SPITransmitReceive(SPIInstance *instance, uint8_t *tx_data, uint16_t len)
     }
 
     instance->rx_len = 0;
+    instance->last_xfer_len = len;
     transmit_receive_funcs[instance->work_mode](instance->handle, tx_data, instance->rx_buff, len, SPI_BLOCK_TIMEOUT_MS);
 }
 

@@ -19,6 +19,14 @@ static GPIOInstance *s_gpio_instance[GPIO_INSTANCE_NUM] = {NULL};
 static GPIOInstance **s_gpio_instance = NULL;
 #endif
 
+/**
+ * @brief 判断 GPIO_Pin 是否为单比特掩码
+ */
+static uint8_t GPIOIsSingleBitPin(uint16_t pin)
+{
+    return (pin != 0U) && ((pin & (pin - 1U)) == 0U);
+}
+
 /*------------- HAL回调函数重写 --------------*/
 
 /**
@@ -58,8 +66,31 @@ int8_t GPIORegister(GPIOInstance *instance)
         return -1;
     }
 
+    // 枚举边界检查
+    if (instance->gpio_e >= GPIO_NUM_MAX)
+    {
+        LOGERROR("[bsp_gpio] gpio_e out of range!");
+        return -1;
+    }
+
     // 根据枚举自动填充硬件映射
     instance->map = gpio_map[instance->gpio_e];
+
+    if (instance->map.port == NULL || !GPIOIsSingleBitPin(instance->map.pin))
+    {
+        LOGERROR("[bsp_gpio] Invalid GPIO map, check bsp_cfg mapping!");
+        return -1;
+    }
+
+    // EXTI 回调只有 GPIO_Pin 参数，要求板级不复用同一 pin 位
+    for (uint8_t i = 0; i < s_idx; i++)
+    {
+        if (s_gpio_instance[i]->map.pin == instance->map.pin)
+        {
+            LOGERROR("[bsp_gpio] Duplicate EXTI pin registration is not allowed!");
+            return -1;
+        }
+    }
 
     s_gpio_instance[s_idx++] = instance;
     LOGINFO("[bsp_gpio] GPIO instance registered, idx=%d", s_idx - 1);
