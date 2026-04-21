@@ -39,6 +39,12 @@ int8_t PWMRegister(PWMInstance *instance)
         return -1;
     }
 
+    if (instance->tim_e >= TIM_NUM_MAX)
+    {
+        LOGERROR("[bsp_tim] PWM tim_e out of range!");
+        return -1;
+    }
+
     // 重复注册检查
     for (uint8_t i = 0; i < s_pwm_idx; i++)
     {
@@ -107,6 +113,12 @@ int8_t EncoderRegister(EncoderInstance *instance)
     if (s_encoder_idx >= ENCODER_INSTANCE_NUM)
     {
         LOGERROR("[bsp_tim] Encoder exceeded max instance count!");
+        return -1;
+    }
+
+    if (instance->tim_e >= TIM_NUM_MAX)
+    {
+        LOGERROR("[bsp_tim] Encoder tim_e out of range!");
         return -1;
     }
 

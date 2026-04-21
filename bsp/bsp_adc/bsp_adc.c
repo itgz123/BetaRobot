@@ -17,6 +17,29 @@
 static uint8_t s_idx = 0;                             // 已注册实例数量
 static ADCInstance *s_adc_instance[ADC_INSTANCE_NUM]; // 实例指针数组
 
+/**
+ * @brief 按实例映射配置 ADC 通道
+ * @retval HAL_OK 配置成功
+ */
+static HAL_StatusTypeDef ADCConfigChannel(ADCInstance *instance)
+{
+    ADC_ChannelConfTypeDef config = {0};
+
+    config.Channel = instance->adc_map.channel;
+#if CPU_CORE == CORTEX_M7
+    config.Rank = ADC_REGULAR_RANK_1;
+    config.SamplingTime = ADC_SAMPLETIME_64CYCLES_5;
+    config.SingleDiff = ADC_SINGLE_ENDED;
+    config.OffsetNumber = ADC_OFFSET_NONE;
+    config.Offset = 0;
+#else
+    config.Rank = 1;
+    config.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+#endif
+
+    return HAL_ADC_ConfigChannel(instance->adc_map.handle, &config);
+}
+
 /*============================================
  *              接口函数实现
  *============================================*/
@@ -40,8 +63,26 @@ int8_t ADCRegister(ADCInstance *instance)
         return -1;
     }
 
+    if (instance->adc_e >= ADC_NUM_MAX)
+    {
+        LOGERROR("[BSP_ADC] Register failed: adc_e out of range");
+        return -1;
+    }
+
     // 自动填充硬件映射
     instance->adc_map = adc_map[instance->adc_e];
+
+    if (instance->adc_map.handle == NULL)
+    {
+        LOGERROR("[BSP_ADC] Register failed: ADC handle is NULL");
+        return -1;
+    }
+
+    if (ADCConfigChannel(instance) != HAL_OK)
+    {
+        LOGERROR("[BSP_ADC] Register failed: config channel failed, adc_e=%d", instance->adc_e);
+        return -1;
+    }
 
     // ADC校准（仅H7系列支持，F4系列无校准API）
     ADC_HandleTypeDef *hadc = instance->adc_map.handle;
@@ -77,6 +118,12 @@ uint16_t ADCGetValue(ADCInstance *instance)
     }
 
     ADC_HandleTypeDef *hadc = instance->adc_map.handle;
+
+    // 按实例映射确保当前采样通道正确
+    if (ADCConfigChannel(instance) != HAL_OK)
+    {
+        return 0;
+    }
 
     // 启动ADC转换
     HAL_ADC_Start(hadc);

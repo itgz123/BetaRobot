@@ -109,6 +109,28 @@ int8_t USARTRegister(USARTInstance *instance)
         return -1;
     }
 
+    // 枚举边界检查
+    if (instance->uart_e >= UART_NUM_MAX)
+    {
+        LOGERROR("[bsp_usart] uart_e out of range!");
+        return -1;
+    }
+
+    // 根据枚举自动填充硬件句柄
+    instance->handle = uart_map[instance->uart_e].handle;
+    if (instance->handle == NULL)
+    {
+        LOGERROR("[bsp_usart] UART handle is NULL, check bsp_cfg mapping!");
+        return -1;
+    }
+
+    // RX 使用 ReceiveToIdle DMA，必须配置 RX DMA
+    if (instance->handle->hdmarx == NULL)
+    {
+        LOGERROR("[bsp_usart] RX DMA is required but hdmarx is NULL!");
+        return -1;
+    }
+
     // 重复注册检查
     for (uint8_t i = 0; i < s_idx; i++)
     {
@@ -118,9 +140,6 @@ int8_t USARTRegister(USARTInstance *instance)
             return -1;
         }
     }
-
-    // 根据枚举自动填充硬件句柄
-    instance->handle = uart_map[instance->uart_e].handle;
 
     s_usart_instance[s_idx++] = instance;
 
@@ -154,12 +173,17 @@ void USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len)
 
 void USARTRestartReceive(USARTInstance *instance)
 {
-    if (instance == NULL)
+    if (instance == NULL || instance->handle == NULL || instance->handle->hdmarx == NULL)
     {
         return;
     }
 
-    HAL_UARTEx_ReceiveToIdle_DMA(instance->handle, instance->rx_buff, instance->rx_buff_size);
+    if (HAL_UARTEx_ReceiveToIdle_DMA(instance->handle, instance->rx_buff, instance->rx_buff_size) != HAL_OK)
+    {
+        LOGWARNING("[bsp_usart] Restart receive failed!");
+        return;
+    }
+
     // 关闭DMA半传输中断，防止两次进入HAL_UARTEx_RxEventCallback()
     __HAL_DMA_DISABLE_IT(instance->handle->hdmarx, DMA_IT_HT);
 }

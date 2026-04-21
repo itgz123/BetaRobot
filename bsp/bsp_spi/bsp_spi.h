@@ -40,6 +40,7 @@ typedef struct SPIInstance
     uint8_t *rx_buff;                          // 接收缓冲区指针
     uint16_t buff_size;                        // 缓冲区大小
     uint16_t rx_len;                           // 接收数据长度
+    uint16_t last_xfer_len;                    // 最近一次收发请求长度
     void (*rx_callback)(struct SPIInstance *); // DMA接收完成回调
 } SPIInstance;
 
@@ -69,6 +70,7 @@ typedef struct SPIInstance
         .rx_buff = name##_rx_buff,                            \
         .buff_size = buff_sz,                                 \
         .rx_len = 0,                                          \
+        .last_xfer_len = 0,                                   \
         .rx_callback = rx_cb}
 
 /*------------- 外部接口声明 --------------*/
