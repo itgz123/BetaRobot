@@ -10,6 +10,7 @@
 #if UART_INSTANCE_NUM > 0
 
 #include "bsp_log.h"
+#include "bsp_check.h"
 #include "string.h"
 
 /*------------- 私有类型定义 --------------*/
@@ -23,9 +24,37 @@ typedef void (*UART_TransmitFunc)(UART_HandleTypeDef *, uint8_t *, uint16_t, uin
 static uint8_t s_idx = 0;
 #if UART_INSTANCE_NUM > 0
 static USARTInstance *s_usart_instance[UART_INSTANCE_NUM] = {NULL};
+static USARTInstance *s_last_route_instance = NULL;
 #else
 static USARTInstance **s_usart_instance = NULL;
 #endif
+
+/**
+ * @brief 根据 UART 句柄查找实例（带最近命中缓存）
+ */
+static USARTInstance *USARTFindInstanceByHandle(UART_HandleTypeDef *huart)
+{
+    if (huart == NULL)
+    {
+        return NULL;
+    }
+
+    if (s_last_route_instance != NULL && s_last_route_instance->handle == huart)
+    {
+        return s_last_route_instance;
+    }
+
+    for (uint8_t i = 0; i < s_idx; i++)
+    {
+        if (s_usart_instance[i]->handle == huart)
+        {
+            s_last_route_instance = s_usart_instance[i];
+            return s_usart_instance[i];
+        }
+    }
+
+    return NULL;
+}
 
 /**
  * @brief 发送函数指针数组
@@ -46,24 +75,21 @@ static const UART_TransmitFunc transmit_funcs[] = {
  */
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
-    for (uint8_t i = 0; i < s_idx; i++)
+    USARTInstance *instance = USARTFindInstanceByHandle(huart);
+    if (instance != NULL)
     {
-        if (huart == s_usart_instance[i]->handle)
+        // 保存接收长度
+        instance->rx_len = Size;
+
+        // 调用回调函数
+        if (instance->rx_callback != NULL)
         {
-            // 保存接收长度
-            s_usart_instance[i]->rx_len = Size;
-
-            // 调用回调函数
-            if (s_usart_instance[i]->rx_callback != NULL)
-            {
-                s_usart_instance[i]->rx_callback(s_usart_instance[i]);
-            }
-
-            // 清空缓冲区并重新启动接收
-            memset(s_usart_instance[i]->rx_buff, 0, Size);
-            USARTRestartReceive(s_usart_instance[i]);
-            return;
+            instance->rx_callback(instance);
         }
+
+        // 清空缓冲区并重新启动接收
+        memset(instance->rx_buff, 0, Size);
+        USARTRestartReceive(instance);
     }
 }
 
@@ -74,20 +100,17 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
  */
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
-    for (uint8_t i = 0; i < s_idx; i++)
+    USARTInstance *instance = USARTFindInstanceByHandle(huart);
+    if (instance != NULL)
     {
-        if (huart == s_usart_instance[i]->handle)
-        {
-            uint32_t error_code = huart->ErrorCode;
-            LOGWARNING("[bsp_usart] Error detected, idx[%d], code=0x%lX (PE:%d FE:%d NE:%d ORE:%d DMA:%d)", i, error_code,
-                       (error_code & HAL_UART_ERROR_PE) ? 1 : 0,   // 奇偶校验错误
-                       (error_code & HAL_UART_ERROR_FE) ? 1 : 0,   // 帧错误
-                       (error_code & HAL_UART_ERROR_NE) ? 1 : 0,   // 噪声错误
-                       (error_code & HAL_UART_ERROR_ORE) ? 1 : 0,  // 溢出错误
-                       (error_code & HAL_UART_ERROR_DMA) ? 1 : 0); // DMA错误
-            USARTRestartReceive(s_usart_instance[i]);
-            return;
-        }
+        uint32_t error_code = huart->ErrorCode;
+        LOGWARNING("[bsp_usart] Error detected, code=0x%lX (PE:%d FE:%d NE:%d ORE:%d DMA:%d)", error_code,
+                   (error_code & HAL_UART_ERROR_PE) ? 1 : 0,   // 奇偶校验错误
+                   (error_code & HAL_UART_ERROR_FE) ? 1 : 0,   // 帧错误
+                   (error_code & HAL_UART_ERROR_NE) ? 1 : 0,   // 噪声错误
+                   (error_code & HAL_UART_ERROR_ORE) ? 1 : 0,  // 溢出错误
+                   (error_code & HAL_UART_ERROR_DMA) ? 1 : 0); // DMA错误
+        USARTRestartReceive(instance);
     }
 }
 
@@ -95,41 +118,16 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 
 int8_t USARTRegister(USARTInstance *instance)
 {
-    // 参数检查
-    if (instance == NULL)
-    {
-        LOGERROR("[bsp_usart] Instance is NULL!");
-        return -1;
-    }
-
-    // 实例数量检查
-    if (s_idx >= UART_INSTANCE_NUM)
-    {
-        LOGERROR("[bsp_usart] Exceeded max instance count!");
-        return -1;
-    }
-
-    // 枚举边界检查
-    if (instance->uart_e >= UART_NUM_MAX)
-    {
-        LOGERROR("[bsp_usart] uart_e out of range!");
-        return -1;
-    }
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_usart] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(s_idx >= UART_INSTANCE_NUM, -1, LOGERROR("[bsp_usart] Exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->uart_e >= UART_NUM_MAX, -1, LOGERROR("[bsp_usart] uart_e out of range!"));
 
     // 根据枚举自动填充硬件句柄
     instance->handle = uart_map[instance->uart_e].handle;
-    if (instance->handle == NULL)
-    {
-        LOGERROR("[bsp_usart] UART handle is NULL, check bsp_cfg mapping!");
-        return -1;
-    }
+    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, -1, LOGERROR("[bsp_usart] UART handle is NULL, check bsp_cfg mapping!"));
 
     // RX 使用 ReceiveToIdle DMA，必须配置 RX DMA
-    if (instance->handle->hdmarx == NULL)
-    {
-        LOGERROR("[bsp_usart] RX DMA is required but hdmarx is NULL!");
-        return -1;
-    }
+    BSP_RETURN_IF_TRUE_LOG(instance->handle->hdmarx == NULL, -1, LOGERROR("[bsp_usart] RX DMA is required but hdmarx is NULL!"));
 
     // 重复注册检查
     for (uint8_t i = 0; i < s_idx; i++)

@@ -3,13 +3,14 @@
  * @brief ADC外设封装层实现
  */
 
-#include "main.h"  // 确保 HAL 宏已定义
+#include "main.h" // 确保 HAL 宏已定义
 #include "bsp_adc.h"
 
 #ifdef HAL_ADC_MODULE_ENABLED
 #if ADC_INSTANCE_NUM > 0
 
 #include "bsp_log.h"
+#include "bsp_check.h"
 
 /*============================================
  *              私有变量
@@ -49,40 +50,16 @@ static HAL_StatusTypeDef ADCConfigChannel(ADCInstance *instance)
  */
 int8_t ADCRegister(ADCInstance *instance)
 {
-    // 参数检查
-    if (instance == NULL)
-    {
-        LOGERROR("[BSP_ADC] Register failed: instance is NULL");
-        return -1;
-    }
-
-    // 实例数量检查
-    if (s_idx >= ADC_INSTANCE_NUM)
-    {
-        LOGERROR("[BSP_ADC] Register failed: instance num exceeded %d", ADC_INSTANCE_NUM);
-        return -1;
-    }
-
-    if (instance->adc_e >= ADC_NUM_MAX)
-    {
-        LOGERROR("[BSP_ADC] Register failed: adc_e out of range");
-        return -1;
-    }
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[BSP_ADC] Register failed: instance is NULL"));
+    BSP_RETURN_IF_TRUE_LOG(s_idx >= ADC_INSTANCE_NUM, -1, LOGERROR("[BSP_ADC] Register failed: instance num exceeded %d", ADC_INSTANCE_NUM));
+    BSP_RETURN_IF_TRUE_LOG(instance->adc_e >= ADC_NUM_MAX, -1, LOGERROR("[BSP_ADC] Register failed: adc_e out of range"));
 
     // 自动填充硬件映射
     instance->adc_map = adc_map[instance->adc_e];
 
-    if (instance->adc_map.handle == NULL)
-    {
-        LOGERROR("[BSP_ADC] Register failed: ADC handle is NULL");
-        return -1;
-    }
+    BSP_RETURN_IF_TRUE_LOG(instance->adc_map.handle == NULL, -1, LOGERROR("[BSP_ADC] Register failed: ADC handle is NULL"));
 
-    if (ADCConfigChannel(instance) != HAL_OK)
-    {
-        LOGERROR("[BSP_ADC] Register failed: config channel failed, adc_e=%d", instance->adc_e);
-        return -1;
-    }
+    BSP_RETURN_IF_TRUE_LOG(ADCConfigChannel(instance) != HAL_OK, -1, LOGERROR("[BSP_ADC] Register failed: config channel failed, adc_e=%d", instance->adc_e));
 
     // ADC校准（仅H7系列支持，F4系列无校准API）
     ADC_HandleTypeDef *hadc = instance->adc_map.handle;
@@ -102,8 +79,7 @@ int8_t ADCRegister(ADCInstance *instance)
     // 保存实例指针
     s_adc_instance[s_idx++] = instance;
 
-    LOGINFO("[BSP_ADC] Register success: adc_e=%d, handle=0x%p, channel=%lu",
-            instance->adc_e, instance->adc_map.handle, instance->adc_map.channel);
+    LOGINFO("[BSP_ADC] Register success: adc_e=%d, handle=0x%p, channel=%lu", instance->adc_e, instance->adc_map.handle, instance->adc_map.channel);
     return 0;
 }
 
