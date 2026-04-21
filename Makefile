@@ -147,6 +147,10 @@ ASM_SOURCES += Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT_ASM_ARMv7M.s \
 C_INCLUDES := $(patsubst -I%,-I$(HAL_DIR)/%,$(C_INCLUDES))
 AS_INCLUDES := $(patsubst -I%,-I$(HAL_DIR)/%,$(AS_INCLUDES))
 
+# CubeMX 模板中的 .s/.S 规则使用 $(CFLAGS)，
+# 为保证仅修改根 Makefile 时 AS_INCLUDES 仍能生效，将其并入 CFLAGS。
+override CFLAGS += $(AS_DEFS) $(AS_INCLUDES)
+
 ######################################
 # 手动维护的头文件目录
 ######################################
