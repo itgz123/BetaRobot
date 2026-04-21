@@ -10,6 +10,7 @@
 #if (ENCODER_INSTANCE_NUM > 0) || (PWM_INSTANCE_NUM > 0)
 
 #include "bsp_log.h"
+#include "bsp_check.h"
 #include "bsp_dwt.h"
 #include "string.h"
 
@@ -27,23 +28,9 @@ static PWMInstance **s_pwm_instance = NULL;
 
 int8_t PWMRegister(PWMInstance *instance)
 {
-    if (instance == NULL)
-    {
-        LOGERROR("[bsp_tim] PWM instance is NULL!");
-        return -1;
-    }
-
-    if (s_pwm_idx >= PWM_INSTANCE_NUM)
-    {
-        LOGERROR("[bsp_tim] PWM exceeded max instance count!");
-        return -1;
-    }
-
-    if (instance->tim_e >= TIM_NUM_MAX)
-    {
-        LOGERROR("[bsp_tim] PWM tim_e out of range!");
-        return -1;
-    }
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_tim] PWM instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(s_pwm_idx >= PWM_INSTANCE_NUM, -1, LOGERROR("[bsp_tim] PWM exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->tim_e >= TIM_NUM_MAX, -1, LOGERROR("[bsp_tim] PWM tim_e out of range!"));
 
     // 重复注册检查
     for (uint8_t i = 0; i < s_pwm_idx; i++)
@@ -104,23 +91,9 @@ static EncoderInstance **s_encoder_instance = NULL;
 
 int8_t EncoderRegister(EncoderInstance *instance)
 {
-    if (instance == NULL)
-    {
-        LOGERROR("[bsp_tim] Encoder instance is NULL!");
-        return -1;
-    }
-
-    if (s_encoder_idx >= ENCODER_INSTANCE_NUM)
-    {
-        LOGERROR("[bsp_tim] Encoder exceeded max instance count!");
-        return -1;
-    }
-
-    if (instance->tim_e >= TIM_NUM_MAX)
-    {
-        LOGERROR("[bsp_tim] Encoder tim_e out of range!");
-        return -1;
-    }
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_tim] Encoder instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(s_encoder_idx >= ENCODER_INSTANCE_NUM, -1, LOGERROR("[bsp_tim] Encoder exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->tim_e >= TIM_NUM_MAX, -1, LOGERROR("[bsp_tim] Encoder tim_e out of range!"));
 
     // 重复注册检查
     for (uint8_t i = 0; i < s_encoder_idx; i++)

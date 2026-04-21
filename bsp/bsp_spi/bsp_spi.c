@@ -10,6 +10,7 @@
 #if SPI_INSTANCE_NUM > 0
 
 #include "bsp_log.h"
+#include "bsp_check.h"
 
 /*------------- 私有类型定义 --------------*/
 
@@ -34,9 +35,37 @@ typedef HAL_StatusTypeDef (*SPI_ReceiveFunc)(SPI_HandleTypeDef *, uint8_t *, uin
 static uint8_t s_idx = 0;
 #if SPI_INSTANCE_NUM > 0
 static SPIInstance *s_spi_instance[SPI_INSTANCE_NUM] = {NULL};
+static SPIInstance *s_last_route_instance = NULL;
 #else
 static SPIInstance **s_spi_instance = NULL;
 #endif
+
+/**
+ * @brief 根据 SPI 句柄查找实例（带最近命中缓存）
+ */
+static SPIInstance *SPIFindInstanceByHandle(SPI_HandleTypeDef *hspi)
+{
+    if (hspi == NULL)
+    {
+        return NULL;
+    }
+
+    if (s_last_route_instance != NULL && s_last_route_instance->handle == hspi)
+    {
+        return s_last_route_instance;
+    }
+
+    for (uint8_t i = 0; i < s_idx; i++)
+    {
+        if (s_spi_instance[i]->handle == hspi)
+        {
+            s_last_route_instance = s_spi_instance[i];
+            return s_spi_instance[i];
+        }
+    }
+
+    return NULL;
+}
 
 /**
  * @brief 收发函数指针数组
@@ -91,19 +120,16 @@ static uint8_t SPIIsReady(SPIInstance *instance)
  */
 void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-    for (uint8_t i = 0; i < s_idx; i++)
+    SPIInstance *instance = SPIFindInstanceByHandle(hspi);
+    if (instance != NULL)
     {
-        if (hspi == s_spi_instance[i]->handle)
-        {
-            // 保存接收长度
-            s_spi_instance[i]->rx_len = s_spi_instance[i]->last_xfer_len;
+        // 保存接收长度
+        instance->rx_len = instance->last_xfer_len;
 
-            // 调用接收回调
-            if (s_spi_instance[i]->rx_callback != NULL)
-            {
-                s_spi_instance[i]->rx_callback(s_spi_instance[i]);
-            }
-            return;
+        // 调用接收回调
+        if (instance->rx_callback != NULL)
+        {
+            instance->rx_callback(instance);
         }
     }
 }
@@ -115,17 +141,14 @@ void HAL_SPI_TxRxCpltCallback(SPI_HandleTypeDef *hspi)
  */
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-    for (uint8_t i = 0; i < s_idx; i++)
+    SPIInstance *instance = SPIFindInstanceByHandle(hspi);
+    if (instance != NULL)
     {
-        if (hspi == s_spi_instance[i]->handle)
+        instance->rx_len = 0;
+        // 发送完成也调用接收回调（统一接口）
+        if (instance->rx_callback != NULL)
         {
-            s_spi_instance[i]->rx_len = 0;
-            // 发送完成也调用接收回调（统一接口）
-            if (s_spi_instance[i]->rx_callback != NULL)
-            {
-                s_spi_instance[i]->rx_callback(s_spi_instance[i]);
-            }
-            return;
+            instance->rx_callback(instance);
         }
     }
 }
@@ -136,19 +159,16 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
  */
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
 {
-    for (uint8_t i = 0; i < s_idx; i++)
+    SPIInstance *instance = SPIFindInstanceByHandle(hspi);
+    if (instance != NULL)
     {
-        if (hspi == s_spi_instance[i]->handle)
-        {
-            // 保存接收长度
-            s_spi_instance[i]->rx_len = s_spi_instance[i]->last_xfer_len;
+        // 保存接收长度
+        instance->rx_len = instance->last_xfer_len;
 
-            // 调用接收回调
-            if (s_spi_instance[i]->rx_callback != NULL)
-            {
-                s_spi_instance[i]->rx_callback(s_spi_instance[i]);
-            }
-            return;
+        // 调用接收回调
+        if (instance->rx_callback != NULL)
+        {
+            instance->rx_callback(instance);
         }
     }
 }
@@ -159,19 +179,15 @@ void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi)
  */
 void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 {
-    for (uint8_t i = 0; i < s_idx; i++)
+    SPIInstance *instance = SPIFindInstanceByHandle(hspi);
+    if (instance != NULL)
     {
-        if (hspi == s_spi_instance[i]->handle)
-        {
-            uint32_t error_code = hspi->ErrorCode;
-            LOGWARNING("[spi] Error detected, idx[%d], code=0x%lX (MODF:%d OVR:%d FRE:%d DMA:%d)", i, error_code,
-                       (error_code & HAL_SPI_ERROR_MODF) ? 1 : 0, // 模式错误
-                       (error_code & HAL_SPI_ERROR_OVR) ? 1 : 0,  // 溢出错误
-                       (error_code & HAL_SPI_ERROR_FRE) ? 1 : 0,  // 帧错误
-                       (error_code & HAL_SPI_ERROR_DMA) ? 1 : 0); // DMA错误
-
-            return;
-        }
+        uint32_t error_code = hspi->ErrorCode;
+        LOGWARNING("[spi] Error detected, code=0x%lX (MODF:%d OVR:%d FRE:%d DMA:%d)", error_code,
+                   (error_code & HAL_SPI_ERROR_MODF) ? 1 : 0, // 模式错误
+                   (error_code & HAL_SPI_ERROR_OVR) ? 1 : 0,  // 溢出错误
+                   (error_code & HAL_SPI_ERROR_FRE) ? 1 : 0,  // 帧错误
+                   (error_code & HAL_SPI_ERROR_DMA) ? 1 : 0); // DMA错误
     }
 }
 
@@ -179,35 +195,14 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 
 int8_t SPIRegister(SPIInstance *instance)
 {
-    // 参数检查
-    if (instance == NULL)
-    {
-        LOGERROR("[bsp_spi] Instance is NULL!");
-        return -1;
-    }
-
-    // 实例数量检查
-    if (s_idx >= SPI_INSTANCE_NUM)
-    {
-        LOGERROR("[bsp_spi] Exceeded max instance count!");
-        return -1;
-    }
-
-    // 枚举边界检查
-    if (instance->spi_e >= SPI_NUM_MAX)
-    {
-        LOGERROR("[bsp_spi] spi_e out of range!");
-        return -1;
-    }
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_spi] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(s_idx >= SPI_INSTANCE_NUM, -1, LOGERROR("[bsp_spi] Exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->spi_e >= SPI_NUM_MAX, -1, LOGERROR("[bsp_spi] spi_e out of range!"));
 
     // 根据枚举自动填充硬件句柄
     instance->handle = spi_map[instance->spi_e].handle;
 
-    if (instance->handle == NULL)
-    {
-        LOGERROR("[bsp_spi] SPI handle is NULL, check CubeMX configuration!");
-        return -1;
-    }
+    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, -1, LOGERROR("[bsp_spi] SPI handle is NULL, check CubeMX configuration!"));
 
     s_spi_instance[s_idx++] = instance;
 
