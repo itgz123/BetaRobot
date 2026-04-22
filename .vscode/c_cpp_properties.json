@@ -65,7 +65,6 @@
                 "${workspaceFolder}/hal/DM_MC02/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS",
                 "${workspaceFolder}/hal/DM_MC02/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
                 "${workspaceFolder}/hal/DM_MC02/Drivers/CMSIS/DSP/Include",
-                "${workspaceFolder}/hal/DM_MC02/Drivers/CMSIS/DSP/PrivateInclude",
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/RTT",
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/Config",
                 "${workspaceFolder}/app",

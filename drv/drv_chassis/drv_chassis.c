@@ -21,26 +21,10 @@
 #define SQRT2 1.41421356f
 
 /*============================================
- *              私有函数声明
- *============================================*/
-
-// 各底盘类型的运动学逆解函数
-static void InverseMecanumX(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out);
-static void InverseMecanumO(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out);
-static void InverseOmniX(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out);
-static void InverseOmniCross(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out);
-
-// 各底盘类型的运动学正解函数
-static ChassisVelCmd_t ForwardMecanumX(ChassisInstance *inst, WheelSpeed_t *wheel);
-static ChassisVelCmd_t ForwardMecanumO(ChassisInstance *inst, WheelSpeed_t *wheel);
-static ChassisVelCmd_t ForwardOmniX(ChassisInstance *inst, WheelSpeed_t *wheel);
-static ChassisVelCmd_t ForwardOmniCross(ChassisInstance *inst, WheelSpeed_t *wheel);
-
-/*============================================
  *              运动学逆解函数实现
  *============================================*/
 
-static void InverseMecanumX(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out)
+void InverseMecanumX(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out)
 {
     float r = inst->wheel_radius;
     float k = inst->chassis_l / r; // 旋转系数
@@ -50,7 +34,7 @@ static void InverseMecanumX(ChassisInstance *inst, float vx, float vy, float w, 
     out->w4 = (vx + vy + w * k) / r;
 }
 
-static void InverseMecanumO(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out)
+void InverseMecanumO(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out)
 {
     float r = inst->wheel_radius;
     float k = inst->chassis_l / r;
@@ -60,7 +44,7 @@ static void InverseMecanumO(ChassisInstance *inst, float vx, float vy, float w, 
     out->w4 = (vx - vy + w * k) / r;
 }
 
-static void InverseOmniX(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out)
+void InverseOmniX(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out)
 {
     float r = inst->wheel_radius;
     float k = inst->chassis_l / r;
@@ -70,7 +54,7 @@ static void InverseOmniX(ChassisInstance *inst, float vx, float vy, float w, Whe
     out->w4 = (vx + vy + w * k) / (r * SQRT2);
 }
 
-static void InverseOmniCross(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out)
+void InverseOmniCross(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out)
 {
     float r = inst->wheel_radius;
     out->w1 = (vy + w * inst->cross_a / r) / r;
@@ -83,7 +67,7 @@ static void InverseOmniCross(ChassisInstance *inst, float vx, float vy, float w,
  *              运动学正解函数实现
  *============================================*/
 
-static ChassisVelCmd_t ForwardMecanumX(ChassisInstance *inst, WheelSpeed_t *wheel)
+ChassisVelCmd_t ForwardMecanumX(ChassisInstance *inst, WheelSpeed_t *wheel)
 {
     ChassisVelCmd_t cmd;
     float r = inst->wheel_radius;
@@ -95,7 +79,7 @@ static ChassisVelCmd_t ForwardMecanumX(ChassisInstance *inst, WheelSpeed_t *whee
     return cmd;
 }
 
-static ChassisVelCmd_t ForwardMecanumO(ChassisInstance *inst, WheelSpeed_t *wheel)
+ChassisVelCmd_t ForwardMecanumO(ChassisInstance *inst, WheelSpeed_t *wheel)
 {
     ChassisVelCmd_t cmd;
     float r = inst->wheel_radius;
@@ -107,7 +91,7 @@ static ChassisVelCmd_t ForwardMecanumO(ChassisInstance *inst, WheelSpeed_t *whee
     return cmd;
 }
 
-static ChassisVelCmd_t ForwardOmniX(ChassisInstance *inst, WheelSpeed_t *wheel)
+ChassisVelCmd_t ForwardOmniX(ChassisInstance *inst, WheelSpeed_t *wheel)
 {
     ChassisVelCmd_t cmd;
     float r = inst->wheel_radius;
@@ -119,7 +103,7 @@ static ChassisVelCmd_t ForwardOmniX(ChassisInstance *inst, WheelSpeed_t *wheel)
     return cmd;
 }
 
-static ChassisVelCmd_t ForwardOmniCross(ChassisInstance *inst, WheelSpeed_t *wheel)
+ChassisVelCmd_t ForwardOmniCross(ChassisInstance *inst, WheelSpeed_t *wheel)
 {
     ChassisVelCmd_t cmd;
     float r = inst->wheel_radius;
