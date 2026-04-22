@@ -1,199 +1,380 @@
+/**
+ * @file bsp_can.c
+ * @brief CAN驱动封装实现
+ *
+ * @note 只负责实例管理和回调分发，不负责硬件初始化参数配置
+ */
+
 #include "bsp_can.h"
-#include "main.h"
-#include "memory.h"
-#include "stdlib.h"
-#include "bsp_dwt.h"
+
+#ifdef BSP_CAN_MODULE_ENABLED
+#if CAN_INSTANCE_NUM > 0
+
+#include "bsp_check.h"
 #include "bsp_log.h"
+#include "string.h"
 
-/* can instance ptrs storage, used for recv callback */
-// 在CAN产生接收中断会遍历数组,选出hcan和rxid与发生中断的实例相同的那个,调用其回调函数
-// @todo: 后续为每个CAN总线单独添加一个can_instance指针数组,提高回调查找的性能
-static CANInstance *can_instance[CAN_MX_REGISTER_CNT] = {NULL};
-static uint8_t idx; // 全局CAN实例索引,每次有新的模块注册会自增
+/*------------- 私有变量 --------------*/
+static uint8_t s_idx = 0;
+static CANInstance *s_can_instance[CAN_INSTANCE_NUM] = {NULL};
 
-/* ----------------two static function called by CANRegister()-------------------- */
+#if BSP_CAN_IP == BSP_CAN_IP_FDCAN
 
-/**
- * @brief 添加过滤器以实现对特定id的报文的接收,会被CANRegister()调用
- *        给CAN添加过滤器后,BxCAN会根据接收到的报文的id进行消息过滤,符合规则的id会被填入FIFO触发中断
- *
- * @note f407的bxCAN有28个过滤器,这里将其配置为前14个过滤器给CAN1使用,后14个被CAN2使用
- *       初始化时,奇数id的模块会被分配到FIFO0,偶数id的模块会被分配到FIFO1
- *       注册到CAN1的模块使用过滤器0-13,CAN2使用过滤器14-27
- *
- * @attention 你不需要完全理解这个函数的作用,因为它主要是用于初始化,在开发过程中不需要关心底层的实现
- *            享受开发的乐趣吧!如果你真的想知道这个函数在干什么,请联系作者或自己查阅资料(请直接查阅官方的reference manual)
- *
- * @param _instance can instance owned by specific module
- */
-static void CANAddFilter(CANInstance *_instance)
+/*------------- FDCAN 私有函数 --------------*/
+
+static uint8_t CANFdcanDlcToLength(uint32_t dlc)
 {
-    CAN_FilterTypeDef can_filter_conf;
-    static uint8_t can1_filter_idx = 0, can2_filter_idx = 14; // 0-13给can1用,14-27给can2用
-
-    can_filter_conf.FilterMode = CAN_FILTERMODE_IDLIST;                                                       // 使用id list模式,即只有将rxid添加到过滤器中才会接收到,其他报文会被过滤
-    can_filter_conf.FilterScale = CAN_FILTERSCALE_16BIT;                                                      // 使用16位id模式,即只有低16位有效
-    can_filter_conf.FilterFIFOAssignment = (_instance->tx_id & 1) ? CAN_RX_FIFO0 : CAN_RX_FIFO1;              // 奇数id的模块会被分配到FIFO0,偶数id的模块会被分配到FIFO1
-    can_filter_conf.SlaveStartFilterBank = 14;                                                                // 从第14个过滤器开始配置从机过滤器(在STM32的BxCAN控制器中CAN2是CAN1的从机)
-    can_filter_conf.FilterIdLow = _instance->rx_id << 5;                                                      // 过滤器寄存器的低16位,因为使用STDID,所以只有低11位有效,高5位要填0
-    can_filter_conf.FilterBank = _instance->can_handle == &hcan1 ? (can1_filter_idx++) : (can2_filter_idx++); // 根据can_handle判断是CAN1还是CAN2,然后自增
-    can_filter_conf.FilterActivation = CAN_FILTER_ENABLE;                                                     // 启用过滤器
-
-    HAL_CAN_ConfigFilter(_instance->can_handle, &can_filter_conf);
+    switch (dlc)
+    {
+    case FDCAN_DLC_BYTES_1:
+        return 1;
+    case FDCAN_DLC_BYTES_2:
+        return 2;
+    case FDCAN_DLC_BYTES_3:
+        return 3;
+    case FDCAN_DLC_BYTES_4:
+        return 4;
+    case FDCAN_DLC_BYTES_5:
+        return 5;
+    case FDCAN_DLC_BYTES_6:
+        return 6;
+    case FDCAN_DLC_BYTES_7:
+        return 7;
+    case FDCAN_DLC_BYTES_8:
+    default:
+        return 8;
+    }
 }
 
-/**
- * @brief 在第一个CAN实例初始化的时候会自动调用此函数,启动CAN服务
- *
- * @note 此函数会启动CAN1和CAN2,开启CAN1和CAN2的FIFO0 & FIFO1溢出通知
- *
- */
-static void CANServiceInit()
+static uint32_t CANLengthToFdcanDlc(uint8_t len)
 {
-    HAL_CAN_Start(&hcan1);
-    HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
-    HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO1_MSG_PENDING);
-    HAL_CAN_Start(&hcan2);
-    HAL_CAN_ActivateNotification(&hcan2, CAN_IT_RX_FIFO0_MSG_PENDING);
-    HAL_CAN_ActivateNotification(&hcan2, CAN_IT_RX_FIFO1_MSG_PENDING);
+    switch (len)
+    {
+    case 1:
+        return FDCAN_DLC_BYTES_1;
+    case 2:
+        return FDCAN_DLC_BYTES_2;
+    case 3:
+        return FDCAN_DLC_BYTES_3;
+    case 4:
+        return FDCAN_DLC_BYTES_4;
+    case 5:
+        return FDCAN_DLC_BYTES_5;
+    case 6:
+        return FDCAN_DLC_BYTES_6;
+    case 7:
+        return FDCAN_DLC_BYTES_7;
+    case 8:
+    default:
+        return FDCAN_DLC_BYTES_8;
+    }
 }
 
-/* ----------------------- two extern callable function -----------------------*/
-
-CANInstance *CANRegister(CAN_Init_Config_s *config)
+static HAL_StatusTypeDef CANFdcanStartIfNeeded(FDCAN_HandleTypeDef *handle)
 {
-    if (!idx)
+    for (uint8_t i = 0; i < s_idx; i++)
     {
-        CANServiceInit(); // 第一次注册,先进行硬件初始化
-        LOGINFO("[bsp_can] CAN Service Init");
-    }
-    if (idx >= CAN_MX_REGISTER_CNT) // 超过最大实例数
-    {
-        while (1)
-            LOGERROR("[bsp_can] CAN instance exceeded MAX num, consider balance the load of CAN bus");
-    }
-    for (size_t i = 0; i < idx; i++)
-    { // 重复注册 | id重复
-        if (can_instance[i]->rx_id == config->rx_id && can_instance[i]->can_handle == config->can_handle)
+        if (s_can_instance[i]->map.handle == handle)
         {
-            while (1)
-                LOGERROR("[}bsp_can] CAN id crash ,tx [%d] or rx [%d] already registered", &config->tx_id, &config->rx_id);
+            return HAL_OK;
         }
     }
-    
-    CANInstance *instance = (CANInstance *)malloc(sizeof(CANInstance)); // 分配空间
-    memset(instance, 0, sizeof(CANInstance));                           // 分配的空间未必是0,所以要先清空
-    // 进行发送报文的配置
-    instance->txconf.StdId = config->tx_id; // 发送id
-    instance->txconf.IDE = CAN_ID_STD;      // 使用标准id,扩展id则使用CAN_ID_EXT(目前没有需求)
-    instance->txconf.RTR = CAN_RTR_DATA;    // 发送数据帧
-    instance->txconf.DLC = 0x08;            // 默认发送长度为8
-    // 设置回调函数和接收发送id
-    instance->can_handle = config->can_handle;
-    instance->tx_id = config->tx_id; // 好像没用,可以删掉
-    instance->rx_id = config->rx_id;
-    instance->can_module_callback = config->can_module_callback;
-    instance->id = config->id;
 
-    CANAddFilter(instance);         // 添加CAN过滤器规则
-    can_instance[idx++] = instance; // 将实例保存到can_instance中
+    if (HAL_FDCAN_ConfigGlobalFilter(handle, FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_REJECT, FDCAN_REJECT_REMOTE, FDCAN_REJECT_REMOTE) != HAL_OK)
+    {
+        return HAL_ERROR;
+    }
 
-    return instance; // 返回can实例指针
+    if (HAL_FDCAN_Start(handle) != HAL_OK)
+    {
+        return HAL_ERROR;
+    }
+
+    if (HAL_FDCAN_ActivateNotification(handle, FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_RX_FIFO1_NEW_MESSAGE, 0) != HAL_OK)
+    {
+        return HAL_ERROR;
+    }
+
+    return HAL_OK;
 }
 
-/* @todo 目前似乎封装过度,应该添加一个指向tx_buff的指针,tx_buff不应该由CAN instance保存 */
-/* 如果让CANinstance保存txbuff,会增加一次复制的开销 */
-uint8_t CANTransmit(CANInstance *_instance, float timeout)
+static void CANDispatchFdcanMessage(FDCAN_HandleTypeDef *hfdcan, uint32_t fifo)
 {
-    static uint32_t busy_count;
-    static volatile float wait_time __attribute__((unused)); // for cancel warning
-    float dwt_start = DWT_GetTimeline_ms();
-    while (HAL_CAN_GetTxMailboxesFreeLevel(_instance->can_handle) == 0) // 等待邮箱空闲
+    FDCAN_RxHeaderTypeDef rx_header;
+    uint8_t rx_data[8];
+
+    while (HAL_FDCAN_GetRxFifoFillLevel(hfdcan, fifo) > 0U)
     {
-        if (DWT_GetTimeline_ms() - dwt_start > timeout) // 超时
+        if (HAL_FDCAN_GetRxMessage(hfdcan, fifo, &rx_header, rx_data) != HAL_OK)
         {
-            LOGWARNING("[bsp_can] CAN MAILbox full! failed to add msg to mailbox. Cnt [%d]", busy_count);
-            busy_count++;
-            return 0;
+            return;
         }
-    }
-    wait_time = DWT_GetTimeline_ms() - dwt_start;
-    // tx_mailbox会保存实际填入了这一帧消息的邮箱,但是知道是哪个邮箱发的似乎也没啥用
-    if (HAL_CAN_AddTxMessage(_instance->can_handle, &_instance->txconf, _instance->tx_buff, &_instance->tx_mailbox))
-    {
-        LOGWARNING("[bsp_can] CAN bus BUS! cnt:%d", busy_count);
-        busy_count++;
-        return 0;
-    }
-    return 1; // 发送成功
-}
 
-void CANSetDLC(CANInstance *_instance, uint8_t length)
-{
-    // 发送长度错误!检查调用参数是否出错,或出现野指针/越界访问
-    if (length > 8 || length == 0) // 安全检查
-        while (1)
-            LOGERROR("[bsp_can] CAN DLC error! check your code or wild pointer");
-    _instance->txconf.DLC = length;
-}
-
-/* -----------------------belows are callback definitions--------------------------*/
-
-/**
- * @brief 此函数会被下面两个函数调用,用于处理FIFO0和FIFO1溢出中断(说明收到了新的数据)
- *        所有的实例都会被遍历,找到can_handle和rx_id相等的实例时,调用该实例的回调函数
- *
- * @param _hcan
- * @param fifox passed to HAL_CAN_GetRxMessage() to get mesg from a specific fifo
- */
-static void CANFIFOxCallback(CAN_HandleTypeDef *_hcan, uint32_t fifox)
-{
-    static CAN_RxHeaderTypeDef rxconf; // 同上
-    uint8_t can_rx_buff[8];
-    while (HAL_CAN_GetRxFifoFillLevel(_hcan, fifox)) // FIFO不为空,有可能在其他中断时有多帧数据进入
-    {
-        HAL_CAN_GetRxMessage(_hcan, fifox, &rxconf, can_rx_buff); // 从FIFO中获取数据
-        for (size_t i = 0; i < idx; ++i)
-        { // 两者相等说明这是要找的实例
-            if (_hcan == can_instance[i]->can_handle && rxconf.StdId == can_instance[i]->rx_id)
+        for (uint8_t i = 0; i < s_idx; i++)
+        {
+            CANInstance *instance = s_can_instance[i];
+            if (instance->map.handle == hfdcan && instance->rx_id == rx_header.Identifier)
             {
-                if (can_instance[i]->can_module_callback != NULL) // 回调函数不为空就调用
+                uint8_t rx_len = CANFdcanDlcToLength(rx_header.DataLength);
+                if (rx_len > sizeof(instance->rx_buff))
                 {
-                    can_instance[i]->rx_len = rxconf.DLC;                      // 保存接收到的数据长度
-                    memcpy(can_instance[i]->rx_buff, can_rx_buff, rxconf.DLC); // 消息拷贝到对应实例
-                    can_instance[i]->can_module_callback(can_instance[i]);     // 触发回调进行数据解析和处理
+                    rx_len = sizeof(instance->rx_buff);
                 }
-                return;
+
+                instance->rx_len = rx_len;
+                memcpy(instance->rx_buff, rx_data, rx_len);
+
+                if (instance->rx_callback != NULL)
+                {
+                    instance->rx_callback(instance);
+                }
+                break;
             }
         }
     }
 }
 
-/**
- * @brief 注意,STM32的两个CAN设备共享两个FIFO
- * 下面两个函数是HAL库中的回调函数,他们被HAL声明为__weak,这里对他们进行重载(重写)
- * 当FIFO0或FIFO1溢出时会调用这两个函数
- */
-// 下面的函数会调用CANFIFOxCallback()来进一步处理来自特定CAN设备的消息
+#else
 
-/**
- * @brief rx fifo callback. Once FIFO_0 is full,this func would be called
- *
- * @param hcan CAN handle indicate which device the oddest mesg in FIFO_0 comes from
- */
+/*------------- BxCAN 私有函数 --------------*/
+
+static uint8_t s_can1_filter_idx = 0;
+static uint8_t s_can2_filter_idx = 14;
+
+static HAL_StatusTypeDef CANBxcanAddFilter(CANInstance *instance)
+{
+    CAN_FilterTypeDef filter = {0};
+    uint8_t filter_bank = 0;
+
+    if (instance->map.handle->Instance == CAN1)
+    {
+        BSP_RETURN_IF_TRUE(s_can1_filter_idx >= 14, HAL_ERROR);
+        filter_bank = s_can1_filter_idx++;
+    }
+    else if (instance->map.handle->Instance == CAN2)
+    {
+        BSP_RETURN_IF_TRUE(s_can2_filter_idx >= 28, HAL_ERROR);
+        filter_bank = s_can2_filter_idx++;
+    }
+    else
+    {
+        return HAL_ERROR;
+    }
+
+    filter.FilterMode = CAN_FILTERMODE_IDLIST;
+    filter.FilterScale = CAN_FILTERSCALE_16BIT;
+    filter.FilterFIFOAssignment = (instance->rx_id & 1U) ? CAN_RX_FIFO0 : CAN_RX_FIFO1;
+    filter.FilterIdLow = (instance->rx_id & 0x7FFU) << 5;
+    filter.FilterBank = filter_bank;
+    filter.FilterActivation = CAN_FILTER_ENABLE;
+    filter.SlaveStartFilterBank = 14;
+
+    return HAL_CAN_ConfigFilter(instance->map.handle, &filter);
+}
+
+static HAL_StatusTypeDef CANBxcanStartIfNeeded(CAN_HandleTypeDef *handle)
+{
+    for (uint8_t i = 0; i < s_idx; i++)
+    {
+        if (s_can_instance[i]->map.handle == handle)
+        {
+            return HAL_OK;
+        }
+    }
+
+    if (HAL_CAN_Start(handle) != HAL_OK)
+    {
+        return HAL_ERROR;
+    }
+
+    if (HAL_CAN_ActivateNotification(handle, CAN_IT_RX_FIFO0_MSG_PENDING | CAN_IT_RX_FIFO1_MSG_PENDING) != HAL_OK)
+    {
+        return HAL_ERROR;
+    }
+
+    return HAL_OK;
+}
+
+static void CANDispatchBxcanMessage(CAN_HandleTypeDef *hcan, uint32_t fifo)
+{
+    CAN_RxHeaderTypeDef rx_header;
+    uint8_t rx_data[8];
+
+    while (HAL_CAN_GetRxFifoFillLevel(hcan, fifo) > 0U)
+    {
+        if (HAL_CAN_GetRxMessage(hcan, fifo, &rx_header, rx_data) != HAL_OK)
+        {
+            return;
+        }
+
+        for (uint8_t i = 0; i < s_idx; i++)
+        {
+            CANInstance *instance = s_can_instance[i];
+            if (instance->map.handle == hcan && instance->rx_id == rx_header.StdId)
+            {
+                uint8_t rx_len = (rx_header.DLC <= 8U) ? (uint8_t)rx_header.DLC : 8U;
+                instance->rx_len = rx_len;
+                memcpy(instance->rx_buff, rx_data, rx_len);
+
+                if (instance->rx_callback != NULL)
+                {
+                    instance->rx_callback(instance);
+                }
+                break;
+            }
+        }
+    }
+}
+
+#endif
+
+/*------------- 外部接口实现 --------------*/
+
+int8_t CANRegister(CANInstance *instance)
+{
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_can] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(s_idx >= CAN_INSTANCE_NUM, -1, LOGERROR("[bsp_can] Exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->can_e >= CAN_NUM_MAX, -1, LOGERROR("[bsp_can] can_e out of range!"));
+
+    instance->map = can_map[instance->can_e];
+    BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, -1, LOGERROR("[bsp_can] CAN handle is NULL, check bsp_cfg mapping!"));
+
+    for (uint8_t i = 0; i < s_idx; i++)
+    {
+        if (s_can_instance[i]->map.handle == instance->map.handle && s_can_instance[i]->rx_id == instance->rx_id)
+        {
+            LOGERROR("[bsp_can] Duplicate rx_id registration on same CAN handle! rx_id=0x%lX", instance->rx_id);
+            return -1;
+        }
+    }
+
+#if BSP_CAN_IP == BSP_CAN_IP_FDCAN
+    instance->tx_header.Identifier = instance->tx_id;
+    instance->tx_header.IdType = FDCAN_STANDARD_ID;
+    instance->tx_header.TxFrameType = FDCAN_DATA_FRAME;
+    instance->tx_header.DataLength = FDCAN_DLC_BYTES_8;
+    instance->tx_header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+    instance->tx_header.BitRateSwitch = FDCAN_BRS_OFF;
+    instance->tx_header.FDFormat = FDCAN_CLASSIC_CAN;
+    instance->tx_header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+    instance->tx_header.MessageMarker = 0;
+
+    BSP_RETURN_IF_TRUE_LOG(CANFdcanStartIfNeeded(instance->map.handle) != HAL_OK, -1, LOGERROR("[bsp_can] FDCAN start/notification init failed! can_e=%d", instance->can_e));
+#else
+    instance->tx_header.StdId = instance->tx_id;
+    instance->tx_header.IDE = CAN_ID_STD;
+    instance->tx_header.RTR = CAN_RTR_DATA;
+    instance->tx_header.DLC = 8;
+
+    BSP_RETURN_IF_TRUE_LOG(CANBxcanAddFilter(instance) != HAL_OK, -1, LOGERROR("[bsp_can] CAN filter config failed! can_e=%d rx_id=0x%lX", instance->can_e, instance->rx_id));
+
+    BSP_RETURN_IF_TRUE_LOG(CANBxcanStartIfNeeded(instance->map.handle) != HAL_OK, -1, LOGERROR("[bsp_can] CAN start/notification init failed! can_e=%d", instance->can_e));
+#endif
+
+    s_can_instance[s_idx++] = instance;
+    LOGINFO("[bsp_can] CAN instance registered, idx=%d", s_idx - 1);
+    return 0;
+}
+
+void CANSetDLC(CANInstance *instance, uint8_t length)
+{
+    if (instance == NULL)
+    {
+        LOGWARNING("[bsp_can] CANSetDLC: instance is NULL!");
+        return;
+    }
+
+    if (length == 0U || length > 8U)
+    {
+        LOGWARNING("[bsp_can] CANSetDLC: invalid length=%d, only 1~8 is allowed", length);
+        return;
+    }
+
+#if BSP_CAN_IP == BSP_CAN_IP_FDCAN
+    instance->tx_header.DataLength = CANLengthToFdcanDlc(length);
+#else
+    instance->tx_header.DLC = length;
+#endif
+}
+
+uint8_t CANTransmit(CANInstance *instance, uint32_t timeout_ms)
+{
+    if (instance == NULL || instance->map.handle == NULL)
+    {
+        LOGWARNING("[bsp_can] CANTransmit: invalid instance");
+        return 0;
+    }
+
+    uint32_t start_tick = HAL_GetTick();
+
+#if BSP_CAN_IP == BSP_CAN_IP_FDCAN
+    while (HAL_FDCAN_GetTxFifoFreeLevel(instance->map.handle) == 0U)
+    {
+        if ((HAL_GetTick() - start_tick) > timeout_ms)
+        {
+            LOGWARNING("[bsp_can] FDCAN Tx FIFO timeout");
+            return 0;
+        }
+    }
+
+    if (HAL_FDCAN_AddMessageToTxFifoQ(instance->map.handle, &instance->tx_header, instance->tx_buff) != HAL_OK)
+    {
+        LOGWARNING("[bsp_can] FDCAN add tx message failed");
+        return 0;
+    }
+#else
+    while (HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle) == 0U)
+    {
+        if ((HAL_GetTick() - start_tick) > timeout_ms)
+        {
+            LOGWARNING("[bsp_can] CAN mailbox timeout");
+            return 0;
+        }
+    }
+
+    if (HAL_CAN_AddTxMessage(instance->map.handle, &instance->tx_header, instance->tx_buff, &instance->tx_mailbox) != HAL_OK)
+    {
+        LOGWARNING("[bsp_can] CAN add tx message failed");
+        return 0;
+    }
+#endif
+
+    return 1;
+}
+
+/*------------- HAL回调函数重写 --------------*/
+
+#if BSP_CAN_IP == BSP_CAN_IP_FDCAN
+
+void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
+{
+    if ((RxFifo0ITs & FDCAN_IT_RX_FIFO0_NEW_MESSAGE) != 0U)
+    {
+        CANDispatchFdcanMessage(hfdcan, FDCAN_RX_FIFO0);
+    }
+}
+
+void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
+{
+    if ((RxFifo1ITs & FDCAN_IT_RX_FIFO1_NEW_MESSAGE) != 0U)
+    {
+        CANDispatchFdcanMessage(hfdcan, FDCAN_RX_FIFO1);
+    }
+}
+
+#else
+
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
-    CANFIFOxCallback(hcan, CAN_RX_FIFO0); // 调用我们自己写的函数来处理消息
+    CANDispatchBxcanMessage(hcan, CAN_RX_FIFO0);
 }
 
-/**
- * @brief rx fifo callback. Once FIFO_1 is full,this func would be called
- *
- * @param hcan CAN handle indicate which device the oddest mesg in FIFO_1 comes from
- */
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
-    CANFIFOxCallback(hcan, CAN_RX_FIFO1); // 调用我们自己写的函数来处理消息
+    CANDispatchBxcanMessage(hcan, CAN_RX_FIFO1);
 }
 
-// 人工智能会毁灭人类吗？请在补全回答
+#endif
+
+#endif
+#endif
