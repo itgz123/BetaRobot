@@ -40,7 +40,8 @@
                 "${workspaceFolder}/drv/drv_motor",
                 "${workspaceFolder}/drv/drv_motor/drv_dcmotor",
                 "${workspaceFolder}/drv/drv_pid",
-                "${workspaceFolder}/drv/drv_sbus"
+                "${workspaceFolder}/drv/drv_sbus",
+                "${workspaceFolder}/bsp/bsp_can"
             ],
             "defines": [
                 "USE_HAL_DRIVER",
@@ -90,7 +91,8 @@
                 "${workspaceFolder}/drv/drv_motor",
                 "${workspaceFolder}/drv/drv_motor/drv_dcmotor",
                 "${workspaceFolder}/drv/drv_pid",
-                "${workspaceFolder}/drv/drv_sbus"
+                "${workspaceFolder}/drv/drv_sbus",
+                "${workspaceFolder}/bsp/bsp_can"
             ],
             "defines": [
                 "USE_HAL_DRIVER",
@@ -142,7 +144,8 @@
                 "${workspaceFolder}/drv/drv_motor",
                 "${workspaceFolder}/drv/drv_motor/drv_dcmotor",
                 "${workspaceFolder}/drv/drv_pid",
-                "${workspaceFolder}/drv/drv_sbus"
+                "${workspaceFolder}/drv/drv_sbus",
+                "${workspaceFolder}/bsp/bsp_can"
             ],
             "defines": [
                 "USE_HAL_DRIVER",
@@ -193,7 +196,8 @@
                 "${workspaceFolder}/drv/drv_motor",
                 "${workspaceFolder}/drv/drv_motor/drv_dcmotor",
                 "${workspaceFolder}/drv/drv_pid",
-                "${workspaceFolder}/drv/drv_sbus"
+                "${workspaceFolder}/drv/drv_sbus",
+                "${workspaceFolder}/bsp/bsp_can"
             ],
             "defines": [
                 "USE_HAL_DRIVER",
