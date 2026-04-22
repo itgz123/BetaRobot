@@ -20,6 +20,9 @@ static CANInstance *s_can_instance[CAN_INSTANCE_NUM] = {NULL};
 
 #if BSP_CAN_IP == BSP_CAN_IP_FDCAN
 
+/*------------- FDCAN 过滤器索引 --------------*/
+static uint8_t s_fdcan_filter_idx[CAN_NUM_MAX] = {0};
+
 /*------------- FDCAN 私有函数 --------------*/
 
 static uint8_t CANFdcanDlcToLength(uint32_t dlc)
@@ -70,6 +73,25 @@ static uint32_t CANLengthToFdcanDlc(uint8_t len)
     }
 }
 
+static HAL_StatusTypeDef CANFdcanAddFilter(CANInstance *instance)
+{
+    if (instance->can_e >= CAN_NUM_MAX)
+    {
+        return HAL_ERROR;
+    }
+
+    FDCAN_FilterTypeDef filter = {0};
+    filter.FilterIndex = s_fdcan_filter_idx[instance->can_e]++;
+    filter.FilterType = FDCAN_FILTER_DUAL;
+    filter.FilterConfig = (instance->rx_id & 1U) ? FDCAN_FILTER_TO_RXFIFO0 : FDCAN_FILTER_TO_RXFIFO1;
+    filter.FilterID1 = instance->rx_id;
+    filter.FilterID2 = instance->rx_id;
+    filter.IdType = FDCAN_STANDARD_ID;
+    filter.IsCalibrationMsg = 0;
+
+    return HAL_FDCAN_ConfigFilter(instance->map.handle, &filter);
+}
+
 static HAL_StatusTypeDef CANFdcanStartIfNeeded(FDCAN_HandleTypeDef *handle)
 {
     for (uint8_t i = 0; i < s_idx; i++)
@@ -80,7 +102,7 @@ static HAL_StatusTypeDef CANFdcanStartIfNeeded(FDCAN_HandleTypeDef *handle)
         }
     }
 
-    if (HAL_FDCAN_ConfigGlobalFilter(handle, FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_REJECT, FDCAN_REJECT_REMOTE, FDCAN_REJECT_REMOTE) != HAL_OK)
+    if (HAL_FDCAN_ConfigGlobalFilter(handle, FDCAN_REJECT, FDCAN_REJECT, FDCAN_REJECT_REMOTE, FDCAN_REJECT_REMOTE) != HAL_OK)
     {
         return HAL_ERROR;
     }
@@ -258,6 +280,8 @@ int8_t CANRegister(CANInstance *instance)
     instance->tx_header.FDFormat = FDCAN_CLASSIC_CAN;
     instance->tx_header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
     instance->tx_header.MessageMarker = 0;
+
+    BSP_RETURN_IF_TRUE_LOG(CANFdcanAddFilter(instance) != HAL_OK, -1, LOGERROR("[bsp_can] FDCAN filter config failed! can_e=%d rx_id=0x%lX", instance->can_e, instance->rx_id));
 
     BSP_RETURN_IF_TRUE_LOG(CANFdcanStartIfNeeded(instance->map.handle) != HAL_OK, -1, LOGERROR("[bsp_can] FDCAN start/notification init failed! can_e=%d", instance->can_e));
 #else
