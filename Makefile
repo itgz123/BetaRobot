@@ -127,6 +127,7 @@ $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_sin_f32.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c \
 drv/drv_bmi088/drv_bmi088.c \
 app/app_sensor/app_sensor.c \
+bsp/bsp_adc/bsp_can.c \
 
 # arm_atan2_f32.c 仅在 CMSIS-DSP V1.9.0+ 中存在
 # DJI_A 使用 V1.10.0，支持此文件
@@ -180,6 +181,7 @@ drv/drv_motor/drv_dcmotor \
 drv/drv_pid \
 drv/drv_sbus \
 app/app_sensor
+bsp/bsp_can \
 
 # 添加 -I 前缀
 C_INCLUDES += $(addprefix -I,$(ALL_DIRS))
