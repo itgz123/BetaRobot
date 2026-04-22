@@ -1,68 +1,92 @@
-#ifndef BSP_CAN_H
-#define BSP_CAN_H
-
-#include <stdint.h>
-#include "can.h"
-
-// 最多能够支持的CAN设备数
-#define CAN_MX_REGISTER_CNT 16     // 这个数量取决于CAN总线的负载
-#define MX_CAN_FILTER_CNT (2 * 14) // 最多可以使用的CAN过滤器数量,目前远不会用到这么多
-#define DEVICE_CAN_CNT 2           // 根据板子设定,F407IG有CAN1,CAN2,因此为2;F334只有一个,则设为1
-// 如果只有1个CAN,还需要把bsp_can.c中所有的hcan2变量改为hcan1(别担心,主要是总线和FIFO的负载均衡,不影响功能)
-
-/* can instance typedef, every module registered to CAN should have this variable */
-#pragma pack(1)
-typedef struct _
-{
-    CAN_HandleTypeDef *can_handle; // can句柄
-    CAN_TxHeaderTypeDef txconf;    // CAN报文发送配置
-    uint32_t tx_id;                // 发送id
-    uint32_t tx_mailbox;           // CAN消息填入的邮箱号
-    uint8_t tx_buff[8];            // 发送缓存,发送消息长度可以通过CANSetDLC()设定,最大为8
-    uint8_t rx_buff[8];            // 接收缓存,最大消息长度为8
-    uint32_t rx_id;                // 接收id
-    uint8_t rx_len;                // 接收长度,可能为0-8
-    // 接收的回调函数,用于解析接收到的数据
-    void (*can_module_callback)(struct _ *); // callback needs an instance to tell among registered ones
-    void *id;                                // 使用can外设的模块指针(即id指向的模块拥有此can实例,是父子关系)
-} CANInstance;
-#pragma pack()
-
-/* CAN实例初始化结构体,将此结构体指针传入注册函数 */
-typedef struct
-{
-    CAN_HandleTypeDef *can_handle;              // can句柄
-    uint32_t tx_id;                             // 发送id
-    uint32_t rx_id;                             // 接收id
-    void (*can_module_callback)(CANInstance *); // 处理接收数据的回调函数
-    void *id;                                   // 拥有can实例的模块地址,用于区分不同的模块(如果有需要的话),如果不需要可以不传入
-} CAN_Init_Config_s;
-
 /**
- * @brief Register a module to CAN service,remember to call this before using a CAN device
- *        注册(初始化)一个can实例,需要传入初始化配置的指针.
- * @param config init config
- * @return CANInstance* can instance owned by module
- */
-CANInstance *CANRegister(CAN_Init_Config_s *config);
-
-/**
- * @brief 修改CAN发送报文的数据帧长度;注意最大长度为8,在没有进行修改的时候,默认长度为8
+ * @file bsp_can.h
+ * @brief CAN驱动封装，提供实例管理和回调分发功能
  *
- * @param _instance 要修改长度的can实例
- * @param length    设定长度
+ * @note 硬件配置（波特率/滤波器容量/中断/DMA/FD模式等）由 CubeMX 负责，BSP 层只管理实例
  */
-void CANSetDLC(CANInstance *_instance, uint8_t length);
+
+#ifndef __BSP_CAN_H
+#define __BSP_CAN_H
+
+#include "bsp_cfg.h"
+
+#ifdef BSP_CAN_MODULE_ENABLED
+
+#include "main.h"
+#include "stdint.h"
+
+/*------------- 类型定义 --------------*/
 
 /**
- * @brief transmit mesg through CAN device,通过can实例发送消息
- *        发送前需要向CAN实例的tx_buff写入发送数据
- * 
- * @attention 超时时间不应该超过调用此函数的任务的周期,否则会导致任务阻塞
- * 
- * @param timeout 超时时间,单位为ms;后续改为us,获得更精确的控制
- * @param _instance* can instance owned by module
+ * @brief CAN实例结构体
  */
-uint8_t CANTransmit(CANInstance *_instance,float timeout);
-
+typedef struct CANInstance
+{
+    void *parent;                              // 父实例指针（由 DRV 层设置）
+    BoardCAN_e can_e;                          // 板载CAN枚举（注册时用于查找映射）
+    CAN_Map_t map;                             // CAN映射（注册时自动填充）
+    uint32_t tx_id;                            // 发送标准ID
+    uint32_t rx_id;                            // 接收标准ID（软件分发匹配）
+    uint8_t tx_buff[8];                        // 发送缓存
+    uint8_t rx_buff[8];                        // 接收缓存
+    uint8_t rx_len;                            // 接收长度（字节）
+    void (*rx_callback)(struct CANInstance *); // 接收完成回调
+#if BSP_CAN_IP == BSP_CAN_IP_FDCAN
+    FDCAN_TxHeaderTypeDef tx_header; // FDCAN发送头
+#else
+    CAN_TxHeaderTypeDef tx_header; // CAN发送头
+    uint32_t tx_mailbox;           // BxCAN发送邮箱索引
 #endif
+} CANInstance;
+
+/*------------- 实例定义宏 --------------*/
+
+/**
+ * @brief 静态定义CAN实例
+ * @param name    实例名称
+ * @param can_idx 板载CAN枚举（BoardCAN_e）
+ * @param txid    发送标准ID
+ * @param rxid    接收标准ID
+ * @param cb      接收回调函数（可为NULL）
+ */
+#define CAN_INSTANCE_DEF(name, can_idx, txid, rxid, cb) \
+    static CANInstance name = {                         \
+        .parent = NULL,                                 \
+        .can_e = can_idx,                               \
+        .map = {0},                                     \
+        .tx_id = txid,                                  \
+        .rx_id = rxid,                                  \
+        .tx_buff = {0},                                 \
+        .rx_buff = {0},                                 \
+        .rx_len = 0,                                    \
+        .rx_callback = cb}
+
+/*------------- 外部接口声明 --------------*/
+
+/**
+ * @brief 注册CAN实例
+ * @param instance CAN实例指针（需先通过宏定义）
+ * @retval 0 成功
+ * @retval -1 失败（实例数超过上限、参数非法或重复注册）
+ */
+int8_t CANRegister(CANInstance *instance);
+
+/**
+ * @brief 设置发送DLC长度（1~8）
+ * @param instance CAN实例
+ * @param length 数据长度（字节）
+ */
+void CANSetDLC(CANInstance *instance, uint8_t length);
+
+/**
+ * @brief 发送CAN消息（发送数据来自 instance->tx_buff）
+ * @param instance CAN实例
+ * @param timeout_ms 超时时间（毫秒）
+ * @retval 1 发送成功
+ * @retval 0 发送失败或超时
+ */
+uint8_t CANTransmit(CANInstance *instance, uint32_t timeout_ms);
+
+#endif // BSP_CAN_MODULE_ENABLED
+
+#endif /* __BSP_CAN_H */

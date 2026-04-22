@@ -50,9 +50,14 @@
 #define CORTEX_M4 0
 #define CORTEX_M7 1
 
+// CAN 控制器类型
+#define BSP_CAN_IP_BXCAN 0
+#define BSP_CAN_IP_FDCAN 1
+
 #if DEVELOPMENT_BOARD == STM32F407VET6
 #define CPU_FREQ_MHZ 168   // CPU频率 MHz
 #define CPU_CORE CORTEX_M4 // Cortex-M4 内核
+#define BSP_CAN_IP BSP_CAN_IP_BXCAN
 #define HAS_FPU 1          // Cortex-M4F 单精度浮点
 #define HAS_DSP 1          // DSP指令集
 #define HAS_CORDIC 0       // 无CORDIC协处理器
@@ -65,6 +70,7 @@
 #if DEVELOPMENT_BOARD == DM_MC02
 #define CPU_FREQ_MHZ 480   // CPU频率 MHz
 #define CPU_CORE CORTEX_M7 // Cortex-M7 内核
+#define BSP_CAN_IP BSP_CAN_IP_FDCAN
 #define HAS_FPU 1          // Cortex-M7 双精度浮点
 #define HAS_DSP 1          // DSP指令集
 #define HAS_CORDIC 1       // CORDIC协处理器
@@ -77,6 +83,7 @@
 #if DEVELOPMENT_BOARD == DJI_A
 #define CPU_FREQ_MHZ 180   // CPU频率 MHz
 #define CPU_CORE CORTEX_M4 // Cortex-M4 内核
+#define BSP_CAN_IP BSP_CAN_IP_BXCAN
 #define HAS_FPU 1          // Cortex-M4F 单精度浮点
 #define HAS_DSP 1          // DSP指令集
 #define HAS_CORDIC 0       // 无CORDIC协处理器
@@ -89,6 +96,7 @@
 #if DEVELOPMENT_BOARD == DJI_C
 #define CPU_FREQ_MHZ 168   // CPU频率 MHz
 #define CPU_CORE CORTEX_M4 // Cortex-M4 内核
+#define BSP_CAN_IP BSP_CAN_IP_BXCAN
 #define HAS_FPU 1          // Cortex-M4F 单精度浮点
 #define HAS_DSP 1          // DSP指令集
 #define HAS_CORDIC 0       // 无CORDIC协处理器
@@ -698,7 +706,7 @@ extern const UART_Map_t uart_map[];
  */
 typedef struct
 {
-#if DEVELOPMENT_BOARD == DM_MC02
+#if BSP_CAN_IP == BSP_CAN_IP_FDCAN
     FDCAN_HandleTypeDef *handle; // CAN句柄
 #else
     CAN_HandleTypeDef *handle; // CAN句柄
