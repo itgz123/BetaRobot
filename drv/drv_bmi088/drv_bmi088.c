@@ -186,6 +186,12 @@ int8_t BMI088Register(BMI088Instance *inst)
         return -1;
     }
 
+    // 某些板级默认将 CS 拉低，上电后先释放两个片选，避免总线冲突。
+    // 同时给加速度计一个 CS 上升沿，触发其由 I2C 切换到 SPI。
+    GPIOSet(&inst->cs_acc);
+    GPIOSet(&inst->cs_gyro);
+    DWT_Delay(BMI088_DELAY_MS);
+
     if (GPIORegister(&inst->int_acc) != 0)
     {
         LOGERROR("[drv_bmi088] int_acc register failed");

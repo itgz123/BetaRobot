@@ -93,21 +93,25 @@ int8_t GPIORegister(GPIOInstance *instance)
 
     BSP_RETURN_IF_TRUE_LOG(instance->map.port == NULL || !GPIOIsSingleBitPin(instance->map.pin), -1, LOGERROR("[bsp_gpio] Invalid GPIO map, check bsp_cfg mapping!"));
 
-    // EXTI 回调只有 GPIO_Pin 参数，要求板级不复用同一 pin 位
-    for (uint8_t i = 0; i < s_idx; i++)
+    uint8_t pin_idx = GPIOPinToIndex(instance->map.pin);
+    BSP_RETURN_IF_TRUE_LOG(pin_idx >= 16, -1, LOGERROR("[bsp_gpio] Invalid pin index!"));
+
+    // 仅对使用 EXTI 回调的实例做冲突检查
+    // EXTI 回调只有 GPIO_Pin 参数，因此同一 pin 位只能绑定一个回调
+    if (instance->callback != NULL)
     {
-        if (s_gpio_instance[i]->map.pin == instance->map.pin)
+        if (s_exti_pin_instance[pin_idx] != NULL)
         {
             LOGERROR("[bsp_gpio] Duplicate EXTI pin registration is not allowed!");
             return -1;
         }
     }
 
-    uint8_t pin_idx = GPIOPinToIndex(instance->map.pin);
-    BSP_RETURN_IF_TRUE_LOG(pin_idx >= 16, -1, LOGERROR("[bsp_gpio] Invalid pin index!"));
-
     s_gpio_instance[s_idx++] = instance;
-    s_exti_pin_instance[pin_idx] = instance;
+    if (instance->callback != NULL)
+    {
+        s_exti_pin_instance[pin_idx] = instance;
+    }
     LOGINFO("[bsp_gpio] GPIO instance registered, idx=%d", s_idx - 1);
     return 0;
 }
