@@ -155,6 +155,21 @@ struct ChassisInstance
 void ChassisInit(ChassisInstance *inst, MotorInstance *m1, MotorInstance *m2, MotorInstance *m3, MotorInstance *m4, float wheel_radius, float wheelbase_a, float wheelbase_b, float chassis_l, float cross_a, float cross_b, ChassisType_e type, float max_speed, float max_w);
 
 /*============================================
+ *        可以不创建实例直接调用函数计算
+ *============================================*/
+// 各底盘类型的运动学逆解函数
+void InverseMecanumX(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out);
+void InverseMecanumO(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out);
+void InverseOmniX(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out);
+void InverseOmniCross(ChassisInstance *inst, float vx, float vy, float w, WheelSpeed_t *out);
+
+// 各底盘类型的运动学正解函数
+ChassisVelCmd_t ForwardMecanumX(ChassisInstance *inst, WheelSpeed_t *wheel);
+ChassisVelCmd_t ForwardMecanumO(ChassisInstance *inst, WheelSpeed_t *wheel);
+ChassisVelCmd_t ForwardOmniX(ChassisInstance *inst, WheelSpeed_t *wheel);
+ChassisVelCmd_t ForwardOmniCross(ChassisInstance *inst, WheelSpeed_t *wheel);
+
+/*============================================
  *              控制函数声明
  *============================================*/
 
