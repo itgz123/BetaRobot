@@ -11,6 +11,7 @@
 #if CAN_INSTANCE_NUM > 0
 
 #include "bsp_check.h"
+#include "bsp_dwt.h"
 #include "bsp_log.h"
 #include "string.h"
 
@@ -21,6 +22,7 @@ static CANInstance *s_can_instance[CAN_INSTANCE_NUM] = {NULL};
 #if BSP_CAN_IP == BSP_CAN_IP_FDCAN
 
 /*------------- FDCAN 过滤器索引 --------------*/
+#define FDCAN_FILTER_MAX 16 // FDCAN标准过滤器数量限制为128个（0-127）
 static uint8_t s_fdcan_filter_idx[CAN_NUM_MAX] = {0};
 
 /*------------- FDCAN 私有函数 --------------*/
@@ -80,14 +82,35 @@ static HAL_StatusTypeDef CANFdcanAddFilter(CANInstance *instance)
         return HAL_ERROR;
     }
 
+    // 检查过滤器索引是否超出上限
+    if (s_fdcan_filter_idx[instance->can_e] >= FDCAN_FILTER_MAX)
+    {
+        LOGERROR("[bsp_can] FDCAN filter index overflow! max=%d, current=%d", FDCAN_FILTER_MAX, s_fdcan_filter_idx[instance->can_e]);
+        return HAL_ERROR;
+    }
+
     FDCAN_FilterTypeDef filter = {0};
     filter.FilterIndex = s_fdcan_filter_idx[instance->can_e]++;
-    filter.FilterType = FDCAN_FILTER_DUAL;
-    filter.FilterConfig = (instance->rx_id & 1U) ? FDCAN_FILTER_TO_RXFIFO0 : FDCAN_FILTER_TO_RXFIFO1;
-    filter.FilterID1 = instance->rx_id;
-    filter.FilterID2 = instance->rx_id;
+    filter.FilterConfig = (instance->rx_id_list[0] & 1U) ? FDCAN_FILTER_TO_RXFIFO0 : FDCAN_FILTER_TO_RXFIFO1;
     filter.IdType = FDCAN_STANDARD_ID;
     filter.IsCalibrationMsg = 0;
+
+    if (instance->filter_mode == CAN_FILTER_MODE_LIST)
+    {
+        // FDCAN 列表模式：使用 DUAL 类型，FilterID1 和 FilterID2 为两个精确 ID
+        // 注意：FDCAN 每个 filter 只能匹配 2 个 ID，列表模式下只使用前 2 个
+        filter.FilterType = FDCAN_FILTER_DUAL;
+        filter.FilterID1 = instance->rx_id_list[0];
+        filter.FilterID2 = instance->rx_id_list[1];
+    }
+    else
+    {
+        // FDCAN 掩码模式：使用 RANGE 或 MASK 类型
+        // 使用 CLASSIC 类型：FilterID1 为 ID，FilterID2 为掩码
+        filter.FilterType = FDCAN_FILTER_MASK;
+        filter.FilterID1 = instance->rx_id_list[0];
+        filter.FilterID2 = instance->rx_mask;
+    }
 
     return HAL_FDCAN_ConfigFilter(instance->map.handle, &filter);
 }
@@ -135,7 +158,37 @@ static void CANDispatchFdcanMessage(FDCAN_HandleTypeDef *hfdcan, uint32_t fifo)
         for (uint8_t i = 0; i < s_idx; i++)
         {
             CANInstance *instance = s_can_instance[i];
-            if (instance->map.handle == hfdcan && instance->rx_id == rx_header.Identifier)
+            if (instance->map.handle != hfdcan)
+            {
+                continue;
+            }
+
+            uint8_t matched = 0;
+
+            if (instance->filter_mode == CAN_FILTER_MODE_LIST)
+            {
+                // 列表模式：遍历 rx_id_list 匹配
+                for (uint8_t j = 0; j < instance->rx_id_count; j++)
+                {
+                    if (instance->rx_id_list[j] == rx_header.Identifier)
+                    {
+                        instance->rx_id_matched = rx_header.Identifier;
+                        matched = 1;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                // 掩码模式：使用掩码匹配
+                if ((rx_header.Identifier & instance->rx_mask) == (instance->rx_id_list[0] & instance->rx_mask))
+                {
+                    instance->rx_id_matched = rx_header.Identifier;
+                    matched = 1;
+                }
+            }
+
+            if (matched)
             {
                 uint8_t rx_len = CANFdcanDlcToLength(rx_header.DataLength);
                 if (rx_len > sizeof(instance->rx_buff))
@@ -183,13 +236,32 @@ static HAL_StatusTypeDef CANBxcanAddFilter(CANInstance *instance)
         return HAL_ERROR;
     }
 
-    filter.FilterMode = CAN_FILTERMODE_IDLIST;
+    // 16位标准帧ID格式：[15]=RTR, [14]=IDE, [13:3]=STID[10:0], [2:0]=EXID[17:15]
+    // 标准帧ID左移3位，IDE=0, RTR=0
     filter.FilterScale = CAN_FILTERSCALE_16BIT;
-    filter.FilterFIFOAssignment = (instance->rx_id & 1U) ? CAN_RX_FIFO0 : CAN_RX_FIFO1;
-    filter.FilterIdLow = (instance->rx_id & 0x7FFU) << 5;
+    filter.FilterFIFOAssignment = (instance->rx_id_list[0] & 1U) ? CAN_RX_FIFO0 : CAN_RX_FIFO1;
     filter.FilterBank = filter_bank;
     filter.FilterActivation = CAN_FILTER_ENABLE;
     filter.SlaveStartFilterBank = 14;
+
+    if (instance->filter_mode == CAN_FILTER_MODE_LIST)
+    {
+        // 16位列表模式：每个filter bank可配置4个精确ID
+        filter.FilterMode = CAN_FILTERMODE_IDLIST;
+        filter.FilterIdHigh = (instance->rx_id_list[0] & 0x7FFU) << 3;
+        filter.FilterIdLow = (instance->rx_id_list[1] & 0x7FFU) << 3;
+        filter.FilterMaskIdHigh = (instance->rx_id_list[2] & 0x7FFU) << 3;
+        filter.FilterMaskIdLow = (instance->rx_id_list[3] & 0x7FFU) << 3;
+    }
+    else
+    {
+        // 16位掩码模式：支持范围匹配
+        filter.FilterMode = CAN_FILTERMODE_IDMASK;
+        filter.FilterIdHigh = (instance->rx_id_list[0] & 0x7FFU) << 3;
+        filter.FilterIdLow = 0; // 未使用
+        filter.FilterMaskIdHigh = (instance->rx_mask & 0x7FFU) << 3;
+        filter.FilterMaskIdLow = 0; // 未使用
+    }
 
     return HAL_CAN_ConfigFilter(instance->map.handle, &filter);
 }
@@ -232,7 +304,37 @@ static void CANDispatchBxcanMessage(CAN_HandleTypeDef *hcan, uint32_t fifo)
         for (uint8_t i = 0; i < s_idx; i++)
         {
             CANInstance *instance = s_can_instance[i];
-            if (instance->map.handle == hcan && instance->rx_id == rx_header.StdId)
+            if (instance->map.handle != hcan)
+            {
+                continue;
+            }
+
+            uint8_t matched = 0;
+
+            if (instance->filter_mode == CAN_FILTER_MODE_LIST)
+            {
+                // 列表模式：遍历 rx_id_list 匹配
+                for (uint8_t j = 0; j < instance->rx_id_count; j++)
+                {
+                    if (instance->rx_id_list[j] == rx_header.StdId)
+                    {
+                        instance->rx_id_matched = rx_header.StdId;
+                        matched = 1;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                // 掩码模式：使用掩码匹配
+                if ((rx_header.StdId & instance->rx_mask) == (instance->rx_id_list[0] & instance->rx_mask))
+                {
+                    instance->rx_id_matched = rx_header.StdId;
+                    matched = 1;
+                }
+            }
+
+            if (matched)
             {
                 uint8_t rx_len = (rx_header.DLC <= 8U) ? (uint8_t)rx_header.DLC : 8U;
                 instance->rx_len = rx_len;
@@ -258,15 +360,70 @@ int8_t CANRegister(CANInstance *instance)
     BSP_RETURN_IF_TRUE_LOG(s_idx >= CAN_INSTANCE_NUM, -1, LOGERROR("[bsp_can] Exceeded max instance count!"));
     BSP_RETURN_IF_TRUE_LOG(instance->can_e >= CAN_NUM_MAX, -1, LOGERROR("[bsp_can] can_e out of range!"));
 
+    // 检查tx_id范围
+    if (instance->tx_id > 0x7FF)
+    {
+        LOGERROR("[bsp_can] Invalid tx_id=0x%lX, must be <= 0x7FF for standard frames", instance->tx_id);
+        return -1;
+    }
+
+    // 检查过滤器模式参数
+    if (instance->filter_mode == CAN_FILTER_MODE_LIST)
+    {
+        // 列表模式：检查 rx_id_count 有效性
+        if (instance->rx_id_count == 0 || instance->rx_id_count > 4)
+        {
+            LOGERROR("[bsp_can] Invalid rx_id_count=%d for list mode, must be 1-4", instance->rx_id_count);
+            return -1;
+        }
+    }
+    else if (instance->filter_mode != CAN_FILTER_MODE_MASK)
+    {
+        LOGERROR("[bsp_can] Invalid filter_mode=%d", instance->filter_mode);
+        return -1;
+    }
+
+    // 检查 rx_id_list 中的 ID 范围
+    for (uint8_t i = 0; i < 4; i++)
+    {
+        if (instance->rx_id_list[i] > 0x7FF)
+        {
+            LOGERROR("[bsp_can] Invalid rx_id_list[%d]=0x%lX, must be <= 0x7FF for standard frames", i, instance->rx_id_list[i]);
+            return -1;
+        }
+    }
+
+    // 检查掩码范围
+    if (instance->rx_mask > 0x7FF)
+    {
+        LOGERROR("[bsp_can] Invalid rx_mask=0x%lX, must be <= 0x7FF for standard frames", instance->rx_mask);
+        return -1;
+    }
+
     instance->map = can_map[instance->can_e];
     BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, -1, LOGERROR("[bsp_can] CAN handle is NULL, check bsp_cfg mapping!"));
 
+    // 检查重复注册（列表模式下检查每个 ID）
     for (uint8_t i = 0; i < s_idx; i++)
     {
-        if (s_can_instance[i]->map.handle == instance->map.handle && s_can_instance[i]->rx_id == instance->rx_id)
+        CANInstance *existing = s_can_instance[i];
+        if (existing->map.handle == instance->map.handle)
         {
-            LOGERROR("[bsp_can] Duplicate rx_id registration on same CAN handle! rx_id=0x%lX", instance->rx_id);
-            return -1;
+            // 检查是否有重叠的 ID
+            if (instance->filter_mode == CAN_FILTER_MODE_LIST && existing->filter_mode == CAN_FILTER_MODE_LIST)
+            {
+                for (uint8_t j = 0; j < instance->rx_id_count; j++)
+                {
+                    for (uint8_t k = 0; k < existing->rx_id_count; k++)
+                    {
+                        if (instance->rx_id_list[j] == existing->rx_id_list[k] && instance->rx_id_list[j] != 0)
+                        {
+                            LOGERROR("[bsp_can] Duplicate rx_id=0x%lX registration on same CAN handle!", instance->rx_id_list[j]);
+                            return -1;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -281,7 +438,7 @@ int8_t CANRegister(CANInstance *instance)
     instance->tx_header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
     instance->tx_header.MessageMarker = 0;
 
-    BSP_RETURN_IF_TRUE_LOG(CANFdcanAddFilter(instance) != HAL_OK, -1, LOGERROR("[bsp_can] FDCAN filter config failed! can_e=%d rx_id=0x%lX", instance->can_e, instance->rx_id));
+    BSP_RETURN_IF_TRUE_LOG(CANFdcanAddFilter(instance) != HAL_OK, -1, LOGERROR("[bsp_can] FDCAN filter config failed! can_e=%d rx_id=0x%lX", instance->can_e, instance->rx_id_list[0]));
 
     BSP_RETURN_IF_TRUE_LOG(CANFdcanStartIfNeeded(instance->map.handle) != HAL_OK, -1, LOGERROR("[bsp_can] FDCAN start/notification init failed! can_e=%d", instance->can_e));
 #else
@@ -290,7 +447,7 @@ int8_t CANRegister(CANInstance *instance)
     instance->tx_header.RTR = CAN_RTR_DATA;
     instance->tx_header.DLC = 8;
 
-    BSP_RETURN_IF_TRUE_LOG(CANBxcanAddFilter(instance) != HAL_OK, -1, LOGERROR("[bsp_can] CAN filter config failed! can_e=%d rx_id=0x%lX", instance->can_e, instance->rx_id));
+    BSP_RETURN_IF_TRUE_LOG(CANBxcanAddFilter(instance) != HAL_OK, -1, LOGERROR("[bsp_can] CAN filter config failed! can_e=%d rx_id=0x%lX", instance->can_e, instance->rx_id_list[0]));
 
     BSP_RETURN_IF_TRUE_LOG(CANBxcanStartIfNeeded(instance->map.handle) != HAL_OK, -1, LOGERROR("[bsp_can] CAN start/notification init failed! can_e=%d", instance->can_e));
 #endif
@@ -329,36 +486,37 @@ uint8_t CANTransmit(CANInstance *instance, uint32_t timeout_ms)
         return 0;
     }
 
-    uint32_t start_tick = HAL_GetTick();
+    float start_time = DWT_GetTimeline_ms();
+    float timeout_f = (float)timeout_ms;
 
 #if BSP_CAN_IP == BSP_CAN_IP_FDCAN
     while (HAL_FDCAN_GetTxFifoFreeLevel(instance->map.handle) == 0U)
     {
-        if ((HAL_GetTick() - start_tick) > timeout_ms)
+        if ((DWT_GetTimeline_ms() - start_time) > timeout_f)
         {
-            LOGWARNING("[bsp_can] FDCAN Tx FIFO timeout");
+            LOGWARNING("[bsp_can] FDCAN Tx FIFO timeout (can_e=%d, tx_id=0x%lX)", instance->can_e, instance->tx_id);
             return 0;
         }
     }
 
     if (HAL_FDCAN_AddMessageToTxFifoQ(instance->map.handle, &instance->tx_header, instance->tx_buff) != HAL_OK)
     {
-        LOGWARNING("[bsp_can] FDCAN add tx message failed");
+        LOGWARNING("[bsp_can] FDCAN add tx message failed (can_e=%d, tx_id=0x%lX)", instance->can_e, instance->tx_id);
         return 0;
     }
 #else
     while (HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle) == 0U)
     {
-        if ((HAL_GetTick() - start_tick) > timeout_ms)
+        if ((DWT_GetTimeline_ms() - start_time) > timeout_f)
         {
-            LOGWARNING("[bsp_can] CAN mailbox timeout");
+            LOGWARNING("[bsp_can] CAN mailbox timeout (can_e=%d, tx_id=0x%lX)", instance->can_e, instance->tx_id);
             return 0;
         }
     }
 
     if (HAL_CAN_AddTxMessage(instance->map.handle, &instance->tx_header, instance->tx_buff, &instance->tx_mailbox) != HAL_OK)
     {
-        LOGWARNING("[bsp_can] CAN add tx message failed");
+        LOGWARNING("[bsp_can] CAN add tx message failed (can_e=%d, tx_id=0x%lX)", instance->can_e, instance->tx_id);
         return 0;
     }
 #endif
