@@ -3,7 +3,8 @@
     "allow": [
       "Bash(make clean *)",
       "Bash(make)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(make *)"
     ]
   }
 }

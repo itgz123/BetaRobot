@@ -71,10 +71,10 @@ static void SBUSCallback(SBUSInstance *inst)
     SBUS_RawFrame_t raw_frame;
 
     // 拷贝原始数据
-    raw_frame.len = inst->usart_inst.rx_len;
+    raw_frame.len = inst->usart_inst->rx_len;
     for (uint8_t i = 0; i < raw_frame.len && i < SBUS_FRAME_SIZE; i++)
     {
-        raw_frame.data[i] = inst->usart_inst.rx_buff[i];
+        raw_frame.data[i] = inst->usart_inst->rx_buff[i];
     }
 
     // 覆盖式写入队列

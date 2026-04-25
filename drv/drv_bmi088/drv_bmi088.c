@@ -79,9 +79,9 @@ static void BMI088_AccReadReg(BMI088Instance *inst, uint8_t reg, uint16_t len)
     inst->tx_buff[0] = reg | BMI088_SPI_READ_CMD;
     inst->tx_len = 1 + 1 + len;
 
-    GPIOReset(&inst->cs_acc);
-    SPITransmitReceive(&inst->spi_inst, inst->tx_buff, inst->tx_len);
-    GPIOSet(&inst->cs_acc);
+    GPIOReset(inst->cs_acc);
+    SPITransmitReceive(inst->spi_inst, inst->tx_buff, inst->tx_len);
+    GPIOSet(inst->cs_acc);
 }
 
 /**
@@ -93,9 +93,9 @@ static void BMI088_AccWriteReg(BMI088Instance *inst, uint8_t reg, uint8_t data)
     inst->tx_buff[1] = data;
     inst->tx_len = 2;
 
-    GPIOReset(&inst->cs_acc);
-    SPITransmit(&inst->spi_inst, inst->tx_buff, inst->tx_len);
-    GPIOSet(&inst->cs_acc);
+    GPIOReset(inst->cs_acc);
+    SPITransmit(inst->spi_inst, inst->tx_buff, inst->tx_len);
+    GPIOSet(inst->cs_acc);
 }
 
 /**
@@ -108,7 +108,7 @@ static uint8_t BMI088_AccWriteRegWithCheck(BMI088Instance *inst, uint8_t reg, ui
     DWT_Delay(BMI088_DELAY_MS);
 
     BMI088_AccReadReg(inst, reg, 1);
-    return (inst->spi_inst.rx_buff[2] != data);
+    return (inst->spi_inst->rx_buff[2] != data);
 }
 
 /**
@@ -126,9 +126,9 @@ static void BMI088_GyroReadReg(BMI088Instance *inst, uint8_t reg, uint16_t len)
     inst->tx_buff[0] = reg | BMI088_SPI_READ_CMD;
     inst->tx_len = 1 + len;
 
-    GPIOReset(&inst->cs_gyro);
-    SPITransmitReceive(&inst->spi_inst, inst->tx_buff, inst->tx_len);
-    GPIOSet(&inst->cs_gyro);
+    GPIOReset(inst->cs_gyro);
+    SPITransmitReceive(inst->spi_inst, inst->tx_buff, inst->tx_len);
+    GPIOSet(inst->cs_gyro);
 }
 
 /**
@@ -140,9 +140,9 @@ static void BMI088_GyroWriteReg(BMI088Instance *inst, uint8_t reg, uint8_t data)
     inst->tx_buff[1] = data;
     inst->tx_len = 2;
 
-    GPIOReset(&inst->cs_gyro);
-    SPITransmit(&inst->spi_inst, inst->tx_buff, inst->tx_len);
-    GPIOSet(&inst->cs_gyro);
+    GPIOReset(inst->cs_gyro);
+    SPITransmit(inst->spi_inst, inst->tx_buff, inst->tx_len);
+    GPIOSet(inst->cs_gyro);
 }
 
 /**
@@ -155,7 +155,7 @@ static uint8_t BMI088_GyroWriteRegWithCheck(BMI088Instance *inst, uint8_t reg, u
     DWT_Delay(BMI088_DELAY_MS);
 
     BMI088_GyroReadReg(inst, reg, 1);
-    return (inst->spi_inst.rx_buff[1] != data);
+    return (inst->spi_inst->rx_buff[1] != data);
 }
 
 /*============================ 公开接口实现 ============================*/
@@ -168,19 +168,26 @@ int8_t BMI088Register(BMI088Instance *inst)
         return -1;
     }
 
-    if (SPIRegister(&inst->spi_inst) != 0)
+    // 设置 parent 指针
+    inst->spi_inst->parent = inst;
+    inst->cs_acc->parent = inst;
+    inst->cs_gyro->parent = inst;
+    inst->int_acc->parent = inst;
+    inst->int_gyro->parent = inst;
+
+    if (SPIRegister(inst->spi_inst) != 0)
     {
         LOGERROR("[drv_bmi088] SPI register failed");
         return -1;
     }
 
-    if (GPIORegister(&inst->cs_acc) != 0)
+    if (GPIORegister(inst->cs_acc) != 0)
     {
         LOGERROR("[drv_bmi088] cs_acc register failed");
         return -1;
     }
 
-    if (GPIORegister(&inst->cs_gyro) != 0)
+    if (GPIORegister(inst->cs_gyro) != 0)
     {
         LOGERROR("[drv_bmi088] cs_gyro register failed");
         return -1;
@@ -188,22 +195,22 @@ int8_t BMI088Register(BMI088Instance *inst)
 
     // 某些板级默认将 CS 拉低，上电后先释放两个片选，避免总线冲突。
     // 同时给加速度计一个 CS 上升沿，触发其由 I2C 切换到 SPI。
-    GPIOSet(&inst->cs_acc);
-    GPIOSet(&inst->cs_gyro);
+    GPIOSet(inst->cs_acc);
+    GPIOSet(inst->cs_gyro);
     DWT_Delay(BMI088_DELAY_MS);
 
-    if (GPIORegister(&inst->int_acc) != 0)
+    if (GPIORegister(inst->int_acc) != 0)
     {
         LOGERROR("[drv_bmi088] int_acc register failed");
         return -1;
     }
-    if (GPIORegister(&inst->int_gyro) != 0)
+    if (GPIORegister(inst->int_gyro) != 0)
     {
         LOGERROR("[drv_bmi088] int_gyro register failed");
         return -1;
     }
 
-    if (PWMRegister(&inst->heater_pwm) != 0)
+    if (PWMRegister(inst->heater_pwm) != 0)
     {
         LOGERROR("[drv_bmi088] heater_pwm register failed");
         return -1;
@@ -246,9 +253,9 @@ int8_t BMI088SetConfig(BMI088Instance *inst, BMI088_AccRange_e acc_range, uint8_
 
     // 4. 检查 CHIP_ID
     BMI088_AccReadReg(inst, BMI088_ACC_CHIP_ID_REG, 1);
-    if (inst->spi_inst.rx_buff[2] != BMI088_ACC_CHIP_ID_VAL)
+    if (inst->spi_inst->rx_buff[2] != BMI088_ACC_CHIP_ID_VAL)
     {
-        LOGERROR("[drv_bmi088] Acc CHIP_ID error: 0x%02X", inst->spi_inst.rx_buff[2]);
+        LOGERROR("[drv_bmi088] Acc CHIP_ID error: 0x%02X", inst->spi_inst->rx_buff[2]);
         return -1;
     }
     DWT_Delay(BMI088_DELAY_MS);
@@ -303,9 +310,9 @@ int8_t BMI088SetConfig(BMI088Instance *inst, BMI088_AccRange_e acc_range, uint8_
 
     // 2. 检查 CHIP_ID
     BMI088_GyroReadReg(inst, BMI088_GYRO_CHIP_ID_REG, 1);
-    if (inst->spi_inst.rx_buff[1] != BMI088_GYRO_CHIP_ID_VALUE)
+    if (inst->spi_inst->rx_buff[1] != BMI088_GYRO_CHIP_ID_VALUE)
     {
-        LOGERROR("[drv_bmi088] Gyro CHIP_ID error: 0x%02X", inst->spi_inst.rx_buff[1]);
+        LOGERROR("[drv_bmi088] Gyro CHIP_ID error: 0x%02X", inst->spi_inst->rx_buff[1]);
         return -1;
     }
 
@@ -392,9 +399,9 @@ BMI088_Data_t BMI088ReadBlocking(BMI088Instance *inst)
 
     /* 读取加速度计数据（X/Y/Z 三轴，6 字节） */
     BMI088_AccReadReg(inst, BMI088_ACCEL_XOUT_L, 6);
-    raw_data[0] = (int16_t)((inst->spi_inst.rx_buff[3] << 8) | inst->spi_inst.rx_buff[2]);
-    raw_data[1] = (int16_t)((inst->spi_inst.rx_buff[5] << 8) | inst->spi_inst.rx_buff[4]);
-    raw_data[2] = (int16_t)((inst->spi_inst.rx_buff[7] << 8) | inst->spi_inst.rx_buff[6]);
+    raw_data[0] = (int16_t)((inst->spi_inst->rx_buff[3] << 8) | inst->spi_inst->rx_buff[2]);
+    raw_data[1] = (int16_t)((inst->spi_inst->rx_buff[5] << 8) | inst->spi_inst->rx_buff[4]);
+    raw_data[2] = (int16_t)((inst->spi_inst->rx_buff[7] << 8) | inst->spi_inst->rx_buff[6]);
 
     /* 转换为物理单位并减去标定偏移量 */
     float acc_sen = BMI088_AccSenTable[inst->acc_range];
@@ -404,9 +411,9 @@ BMI088_Data_t BMI088ReadBlocking(BMI088Instance *inst)
 
     /* 读取陀螺仪数据（X/Y/Z 三轴，6 字节） */
     BMI088_GyroReadReg(inst, BMI088_GYRO_X_L, 6);
-    raw_data[0] = (int16_t)((inst->spi_inst.rx_buff[2] << 8) | inst->spi_inst.rx_buff[1]);
-    raw_data[1] = (int16_t)((inst->spi_inst.rx_buff[4] << 8) | inst->spi_inst.rx_buff[3]);
-    raw_data[2] = (int16_t)((inst->spi_inst.rx_buff[6] << 8) | inst->spi_inst.rx_buff[5]);
+    raw_data[0] = (int16_t)((inst->spi_inst->rx_buff[2] << 8) | inst->spi_inst->rx_buff[1]);
+    raw_data[1] = (int16_t)((inst->spi_inst->rx_buff[4] << 8) | inst->spi_inst->rx_buff[3]);
+    raw_data[2] = (int16_t)((inst->spi_inst->rx_buff[6] << 8) | inst->spi_inst->rx_buff[5]);
 
     /* 转换为物理单位并减去标定偏移量 */
     float gyro_sen = BMI088_GyroSenTable[inst->gyro_range];
@@ -416,7 +423,7 @@ BMI088_Data_t BMI088ReadBlocking(BMI088Instance *inst)
 
     /* 读取温度数据（2 字节） */
     BMI088_AccReadReg(inst, BMI088_TEMP_L, 2);
-    raw_temp = (int16_t)((inst->spi_inst.rx_buff[3] << 8) | inst->spi_inst.rx_buff[2]);
+    raw_temp = (int16_t)((inst->spi_inst->rx_buff[3] << 8) | inst->spi_inst->rx_buff[2]);
 
     /* 温度转换公式 */
     data.temp = (float)raw_temp * BMI088_TEMP_SENS + BMI088_TEMP_OFFSET;
@@ -455,9 +462,9 @@ int8_t BMI088Calibrate(BMI088Instance *inst, uint16_t samples)
     {
         /* 读取加速度计数据 */
         BMI088_AccReadReg(inst, BMI088_ACCEL_XOUT_L, 6);
-        raw_data[0] = (int16_t)((inst->spi_inst.rx_buff[3] << 8) | inst->spi_inst.rx_buff[2]);
-        raw_data[1] = (int16_t)((inst->spi_inst.rx_buff[5] << 8) | inst->spi_inst.rx_buff[4]);
-        raw_data[2] = (int16_t)((inst->spi_inst.rx_buff[7] << 8) | inst->spi_inst.rx_buff[6]);
+        raw_data[0] = (int16_t)((inst->spi_inst->rx_buff[3] << 8) | inst->spi_inst->rx_buff[2]);
+        raw_data[1] = (int16_t)((inst->spi_inst->rx_buff[5] << 8) | inst->spi_inst->rx_buff[4]);
+        raw_data[2] = (int16_t)((inst->spi_inst->rx_buff[7] << 8) | inst->spi_inst->rx_buff[6]);
 
         float acc_sen = BMI088_AccSenTable[inst->acc_range];
         acc_sum[0] += (float)raw_data[0] * acc_sen * BMI088_GRAVITY;
@@ -466,9 +473,9 @@ int8_t BMI088Calibrate(BMI088Instance *inst, uint16_t samples)
 
         /* 读取陀螺仪数据 */
         BMI088_GyroReadReg(inst, BMI088_GYRO_X_L, 6);
-        raw_data[0] = (int16_t)((inst->spi_inst.rx_buff[2] << 8) | inst->spi_inst.rx_buff[1]);
-        raw_data[1] = (int16_t)((inst->spi_inst.rx_buff[4] << 8) | inst->spi_inst.rx_buff[3]);
-        raw_data[2] = (int16_t)((inst->spi_inst.rx_buff[6] << 8) | inst->spi_inst.rx_buff[5]);
+        raw_data[0] = (int16_t)((inst->spi_inst->rx_buff[2] << 8) | inst->spi_inst->rx_buff[1]);
+        raw_data[1] = (int16_t)((inst->spi_inst->rx_buff[4] << 8) | inst->spi_inst->rx_buff[3]);
+        raw_data[2] = (int16_t)((inst->spi_inst->rx_buff[6] << 8) | inst->spi_inst->rx_buff[5]);
 
         float gyro_sen = BMI088_GyroSenTable[inst->gyro_range];
         gyro_sum[0] += (float)raw_data[0] * gyro_sen;
@@ -517,12 +524,12 @@ void BMI088SetHeater(BMI088Instance *inst, float duty_ratio)
     /* 阻塞模式：直接设置 PWM 占空比 */
     if (inst->work_mode == BMI088_MODE_POLLING)
     {
-        PWMSetDutyRatio(&inst->heater_pwm, duty_ratio);
+        PWMSetDutyRatio(inst->heater_pwm, duty_ratio);
     }
     else
     {
         /* 中断模式：预留 PID 控制接口（后续实现） */
-        PWMSetDutyRatio(&inst->heater_pwm, duty_ratio);
+        PWMSetDutyRatio(inst->heater_pwm, duty_ratio);
     }
 }
 
