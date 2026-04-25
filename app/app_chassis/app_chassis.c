@@ -17,33 +17,12 @@
 #include "bsp_dwt.h"
 #include "bsp_can.h"
 
-void ch_callback(struct CANInstance *_isn)
-{
-    uint8_t data = _isn->rx_buff[0];
-    // LOGINFO("callback%d", data);
-}
-
-// CAN_INSTANCE_DEF(s_chassis_can, CAN_1, 0x141, 0x206, ch_callback);
-// 使用掩码模式，0x7FF 掩码实现精确匹配单个 ID
-CAN_INSTANCE_DEF_MASK(s_chassis_can, CAN_1, 0x1FF, 0x208, 0x7FF, ch_callback);
-
 static void Init(void)
 {
-    CANRegister(&s_chassis_can);
-    CANSetDLC(&s_chassis_can, 8);
 }
 
 ITCM_RAM static void Run(void)
 {
-    s_chassis_can.tx_buff[0] = 0x00;
-    s_chassis_can.tx_buff[1] = 0x00;
-    s_chassis_can.tx_buff[2] = 0x00;
-    s_chassis_can.tx_buff[3] = 0xff;
-    s_chassis_can.tx_buff[4] = 0x00;
-    s_chassis_can.tx_buff[5] = 0x33;
-    s_chassis_can.tx_buff[6] = 0x33;
-    s_chassis_can.tx_buff[7] = 0xff;
-    CANTransmit(&s_chassis_can, 1U);
 }
 
 /*============================================
