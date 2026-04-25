@@ -46,28 +46,29 @@ typedef struct USARTInstance
 
 /**
  * @brief 静态定义USART实例（同时定义缓冲区）
- * @param name     实例名称
- * @param uart_idx 板载UART枚举（BoardUART_e）
- * @param mode     发送模式（USART_Work_Mode_e）
- * @param buff_sz  接收缓冲区大小
- * @param cb       接收回调函数（可为NULL）
+ * @param name       实例名称
+ * @param uart_idx   板载UART枚举（BoardUART_e）
+ * @param mode       发送模式（USART_Work_Mode_e）
+ * @param buff_sz    接收缓冲区大小
+ * @param cb         接收回调函数（可为NULL）
+ * @param parent_ptr 父实例指针（可为NULL，DRV层注册时会设置）
  *
  * @note DMA_RAM 宏在 Cortex-M7 上将缓冲区放入 RAM_D1 以支持 DMA 访问
  *       在 Cortex-M4 上定义为空
  *
  * @example
- *   USART_INSTANCE_DEF(sbus_uart, UART_SBUS_2, USART_DMA_MODE, 64, sbus_callback);
+ *   USART_INSTANCE_DEF(sbus_uart, UART_SBUS_2, USART_DMA_MODE, 64, sbus_callback, NULL);
  */
-#define USART_INSTANCE_DEF(name, uart_idx, mode, buff_sz, cb) \
-    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};     \
-    static USARTInstance name = {                             \
-        .parent = NULL,                                       \
-        .uart_e = uart_idx,                                   \
-        .handle = NULL,                                       \
-        .tx_mode = mode,                                      \
-        .rx_buff = name##_rx_buff,                            \
-        .rx_buff_size = buff_sz,                              \
-        .rx_len = 0,                                          \
+#define USART_INSTANCE_DEF(name, uart_idx, mode, buff_sz, cb, parent_ptr) \
+    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};                 \
+    static USARTInstance name = {                                         \
+        .parent = parent_ptr,                                             \
+        .uart_e = uart_idx,                                               \
+        .handle = NULL,                                                   \
+        .tx_mode = mode,                                                  \
+        .rx_buff = name##_rx_buff,                                        \
+        .rx_buff_size = buff_sz,                                          \
+        .rx_len = 0,                                                      \
         .rx_callback = cb}
 
 /*------------- 外部接口声明 --------------*/

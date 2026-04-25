@@ -37,11 +37,11 @@
 /*------------- 类型定义 --------------*/
 /**
  * @brief SBUS 实例结构体
- * @note 内嵌 USARTInstance，直接管理 BSP 层实例
+ * @note 使用指针指向 BSP 实例，在注册时设置 parent
  */
 typedef struct SBUSInstance
 {
-    USARTInstance usart_inst;                    // 内嵌 BSP 实例
+    USARTInstance *usart_inst;                    // BSP 实例指针
     void (*app_callback)(struct SBUSInstance *); // APP 层回调
 } SBUSInstance;
 
@@ -76,24 +76,16 @@ void SBUSUARTRxCallback(USARTInstance *usart_inst);
  * @param uart_idx 板载 UART 枚举（BoardUART_e）
  * @param app_cb   APP 层回调函数
  *
- * @note DMA_RAM 宏在 Cortex-M7 上将缓冲区放入 RAM_D1 以支持 DMA 访问
- *       parent 指向 SBUSInstance 自身，用于 BSP 回调时获取 DRV 实例
+ * @note 使用 BSP 层的 USART_INSTANCE_DEF 宏定义底层实例
+ *       parent 指针在注册时设置，指向 SBUSInstance 自身
  *
  * @example
  *   SBUS_INSTANCE_DEF(sbus_inst, UART_SBUS_2, AppCallback);
  */
-#define SBUS_INSTANCE_DEF(name, uart_idx, app_cb)    \
-    static uint8_t name##_rx_buff[25] DMA_RAM = {0}; \
-    SBUSInstance name = {                            \
-        .usart_inst = {                              \
-            .parent = &name,                         \
-            .uart_e = uart_idx,                      \
-            .handle = NULL,                          \
-            .tx_mode = USART_DMA_MODE,               \
-            .rx_buff = name##_rx_buff,               \
-            .rx_buff_size = 25,                      \
-            .rx_len = 0,                             \
-            .rx_callback = SBUSUARTRxCallback},      \
+#define SBUS_INSTANCE_DEF(name, uart_idx, app_cb) \
+    USART_INSTANCE_DEF(name##_uart, uart_idx, USART_DMA_MODE, 25, SBUSUARTRxCallback, NULL); \
+    static SBUSInstance name = {                  \
+        .usart_inst = &name##_uart,               \
         .app_callback = app_cb}
 
 /*------------- 外部接口声明 --------------*/

@@ -33,19 +33,20 @@ typedef struct GPIOInstance
 
 /**
  * @brief 静态定义GPIO实例（使用板载枚举）
- * @param name     实例名称
- * @param gpio_idx 板载GPIO枚举（BoardGPIO_e）
- * @param cb       回调函数（可为NULL）
+ * @param name       实例名称
+ * @param gpio_idx   板载GPIO枚举（BoardGPIO_e）
+ * @param cb         回调函数（可为NULL）
+ * @param parent_ptr 父实例指针（可为NULL，DRV层注册时会设置）
  *
  * @example
- *   GPIO_INSTANCE_DEF(led_green, GPIO_LED_GREEN, led_callback);
+ *   GPIO_INSTANCE_DEF(led_green, GPIO_LED_GREEN, led_callback, NULL);
  */
-#define GPIO_INSTANCE_DEF(name, gpio_idx, cb) \
-    GPIOInstance name = {                     \
-        .parent = NULL,                       \
-        .gpio_e = gpio_idx,                   \
-        .map = {0},                           \
-        .pin_state = GPIO_PIN_RESET,          \
+#define GPIO_INSTANCE_DEF(name, gpio_idx, cb, parent_ptr) \
+    GPIOInstance name = {                                 \
+        .parent = parent_ptr,                             \
+        .gpio_e = gpio_idx,                               \
+        .map = {0},                                       \
+        .pin_state = GPIO_PIN_RESET,                      \
         .callback = cb}
 
 /*------------- 外部接口声明 --------------*/

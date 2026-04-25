@@ -24,9 +24,15 @@ int8_t SBUSRegister(SBUSInstance *instance)
         return -1;
     }
 
-    if (instance->usart_inst.uart_e >= UART_NUM_MAX)
+    if (instance->usart_inst == NULL)
     {
-        LOGERROR("[drv_sbus] Invalid uart_e: %d", instance->usart_inst.uart_e);
+        LOGERROR("[drv_sbus] usart_inst is NULL!");
+        return -1;
+    }
+
+    if (instance->usart_inst->uart_e >= UART_NUM_MAX)
+    {
+        LOGERROR("[drv_sbus] Invalid uart_e: %d", instance->usart_inst->uart_e);
         return -1;
     }
 
@@ -36,8 +42,11 @@ int8_t SBUSRegister(SBUSInstance *instance)
         return -1;
     }
 
+    // 设置 parent 指针，用于 BSP 回调时获取 DRV 实例
+    instance->usart_inst->parent = instance;
+
     // 注册 BSP 层实例（会自动根据 uart_e 填充 handle）
-    if (USARTRegister(&instance->usart_inst) != 0)
+    if (USARTRegister(instance->usart_inst) != 0)
     {
         LOGERROR("[drv_sbus] USART register failed!");
         return -1;

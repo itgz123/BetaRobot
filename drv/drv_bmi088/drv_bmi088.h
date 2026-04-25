@@ -48,17 +48,17 @@ typedef struct
 
 /**
  * @brief BMI088 实例结构体
- * @note 内嵌 BSP 实例
+ * @note 使用指针指向 BSP 实例，在注册时设置 parent
  */
 typedef struct BMI088Instance
 {
-    /* BSP 实例 */
-    SPIInstance spi_inst;   // SPI 实例
-    GPIOInstance cs_acc;    // 加速度计片选
-    GPIOInstance cs_gyro;   // 陀螺仪片选
-    GPIOInstance int_acc;   // 加速度计中断
-    GPIOInstance int_gyro;  // 陀螺仪中断（可选）
-    PWMInstance heater_pwm; // 加热 PWM（可选）
+    /* BSP 实例指针 */
+    SPIInstance *spi_inst;   // SPI 实例
+    GPIOInstance *cs_acc;    // 加速度计片选
+    GPIOInstance *cs_gyro;   // 陀螺仪片选
+    GPIOInstance *int_acc;   // 加速度计中断
+    GPIOInstance *int_gyro;  // 陀螺仪中断（可选）
+    PWMInstance *heater_pwm; // 加热 PWM（可选）
 
     /* 发送缓冲区 */
     uint8_t *tx_buff; // 发送缓冲区指针
@@ -95,7 +95,7 @@ typedef struct BMI088Instance
  * @param int_gyro_idx 陀螺仪中断GPIO枚举（无则填0）
  * @param heater_idx  加热PWM枚举（无则填0）
  *
- * @note DMA_RAM 宏在 Cortex-M7 上将缓冲区放入 RAM_D1 以支持 DMA 访问
+ * @note 使用 BSP 层的实例定义宏，parent 在注册时设置
  *       初始化时默认使用阻塞模式，初始化完成后可切换到DMA模式
  *
  * @example
@@ -104,40 +104,20 @@ typedef struct BMI088Instance
  */
 #define BMI088_INSTANCE_DEF(name, spi_idx, cs_acc_idx, cs_gyro_idx, \
                             int_acc_idx, int_gyro_idx, heater_idx)  \
-    static uint8_t name##_rx_buff[BMI088_BUFF_SIZE] DMA_RAM = {0};  \
     static uint8_t name##_tx_buff[BMI088_BUFF_SIZE] DMA_RAM = {0};  \
+    SPI_INSTANCE_DEF(name##_spi, spi_idx, SPI_BLOCK_MODE, BMI088_BUFF_SIZE, NULL, NULL); \
+    GPIO_INSTANCE_DEF(name##_cs_acc, cs_acc_idx, NULL, NULL);       \
+    GPIO_INSTANCE_DEF(name##_cs_gyro, cs_gyro_idx, NULL, NULL);     \
+    GPIO_INSTANCE_DEF(name##_int_acc, int_acc_idx, NULL, NULL);     \
+    GPIO_INSTANCE_DEF(name##_int_gyro, int_gyro_idx, NULL, NULL);   \
+    PWM_INSTANCE_DEF(name##_heater, heater_idx);                    \
     static BMI088Instance name = {                                  \
-        .spi_inst.parent = &name,                                   \
-        .spi_inst.spi_e = spi_idx,                                  \
-        .spi_inst.handle = NULL,                                    \
-        .spi_inst.work_mode = SPI_BLOCK_MODE,                       \
-        .spi_inst.rx_buff = name##_rx_buff,                         \
-        .spi_inst.buff_size = BMI088_BUFF_SIZE,                     \
-        .spi_inst.rx_len = 0,                                       \
-        .spi_inst.rx_callback = NULL,                               \
-        .cs_acc.parent = &name,                                     \
-        .cs_acc.gpio_e = cs_acc_idx,                                \
-        .cs_acc.map = {0},                                          \
-        .cs_acc.pin_state = GPIO_PIN_RESET,                         \
-        .cs_acc.callback = NULL,                                    \
-        .cs_gyro.parent = &name,                                    \
-        .cs_gyro.gpio_e = cs_gyro_idx,                              \
-        .cs_gyro.map = {0},                                         \
-        .cs_gyro.pin_state = GPIO_PIN_RESET,                        \
-        .cs_gyro.callback = NULL,                                   \
-        .int_acc.parent = &name,                                    \
-        .int_acc.gpio_e = int_acc_idx,                              \
-        .int_acc.map = {0},                                         \
-        .int_acc.pin_state = GPIO_PIN_RESET,                        \
-        .int_acc.callback = NULL,                                   \
-        .int_gyro.parent = &name,                                   \
-        .int_gyro.gpio_e = int_gyro_idx,                            \
-        .int_gyro.map = {0},                                        \
-        .int_gyro.pin_state = GPIO_PIN_RESET,                       \
-        .int_gyro.callback = NULL,                                  \
-        .heater_pwm.tim_e = heater_idx,                             \
-        .heater_pwm.map = {NULL, 0},                                \
-        .heater_pwm.dutyratio = 0.0f,                               \
+        .spi_inst = &name##_spi,                                    \
+        .cs_acc = &name##_cs_acc,                                   \
+        .cs_gyro = &name##_cs_gyro,                                 \
+        .int_acc = &name##_int_acc,                                 \
+        .int_gyro = &name##_int_gyro,                               \
+        .heater_pwm = &name##_heater,                               \
         .tx_buff = name##_tx_buff,                                  \
         .tx_len = 0,                                                \
         .acc_offset = {0.0f, 0.0f, 0.0f},                           \
