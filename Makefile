@@ -117,7 +117,9 @@ bsp/bsp_spi/bsp_spi.c \
 bsp/bsp_tim/bsp_tim.c \
 bsp/bsp_usart/bsp_usart.c \
 bsp/bsp_adc/bsp_adc.c \
+drv/drv_motor/drv_motor_base.c \
 drv/drv_motor/drv_dcmotor/drv_dcmotor.c \
+drv/drv_motor/drv_djimotor/drv_djimotor.c \
 drv/drv_pid/drv_pid.c \
 drv/drv_chassis/drv_chassis.c \
 drv/drv_sbus/drv_sbus.c \
@@ -178,6 +180,7 @@ drv/drv_bmi088 \
 drv/drv_chassis \
 drv/drv_motor \
 drv/drv_motor/drv_dcmotor \
+drv/drv_motor/drv_djimotor \
 drv/drv_pid \
 drv/drv_sbus \
 app/app_sensor \
