@@ -32,9 +32,8 @@ typedef enum
 typedef enum
 {
     MOTOR_LOOP_OPEN = 0,
-    MOTOR_LOOP_CURRENT = 0x01,
-    MOTOR_LOOP_SPEED = 0x02,
-    MOTOR_LOOP_ANGLE = 0x04,
+    MOTOR_LOOP_SPEED = 0x01,
+    MOTOR_LOOP_ANGLE = 0x02,
 } MotorLoopType_e;
 
 /*============================================
@@ -43,10 +42,11 @@ typedef enum
 
 typedef struct
 {
-    float speed;       // 当前速度 (rad/s)
     float angle;       // 当前角度 (rad)
-    float current;     // 当前电流/扭矩 (A 或 Nm)
+    float speed;       // 当前速度 (rad/s)
+    float current;     // 当前电流 (A)
     float temperature; // 温度 (C)
+    uint8_t enable;    // 使能状态 (1=使能, 0=失能)
     uint8_t online;    // 在线状态 (1=在线, 0=离线)
 } MotorStatus_t;
 
