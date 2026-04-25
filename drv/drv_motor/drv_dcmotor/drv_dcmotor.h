@@ -24,14 +24,30 @@
 #include "bsp_math.h"
 #include "stdint.h"
 
-/*------------- 宏定义 --------------*/
-
-/*------------- 类型定义 --------------*/
+/*============================================
+ *              类型定义
+ *============================================*/
 
 /**
  * @brief DC 电机实例结构体
  * @note 内嵌 BSP 层实例，直接管理 PWM、编码器、方向控制 GPIO
  *       继承 MotorInstance 基类，支持多态调用
+ *
+ * @note 用户定义示例：
+ *       DCMotorInstance motor_1 = {
+ *           .base = { .type = MOTOR_TYPE_DC },
+ *           .pwm_inst.tim_e = TIM_PWM_1,
+ *           .encoder_inst.tim_e = TIM_ENCODER_1,
+ *           .in1_inst.gpio_e = GPIO_MOTOR_IN1,
+ *           .in2_inst.gpio_e = GPIO_MOTOR_IN2,
+ *           .encoder_ppr = 1000,
+ *           .reduction_ratio = 30.0f,
+ *           .alpha = 0.3f,
+ *           .pid = { .kp = 1.5f, .ki = 0.1f, .kd = 0.0f, .integral_limit = 1000.0f },
+ *           .max_speed = 20.0f,
+ *           // ... 前馈参数等
+ *       };
+ *       MotorInit(&motor_1.base);
  */
 typedef struct DCMotorInstance
 {
@@ -68,7 +84,9 @@ typedef struct DCMotorInstance
     float target_speed; // 目标速度 (rad/s)
 } DCMotorInstance;
 
-/*------------- 虚函数表声明 --------------*/
+/*============================================
+ *              虚函数表声明
+ *============================================*/
 
 /**
  * @brief DC 电机虚函数表
@@ -76,81 +94,9 @@ typedef struct DCMotorInstance
  */
 extern const MotorInterface_s g_dc_motor_interface;
 
-/*------------- 实例定义宏 --------------*/
-
-/**
- * @brief 静态定义 DC 电机实例（仅设置外设实例）
- * @param name         实例名称
- * @param pwm_idx      板载 PWM TIM 枚举（TIM_PWM_1~4）
- * @param encoder_idx  板载编码器 TIM 枚举（TIM_ENCODER_1~4）
- * @param in1_idx      方向控制 IN1 GPIO 枚举
- * @param in2_idx      方向控制 IN2 GPIO 枚举
- */
-// clang-format off
-#define DCMOTOR_INSTANCE_DEF(name, pwm_idx, encoder_idx, in1_idx, in2_idx) \
-    DCMotorInstance name = {                                               \
-        .base = {                                                          \
-            .vtable = &g_dc_motor_interface,                               \
-            .impl = NULL,                                                  \
-            .type = MOTOR_TYPE_DC,                                         \
-            .status = {0}},                                                \
-        .pwm_inst = {                                                      \
-            .tim_e = pwm_idx,                                              \
-            .map = {NULL, 0},                                              \
-            .dutyratio = 0.0f},                                            \
-        .encoder_inst = {                                                  \
-            .tim_e = encoder_idx,                                          \
-            .map = {NULL, 0},                                              \
-            .arr = 0,                                                      \
-            .overflow_count = 0,                                           \
-            .total_count = 0,                                              \
-            .last_total_count = 0,                                         \
-            .speed = 0.0f,                                                 \
-            .last_time = 0.0f},                                            \
-        .in1_inst = {                                                      \
-            .parent = NULL,                                                \
-            .gpio_e = in1_idx,                                             \
-            .map = {0},                                                    \
-            .pin_state = GPIO_PIN_RESET,                                   \
-            .callback = NULL},                                             \
-        .in2_inst = {                                                      \
-            .parent = NULL,                                                \
-            .gpio_e = in2_idx,                                             \
-            .map = {0},                                                    \
-            .pin_state = GPIO_PIN_RESET,                                   \
-            .callback = NULL},                                             \
-        .encoder_ppr = 0,                                                  \
-        .reduction_ratio = 0.0f,                                           \
-        .alpha = 0.0f,                                                     \
-        .speed = 0.0f,                                                     \
-        .last_time = 0,                                                    \
-        .pid = {0},                                                        \
-        .ff_k_low = 0.0f,                                                  \
-        .ff_offset_low = 0.0f,                                             \
-        .ff_k_high = 0.0f,                                                 \
-        .ff_offset_high = 0.0f,                                            \
-        .ff_split_speed = 0.0f,                                            \
-        .max_speed = 0.0f,                                                 \
-        .target_speed = 0.0f}
-// clang-format on
-
-/*------------- 外部接口声明 --------------*/
-
-/**
- * @brief 初始化电机基本参数
- * @param instance       DC 电机实例指针
- * @param encoder_ppr    编码器线数（每转脉冲数）
- * @param reduction_ratio 减速比（输出轴/电机轴，如 30 表示 1:30 减速）
- * @param lpf_alpha      低通滤波系数（0~1），值越小滤波效果越强
- * @retval 0 成功
- * @retval -1 失败
- */
-int8_t DCMotorInit(DCMotorInstance *instance, uint16_t encoder_ppr, float reduction_ratio, float lpf_alpha);
-
-/**
- * @brief 设置 PID 和两段前馈参数
- */
-void DCMotorSetPID(DCMotorInstance *instance, float kp, float ki, float kd, float integral_limit, float max_speed, float ff_k_low, float ff_offset_low, float ff_k_high, float ff_offset_high, float ff_split_speed);
+/*============================================
+ *              外部接口声明
+ *============================================*/
 
 /**
  * @brief 设置 PWM 占空比（自动控制方向）
@@ -170,14 +116,6 @@ float DCMotorGetSpeed(DCMotorInstance *instance);
  * @brief 清零编码器计数
  */
 void DCMotorClearEncoder(DCMotorInstance *instance);
-
-/**
- * @brief 设置电机转速（PID + 两段前馈控制）
- * @param instance     DC 电机实例指针
- * @param target_speed 目标转速，正值正转，负值反转
- * @note dt 由内部使用 DWT 自动计算
- */
-void DCMotorSetSpeed(DCMotorInstance *instance, float target_speed);
 
 #endif // defined(BSP_TIM_MODULE_ENABLED) && defined(BSP_GPIO_MODULE_ENABLED)
 

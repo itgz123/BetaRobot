@@ -20,28 +20,122 @@
  *============================================*/
 
 // 虚函数实现（静态，用于填充 vtable）
+static int8_t DCMotor_Init(MotorInstance *inst);
 static void DCMotor_Enable(MotorInstance *inst);
 static void DCMotor_Stop(MotorInstance *inst);
 static void DCMotor_SetRef(MotorInstance *inst, float ref);
 static void DCMotor_SetSpeed_VTable(MotorInstance *inst, float speed);
 static void DCMotor_GetStatus(MotorInstance *inst, MotorStatus_t *status);
+static int8_t DCMotor_SetPID_VTable(MotorInstance *inst, MotorLoopType_e loop,
+                                    float kp, float ki, float kd, float integral_limit, float max_value);
 
 /*============================================
  *              虚函数表定义
  *============================================*/
 
 const MotorInterface_s g_dc_motor_interface = {
+    .init = DCMotor_Init,
     .enable = DCMotor_Enable,
     .stop = DCMotor_Stop,
     .set_ref = DCMotor_SetRef,
     .set_speed = DCMotor_SetSpeed_VTable,
     .set_outer_loop = NULL, // DC 电机固定速度环
     .get_status = DCMotor_GetStatus,
+    .set_pid = DCMotor_SetPID_VTable,
 };
 
 /*============================================
  *              虚函数实现
  *============================================*/
+
+static int8_t DCMotor_Init(MotorInstance *inst)
+{
+    if (inst == NULL)
+    {
+        LOGERROR("[drv_dcmotor] Instance is NULL!");
+        return -1;
+    }
+
+    DCMotorInstance *instance = (DCMotorInstance *)inst;
+
+    // 检查 PWM 枚举范围
+    if (instance->pwm_inst.tim_e >= TIM_NUM_MAX)
+    {
+        LOGERROR("[drv_dcmotor] Invalid PWM tim_e: %d", instance->pwm_inst.tim_e);
+        return -1;
+    }
+
+    // 检查编码器枚举范围
+    if (instance->encoder_inst.tim_e >= TIM_NUM_MAX)
+    {
+        LOGERROR("[drv_dcmotor] Invalid Encoder tim_e: %d", instance->encoder_inst.tim_e);
+        return -1;
+    }
+
+    // 检查编码器参数
+    if (instance->encoder_ppr == 0)
+    {
+        LOGERROR("[drv_dcmotor] encoder_ppr cannot be 0!");
+        return -1;
+    }
+
+    if (instance->reduction_ratio <= 0.0f)
+    {
+        LOGERROR("[drv_dcmotor] reduction_ratio must be positive!");
+        return -1;
+    }
+
+    if (instance->alpha < 0.0f || instance->alpha > 1.0f)
+    {
+        LOGWARNING("[drv_dcmotor] alpha should be in [0, 1], using 0.5");
+        instance->alpha = 0.5f;
+    }
+
+    // 注册 GPIO 实例
+    if (GPIORegister(&instance->in1_inst) != 0)
+    {
+        LOGERROR("[drv_dcmotor] IN1 GPIO register failed!");
+        return -1;
+    }
+
+    if (GPIORegister(&instance->in2_inst) != 0)
+    {
+        LOGERROR("[drv_dcmotor] IN2 GPIO register failed!");
+        return -1;
+    }
+
+    // 注册 PWM 实例
+    if (PWMRegister(&instance->pwm_inst) != 0)
+    {
+        LOGERROR("[drv_dcmotor] PWM register failed!");
+        return -1;
+    }
+
+    // 注册编码器实例
+    if (EncoderRegister(&instance->encoder_inst) != 0)
+    {
+        LOGERROR("[drv_dcmotor] Encoder register failed!");
+        return -1;
+    }
+
+    // 初始化方向为停止
+    GPIOReset(&instance->in1_inst);
+    GPIOReset(&instance->in2_inst);
+
+    // 初始化速度状态
+    instance->speed = 0.0f;
+    instance->target_speed = 0.0f;
+    instance->last_time = 0;
+
+    // 初始化 PID 控制器
+    PIDInit(&instance->pid, instance->pid.kp, instance->pid.ki, instance->pid.kd);
+
+    // 设置 impl 指针
+    instance->base.impl = instance;
+
+    LOGINFO("[drv_dcmotor] DC Motor initialized");
+    return 0;
+}
 
 static void DCMotor_Enable(MotorInstance *inst)
 {
@@ -89,111 +183,22 @@ static void DCMotor_GetStatus(MotorInstance *inst, MotorStatus_t *status)
     status->online = 1;         // 假设始终在线
 }
 
-/*============================================
- *              外部接口实现
- *============================================*/
-
-int8_t DCMotorInit(DCMotorInstance *instance, uint16_t encoder_ppr, float reduction_ratio, float lpf_alpha)
+static int8_t DCMotor_SetPID_VTable(MotorInstance *inst, MotorLoopType_e loop,
+                                    float kp, float ki, float kd, float integral_limit, float max_value)
 {
-    // 参数检查
-    if (instance == NULL)
+    if (inst == NULL)
     {
         LOGERROR("[drv_dcmotor] Instance is NULL!");
         return -1;
     }
 
-    // 检查 PWM 枚举范围
-    if (instance->pwm_inst.tim_e >= TIM_NUM_MAX)
+    DCMotorInstance *instance = (DCMotorInstance *)inst;
+
+    // DC 电机只支持速度环
+    if (loop != MOTOR_LOOP_SPEED)
     {
-        LOGERROR("[drv_dcmotor] Invalid PWM tim_e: %d", instance->pwm_inst.tim_e);
+        LOGWARNING("[drv_dcmotor] DC motor only supports SPEED loop");
         return -1;
-    }
-
-    // 检查编码器枚举范围
-    if (instance->encoder_inst.tim_e >= TIM_NUM_MAX)
-    {
-        LOGERROR("[drv_dcmotor] Invalid Encoder tim_e: %d", instance->encoder_inst.tim_e);
-        return -1;
-    }
-
-    // 检查编码器参数
-    if (encoder_ppr == 0)
-    {
-        LOGERROR("[drv_dcmotor] encoder_ppr cannot be 0!");
-        return -1;
-    }
-
-    if (reduction_ratio <= 0.0f)
-    {
-        LOGERROR("[drv_dcmotor] reduction_ratio must be positive!");
-        return -1;
-    }
-
-    if (lpf_alpha < 0.0f || lpf_alpha > 1.0f)
-    {
-        LOGWARNING("[drv_dcmotor] lpf_alpha should be in [0, 1], using 0.5");
-        lpf_alpha = 0.5f;
-    }
-
-    // 注册 GPIO 实例
-    if (GPIORegister(&instance->in1_inst) != 0)
-    {
-        LOGERROR("[drv_dcmotor] IN1 GPIO register failed!");
-        return -1;
-    }
-
-    if (GPIORegister(&instance->in2_inst) != 0)
-    {
-        LOGERROR("[drv_dcmotor] IN2 GPIO register failed!");
-        return -1;
-    }
-
-    // 注册 PWM 实例
-    if (PWMRegister(&instance->pwm_inst) != 0)
-    {
-        LOGERROR("[drv_dcmotor] PWM register failed!");
-        return -1;
-    }
-
-    // 注册编码器实例
-    if (EncoderRegister(&instance->encoder_inst) != 0)
-    {
-        LOGERROR("[drv_dcmotor] Encoder register failed!");
-        return -1;
-    }
-
-    // 初始化方向为停止
-    GPIOReset(&instance->in1_inst);
-    GPIOReset(&instance->in2_inst);
-
-    // 设置基本参数
-    instance->encoder_ppr = encoder_ppr;
-    instance->reduction_ratio = reduction_ratio;
-    instance->alpha = lpf_alpha;
-
-    // 初始化速度状态
-    instance->speed = 0.0f;
-    instance->target_speed = 0.0f;
-    instance->last_time = 0;
-
-    // 初始化 PID 控制器（参数为 0，由 DCMotorSetPID 配置）
-    PIDInit(&instance->pid, 0.0f, 0.0f, 0.0f);
-
-    // 设置虚函数表指针（已在宏中设置，此处确保）
-    instance->base.vtable = &g_dc_motor_interface;
-    instance->base.type = MOTOR_TYPE_DC;
-    instance->base.impl = instance;
-
-    LOGINFO("[drv_dcmotor] DC Motor initialized");
-    return 0;
-}
-
-void DCMotorSetPID(DCMotorInstance *instance, float kp, float ki, float kd, float integral_limit, float max_speed, float ff_k_low, float ff_offset_low, float ff_k_high, float ff_offset_high, float ff_split_speed)
-{
-    if (instance == NULL)
-    {
-        LOGWARNING("[drv_dcmotor] Instance is NULL!");
-        return;
     }
 
     // 设置 PID 基本参数
@@ -201,21 +206,24 @@ void DCMotorSetPID(DCMotorInstance *instance, float kp, float ki, float kd, floa
     instance->pid.ki = ki;
     instance->pid.kd = kd;
 
-    // 设置积分限幅（integral_limit > 0 时启用）
+    // 设置积分限幅
     PIDSetIntegralLimit(&instance->pid, integral_limit, integral_limit > 0.0001f ? 1 : 0);
 
-    // 设置两段前馈参数
-    instance->ff_k_low = ff_k_low;
-    instance->ff_offset_low = ff_offset_low;
-    instance->ff_k_high = ff_k_high;
-    instance->ff_offset_high = ff_offset_high;
-    instance->ff_split_speed = ff_split_speed;
-
     // 设置最大速度
-    instance->max_speed = max_speed;
+    instance->max_speed = max_value;
 
-    LOGINFO("[drv_dcmotor] PID configured");
+    // 重新初始化 PID
+    PIDInit(&instance->pid, kp, ki, kd);
+
+    LOGINFO("[drv_dcmotor] PID configured: kp=%.2f, ki=%.2f, kd=%.2f, limit=%.2f, max=%.2f",
+            kp, ki, kd, integral_limit, max_value);
+
+    return 0;
 }
+
+/*============================================
+ *              外部接口实现
+ *============================================*/
 
 void DCMotorSetDutyRatio(DCMotorInstance *instance, float dutyratio)
 {

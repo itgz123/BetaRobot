@@ -67,12 +67,15 @@ typedef struct MotorInstance MotorInstance;
  */
 typedef struct
 {
+    int8_t (*init)(MotorInstance *inst);
     void (*enable)(MotorInstance *inst);
     void (*stop)(MotorInstance *inst);
     void (*set_ref)(MotorInstance *inst, float ref);
     void (*set_speed)(MotorInstance *inst, float speed);
     void (*set_outer_loop)(MotorInstance *inst, MotorLoopType_e loop);
     void (*get_status)(MotorInstance *inst, MotorStatus_t *status);
+    int8_t (*set_pid)(MotorInstance *inst, MotorLoopType_e loop,
+                      float kp, float ki, float kd, float integral_limit, float max_value);
 } MotorInterface_s;
 
 /*============================================
@@ -91,6 +94,34 @@ struct MotorInstance
     MotorType_e type;               // 电机类型
     MotorStatus_t status;           // 电机状态（缓存）
 };
+
+/*============================================
+ *              基类统一接口
+ *============================================*/
+
+/**
+ * @brief 初始化电机（统一入口）
+ * @param inst 电机实例指针
+ * @retval 0 成功
+ * @retval -1 失败
+ * @note 根据 inst->type 分发到具体电机类型的初始化函数
+ */
+int8_t MotorInit(MotorInstance *inst);
+
+/**
+ * @brief 设置 PID 参数（统一入口）
+ * @param inst           电机实例指针
+ * @param loop           闭环类型 (MOTOR_LOOP_SPEED / MOTOR_LOOP_ANGLE)
+ * @param kp             比例系数
+ * @param ki             积分系数
+ * @param kd             微分系数
+ * @param integral_limit 积分限幅
+ * @param max_value      最大值（用于归一化）
+ * @retval 0 成功
+ * @retval -1 失败
+ */
+int8_t MotorSetPID(MotorInstance *inst, MotorLoopType_e loop,
+                   float kp, float ki, float kd, float integral_limit, float max_value);
 
 /*============================================
  *              内联辅助函数
