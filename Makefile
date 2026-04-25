@@ -128,8 +128,8 @@ $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c \
 drv/drv_bmi088/drv_bmi088.c \
 app/app_sensor/app_sensor.c \
 bsp/bsp_can/bsp_can.c \
+drv/drv_motor/drv_motor_base.c \
 
-# drv/drv_motor/drv_motor_base.c \
 # drv/drv_motor/drv_dcmotor/drv_dcmotor.c \
 
 # arm_atan2_f32.c 仅在 CMSIS-DSP V1.9.0+ 中存在

@@ -262,13 +262,13 @@ void ChassisSetVel(ChassisInstance *inst, ChassisVelCmd_t *cmd)
 
     // 通过电机 vtable 控制电机
     if (inst->motors[0])
-        MotorSetSpeed(inst->motors[0], inst->wheel_speed.w1);
+        MotorSetRef(inst->motors[0], inst->wheel_speed.w1);
     if (inst->motors[1])
-        MotorSetSpeed(inst->motors[1], inst->wheel_speed.w2);
+        MotorSetRef(inst->motors[1], inst->wheel_speed.w2);
     if (inst->motors[2])
-        MotorSetSpeed(inst->motors[2], inst->wheel_speed.w3);
+        MotorSetRef(inst->motors[2], inst->wheel_speed.w3);
     if (inst->motors[3])
-        MotorSetSpeed(inst->motors[3], inst->wheel_speed.w4);
+        MotorSetRef(inst->motors[3], inst->wheel_speed.w4);
 }
 
 #endif /* HAL_TIM_MODULE_ENABLED */

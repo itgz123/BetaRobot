@@ -39,6 +39,7 @@
                 "${workspaceFolder}/drv/drv_chassis",
                 "${workspaceFolder}/drv/drv_motor",
                 "${workspaceFolder}/drv/drv_motor/drv_dcmotor",
+                "${workspaceFolder}/drv/drv_motor/drv_djimotor",
                 "${workspaceFolder}/drv/drv_pid",
                 "${workspaceFolder}/drv/drv_sbus",
                 "${workspaceFolder}/bsp/bsp_can"
@@ -90,6 +91,7 @@
                 "${workspaceFolder}/drv/drv_chassis",
                 "${workspaceFolder}/drv/drv_motor",
                 "${workspaceFolder}/drv/drv_motor/drv_dcmotor",
+                "${workspaceFolder}/drv/drv_motor/drv_djimotor",
                 "${workspaceFolder}/drv/drv_pid",
                 "${workspaceFolder}/drv/drv_sbus",
                 "${workspaceFolder}/bsp/bsp_can"
@@ -143,6 +145,7 @@
                 "${workspaceFolder}/drv/drv_chassis",
                 "${workspaceFolder}/drv/drv_motor",
                 "${workspaceFolder}/drv/drv_motor/drv_dcmotor",
+                "${workspaceFolder}/drv/drv_motor/drv_djimotor",
                 "${workspaceFolder}/drv/drv_pid",
                 "${workspaceFolder}/drv/drv_sbus",
                 "${workspaceFolder}/bsp/bsp_can"
@@ -195,6 +198,7 @@
                 "${workspaceFolder}/drv/drv_chassis",
                 "${workspaceFolder}/drv/drv_motor",
                 "${workspaceFolder}/drv/drv_motor/drv_dcmotor",
+                "${workspaceFolder}/drv/drv_motor/drv_djimotor",
                 "${workspaceFolder}/drv/drv_pid",
                 "${workspaceFolder}/drv/drv_sbus",
                 "${workspaceFolder}/bsp/bsp_can"
