@@ -15,6 +15,15 @@
 #include "main.h"
 #include "stdint.h"
 
+/*------------- 常量定义 --------------*/
+
+/**
+ * @brief CAN ID 未使用标记（-1 = 0xFFFFFFFF）
+ * @note 当 tx_id 或 rx_id_list 中的条目设置为 CAN_ID_UNUSED 时，
+ *       表示该实例不使用发送功能或该接收ID槽位无效
+ */
+#define CAN_ID_UNUSED ((uint32_t)0xFFFFFFFF)
+
 /*------------- 类型定义 --------------*/
 
 /**
@@ -34,10 +43,10 @@ typedef struct CANInstance
     void *parent;                              // 父实例指针（由 DRV 层设置）
     BoardCAN_e can_e;                          // 板载CAN枚举（注册时用于查找映射）
     CAN_Map_t map;                             // CAN映射（注册时自动填充）
-    uint32_t tx_id;                            // 发送标准ID
+    uint32_t tx_id;                            // 发送标准ID；CAN_ID_UNUSED(-1) 表示不发送
     CANFilterMode_e filter_mode;               // 过滤器模式（掩码/列表）
-    uint8_t rx_id_count;                       // 列表模式下实际ID数量（1-4）
-    uint32_t rx_id_list[4];                    // 接收ID列表（列表模式：精确ID；掩码模式：rx_id_list[0]为基准ID）
+    uint8_t rx_id_count;                       // 列表模式下有效接收ID数量（注册时自动计算）
+    uint32_t rx_id_list[4];                    // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
     uint32_t rx_mask;                          // 掩码模式：掩码值（列表模式不使用）
     uint32_t rx_id_matched;                    // 实际匹配到的ID（回调中使用）
     uint8_t tx_buff[8];                        // 发送缓存
@@ -58,35 +67,35 @@ typedef struct CANInstance
  * @brief 静态定义CAN实例（掩码模式）
  * @param name    实例名称
  * @param can_idx 板载CAN枚举（BoardCAN_e）
- * @param txid    发送标准ID
- * @param rxid    接收基准ID
+ * @param txid    发送标准ID；-1(CAN_ID_UNUSED) 表示不发送
+ * @param rxid    接收基准ID；-1(CAN_ID_UNUSED) 表示不接收
  * @param mask    掩码值（用于范围匹配）
  * @param cb      接收回调函数（可为NULL）
  *
  * @example 匹配 0x201-0x208: rxid=0x200, mask=0x7F8
  */
-#define CAN_INSTANCE_DEF_MASK(name, can_idx, txid, rxid, mask, cb) \
-    static CANInstance name = {                                    \
-        .parent = NULL,                                            \
-        .can_e = can_idx,                                          \
-        .map = {0},                                                \
-        .tx_id = txid,                                             \
-        .filter_mode = CAN_FILTER_MODE_MASK,                       \
-        .rx_id_count = 1,                                          \
-        .rx_id_list = {rxid, 0, 0, 0},                             \
-        .rx_mask = mask,                                           \
-        .rx_id_matched = 0,                                        \
-        .tx_buff = {0},                                            \
-        .rx_buff = {0},                                            \
-        .rx_len = 0,                                               \
+#define CAN_INSTANCE_DEF_MASK(name, can_idx, txid, rxid, mask, cb)         \
+    static CANInstance name = {                                            \
+        .parent = NULL,                                                    \
+        .can_e = can_idx,                                                  \
+        .map = {0},                                                        \
+        .tx_id = txid,                                                     \
+        .filter_mode = CAN_FILTER_MODE_MASK,                               \
+        .rx_id_count = 1,                                                  \
+        .rx_id_list = {rxid, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED}, \
+        .rx_mask = mask,                                                   \
+        .rx_id_matched = 0,                                                \
+        .tx_buff = {0},                                                    \
+        .rx_buff = {0},                                                    \
+        .rx_len = 0,                                                       \
         .rx_callback = cb}
 
 /**
  * @brief 静态定义CAN实例（列表模式）
  * @param name    实例名称
  * @param can_idx 板载CAN枚举（BoardCAN_e）
- * @param txid    发送标准ID
- * @param id0-id3 接收标准ID列表（最多4个，未使用的填0）
+ * @param txid    发送标准ID；-1(CAN_ID_UNUSED) 表示不发送
+ * @param id0-id3 接收标准ID列表（最多4个，未使用的填 -1）
  * @param cb      接收回调函数（可为NULL）
  *
  * @note id0 用于 FIFO 分配（奇数→FIFO0，偶数→FIFO1）
