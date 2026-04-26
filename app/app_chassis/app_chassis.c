@@ -18,42 +18,18 @@
 #include "bsp_can.h"
 #include "drv_djimotor.h"
 
-// 底盘电机实例
-static DJIMotorInstance chassis_motor;
+// 底盘电机实例定义（使用 INSTANCE_DEF 宏）
+// M3508, ID=6, CAN1, 开环模式
+DJIMOTOR_INSTANCE_DEF(chassis_motor, CAN_1, 6, MOTOR_TYPE_DJI_M3508,
+                      MOTOR_LOOP_OPEN, MOTOR_LOOP_OPEN,
+                      0.0f, 0.0f, 0.0f,  // 电流环 PID（不使用）
+                      0.0f, 0.0f, 0.0f,  // 速度环 PID（不使用）
+                      0.0f, 0.0f, 0.0f); // 位置环 PID（不使用）
 
 static void Init(void)
 {
-    // 初始化底盘电机 (M3508, ID=6, CAN1)
-    DJIMotorInitConfig_t motor_config = {
-        .type = MOTOR_TYPE_DJI_M3508,
-        .can_e = CAN_1,
-        .motor_id = 6,
-
-        // 开环模式：直接输出电流值
-        .outer_loop_type = MOTOR_LOOP_OPEN,
-        .close_loop_type = MOTOR_LOOP_OPEN,
-        .motor_reverse = 0,
-        .feedback_reverse = 0,
-
-        // PID 参数（开环模式不使用）
-        .current_kp = 0.0f,
-        .current_ki = 0.0f,
-        .current_kd = 0.0f,
-        .speed_kp = 0.0f,
-        .speed_ki = 0.0f,
-        .speed_kd = 0.0f,
-        .angle_kp = 0.0f,
-        .angle_ki = 0.0f,
-        .angle_kd = 0.0f,
-
-        // 外部反馈（不使用）
-        .angle_feedback_ptr = NULL,
-        .speed_feedback_ptr = NULL,
-        .speed_ff_ptr = NULL,
-        .current_ff_ptr = NULL,
-    };
-
-    if (DJIMotorRegister(&chassis_motor, &motor_config) != 0)
+    // 注册电机实例
+    if (DJIMotorRegister(&chassis_motor) != 0)
     {
         LOGERROR("[chassis] Motor register failed!");
     }
@@ -68,7 +44,6 @@ ITCM_RAM static void Run(void)
 {
     // 开环模式：直接设置输出电流值
     // M3508 电流范围: -16384 ~ 16384
-    // 设置一个较小的电流值让电机转动
     MotorSetRef(&chassis_motor.base, 200.0f);
 
     // 调用 DJI 电机控制发送
