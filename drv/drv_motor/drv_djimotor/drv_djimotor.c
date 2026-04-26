@@ -202,7 +202,7 @@ static void DJIMotorControl(MotorInstance *inst)
     priv->tx_can->tx_buff[2 * slot] = (uint8_t)(set >> 8);
     priv->tx_can->tx_buff[2 * slot + 1] = (uint8_t)(set & 0xFF);
 
-    // 立即发送
+    // 立即发送（非阻塞，超时0ms）
     CANTransmit(priv->tx_can, 1);
 }
 
@@ -315,8 +315,8 @@ static void DJIMotorGroupControl(MotorGroupInstance *inst)
         priv->tx_can->tx_buff[2 * i + 1] = (uint8_t)(set & 0xFF);
     }
 
-    // 统一发送
-    CANTransmit(priv->tx_can, 10);
+    // 立即发送（非阻塞，超时0ms）
+    CANTransmit(priv->tx_can, 1);
 }
 
 /*============================================
