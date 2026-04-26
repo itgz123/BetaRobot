@@ -75,10 +75,10 @@
  *              任务STACK大小
  *============================================*/
 
-#define CMD_STACK_SIZE 256
-#define CHASSIS_STACK_SIZE 256
-#define MOTOR_STACK_SIZE 256
-#define SENSOR_STACK_SIZE 256
-#define ERROR_STACK_SIZE 256
+#define CMD_STACK_SIZE 512
+#define CHASSIS_STACK_SIZE 512
+#define MOTOR_STACK_SIZE 512
+#define SENSOR_STACK_SIZE 512
+#define ERROR_STACK_SIZE 512
 
 #endif // __APP_CFG_H
