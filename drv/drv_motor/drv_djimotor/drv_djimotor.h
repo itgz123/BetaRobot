@@ -8,9 +8,8 @@
  *       3. 不使用 FreeRTOS
  *
  * @note 多态设计：
- *       - 控制函数不声明，通过基类虚函数表调用
+ *       - 控制函数通过基类虚函数表调用
  *       - 使用 MotorEnable()、MotorStop()、MotorSetRef() 等基类函数
- *       - 仅声明注册函数 DJIMotorRegister() 和控制发送函数 DJIMotorControl()
  */
 
 #ifndef __DRV_DJIMOTOR_H
@@ -25,7 +24,7 @@
  *              常量定义
  *============================================*/
 
-#define DJI_MOTOR_MAX_COUNT 12  // 最大电机数量
+#define DJI_MOTOR_MAX_COUNT 12 // 最大电机数量
 
 // 编码器角度系数 (360/8192)
 #define DJI_ECD_ANGLE_COEF 0.043945f
@@ -39,11 +38,11 @@
 
 typedef struct
 {
-    uint16_t ecd;              // 编码器值 (0-8191)
-    uint16_t last_ecd;         // 上一次编码器值
-    float angle_single_round;  // 单圈角度 (度)
-    float total_angle;         // 总角度 (度)
-    int32_t total_round;       // 总圈数
+    uint16_t ecd;             // 编码器值 (0-8191)
+    uint16_t last_ecd;        // 上一次编码器值
+    float angle_single_round; // 单圈角度 (度)
+    float total_angle;        // 总角度 (度)
+    int32_t total_round;      // 总圈数
 } DJIMotorMeasure_t;
 
 /*============================================
@@ -56,58 +55,102 @@ typedef struct
  */
 typedef struct
 {
-    MotorInstance base;            // 基类（必须放在首位）
+    MotorInstance base; // 基类（必须放在首位）
 
-    DJIMotorMeasure_t measure;     // DJI 电机测量数据
-    CANInstance *can_inst;         // CAN 实例指针
-    uint8_t sender_group;          // 发送分组索引
-    uint8_t message_num;           // 组内消息编号
-    uint32_t feed_cnt;             // 用于计算 dt 的时间戳
+    DJIMotorMeasure_t measure; // DJI 电机测量数据
+    CANInstance *can_inst;     // CAN 实例指针
+    uint8_t sender_group;      // 发送分组索引
+    uint8_t message_num;       // 组内消息编号
+    uint32_t feed_cnt;         // 用于计算 dt 的时间戳
 } DJIMotorInstance;
 
 /*============================================
- *              初始化配置结构体
+ *              虚函数表声明
  *============================================*/
 
 /**
- * @brief DJI 电机初始化配置
+ * @brief DJI 电机虚函数表（供宏定义使用）
  */
-typedef struct
-{
-    MotorType_e type;              // 电机类型 (M3508/M2006/GM6020)
-    BoardCAN_e can_e;              // 板载 CAN 枚举
-    uint8_t motor_id;              // 电机 ID (1-8)
-
-    // 基类配置
-    MotorLoopType_e outer_loop_type;
-    MotorLoopType_e close_loop_type;
-    uint8_t motor_reverse;
-    uint8_t feedback_reverse;
-
-    // PID 参数
-    float current_kp, current_ki, current_kd;
-    float speed_kp, speed_ki, speed_kd;
-    float angle_kp, angle_ki, angle_kd;
-
-    // 外部反馈指针（可选）
-    float *angle_feedback_ptr;
-    float *speed_feedback_ptr;
-    float *speed_ff_ptr;
-    float *current_ff_ptr;
-} DJIMotorInitConfig_t;
+extern const MotorInterface_s djimotor_vtable;
 
 /*============================================
- *              必要的函数声明
+ *              实例定义宏
+ *============================================*/
+
+/**
+ * @brief 定义 DJI 电机实例
+ * @param name       实例名称
+ * @param can_idx    板载 CAN 枚举 (CAN_1 / CAN_2)
+ * @param motor_id   电机 ID (1-8)
+ * @param motor_type 电机类型 (MOTOR_TYPE_DJI_M3508 / M2006 / GM6020)
+ * @param outer_loop 外层闭环类型
+ * @param close_loop 启用的闭环组合
+ * @param cur_kp/ki/kd 电流环 PID 参数
+ * @param spd_kp/ki/kd 速度环 PID 参数
+ * @param ang_kp/ki/kd 位置环 PID 参数
+ *
+ * @example 开环模式：
+ *   DJIMOTOR_INSTANCE_DEF(motor_fr, CAN_1, 1, MOTOR_TYPE_DJI_M3508,
+ *       MOTOR_LOOP_OPEN, MOTOR_LOOP_OPEN,
+ *       0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+ *
+ * @example 速度环模式：
+ *   DJIMOTOR_INSTANCE_DEF(motor_fr, CAN_1, 1, MOTOR_TYPE_DJI_M3508,
+ *       MOTOR_LOOP_SPEED, MOTOR_LOOP_SPEED | MOTOR_LOOP_CURRENT,
+ *       0.5f, 0.0f, 0.0f, 1.5f, 0.1f, 0.0f, 0.0f, 0.0f, 0.0f);
+ */
+#define DJIMOTOR_INSTANCE_DEF(name, can_idx, motor_id, motor_type,                                               \
+                              outer_loop, close_loop,                                                            \
+                              cur_kp, cur_ki, cur_kd,                                                            \
+                              spd_kp, spd_ki, spd_kd,                                                            \
+                              ang_kp, ang_ki, ang_kd)                                                            \
+    CAN_INSTANCE_DEF_LIST(name##_can, can_idx, CAN_ID_UNUSED,                                                    \
+                          ((motor_type) == MOTOR_TYPE_DJI_GM6020 ? (0x204 + (motor_id)) : (0x200 + (motor_id))), \
+                          CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED, NULL);                                    \
+    static DJIMotorInstance name = {                                                                             \
+        .base = {                                                                                                \
+            .vtable = &djimotor_vtable,                                                                          \
+            .type = motor_type,                                                                                  \
+            .settings = {                                                                                        \
+                .outer_loop_type = outer_loop,                                                                   \
+                .close_loop_type = close_loop,                                                                   \
+                .motor_reverse = 0,                                                                              \
+                .feedback_reverse = 0,                                                                           \
+                .angle_feedback_src = MOTOR_FEED,                                                                \
+                .speed_feedback_src = MOTOR_FEED,                                                                \
+                .feedforward_flag = FEEDFORWARD_NONE,                                                            \
+            },                                                                                                   \
+            .controller = {                                                                                      \
+                .angle_feedback_ptr = NULL,                                                                      \
+                .speed_feedback_ptr = NULL,                                                                      \
+                .speed_ff_ptr = NULL,                                                                            \
+                .current_ff_ptr = NULL,                                                                          \
+                .current_pid = {.kp = cur_kp, .ki = cur_ki, .kd = cur_kd},                                       \
+                .speed_pid = {.kp = spd_kp, .ki = spd_ki, .kd = spd_kd},                                         \
+                .angle_pid = {.kp = ang_kp, .ki = ang_ki, .kd = ang_kd},                                         \
+                .pid_ref = 0.0f,                                                                                 \
+            },                                                                                                   \
+            .status = {0},                                                                                       \
+            .dt = 0.0f,                                                                                          \
+        },                                                                                                       \
+        .measure = {0},                                                                                          \
+        .can_inst = &name##_can,                                                                                 \
+        .sender_group = 0,                                                                                       \
+        .message_num = 0,                                                                                        \
+        .feed_cnt = 0,                                                                                           \
+    }
+
+/*============================================
+ *              接口函数
  *============================================*/
 
 /**
  * @brief 注册 DJI 电机实例
- * @param motor  DJI 电机实例指针（需由调用者分配内存）
- * @param config 初始化配置
+ * @param inst DJI 电机实例指针（需先通过宏定义）
  * @retval 0 成功
  * @retval -1 失败
  */
-int8_t DJIMotorRegister(DJIMotorInstance *motor, DJIMotorInitConfig_t *config);
+int8_t DJIMotorRegister(DJIMotorInstance *inst);
 
 /**
  * @brief DJI 电机控制发送（周期调用）

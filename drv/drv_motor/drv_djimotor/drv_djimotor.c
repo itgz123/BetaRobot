@@ -3,8 +3,8 @@
  * @brief DJI 智能电机驱动实现
  *
  * @note 多态实现：
- *       - 所有虚函数表函数为 static，仅通过 vtable 调用
- *       - 对外只提供 DJIMotorRegister() 初始化函数
+ *       - 虚函数表导出供宏定义使用
+ *       - 注册函数仅设置 parent 指针和初始化发送分组
  */
 
 #include "drv_djimotor.h"
@@ -37,19 +37,18 @@ static void DJIMotorStop(MotorInstance *inst);
 static void DJIMotorSetRef(MotorInstance *inst, float ref);
 static void DJIMotorSetOuterLoop(MotorInstance *inst, MotorLoopType_e loop);
 static void DJIMotorGetStatus(MotorInstance *inst, MotorStatus_t *status);
-static int8_t DJIMotorSetPID(MotorInstance *inst, MotorLoopType_e loop,
-                              float kp, float ki, float kd, float integral_limit, float max_out);
+static int8_t DJIMotorSetPID(MotorInstance *inst, MotorLoopType_e loop, float kp, float ki, float kd, float integral_limit, float max_out);
 static void DJIMotorChangeFeedback(MotorInstance *inst, MotorLoopType_e loop, FeedbackSource_e src);
 
 // 内部辅助函数
 static void DJIMotorDecode(CANInstance *can_inst);
-static void DJIMotorSenderGrouping(DJIMotorInstance *motor, DJIMotorInitConfig_t *config);
+static void DJIMotorSenderGrouping(DJIMotorInstance *motor);
 
 /*============================================
- *              虚函数表定义
+ *              虚函数表定义（导出）
  *============================================*/
 
-static const MotorInterface_s djimotor_vtable = {
+const MotorInterface_s djimotor_vtable = {
     .init = DJIMotorInit,
     .enable = DJIMotorEnable,
     .stop = DJIMotorStop,
@@ -104,8 +103,7 @@ static void DJIMotorGetStatus(MotorInstance *inst, MotorStatus_t *status)
         *status = inst->status;
 }
 
-static int8_t DJIMotorSetPID(MotorInstance *inst, MotorLoopType_e loop,
-                              float kp, float ki, float kd, float integral_limit, float max_out)
+static int8_t DJIMotorSetPID(MotorInstance *inst, MotorLoopType_e loop, float kp, float ki, float kd, float integral_limit, float max_out)
 {
     return MotorSetPID(inst, loop, kp, ki, kd, integral_limit, max_out);
 }
@@ -172,14 +170,24 @@ static void DJIMotorDecode(CANInstance *can_inst)
 }
 
 /**
- * @brief DJI 电机发送分组
+ * @brief DJI 电机发送分组（根据宏定义的参数计算）
  */
-static void DJIMotorSenderGrouping(DJIMotorInstance *motor, DJIMotorInitConfig_t *config)
+static void DJIMotorSenderGrouping(DJIMotorInstance *motor)
 {
-    uint8_t motor_id = config->motor_id - 1; // ID 从 0 开始
-    uint8_t can_offset = (config->can_e == CAN_1) ? 0 : 3;
+    // 从 CAN 实例获取 CAN 总线
+    BoardCAN_e can_e = motor->can_inst->can_e;
+    uint8_t motor_id = 0;
 
-    switch (config->type)
+    // 从 rx_id 反推 motor_id
+    uint32_t rx_id = motor->can_inst->rx_id_list[0];
+    if (motor->base.type == MOTOR_TYPE_DJI_GM6020)
+        motor_id = rx_id - 0x204 - 1;
+    else
+        motor_id = rx_id - 0x200 - 1;
+
+    uint8_t can_offset = (can_e == CAN_1) ? 0 : 3;
+
+    switch (motor->base.type)
     {
     case MOTOR_TYPE_DJI_M3508:
     case MOTOR_TYPE_DJI_M2006:
@@ -261,100 +269,56 @@ void DJIMotorControl(void)
 
 /**
  * @brief 注册 DJI 电机实例
- * @param motor  DJI 电机实例指针（需由调用者分配内存）
- * @param config 初始化配置
+ * @param inst DJI 电机实例指针（需先通过 DJIMOTOR_INSTANCE_DEF 宏定义）
  * @retval 0 成功
  * @retval -1 失败
  */
-int8_t DJIMotorRegister(DJIMotorInstance *motor, DJIMotorInitConfig_t *config)
+int8_t DJIMotorRegister(DJIMotorInstance *inst)
 {
-    if (!motor || !config || motor_count >= DJI_MOTOR_MAX_COUNT)
+    if (!inst || motor_count >= DJI_MOTOR_MAX_COUNT)
         return -1;
 
-    // 清零结构体
-    memset(motor, 0, sizeof(DJIMotorInstance));
-
-    // 设置虚函数表
-    motor->base.vtable = &djimotor_vtable;
-    motor->base.type = config->type;
-    motor->base.impl = motor; // impl 指向自身
-
-    // 初始化基类配置
-    MotorInitConfig_t base_config = {
-        .type = config->type,
-        .outer_loop_type = config->outer_loop_type,
-        .close_loop_type = config->close_loop_type,
-        .motor_reverse = config->motor_reverse,
-        .feedback_reverse = config->feedback_reverse,
-        .current_kp = config->current_kp,
-        .current_ki = config->current_ki,
-        .current_kd = config->current_kd,
-        .speed_kp = config->speed_kp,
-        .speed_ki = config->speed_ki,
-        .speed_kd = config->speed_kd,
-        .angle_kp = config->angle_kp,
-        .angle_ki = config->angle_ki,
-        .angle_kd = config->angle_kd,
-        .angle_feedback_ptr = config->angle_feedback_ptr,
-        .speed_feedback_ptr = config->speed_feedback_ptr,
-        .speed_ff_ptr = config->speed_ff_ptr,
-        .current_ff_ptr = config->current_ff_ptr,
-    };
-    MotorBaseInit(&motor->base, &base_config);
-
-    // 初始化 CAN 实例（静态定义）
-    static CANInstance can_instances[DJI_MOTOR_MAX_COUNT];
-    CANInstance *can_inst = &can_instances[motor_count];
-
-    // 计算接收 ID
-    uint32_t rx_id;
-    if (config->type == MOTOR_TYPE_DJI_GM6020)
-        rx_id = 0x204 + config->motor_id;
-    else
-        rx_id = 0x200 + config->motor_id;
-
-    // 配置 CAN 实例
-    can_inst->parent = motor;
-    can_inst->can_e = config->can_e;
-    can_inst->tx_id = CAN_ID_UNUSED; // DJI 电机使用分组发送
-    can_inst->filter_mode = CAN_FILTER_MODE_LIST;
-    can_inst->rx_id_count = 1;  // 列表模式下必须设置有效接收 ID 数量
-    can_inst->rx_id_list[0] = rx_id;
-    can_inst->rx_id_list[1] = CAN_ID_UNUSED;
-    can_inst->rx_id_list[2] = CAN_ID_UNUSED;
-    can_inst->rx_id_list[3] = CAN_ID_UNUSED;
-    can_inst->rx_callback = DJIMotorDecode;
+    // 设置 parent 指针
+    inst->can_inst->parent = inst;
+    inst->can_inst->rx_callback = DJIMotorDecode;
 
     // 注册 CAN 实例
-    if (CANRegister(can_inst) != 0)
+    if (CANRegister(inst->can_inst) != 0)
         return -1;
 
-    motor->can_inst = can_inst;
-
-    // 发送分组
-    DJIMotorSenderGrouping(motor, config);
+    // 计算发送分组
+    DJIMotorSenderGrouping(inst);
 
     // 初始化发送分组 CAN 实例（首次使用时）
     static uint8_t sender_init_flag[6] = {0};
-    uint8_t group = motor->sender_group;
+    uint8_t group = inst->sender_group;
 
     if (!sender_init_flag[group])
     {
-        uint32_t tx_id;
+        uint32_t tx_id = 0x1FF;  // 默认值
         BoardCAN_e can_e = (group < 3) ? CAN_1 : CAN_2;
 
         switch (group % 3)
         {
-        case 0: tx_id = 0x1FF; break;
-        case 1: tx_id = 0x200; break;
-        case 2: tx_id = 0x2FF; break;
+        case 0:
+            tx_id = 0x1FF;
+            break;
+        case 1:
+            tx_id = 0x200;
+            break;
+        case 2:
+            tx_id = 0x2FF;
+            break;
+        default:
+            tx_id = 0x1FF;
+            break;
         }
 
         sender_group[group].parent = NULL;
         sender_group[group].can_e = can_e;
         sender_group[group].tx_id = tx_id;
         sender_group[group].filter_mode = CAN_FILTER_MODE_MASK;
-        sender_group[group].rx_id_count = 0;  // 掩码模式，仅发送不接收
+        sender_group[group].rx_id_count = 0; // 掩码模式，仅发送不接收
         sender_group[group].rx_id_list[0] = CAN_ID_UNUSED;
         sender_group[group].rx_callback = NULL;
 
@@ -363,11 +327,11 @@ int8_t DJIMotorRegister(DJIMotorInstance *motor, DJIMotorInitConfig_t *config)
     }
 
     // 添加到电机列表
-    dji_motor_list[motor_count++] = motor;
+    dji_motor_list[motor_count++] = inst;
 
     // 调用虚函数 init
-    if (motor->base.vtable->init)
-        motor->base.vtable->init(&motor->base);
+    if (inst->base.vtable && inst->base.vtable->init)
+        inst->base.vtable->init(&inst->base);
 
     return 0;
 }
