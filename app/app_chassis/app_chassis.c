@@ -20,7 +20,7 @@
 
 // 底盘电机实例定义（使用 INSTANCE_DEF 宏）
 // M3508, ID=6, CAN1, 开环模式
-DJIMOTOR_INSTANCE_DEF(chassis_motor, CAN_1, 6, MOTOR_TYPE_DJI_M3508,
+DJIMOTOR_INSTANCE_DEF(chassis_motor, CAN_1, 6, DJI_MODEL_M3508,
                       MOTOR_LOOP_OPEN, MOTOR_LOOP_OPEN,
                       0.0f, 0.0f, 0.0f,  // 电流环 PID（不使用）
                       0.0f, 0.0f, 0.0f,  // 速度环 PID（不使用）
@@ -28,8 +28,8 @@ DJIMOTOR_INSTANCE_DEF(chassis_motor, CAN_1, 6, MOTOR_TYPE_DJI_M3508,
 
 static void Init(void)
 {
-    // 注册电机实例
-    if (DJIMotorRegister(&chassis_motor) != 0)
+    // 注册电机实例（通过虚函数表）
+    if (MotorRegister(&chassis_motor.base) != 0)
     {
         LOGERROR("[chassis] Motor register failed!");
     }
@@ -46,8 +46,8 @@ ITCM_RAM static void Run(void)
     // M3508 电流范围: -16384 ~ 16384
     MotorSetRef(&chassis_motor.base, 200.0f);
 
-    // 调用 DJI 电机控制发送
-    DJIMotorControl();
+    // 调用电机控制发送（立即发送 CAN）
+    MotorControl(&chassis_motor.base);
 }
 
 /*============================================
