@@ -135,7 +135,7 @@ static HAL_StatusTypeDef CANFdcanStartIfNeeded(FDCAN_HandleTypeDef *handle)
         return HAL_ERROR;
     }
 
-    if (HAL_FDCAN_ActivateNotification(handle, FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_RX_FIFO1_NEW_MESSAGE, 0) != HAL_OK)
+    if (HAL_FDCAN_ActivateNotification(handle, FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_RX_FIFO1_NEW_MESSAGE | FDCAN_IT_BUS_OFF | FDCAN_IT_ERROR_WARNING | FDCAN_IT_ERROR_PASSIVE, 0) != HAL_OK)
     {
         return HAL_ERROR;
     }
@@ -291,7 +291,7 @@ static HAL_StatusTypeDef CANBxcanStartIfNeeded(CAN_HandleTypeDef *handle)
         return HAL_ERROR;
     }
 
-    if (HAL_CAN_ActivateNotification(handle, CAN_IT_RX_FIFO0_MSG_PENDING | CAN_IT_RX_FIFO1_MSG_PENDING) != HAL_OK)
+    if (HAL_CAN_ActivateNotification(handle, CAN_IT_RX_FIFO0_MSG_PENDING | CAN_IT_RX_FIFO1_MSG_PENDING | CAN_IT_ERROR_WARNING | CAN_IT_ERROR_PASSIVE | CAN_IT_BUSOFF | CAN_IT_LAST_ERROR_CODE) != HAL_OK)
     {
         return HAL_ERROR;
     }
@@ -625,7 +625,17 @@ uint8_t CANTransmit(CANInstance *instance, uint32_t timeout_ms)
 }
 
 /*------------- HAL回调函数重写 --------------*/
-
+// 有关错误回调：
+// can总线发生错误，can外设的硬件寄存器和hal库的软件变量都会有记录。
+// 所以需要清除硬件和软件错误。
+// BxCAN (F4)：
+// - AutoBusOff = ENABLE：硬件自动清除 Bus-off 状态
+// - 回调中调用 HAL_CAN_ResetError：清除软件错误标志
+// - 回调中记录日志
+// FDCAN (H7)：
+// - 无 AutoBusOff 配置，但硬件会自动清除错误
+// - HAL_FDCAN_IRQHandler 自动清除软件错误标志
+// - 回调只需记录日志
 #if BSP_CAN_IP == BSP_CAN_IP_FDCAN
 
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
@@ -644,6 +654,32 @@ void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
     }
 }
 
+void HAL_FDCAN_ErrorCallback(FDCAN_HandleTypeDef *hfdcan)
+{
+    uint32_t error = HAL_FDCAN_GetError(hfdcan);
+
+    if (error != HAL_FDCAN_ERROR_NONE)
+    {
+        LOGWARNING("[bsp_can] FDCAN Error: 0x%08lX", error);
+    }
+}
+
+void HAL_FDCAN_ErrorStatusCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t ErrorStatusITs)
+{
+    if (ErrorStatusITs & FDCAN_IT_BUS_OFF)
+    {
+        LOGERROR("[bsp_can] FDCAN Bus-off!");
+    }
+    else if (ErrorStatusITs & FDCAN_IT_ERROR_PASSIVE)
+    {
+        LOGWARNING("[bsp_can] FDCAN Error Passive!");
+    }
+    else if (ErrorStatusITs & FDCAN_IT_ERROR_WARNING)
+    {
+        LOGWARNING("[bsp_can] FDCAN Error Warning!");
+    }
+}
+
 #else
 
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
@@ -654,6 +690,37 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
     CANDispatchBxcanMessage(hcan, CAN_RX_FIFO1);
+}
+
+void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
+{
+    uint32_t error = HAL_CAN_GetError(hcan);
+    uint32_t esr = hcan->Instance->ESR;
+    uint8_t tec = (esr >> 16) & 0xFF;
+    uint8_t rec = (esr >> 24) & 0x7F;
+
+    if (error & HAL_CAN_ERROR_BOF)
+    {
+        LOGERROR("[bsp_can] CAN Bus-off! TEC=%d, REC=%d", tec, rec);
+    }
+    else if (error & HAL_CAN_ERROR_EPV)
+    {
+        LOGWARNING("[bsp_can] CAN Error Passive! TEC=%d, REC=%d", tec, rec);
+    }
+    else if (error & HAL_CAN_ERROR_EWG)
+    {
+        LOGWARNING("[bsp_can] CAN Error Warning! TEC=%d, REC=%d", tec, rec);
+    }
+    else if (error != HAL_CAN_ERROR_NONE)
+    {
+        LOGWARNING("[bsp_can] CAN Error: 0x%08lX, TEC=%d, REC=%d", error, tec, rec);
+    }
+
+    // 清除软件错误标志
+    if (error != HAL_CAN_ERROR_NONE)
+    {
+        HAL_CAN_ResetError(hcan);
+    }
 }
 
 #endif

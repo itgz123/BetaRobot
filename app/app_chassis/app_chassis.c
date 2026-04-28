@@ -20,7 +20,7 @@
 
 // 底盘电机实例定义（使用 INSTANCE_DEF 宏）
 // M3508, ID=6, CAN1, 开环模式
-DJIMOTOR_INSTANCE_DEF(chassis_motor, CAN_1, 6, DJI_MODEL_M3508,
+DJIMOTOR_INSTANCE_DEF(chassis_motor, CAN_1, 3, DJI_MODEL_M3508,
                       MOTOR_LOOP_OPEN, MOTOR_LOOP_OPEN,
                       0.0f, 0.0f, 0.0f,  // 电流环 PID（不使用）
                       0.0f, 0.0f, 0.0f,  // 速度环 PID（不使用）
