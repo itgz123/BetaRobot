@@ -5,7 +5,8 @@
       "Bash(make)",
       "Bash(python *)",
       "Bash(make *)",
-      "Bash(arm-none-eabi-nm -S \"C:\\\\Users\\\\itgz2\\\\Desktop\\\\BetaRobot\\\\build\\\\BetaRobot.elf\")"
+      "Bash(arm-none-eabi-nm -S \"C:\\\\Users\\\\itgz2\\\\Desktop\\\\BetaRobot\\\\build\\\\BetaRobot.elf\")",
+      "Bash(DEVELOPMENT_BOARD=DM_MC02 make -j8)"
     ]
   }
 }
