@@ -22,10 +22,10 @@
 typedef enum
 {
     MOTOR_BRAND_NONE = 0,
-    MOTOR_BRAND_DJI,    // 大疆
-    MOTOR_BRAND_DM,     // 达妙
-    MOTOR_BRAND_LK,     // 龙科
-    MOTOR_BRAND_HT,     // 海泰
+    MOTOR_BRAND_DJI, // 大疆
+    MOTOR_BRAND_DM,  // 达妙
+    MOTOR_BRAND_LK,  // 龙科
+    MOTOR_BRAND_HT,  // 海泰
 } MotorBrand_e;
 
 /*============================================
@@ -35,9 +35,9 @@ typedef enum
 typedef enum
 {
     DJI_MODEL_NONE = 0,
-    DJI_MODEL_M3508,    // C620 电调
-    DJI_MODEL_M2006,    // C610 电调
-    DJI_MODEL_GM6020,   // 云台电机
+    DJI_MODEL_M3508,  // C620 电调
+    DJI_MODEL_M2006,  // C610 电调
+    DJI_MODEL_GM6020, // 云台电机
 } DJIModel_e;
 
 /*============================================
@@ -133,17 +133,16 @@ typedef struct MotorGroupInstance MotorGroupInstance;
 
 typedef struct
 {
-    int8_t (*reg)(MotorInstance *inst);     // 注册函数
-    int8_t (*init)(MotorInstance *inst);    // 初始化函数
+    int8_t (*reg)(MotorInstance *inst);  // 注册函数
+    int8_t (*init)(MotorInstance *inst); // 初始化函数
     void (*enable)(MotorInstance *inst);
     void (*stop)(MotorInstance *inst);
     void (*set_ref)(MotorInstance *inst, float ref);
     void (*set_outer_loop)(MotorInstance *inst, MotorLoopType_e loop);
     void (*get_status)(MotorInstance *inst, MotorStatus_t *status);
-    int8_t (*set_pid)(MotorInstance *inst, MotorLoopType_e loop,
-                      float kp, float ki, float kd, float integral_limit, float max_out);
+    int8_t (*set_pid)(MotorInstance *inst, MotorLoopType_e loop, float kp, float ki, float kd, float integral_limit, float max_out);
     void (*change_feedback)(MotorInstance *inst, MotorLoopType_e loop, FeedbackSource_e src);
-    void (*control)(MotorInstance *inst);  // 控制并发送
+    void (*control)(MotorInstance *inst); // 控制并发送
 } MotorInterface_s;
 
 /*============================================
@@ -152,13 +151,13 @@ typedef struct
 
 typedef struct
 {
-    int8_t (*reg)(MotorGroupInstance *inst);  // 注册函数
+    int8_t (*reg)(MotorGroupInstance *inst); // 注册函数
     int8_t (*init)(MotorGroupInstance *inst);
     void (*enable)(MotorGroupInstance *inst, uint8_t motor_idx);
     void (*stop)(MotorGroupInstance *inst, uint8_t motor_idx);
     void (*set_ref)(MotorGroupInstance *inst, uint8_t motor_idx, float ref);
     void (*get_status)(MotorGroupInstance *inst, uint8_t motor_idx, MotorStatus_t *status);
-    void (*control)(MotorGroupInstance *inst);  // 统一发送
+    void (*control)(MotorGroupInstance *inst); // 统一发送
 } MotorGroupInterface_s;
 
 /*============================================
@@ -208,8 +207,7 @@ float MotorCascadePID(MotorInstance *inst, float dt);
 /**
  * @brief 设置 PID 参数
  */
-int8_t MotorSetPID(MotorInstance *inst, MotorLoopType_e loop,
-                   float kp, float ki, float kd, float integral_limit, float max_out);
+int8_t MotorSetPID(MotorInstance *inst, MotorLoopType_e loop, float kp, float ki, float kd, float integral_limit, float max_out);
 
 /*============================================
  *              单电机内联辅助函数
