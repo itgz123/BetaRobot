@@ -26,6 +26,11 @@ DJIMOTOR_INSTANCE_DEF(chassis_motor, CAN_1, 3, DJI_MODEL_M3508,
                       0.0f, 0.0f, 0.0f,  // 速度环 PID（不使用）
                       0.0f, 0.0f, 0.0f); // 位置环 PID（不使用）
 
+// 临时变量
+float set_current;
+float get_current;
+// float set_speed;
+
 static void Init(void)
 {
     // 注册电机实例（通过虚函数表）
@@ -45,6 +50,7 @@ ITCM_RAM static void Run(void)
     // 开环模式：直接设置输出电流值
     // M3508 电流范围: -16384 ~ 16384
     MotorSetRef(&chassis_motor.base, 200.0f);
+    // get_current =chassis_motor.priv.measure.;
 
     // 调用电机控制发送（立即发送 CAN）
     MotorControl(&chassis_motor.base);
