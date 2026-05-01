@@ -1,53 +1,52 @@
 ##########################################################################################################################
 # BetaRobot 顶层 Makefile
-# 
-# 功能：根据 app_cfg.h 中的 DEVELOPMENT_BOARD 宏选择对应开发板的 hal 目录
-# 
+#
+# 功能：根据 user_cfg.h 中的 APP_NAME 和 BOARD_NAME 选择应用和开发板
+#
 # 使用方法：
-#   make        # 编译（根据 app_cfg.h 中的 DEVELOPMENT_BOARD 宏）
+#   make        # 编译
 #   make clean  # 清理构建
-# 
-# 切换开发板：修改 app/inc/app_cfg.h 中的 DEVELOPMENT_BOARD 宏
+#
+# 切换应用和开发板：修改 user_cfg.h 中的 APP_NAME / BOARD_NAME
 ##########################################################################################################################
 
 ######################################
-# 从 app_cfg.h 读取 DEVELOPMENT_BOARD 值
+# 从 user_cfg.h 读取 APP_NAME 和 BOARD_NAME
 ######################################
-# DEVELOPMENT_BOARD 定义格式: #define DEVELOPMENT_BOARD STM32F407VET6 (或 0/1/2/3)
-# 这个必须要有git或者msys，因为使用了grep和swk
-BOARD_VALUE := $(shell grep -E "^#define DEVELOPMENT_BOARD" app/app_cfg.h | awk '{print $$3}')
+APP_NAME := $(shell grep -E "^#define APP_NAME" user_cfg.h | awk '{print $$3}')
+BOARD_NAME := $(shell grep -E "^#define BOARD_NAME" user_cfg.h | awk '{print $$3}')
 
-# 根据值选择开发板名称和 hal 目录
-# 值为 0/STM32F407VET6 -> hal/STM32F407VET6
-# 值为 1/DM_MC02      -> hal/DM_MC02
-# 值为 2/DJI_A        -> hal/DJI_A
-# 值为 3/DJI_C        -> hal/DJI_C
-ifeq ($(BOARD_VALUE), 0)
-    BOARD_NAME = STM32F407VET6
+# 设置 app 目录
+APP_DIR := app/$(APP_NAME)
+
+# 导入 app 模块定义（源文件列表、头文件路径）
+include $(APP_DIR)/Makefile
+
+# 根据 BOARD_NAME 选择 hal 目录
+ifeq ($(BOARD_NAME), STM32F407VET6)
     HAL_DIR = hal/STM32F407VET6
-else ifeq ($(BOARD_VALUE), 1)
-    BOARD_NAME = DM_MC02
+else ifeq ($(BOARD_NAME), DM_MC02)
     HAL_DIR = hal/DM_MC02
-else ifeq ($(BOARD_VALUE), 2)
-    BOARD_NAME = DJI_A
+else ifeq ($(BOARD_NAME), DJI_A)
     HAL_DIR = hal/DJI_A
-else ifeq ($(BOARD_VALUE), 3)
-    BOARD_NAME = DJI_C
-    HAL_DIR = hal/DJI_C
-else ifeq ($(BOARD_VALUE), STM32F407VET6)
-    BOARD_NAME = STM32F407VET6
-    HAL_DIR = hal/STM32F407VET6
-else ifeq ($(BOARD_VALUE), DM_MC02)
-    BOARD_NAME = DM_MC02
-    HAL_DIR = hal/DM_MC02
-else ifeq ($(BOARD_VALUE), DJI_A)
-    BOARD_NAME = DJI_A
-    HAL_DIR = hal/DJI_A
-else ifeq ($(BOARD_VALUE), DJI_C)
-    BOARD_NAME = DJI_C
+else ifeq ($(BOARD_NAME), DJI_C)
     HAL_DIR = hal/DJI_C
 else
-    $(error Unknown DEVELOPMENT_BOARD: $(BOARD_VALUE). Valid options: 0/STM32F407VET6, 1/DM_MC02, 2/DJI_A, 3/DJI_C)
+    $(error Unknown BOARD_NAME: $(BOARD_NAME). Valid options: STM32F407VET6, DM_MC02, DJI_A, DJI_C)
+endif
+
+######################################
+# user_cfg.h 变更检测
+######################################
+# APP_NAME 或 BOARD_NAME 变化时自动 clean，避免旧对象文件与当前配置不匹配
+USER_CFG_FINGERPRINT := $(APP_NAME).$(BOARD_NAME)
+USER_CFG_STAMP := build/.user_cfg_stamp
+OLD_FINGERPRINT := $(shell cat $(USER_CFG_STAMP) 2>/dev/null)
+
+ifneq ($(USER_CFG_FINGERPRINT), $(OLD_FINGERPRINT))
+$(shell echo "  [CFG]   user_cfg changed, cleaning..." >&2)
+$(shell rm -rf build 2>/dev/null || true)
+$(shell mkdir -p build 2>/dev/null && echo $(USER_CFG_FINGERPRINT) > $(USER_CFG_STAMP))
 endif
 
 ######################################
@@ -100,14 +99,10 @@ include $(HAL_DIR)/Makefile
 ######################################
 # 过滤 CubeMX 的 main.c，添加 HAL_DIR 前缀，添加根目录 main.c
 C_SOURCES := $(addprefix $(HAL_DIR)/,$(filter-out Core/Src/main.c,$(C_SOURCES)))
-C_SOURCES += main.c \
+C_SOURCES += hal/main.c \
 Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT_printf.c \
 Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT.c \
-app/app_robot/app_robot.c \
-app/app_cmd/app_cmd.c \
-app/app_chassis/app_chassis.c \
-app/app_motor/app_motor.c \
-app/app_error/app_error.c \
+$(addprefix $(APP_DIR)/,$(APP_SOURCES)) \
 bsp/bsp_cfg/bsp_cfg.c \
 bsp/bsp_dwt/bsp_dwt.c \
 bsp/bsp_gpio/bsp_gpio.c \
@@ -126,7 +121,6 @@ $(HAL_DIR)/Drivers/CMSIS/DSP/Source/CommonTables/arm_const_structs.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_sin_f32.c \
 $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c \
 drv/drv_bmi088/drv_bmi088.c \
-app/app_sensor/app_sensor.c \
 bsp/bsp_can/bsp_can.c \
 drv/drv_motor/drv_motor_base.c \
 
@@ -134,7 +128,7 @@ drv/drv_motor/drv_motor_base.c \
 
 # arm_atan2_f32.c 仅在 CMSIS-DSP V1.9.0+ 中存在
 # DJI_A 使用 V1.10.0，支持此文件
-ifneq ($(filter $(BOARD_VALUE),DJI_A 2),)
+ifneq ($(filter $(BOARD_NAME),DJI_A),)
 C_SOURCES += $(HAL_DIR)/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c
 endif
 
@@ -159,12 +153,8 @@ override CFLAGS += $(AS_DEFS) $(AS_INCLUDES)
 # 手动维护的头文件目录
 ######################################
 # app 目录及其子目录
-ALL_DIRS = app \
-app/app_chassis \
-app/app_cmd \
-app/app_error \
-app/app_motor \
-app/app_robot \
+ALL_DIRS = . \
+$(addprefix $(APP_DIR)/,$(APP_INCLUDES)) \
 bsp \
 bsp/bsp_adc \
 bsp/bsp_cfg \
@@ -184,7 +174,6 @@ drv/drv_motor/drv_dcmotor \
 drv/drv_motor/drv_djimotor \
 drv/drv_pid \
 drv/drv_sbus \
-app/app_sensor \
 bsp/bsp_can \
 
 # 添加 -I 前缀
