@@ -8,9 +8,9 @@
 #ifndef __BSP_TIM_H
 #define __BSP_TIM_H
 
-#include "bsp_cfg.h"
+#include "bsp.h"
 
-#ifdef BSP_TIM_MODULE_ENABLED
+#ifdef HAL_TIM_MODULE_ENABLED
 
 #include "main.h"
 #include "stdint.h"

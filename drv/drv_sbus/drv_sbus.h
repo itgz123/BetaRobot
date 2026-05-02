@@ -12,9 +12,9 @@
 #define __DRV_SBUS_H
 
 #include "main.h"
-#include "bsp_cfg.h"
+#include "bsp.h"
 
-#ifdef BSP_UART_MODULE_ENABLED
+#ifdef HAL_UART_MODULE_ENABLED
 #include "bsp_usart.h"
 #include "stdint.h"
 

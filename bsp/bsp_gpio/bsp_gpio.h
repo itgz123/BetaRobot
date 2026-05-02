@@ -8,9 +8,9 @@
 #ifndef __BSP_GPIO_H
 #define __BSP_GPIO_H
 
-#include "bsp_cfg.h"
+#include "bsp.h"
 
-#ifdef BSP_GPIO_MODULE_ENABLED
+#ifdef HAL_GPIO_MODULE_ENABLED
 
 #include "main.h"
 #include "stdint.h"

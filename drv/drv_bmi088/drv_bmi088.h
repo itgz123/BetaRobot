@@ -11,9 +11,9 @@
 #define __DRV_BMI088_H
 
 #include "main.h"
-#include "bsp_cfg.h"
+#include "bsp.h"
 
-#if defined(BSP_SPI_MODULE_ENABLED) && defined(BSP_GPIO_MODULE_ENABLED)
+#if defined(HAL_SPI_MODULE_ENABLED) && defined(HAL_GPIO_MODULE_ENABLED)
 
 #include "bsp_spi.h"
 #include "bsp_gpio.h"

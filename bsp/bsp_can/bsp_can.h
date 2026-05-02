@@ -8,9 +8,9 @@
 #ifndef __BSP_CAN_H
 #define __BSP_CAN_H
 
-#include "bsp_cfg.h"
+#include "bsp.h"
 
-#ifdef BSP_CAN_MODULE_ENABLED
+#if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
 #include "main.h"
 #include "stdint.h"

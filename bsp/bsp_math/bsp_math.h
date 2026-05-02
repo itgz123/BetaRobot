@@ -11,7 +11,7 @@
  *       1. CMSIS-DSP库 - 有DSP指令集时使用查表/优化实现
  *       2. 标准库math.h - 兜底实现
  *
- * @note 硬件特性由 bsp_cfg.h 中的宏定义控制：
+ * @note 硬件特性由 map 文件中的宏定义控制：
  *       - HAS_FPU:     浮点运算单元
  *       - HAS_DSP:     DSP指令集
  */
@@ -19,7 +19,7 @@
 #ifndef __BSP_MATH_H
 #define __BSP_MATH_H
 
-#include "bsp_cfg.h"
+#include "bsp.h"
 #include <stdint.h>
 
 /*============================================

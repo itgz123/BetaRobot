@@ -10,7 +10,7 @@
 
 #include "drv_djimotor.h"
 
-#ifdef BSP_CAN_MODULE_ENABLED
+#if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
 #include "bsp_dwt.h"
 #include <string.h>
