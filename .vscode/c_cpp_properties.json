@@ -2,7 +2,7 @@
     "configurations": [
         {
             "name": "STM32F407VET6",
-            "compilerPath": "C:/Program Files/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc.exe",
+            "compilerPath": "arm-none-eabi-gcc.exe",
             "intelliSenseMode": "windows-gcc-arm",
             "includePath": [
                 // CubeMX HAL 目录
@@ -20,9 +20,27 @@
                 // APP 目录
                 "${workspaceFolder}/app/Assess/**",
                 "${workspaceFolder}/app/dcmotor_chassis/**",
+                // 项目根目录（bsp.h 使用 #include "hal/xxx/bsp_map.h" 相对路径）
+                "${workspaceFolder}",
                 // BSP + DRV
-                "${workspaceFolder}/bsp/**",
-                "${workspaceFolder}/drv/**",
+                "${workspaceFolder}/bsp",
+                "${workspaceFolder}/bsp/bsp_adc",
+                "${workspaceFolder}/bsp/bsp_dwt",
+                "${workspaceFolder}/bsp/bsp_gpio",
+                "${workspaceFolder}/bsp/bsp_log",
+                "${workspaceFolder}/bsp/bsp_math",
+                "${workspaceFolder}/bsp/bsp_spi",
+                "${workspaceFolder}/bsp/bsp_tim",
+                "${workspaceFolder}/bsp/bsp_usart",
+                "${workspaceFolder}/drv",
+                "${workspaceFolder}/drv/drv_bmi088",
+                "${workspaceFolder}/drv/drv_chassis",
+                "${workspaceFolder}/drv/drv_motor",
+                "${workspaceFolder}/drv/drv_motor/drv_dcmotor",
+                "${workspaceFolder}/drv/drv_motor/drv_djimotor",
+                "${workspaceFolder}/drv/drv_pid",
+                "${workspaceFolder}/drv/drv_sbus",
+                "${workspaceFolder}/bsp/bsp_can",
                 // 第三方库
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/RTT",
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/Config"
@@ -41,7 +59,7 @@
         },
         {
             "name": "DJI_A",
-            "compilerPath": "C:/Program Files/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc.exe",
+            "compilerPath": "arm-none-eabi-gcc.exe",
             "intelliSenseMode": "windows-gcc-arm",
             "includePath": [
                 // CubeMX HAL 目录
@@ -59,9 +77,27 @@
                 // APP 目录
                 "${workspaceFolder}/app/Assess/**",
                 "${workspaceFolder}/app/dcmotor_chassis/**",
+                // 项目根目录（bsp.h 使用 #include "hal/xxx/bsp_map.h" 相对路径）
+                "${workspaceFolder}",
                 // BSP + DRV
-                "${workspaceFolder}/bsp/**",
-                "${workspaceFolder}/drv/**",
+                "${workspaceFolder}/bsp",
+                "${workspaceFolder}/bsp/bsp_adc",
+                "${workspaceFolder}/bsp/bsp_dwt",
+                "${workspaceFolder}/bsp/bsp_gpio",
+                "${workspaceFolder}/bsp/bsp_log",
+                "${workspaceFolder}/bsp/bsp_math",
+                "${workspaceFolder}/bsp/bsp_spi",
+                "${workspaceFolder}/bsp/bsp_tim",
+                "${workspaceFolder}/bsp/bsp_usart",
+                "${workspaceFolder}/drv",
+                "${workspaceFolder}/drv/drv_bmi088",
+                "${workspaceFolder}/drv/drv_chassis",
+                "${workspaceFolder}/drv/drv_motor",
+                "${workspaceFolder}/drv/drv_motor/drv_dcmotor",
+                "${workspaceFolder}/drv/drv_motor/drv_djimotor",
+                "${workspaceFolder}/drv/drv_pid",
+                "${workspaceFolder}/drv/drv_sbus",
+                "${workspaceFolder}/bsp/bsp_can",
                 // 第三方库
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/RTT",
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/Config"
@@ -80,7 +116,7 @@
         },
         {
             "name": "DJI_C",
-            "compilerPath": "C:/Program Files/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc.exe",
+            "compilerPath": "arm-none-eabi-gcc.exe",
             "intelliSenseMode": "windows-gcc-arm",
             "includePath": [
                 // CubeMX HAL 目录
@@ -98,9 +134,27 @@
                 // APP 目录
                 "${workspaceFolder}/app/Assess/**",
                 "${workspaceFolder}/app/dcmotor_chassis/**",
+                // 项目根目录（bsp.h 使用 #include "hal/xxx/bsp_map.h" 相对路径）
+                "${workspaceFolder}",
                 // BSP + DRV
-                "${workspaceFolder}/bsp/**",
-                "${workspaceFolder}/drv/**",
+                "${workspaceFolder}/bsp",
+                "${workspaceFolder}/bsp/bsp_adc",
+                "${workspaceFolder}/bsp/bsp_dwt",
+                "${workspaceFolder}/bsp/bsp_gpio",
+                "${workspaceFolder}/bsp/bsp_log",
+                "${workspaceFolder}/bsp/bsp_math",
+                "${workspaceFolder}/bsp/bsp_spi",
+                "${workspaceFolder}/bsp/bsp_tim",
+                "${workspaceFolder}/bsp/bsp_usart",
+                "${workspaceFolder}/drv",
+                "${workspaceFolder}/drv/drv_bmi088",
+                "${workspaceFolder}/drv/drv_chassis",
+                "${workspaceFolder}/drv/drv_motor",
+                "${workspaceFolder}/drv/drv_motor/drv_dcmotor",
+                "${workspaceFolder}/drv/drv_motor/drv_djimotor",
+                "${workspaceFolder}/drv/drv_pid",
+                "${workspaceFolder}/drv/drv_sbus",
+                "${workspaceFolder}/bsp/bsp_can",
                 // 第三方库
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/RTT",
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/Config"
@@ -119,7 +173,7 @@
         },
         {
             "name": "DM_MC02",
-            "compilerPath": "C:/Program Files/arm-gnu-toolchain-15.2.rel1-mingw-w64-x86_64-arm-none-eabi/bin/arm-none-eabi-gcc.exe",
+            "compilerPath": "arm-none-eabi-gcc.exe",
             "intelliSenseMode": "windows-gcc-arm",
             "includePath": [
                 // CubeMX HAL 目录
@@ -137,9 +191,27 @@
                 // APP 目录
                 "${workspaceFolder}/app/Assess/**",
                 "${workspaceFolder}/app/dcmotor_chassis/**",
+                // 项目根目录（bsp.h 使用 #include "hal/xxx/bsp_map.h" 相对路径）
+                "${workspaceFolder}",
                 // BSP + DRV
-                "${workspaceFolder}/bsp/**",
-                "${workspaceFolder}/drv/**",
+                "${workspaceFolder}/bsp",
+                "${workspaceFolder}/bsp/bsp_adc",
+                "${workspaceFolder}/bsp/bsp_dwt",
+                "${workspaceFolder}/bsp/bsp_gpio",
+                "${workspaceFolder}/bsp/bsp_log",
+                "${workspaceFolder}/bsp/bsp_math",
+                "${workspaceFolder}/bsp/bsp_spi",
+                "${workspaceFolder}/bsp/bsp_tim",
+                "${workspaceFolder}/bsp/bsp_usart",
+                "${workspaceFolder}/drv",
+                "${workspaceFolder}/drv/drv_bmi088",
+                "${workspaceFolder}/drv/drv_chassis",
+                "${workspaceFolder}/drv/drv_motor",
+                "${workspaceFolder}/drv/drv_motor/drv_dcmotor",
+                "${workspaceFolder}/drv/drv_motor/drv_djimotor",
+                "${workspaceFolder}/drv/drv_pid",
+                "${workspaceFolder}/drv/drv_sbus",
+                "${workspaceFolder}/bsp/bsp_can",
                 // 第三方库
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/RTT",
                 "${workspaceFolder}/Middlewares/Third_Party/SEGGER/Config"
