@@ -9,9 +9,9 @@
 #ifndef __BSP_SPI_H
 #define __BSP_SPI_H
 
-#include "bsp_cfg.h"
+#include "bsp.h"
 
-#ifdef BSP_SPI_MODULE_ENABLED
+#ifdef HAL_SPI_MODULE_ENABLED
 
 #include "main.h"
 #include "stdint.h"

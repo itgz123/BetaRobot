@@ -7,10 +7,9 @@
 
 #include "bsp_can.h"
 
-#ifdef BSP_CAN_MODULE_ENABLED
+#if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 #if CAN_INSTANCE_NUM > 0
 
-#include "bsp_check.h"
 #include "bsp_dwt.h"
 #include "bsp_log.h"
 #include "string.h"

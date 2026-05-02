@@ -103,7 +103,7 @@ C_SOURCES += hal/main.c \
 Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT_printf.c \
 Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT.c \
 $(addprefix $(APP_DIR)/,$(APP_SOURCES)) \
-bsp/bsp_cfg/bsp_cfg.c \
+$(HAL_DIR)/bsp_map.c \
 bsp/bsp_dwt/bsp_dwt.c \
 bsp/bsp_gpio/bsp_gpio.c \
 bsp/bsp_log/bsp_log.c \
@@ -155,9 +155,9 @@ override CFLAGS += $(AS_DEFS) $(AS_INCLUDES)
 # app 目录及其子目录
 ALL_DIRS = . \
 $(addprefix $(APP_DIR)/,$(APP_INCLUDES)) \
+$(HAL_DIR) \
 bsp \
 bsp/bsp_adc \
-bsp/bsp_cfg \
 bsp/bsp_dwt \
 bsp/bsp_gpio \
 bsp/bsp_log \

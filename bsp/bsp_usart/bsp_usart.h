@@ -8,9 +8,9 @@
 #ifndef __BSP_USART_H
 #define __BSP_USART_H
 
-#include "bsp_cfg.h"
+#include "bsp.h"
 
-#ifdef BSP_UART_MODULE_ENABLED
+#ifdef HAL_UART_MODULE_ENABLED
 
 #include "main.h"
 #include "stdint.h"

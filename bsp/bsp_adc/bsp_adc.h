@@ -16,9 +16,9 @@
 #ifndef __BSP_ADC_H
 #define __BSP_ADC_H
 
-#include "bsp_cfg.h"
+#include "bsp.h"
 
-#ifdef BSP_ADC_MODULE_ENABLED
+#ifdef HAL_ADC_MODULE_ENABLED
 
 /*============================================
  *              ADC实例结构体

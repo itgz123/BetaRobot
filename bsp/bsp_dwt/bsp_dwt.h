@@ -9,7 +9,7 @@
 #define __BSP_DWT_H
 
 #include "main.h"
-#include "bsp_cfg.h"
+#include "bsp.h"
 #include "stdint.h"
 
 /*------------- 类型定义 --------------*/

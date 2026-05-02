@@ -10,7 +10,6 @@
 #if UART_INSTANCE_NUM > 0
 
 #include "bsp_log.h"
-#include "bsp_check.h"
 #include "string.h"
 
 /*------------- 私有类型定义 --------------*/
