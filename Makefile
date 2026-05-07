@@ -1,57 +1,67 @@
 ##########################################################################################################################
 # BetaRobot 顶层 Makefile
 #
-# 功能：根据 user_cfg.h 中的 APP_NAME 和 BOARD_NAME 选择应用和开发板
+# 功能：根据 user_cfg.h 中的 APP_NAME 选择应用，根据 app_cfg.h 中的 DEVELOPMENT_BOARD 选择开发板
 #
 # 使用方法：
 #   make        # 编译
 #   make clean  # 清理构建
 #
-# 切换应用和开发板：修改 user_cfg.h 中的 APP_NAME / BOARD_NAME
+# 切换应用：修改 user_cfg.h 中的 APP_NAME
+# 切换开发板：修改 app/<APP_NAME>/app_cfg.h 中的 DEVELOPMENT_BOARD
 ##########################################################################################################################
 
 ######################################
-# 从 user_cfg.h 读取 APP_NAME 和 BOARD_NAME
+# 从 user_cfg.h 读取 APP_NAME
 ######################################
 APP_NAME := $(shell grep -E "^#define APP_NAME" user_cfg.h | awk '{print $$3}')
-BOARD_NAME := $(shell grep -E "^#define BOARD_NAME" user_cfg.h | awk '{print $$3}')
 
 # 设置 app 目录
 APP_DIR := app/$(APP_NAME)
 APP_MAKEFILE := $(APP_DIR)/Makefile
+APP_CFG_H := $(APP_DIR)/app_cfg.h
 
 ifeq ($(wildcard $(APP_MAKEFILE)),)
 $(error App "$(APP_NAME)" is not initialized. Run: git submodule update --init $(APP_DIR))
 endif
 
+ifeq ($(wildcard $(APP_CFG_H)),)
+$(error App config not found: $(APP_CFG_H))
+endif
+
 # 导入 app 模块定义（源文件列表、头文件路径）
 include $(APP_MAKEFILE)
 
-# 根据 BOARD_NAME 选择 hal 目录
-ifeq ($(BOARD_NAME), STM32F407VET6)
+######################################
+# 从 app_cfg.h 读取 DEVELOPMENT_BOARD
+######################################
+DEVELOPMENT_BOARD := $(shell grep -E "^#define DEVELOPMENT_BOARD" $(APP_CFG_H) | awk '{print $$3}')
+
+# 根据 DEVELOPMENT_BOARD 选择 hal 目录
+ifeq ($(DEVELOPMENT_BOARD), STM32F407VET6)
     HAL_DIR = hal/STM32F407VET6
-else ifeq ($(BOARD_NAME), DM_MC02)
+else ifeq ($(DEVELOPMENT_BOARD), DM_MC02)
     HAL_DIR = hal/DM_MC02
-else ifeq ($(BOARD_NAME), DJI_A)
+else ifeq ($(DEVELOPMENT_BOARD), DJI_A)
     HAL_DIR = hal/DJI_A
-else ifeq ($(BOARD_NAME), DJI_C)
+else ifeq ($(DEVELOPMENT_BOARD), DJI_C)
     HAL_DIR = hal/DJI_C
 else
-    $(error Unknown BOARD_NAME: $(BOARD_NAME). Valid options: STM32F407VET6, DM_MC02, DJI_A, DJI_C)
+    $(error Unknown DEVELOPMENT_BOARD: $(DEVELOPMENT_BOARD). Valid options: STM32F407VET6, DM_MC02, DJI_A, DJI_C)
 endif
 
 ######################################
-# user_cfg.h 变更检测
+# 配置变更检测
 ######################################
-# APP_NAME 或 BOARD_NAME 变化时自动 clean，避免旧对象文件与当前配置不匹配
-USER_CFG_FINGERPRINT := $(APP_NAME).$(BOARD_NAME)
-USER_CFG_STAMP := build/.user_cfg_stamp
-OLD_FINGERPRINT := $(shell cat $(USER_CFG_STAMP) 2>/dev/null)
+# APP_NAME 或 DEVELOPMENT_BOARD 变化时自动 clean，避免旧对象文件与当前配置不匹配
+CFG_FINGERPRINT := $(APP_NAME).$(DEVELOPMENT_BOARD)
+CFG_STAMP := build/.cfg_stamp
+OLD_FINGERPRINT := $(shell cat $(CFG_STAMP) 2>/dev/null)
 
-ifneq ($(USER_CFG_FINGERPRINT), $(OLD_FINGERPRINT))
-$(shell echo "  [CFG]   user_cfg changed, cleaning..." >&2)
+ifneq ($(CFG_FINGERPRINT), $(OLD_FINGERPRINT))
+$(shell echo "  [CFG]   config changed, cleaning..." >&2)
 $(shell rm -rf build 2>/dev/null || true)
-$(shell mkdir -p build 2>/dev/null && echo $(USER_CFG_FINGERPRINT) > $(USER_CFG_STAMP))
+$(shell mkdir -p build 2>/dev/null && echo $(CFG_FINGERPRINT) > $(CFG_STAMP))
 endif
 
 ######################################
@@ -208,7 +218,7 @@ LDSCRIPT := $(HAL_DIR)/$(LDSCRIPT)
 ######################################
 # 添加开发板选择宏
 ######################################
-C_DEFS += -DDEVELOPMENT_BOARD=$(BOARD_NAME)
+C_DEFS += -DDEVELOPMENT_BOARD=$(DEVELOPMENT_BOARD)
 
 ######################################
 # CMSIS-DSP 支持（Cortex-M4F）
