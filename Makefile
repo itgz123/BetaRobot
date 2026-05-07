@@ -18,9 +18,14 @@ BOARD_NAME := $(shell grep -E "^#define BOARD_NAME" user_cfg.h | awk '{print $$3
 
 # 设置 app 目录
 APP_DIR := app/$(APP_NAME)
+APP_MAKEFILE := $(APP_DIR)/Makefile
+
+ifeq ($(wildcard $(APP_MAKEFILE)),)
+$(error App "$(APP_NAME)" is not initialized. Run: git submodule update --init $(APP_DIR))
+endif
 
 # 导入 app 模块定义（源文件列表、头文件路径）
-include $(APP_DIR)/Makefile
+include $(APP_MAKEFILE)
 
 # 根据 BOARD_NAME 选择 hal 目录
 ifeq ($(BOARD_NAME), STM32F407VET6)

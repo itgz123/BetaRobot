@@ -18,8 +18,7 @@
                 "${workspaceFolder}/hal/STM32F407VET6/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS",
                 "${workspaceFolder}/hal/STM32F407VET6/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
                 // APP 目录
-                "${workspaceFolder}/app/Assess/**",
-                "${workspaceFolder}/app/dcmotor_chassis/**",
+                "${workspaceFolder}/app/${config:betaRobot.appName}/**",
                 // 项目根目录（bsp.h 使用 #include "hal/xxx/bsp_map.h" 相对路径）
                 "${workspaceFolder}",
                 // BSP + DRV
@@ -75,8 +74,7 @@
                 "${workspaceFolder}/hal/DJI_A/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS",
                 "${workspaceFolder}/hal/DJI_A/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
                 // APP 目录
-                "${workspaceFolder}/app/Assess/**",
-                "${workspaceFolder}/app/dcmotor_chassis/**",
+                "${workspaceFolder}/app/${config:betaRobot.appName}/**",
                 // 项目根目录（bsp.h 使用 #include "hal/xxx/bsp_map.h" 相对路径）
                 "${workspaceFolder}",
                 // BSP + DRV
@@ -132,8 +130,7 @@
                 "${workspaceFolder}/hal/DJI_C/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS",
                 "${workspaceFolder}/hal/DJI_C/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
                 // APP 目录
-                "${workspaceFolder}/app/Assess/**",
-                "${workspaceFolder}/app/dcmotor_chassis/**",
+                "${workspaceFolder}/app/${config:betaRobot.appName}/**",
                 // 项目根目录（bsp.h 使用 #include "hal/xxx/bsp_map.h" 相对路径）
                 "${workspaceFolder}",
                 // BSP + DRV
@@ -189,8 +186,7 @@
                 "${workspaceFolder}/hal/DM_MC02/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS",
                 "${workspaceFolder}/hal/DM_MC02/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F",
                 // APP 目录
-                "${workspaceFolder}/app/Assess/**",
-                "${workspaceFolder}/app/dcmotor_chassis/**",
+                "${workspaceFolder}/app/${config:betaRobot.appName}/**",
                 // 项目根目录（bsp.h 使用 #include "hal/xxx/bsp_map.h" 相对路径）
                 "${workspaceFolder}",
                 // BSP + DRV

@@ -1,0 +1,6 @@
+[submodule "app/Assess"]
+	path = app/Assess
+	url = git@gitee.com:trwwrt/BetaRobot-App-Assess.git
+[submodule "app/dcmotor_chassis"]
+	path = app/dcmotor_chassis
+	url = git@gitee.com:trwwrt/BetaRobot-App-dcmotor-chassis.git
