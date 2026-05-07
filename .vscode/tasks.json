@@ -20,7 +20,7 @@
             "label": "build",
             "type": "shell",
             "command": "${config:betaRobot.makeCommand} -j${config:betaRobot.buildJobs}",
-            "detail": "编译（根据 user_cfg.h 中的 APP_NAME / BOARD_NAME）",
+            "detail": "编译（根据 user_cfg.h 的 APP_NAME 和 app_cfg.h 的 DEVELOPMENT_BOARD）",
             "group": {
                 "kind": "build",
                 "isDefault": true
