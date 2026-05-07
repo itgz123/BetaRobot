@@ -43,24 +43,6 @@ defined in linker script */
 .word  _sbss
 /* end address for the .bss section. defined in linker script */
 .word  _ebss
-
-/* RAM_D1 section symbols. defined in linker script */
-.word  _sram_d1
-.word  _eram_d1
-.word  _siram_d1
-/* RAM_D2 section symbols. defined in linker script */
-.word  _sram_d2
-.word  _eram_d2
-.word  _siram_d2
-/* RAM_D3 section symbols. defined in linker script */
-.word  _sram_d3
-.word  _eram_d3
-.word  _siram_d3
-/* ITCMRAM section symbols. defined in linker script */
-.word  _sitcmram
-.word  _eitcmram
-.word  _siitcmram
-
 /* stack used for SystemInit_ExtMemCtl; always internal RAM used */
 
 /**
@@ -112,74 +94,6 @@ FillZerobss:
 LoopFillZerobss:
   cmp r2, r4
   bcc FillZerobss
-
-/* Copy RAM_D1 segment initializers from flash to RAM_D1 */
-  ldr r0, =_sram_d1
-  ldr r1, =_eram_d1
-  ldr r2, =_siram_d1
-  movs r3, #0
-  b LoopCopyRamD1
-
-CopyRamD1:
-  ldr r4, [r2, r3]
-  str r4, [r0, r3]
-  adds r3, r3, #4
-
-LoopCopyRamD1:
-  adds r4, r0, r3
-  cmp r4, r1
-  bcc CopyRamD1
-
-/* Copy RAM_D2 segment initializers from flash to RAM_D2 */
-  ldr r0, =_sram_d2
-  ldr r1, =_eram_d2
-  ldr r2, =_siram_d2
-  movs r3, #0
-  b LoopCopyRamD2
-
-CopyRamD2:
-  ldr r4, [r2, r3]
-  str r4, [r0, r3]
-  adds r3, r3, #4
-
-LoopCopyRamD2:
-  adds r4, r0, r3
-  cmp r4, r1
-  bcc CopyRamD2
-
-/* Copy RAM_D3 segment initializers from flash to RAM_D3 */
-  ldr r0, =_sram_d3
-  ldr r1, =_eram_d3
-  ldr r2, =_siram_d3
-  movs r3, #0
-  b LoopCopyRamD3
-
-CopyRamD3:
-  ldr r4, [r2, r3]
-  str r4, [r0, r3]
-  adds r3, r3, #4
-
-LoopCopyRamD3:
-  adds r4, r0, r3
-  cmp r4, r1
-  bcc CopyRamD3
-
-/* Copy ITCMRAM segment initializers from flash to ITCMRAM */
-  ldr r0, =_sitcmram
-  ldr r1, =_eitcmram
-  ldr r2, =_siitcmram
-  movs r3, #0
-  b LoopCopyItcmram
-
-CopyItcmram:
-  ldr r4, [r2, r3]
-  str r4, [r0, r3]
-  adds r3, r3, #4
-
-LoopCopyItcmram:
-  adds r4, r0, r3
-  cmp r4, r1
-  bcc CopyItcmram
 
 /* Call static constructors */
     bl __libc_init_array
