@@ -1,14 +1,22 @@
+##########################################################################################################################
+# BetaRobot 顶层 CMakeLists.txt
+#
+# 功能：根据 user_cfg.h 中的 APP_NAME 选择应用，根据 app_cfg.h 中的 DEVELOPMENT_BOARD 选择开发板
+#       读取 CubeMX 生成的 cmake/stm32cubemx/CMakeLists.txt 中的变量作为 HAL 源文件和头文件配置
+#
+# 使用方法：
+#   cmake --preset Debug      # 配置 Debug 构建
+#   cmake --preset Release    # 配置 Release 构建
+#   cmake --build build -j24  # 编译
+#   cmake --build build --target clean  # 清理
+#
+# 切换应用：修改 user_cfg.h 中的 APP_NAME
+# 切换开发板：修改 app/<APP_NAME>/app_cfg.h 中的 DEVELOPMENT_BOARD
+##########################################################################################################################
+
 cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_SYSTEM_NAME Generic)
-set(CMAKE_SYSTEM_PROCESSOR arm)
-set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
-
 project(BetaRobot C ASM)
-
-if(DEFINED CMAKE_TOOLCHAIN_FILE)
-    set(_TOOLCHAIN_FILE_USED "${CMAKE_TOOLCHAIN_FILE}")
-endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 11)
@@ -17,6 +25,10 @@ set(CMAKE_C_EXTENSIONS ON)
 
 set(TARGET_NAME BetaRobot)
 
+######################################
+# 辅助函数
+######################################
+# 从头文件读取宏定义值
 function(read_define output file_name define_name)
     file(STRINGS "${file_name}" define_line REGEX "^[ \t]*#[ \t]*define[ \t]+${define_name}[ \t]+[A-Za-z0-9_]+")
     if(NOT define_line)
@@ -27,6 +39,7 @@ function(read_define output file_name define_name)
     set(${output} "${define_value}" PARENT_SCOPE)
 endfunction()
 
+# 为路径列表添加前缀
 function(prefix_paths output base)
     set(result)
     foreach(item IN LISTS ARGN)
@@ -35,6 +48,19 @@ function(prefix_paths output base)
     set(${output} "${result}" PARENT_SCOPE)
 endfunction()
 
+# 规范化路径列表
+function(normalize_paths output)
+    set(result)
+    foreach(item IN LISTS ARGN)
+        get_filename_component(abs_path "${item}" ABSOLUTE)
+        list(APPEND result "${abs_path}")
+    endforeach()
+    set(${output} "${result}" PARENT_SCOPE)
+endfunction()
+
+######################################
+# 从 user_cfg.h 读取 APP_NAME
+######################################
 read_define(APP_NAME "${CMAKE_SOURCE_DIR}/user_cfg.h" APP_NAME)
 set(APP_DIR "${CMAKE_SOURCE_DIR}/app/${APP_NAME}")
 
@@ -42,6 +68,9 @@ if(NOT EXISTS "${APP_DIR}/CMakeLists.txt")
     message(FATAL_ERROR "App ${APP_NAME} is not initialized or has no CMakeLists.txt: ${APP_DIR}")
 endif()
 
+######################################
+# 从 app_cfg.h 读取 DEVELOPMENT_BOARD
+######################################
 read_define(DEVELOPMENT_BOARD "${APP_DIR}/app_cfg.h" DEVELOPMENT_BOARD)
 set(BOARD "${DEVELOPMENT_BOARD}")
 set(HAL_DIR "${CMAKE_SOURCE_DIR}/hal/${BOARD}")
@@ -50,228 +79,114 @@ if(NOT EXISTS "${HAL_DIR}")
     message(FATAL_ERROR "Unknown DEVELOPMENT_BOARD: ${DEVELOPMENT_BOARD}")
 endif()
 
+# 导入 app 模块定义（源文件列表、头文件路径）
 include("${APP_DIR}/CMakeLists.txt")
 prefix_paths(APP_SOURCE_FILES "${APP_DIR}" ${APP_SOURCES})
 prefix_paths(APP_INCLUDE_PATHS "${APP_DIR}" ${APP_INCLUDE_DIRS})
 
-if(BOARD STREQUAL "STM32F407VET6")
-    set(MCU_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
-    set(BOARD_DEFINES USE_HAL_DRIVER STM32F407xx)
-    set(DSP_DEFINE ARM_MATH_CM4)
-    set(LINKER_SCRIPT "${HAL_DIR}/STM32F407XX_FLASH.ld")
-    set(STARTUP_FILE "${HAL_DIR}/startup_stm32f407xx.s")
-    set(HAL_C_SOURCES
-        Core/Src/gpio.c
-        Core/Src/freertos.c
-        Core/Src/dma.c
-        Core/Src/tim.c
-        Core/Src/usart.c
-        Core/Src/stm32f4xx_it.c
-        Core/Src/stm32f4xx_hal_msp.c
-        Core/Src/stm32f4xx_hal_timebase_tim.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c
-        Core/Src/system_stm32f4xx.c
-        Middlewares/Third_Party/FreeRTOS/Source/croutine.c
-        Middlewares/Third_Party/FreeRTOS/Source/event_groups.c
-        Middlewares/Third_Party/FreeRTOS/Source/list.c
-        Middlewares/Third_Party/FreeRTOS/Source/queue.c
-        Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c
-        Middlewares/Third_Party/FreeRTOS/Source/tasks.c
-        Middlewares/Third_Party/FreeRTOS/Source/timers.c
-        Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.c
-        Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c
-        Core/Src/sysmem.c
-        Core/Src/syscalls.c
-    )
-elseif(BOARD STREQUAL "DM_MC02")
-    set(MCU_FLAGS -mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard)
-    set(BOARD_DEFINES USE_PWR_LDO_SUPPLY USE_HAL_DRIVER STM32H723xx)
-    set(DSP_DEFINE ARM_MATH_CM4)
-    set(LINKER_SCRIPT "${HAL_DIR}/STM32H723XG_FLASH.ld")
-    set(STARTUP_FILE "${HAL_DIR}/startup_stm32h723xx.s")
-    set(HAL_C_SOURCES
-        Core/Src/gpio.c
-        Core/Src/freertos.c
-        Core/Src/adc.c
-        Core/Src/dma.c
-        Core/Src/spi.c
-        Core/Src/tim.c
-        Core/Src/usart.c
-        Core/Src/stm32h7xx_it.c
-        Core/Src/stm32h7xx_hal_msp.c
-        Core/Src/stm32h7xx_hal_timebase_tim.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_tim.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_tim_ex.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_adc.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_adc_ex.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_rcc.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_rcc_ex.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_flash.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_flash_ex.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_gpio.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_hsem.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dma.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_dma_ex.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_mdma.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_pwr_ex.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_cortex.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_i2c.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_i2c_ex.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_exti.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_spi.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_spi_ex.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_uart.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_uart_ex.c
-        Core/Src/system_stm32h7xx.c
-        Middlewares/Third_Party/FreeRTOS/Source/croutine.c
-        Middlewares/Third_Party/FreeRTOS/Source/event_groups.c
-        Middlewares/Third_Party/FreeRTOS/Source/list.c
-        Middlewares/Third_Party/FreeRTOS/Source/queue.c
-        Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c
-        Middlewares/Third_Party/FreeRTOS/Source/tasks.c
-        Middlewares/Third_Party/FreeRTOS/Source/timers.c
-        Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.c
-        Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c
-        Core/Src/sysmem.c
-        Core/Src/syscalls.c
-        Core/Src/fdcan.c
-        Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal_fdcan.c
-        Core/Src/i2c.c
-    )
-elseif(BOARD STREQUAL "DJI_A")
-    set(MCU_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
-    set(BOARD_DEFINES USE_HAL_DRIVER STM32F427xx)
-    set(DSP_DEFINE ARM_MATH_CM4)
-    set(LINKER_SCRIPT "${HAL_DIR}/STM32F427XX_FLASH.ld")
-    set(STARTUP_FILE "${HAL_DIR}/startup_stm32f427xx.s")
-    set(HAL_C_SOURCES
-        Core/Src/gpio.c
-        Core/Src/freertos.c
-        Core/Src/adc.c
-        Core/Src/dma.c
-        Core/Src/tim.c
-        Core/Src/usart.c
-        Core/Src/stm32f4xx_it.c
-        Core/Src/stm32f4xx_hal_msp.c
-        Core/Src/stm32f4xx_hal_timebase_tim.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c
-        Core/Src/system_stm32f4xx.c
-        Middlewares/Third_Party/FreeRTOS/Source/croutine.c
-        Middlewares/Third_Party/FreeRTOS/Source/event_groups.c
-        Middlewares/Third_Party/FreeRTOS/Source/list.c
-        Middlewares/Third_Party/FreeRTOS/Source/queue.c
-        Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c
-        Middlewares/Third_Party/FreeRTOS/Source/tasks.c
-        Middlewares/Third_Party/FreeRTOS/Source/timers.c
-        Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.c
-        Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c
-        Core/Src/sysmem.c
-        Core/Src/syscalls.c
-        Core/Src/can.c
-        Core/Src/dac.c
-        Core/Src/i2c.c
-        Core/Src/spi.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dac.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dac_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c
-    )
-elseif(BOARD STREQUAL "DJI_C")
-    set(MCU_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
-    set(BOARD_DEFINES USE_HAL_DRIVER STM32F407xx)
-    set(DSP_DEFINE ARM_MATH_CM4)
-    set(LINKER_SCRIPT "${HAL_DIR}/STM32F407XX_FLASH.ld")
-    set(STARTUP_FILE "${HAL_DIR}/startup_stm32f407xx.s")
-    set(HAL_C_SOURCES
-        Core/Src/gpio.c
-        Core/Src/freertos.c
-        Core/Src/adc.c
-        Core/Src/tim.c
-        Core/Src/stm32f4xx_it.c
-        Core/Src/stm32f4xx_hal_msp.c
-        Core/Src/stm32f4xx_hal_timebase_tim.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c
-        Core/Src/system_stm32f4xx.c
-        Middlewares/Third_Party/FreeRTOS/Source/croutine.c
-        Middlewares/Third_Party/FreeRTOS/Source/event_groups.c
-        Middlewares/Third_Party/FreeRTOS/Source/list.c
-        Middlewares/Third_Party/FreeRTOS/Source/queue.c
-        Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c
-        Middlewares/Third_Party/FreeRTOS/Source/tasks.c
-        Middlewares/Third_Party/FreeRTOS/Source/timers.c
-        Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.c
-        Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c
-        Core/Src/sysmem.c
-        Core/Src/syscalls.c
-        Core/Src/dma.c
-        Core/Src/i2c.c
-        Core/Src/spi.c
-        Core/Src/usart.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_spi.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c
-        Core/Src/can.c
-        Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c
-    )
+######################################
+# 配置变更检测：APP/BOARD/BUILD_TYPE/CubeMX 变化时自动清理
+######################################
+# 计算 CubeMX CMakeLists.txt 的修改时间作为 fingerprint 的一部分
+if(EXISTS "${HAL_DIR}/cmake/stm32cubemx/CMakeLists.txt")
+    file(TIMESTAMP "${HAL_DIR}/cmake/stm32cubemx/CMakeLists.txt" CUBEMX_TIMESTAMP UTC)
+else()
+    set(CUBEMX_TIMESTAMP "0")
 endif()
 
-prefix_paths(HAL_SOURCE_FILES "${HAL_DIR}" ${HAL_C_SOURCES})
+set(CFG_FINGERPRINT "${APP_NAME}.${DEVELOPMENT_BOARD}.${CMAKE_BUILD_TYPE}.${CUBEMX_TIMESTAMP}")
+set(CFG_STAMP "${CMAKE_BINARY_DIR}/.cfg_stamp")
+set(CFG_STAMP_DIR "${CMAKE_BINARY_DIR}")
 
+# 在配置阶段检测变更（build 目录可能不存在）
+if(EXISTS "${CFG_STAMP}")
+    file(READ "${CFG_STAMP}" OLD_FINGERPRINT LIMIT 256)
+    string(STRIP "${OLD_FINGERPRINT}" OLD_FINGERPRINT)
+    if(NOT CFG_FINGERPRINT STREQUAL OLD_FINGERPRINT)
+        message(STATUS "")
+        message(STATUS "========================================")
+        message(STATUS "Configuration changed: ${OLD_FINGERPRINT} -> ${CFG_FINGERPRINT}")
+        message(STATUS "Cleaning build directory...")
+        message(STATUS "========================================")
+        message(STATUS "")
+        # 清理整个 build 目录
+        file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}")
+    endif()
+endif()
+
+# 确保 build 目录存在并写入新的 fingerprint
+if(NOT EXISTS "${CFG_STAMP_DIR}")
+    file(MAKE_DIRECTORY "${CFG_STAMP_DIR}")
+endif()
+file(WRITE "${CFG_STAMP}" "${CFG_FINGERPRINT}")
+
+######################################
+# 读取 CubeMX 生成的变量
+######################################
+include("${CMAKE_SOURCE_DIR}/cmake/extract-cubemx-vars.cmake")
+set(CUBEMX_CMAKE "${HAL_DIR}/cmake/stm32cubemx/CMakeLists.txt")
+
+if(NOT EXISTS "${CUBEMX_CMAKE}")
+    message(FATAL_ERROR "CubeMX CMake not found: ${CUBEMX_CMAKE}")
+endif()
+
+load_cubemx_vars("${CUBEMX_CMAKE}" "${HAL_DIR}")
+
+######################################
+# 整理 HAL 源文件、头文件和宏定义
+######################################
+normalize_paths(HAL_DRIVER_SOURCES ${STM32_Drivers_Src})
+normalize_paths(HAL_FREERTOS_SOURCES ${FreeRTOS_Src})
+normalize_paths(HAL_INCLUDE_PATHS ${MX_Include_Dirs})
+
+set(HAL_C_SOURCES
+    ${HAL_DRIVER_SOURCES}
+    ${HAL_FREERTOS_SOURCES}
+)
+
+set(STARTUP_FILE)
+foreach(src IN LISTS MX_Application_Src)
+    get_filename_component(abs_src "${src}" ABSOLUTE)
+    if(abs_src MATCHES "/Core/Src/main\\.c$")
+        continue()
+    elseif(abs_src MATCHES "/startup_.*\\.s$")
+        set(STARTUP_FILE "${abs_src}")
+    else()
+        list(APPEND HAL_C_SOURCES "${abs_src}")
+    endif()
+endforeach()
+
+set(HAL_DEFINES)
+foreach(def IN LISTS MX_Defines_Syms)
+    if(def)
+        list(APPEND HAL_DEFINES "${def}")
+    endif()
+endforeach()
+
+######################################
+# MCU 配置（根据开发板类型）
+######################################
+if(BOARD STREQUAL "STM32F407VET6")
+    set(MCU_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
+    set(LINKER_SCRIPT "${HAL_DIR}/STM32F407XX_FLASH.ld")
+elseif(BOARD STREQUAL "DM_MC02")
+    set(MCU_FLAGS -mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard)
+    set(LINKER_SCRIPT "${HAL_DIR}/STM32H723XG_FLASH.ld")
+elseif(BOARD STREQUAL "DJI_A")
+    set(MCU_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
+    set(LINKER_SCRIPT "${HAL_DIR}/STM32F427XX_FLASH.ld")
+elseif(BOARD STREQUAL "DJI_C")
+    set(MCU_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
+    set(LINKER_SCRIPT "${HAL_DIR}/STM32F407XX_FLASH.ld")
+else()
+    message(FATAL_ERROR "Unknown DEVELOPMENT_BOARD: ${DEVELOPMENT_BOARD}")
+endif()
+
+######################################
+# 项目源文件列表
+######################################
 set(PROJECT_SOURCES
-    ${HAL_SOURCE_FILES}
+    ${HAL_C_SOURCES}
     ${CMAKE_SOURCE_DIR}/hal/main.c
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT_printf.c
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT.c
@@ -298,41 +213,39 @@ set(PROJECT_SOURCES
     ${CMAKE_SOURCE_DIR}/drv/drv_motor/drv_motor_base.c
 )
 
+# DJI_A 额外加入 arm_atan2_f32.c（CMSIS-DSP V1.10.0 支持）
 if(BOARD STREQUAL "DJI_A")
     list(APPEND PROJECT_SOURCES ${HAL_DIR}/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c)
 endif()
 
+# 启动文件和 RTT 汇编文件
 list(APPEND PROJECT_SOURCES
     ${STARTUP_FILE}
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT_ASM_ARMv7M.s
 )
 
+######################################
+# 可执行目标
+######################################
 add_executable(${TARGET_NAME} ${PROJECT_SOURCES})
 set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX ".elf")
 
+######################################
+# 编译定义
+######################################
 target_compile_definitions(${TARGET_NAME} PRIVATE
-    ${BOARD_DEFINES}
+    ${HAL_DEFINES}
     DEVELOPMENT_BOARD=${DEVELOPMENT_BOARD}
-    ${DSP_DEFINE}
+    ARM_MATH_CM4
 )
 
+######################################
+# 头文件路径
+######################################
 target_include_directories(${TARGET_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${APP_INCLUDE_PATHS}
-    ${HAL_DIR}
-    ${HAL_DIR}/Core/Inc
-    ${HAL_DIR}/Drivers/STM32F4xx_HAL_Driver/Inc
-    ${HAL_DIR}/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy
-    ${HAL_DIR}/Drivers/STM32H7xx_HAL_Driver/Inc
-    ${HAL_DIR}/Drivers/STM32H7xx_HAL_Driver/Inc/Legacy
-    ${HAL_DIR}/Middlewares/Third_Party/FreeRTOS/Source/include
-    ${HAL_DIR}/Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS
-    ${HAL_DIR}/Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F
-    ${HAL_DIR}/Drivers/CMSIS/Device/ST/STM32F4xx/Include
-    ${HAL_DIR}/Drivers/CMSIS/Device/ST/STM32H7xx/Include
-    ${HAL_DIR}/Drivers/CMSIS/Include
-    ${HAL_DIR}/Drivers/CMSIS/DSP/Include
-    ${HAL_DIR}/Drivers/CMSIS/DSP/PrivateInclude
+    ${HAL_INCLUDE_PATHS}
     ${CMAKE_SOURCE_DIR}/bsp
     ${CMAKE_SOURCE_DIR}/bsp/bsp_adc
     ${CMAKE_SOURCE_DIR}/bsp/bsp_dwt
@@ -354,36 +267,52 @@ target_include_directories(${TARGET_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/drv/drv_sbus
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/Config
+    ${HAL_DIR}/Drivers/CMSIS/DSP/Include
+    ${HAL_DIR}/Drivers/CMSIS/DSP/PrivateInclude
 )
 
+######################################
+# 编译选项
+######################################
 target_compile_options(${TARGET_NAME} PRIVATE
     ${MCU_FLAGS}
-    -Og
     -Wall
     -fdata-sections
     -ffunction-sections
-    -g
-    -gdwarf-2
+    $<$<CONFIG:Debug>:-Og>
+    $<$<CONFIG:Debug>:-g>
+    $<$<CONFIG:Debug>:-gdwarf-2>
+    $<$<CONFIG:Release>:-Os>
     $<$<COMPILE_LANGUAGE:ASM>:-x>
     $<$<COMPILE_LANGUAGE:ASM>:assembler-with-cpp>
 )
 
+######################################
+# 链接选项
+######################################
 target_link_options(${TARGET_NAME} PRIVATE
     ${MCU_FLAGS}
     -specs=nano.specs
     -T${LINKER_SCRIPT}
     -Wl,-Map=${CMAKE_BINARY_DIR}/${TARGET_NAME}.map,--cref
     -Wl,--gc-sections
+    -Wl,--print-memory-usage
 )
 
 target_link_libraries(${TARGET_NAME} PRIVATE c m nosys)
 
+######################################
+# 构建后生成 hex/bin
+######################################
 add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
     COMMAND ${CMAKE_SIZE} $<TARGET_FILE:${TARGET_NAME}>
     COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${TARGET_NAME}> ${CMAKE_BINARY_DIR}/${TARGET_NAME}.hex
     COMMAND ${CMAKE_OBJCOPY} -O binary -S $<TARGET_FILE:${TARGET_NAME}> ${CMAKE_BINARY_DIR}/${TARGET_NAME}.bin
 )
 
+######################################
+# 下载目标
+######################################
 add_custom_target(download_dap
     COMMAND openocd -f ${HAL_DIR}/openocd_daplink.cfg -c "program $<TARGET_FILE:${TARGET_NAME}> verify reset exit"
     DEPENDS ${TARGET_NAME}
@@ -396,6 +325,9 @@ add_custom_target(download_jlink
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
 )
 
+######################################
+# 打印配置信息
+######################################
 message(STATUS "APP_NAME: ${APP_NAME}")
 message(STATUS "DEVELOPMENT_BOARD: ${DEVELOPMENT_BOARD}")
 message(STATUS "HAL_DIR: ${HAL_DIR}")
