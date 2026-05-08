@@ -147,9 +147,9 @@ set(HAL_C_SOURCES
 set(STARTUP_FILE)
 foreach(src IN LISTS MX_Application_Src)
     get_filename_component(abs_src "${src}" ABSOLUTE)
-    if(abs_src MATCHES "/Core/Src/main\\.c$")
+    if(abs_src MATCHES "[/\\\\]Core[/\\\\]Src[/\\\\]main\\.c$")
         continue()
-    elseif(abs_src MATCHES "/startup_.*\\.s$")
+    elseif(abs_src MATCHES "[/\\\\]startup_.*\\.s$")
         set(STARTUP_FILE "${abs_src}")
     else()
         list(APPEND HAL_C_SOURCES "${abs_src}")
@@ -311,19 +311,73 @@ add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
 )
 
 ######################################
+# 平台检测和工具适配
+######################################
+# 查找工具可用性（find_program 会自动处理 .exe 后缀）
+find_program(JLINK_PROGRAM JLink)
+find_program(OPENOCD_PROGRAM openocd)
+
+######################################
 # 下载目标
 ######################################
-add_custom_target(download_dap
-    COMMAND openocd -f ${HAL_DIR}/openocd_daplink.cfg -c "program $<TARGET_FILE:${TARGET_NAME}> verify reset exit"
-    DEPENDS ${TARGET_NAME}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-)
+if(OPENOCD_PROGRAM)
+    add_custom_target(download_dap
+        COMMAND ${OPENOCD_PROGRAM} -f ${HAL_DIR}/openocd_daplink.cfg -c "program $<TARGET_FILE:${TARGET_NAME}> verify reset exit"
+        DEPENDS ${TARGET_NAME}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Downloading via DAP-Link..."
+    )
+else()
+    add_custom_target(download_dap
+        COMMAND ${CMAKE_COMMAND} -E echo "OpenOCD not found. Please install OpenOCD and add it to PATH."
+        DEPENDS ${TARGET_NAME}
+    )
+endif()
 
-add_custom_target(download_jlink
-    COMMAND JLink.exe -CommanderScript ${HAL_DIR}/jlink_download.jlink
-    DEPENDS ${TARGET_NAME}
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-)
+if(JLINK_PROGRAM)
+    add_custom_target(download_jlink
+        COMMAND ${JLINK_PROGRAM} -CommanderScript ${HAL_DIR}/jlink_download.jlink
+        DEPENDS ${TARGET_NAME}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        COMMENT "Downloading via J-Link..."
+    )
+else()
+    add_custom_target(download_jlink
+        COMMAND ${CMAKE_COMMAND} -E echo "JLink not found. Please install J-Link and add it to PATH."
+        DEPENDS ${TARGET_NAME}
+    )
+endif()
+
+######################################
+# RTT 调试连接目标
+######################################
+if(OPENOCD_PROGRAM)
+    if(WIN32)
+        # Windows: 使用 PowerShell 后台启动 openocd
+        add_custom_target(rtt_connect
+            COMMAND ${CMAKE_COMMAND} -E echo "Starting OpenOCD RTT server..."
+            COMMAND powershell -Command "Start-Process openocd -ArgumentList '-f','${HAL_DIR}/openocd_rtt.cfg'"
+            COMMAND ${CMAKE_COMMAND} -E sleep 2
+            COMMAND telnet 127.0.0.1 8888
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            COMMENT "Connecting to RTT..."
+        )
+    else()
+        # Linux/macOS: 后台启动 openocd
+        add_custom_target(rtt_connect
+            COMMAND ${CMAKE_COMMAND} -E echo "Starting OpenOCD RTT server..."
+            COMMAND openocd -f ${HAL_DIR}/openocd_rtt.cfg &
+            COMMAND ${CMAKE_COMMAND} -E sleep 2
+            COMMAND telnet 127.0.0.1 8888
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            COMMENT "Connecting to RTT..."
+        )
+    endif()
+else()
+    add_custom_target(rtt_connect
+        COMMAND ${CMAKE_COMMAND} -E echo "OpenOCD not found. Please install OpenOCD and add it to PATH."
+    )
+endif()
 
 ######################################
 # 打印配置信息
