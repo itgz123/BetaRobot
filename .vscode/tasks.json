@@ -28,11 +28,11 @@
         {
             "label": "build",
             "type": "shell",
-            "command": "cmake --preset ${input:selectBuildType} 2>$null; cmake --build build -j${config:betaRobot.buildJobs}",
+            "command": "cmake --preset ${input:selectBuildType} ; cmake --build build -j24",
             "options": {
                 "cwd": "${workspaceFolder}"
             },
-            "detail": "使用 CMake + Ninja 编译（自动检测配置变化）",
+            "detail": "配置并编译项目",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -92,8 +92,17 @@
         {
             "label": "DAP-link RTT",
             "type": "shell",
-            "command": "Start-Process openocd -ArgumentList '-f','${workspaceFolder}/hal/${input:selectBoard}/openocd_rtt.cfg'; Start-Sleep -Seconds 2; putty -telnet 127.0.0.1 -P 8888",
-            "detail": "启动 DAP-Link RTT 服务并用 PuTTY 连接",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "build",
+                "--target",
+                "rtt_connect"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "detail": "启动 RTT 调试连接",
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",
