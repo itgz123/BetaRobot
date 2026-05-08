@@ -19,3 +19,4 @@
 19. 通信bsp只要阻塞，it，dma3种发送和dma1种接收，f4和h7的dma没那么少（特殊情况除外）
 20. 所有bsp通信实现错误回调，日志报错。修改uart和spi的错误回调和can一样，通过if或者switch判断在发，而不是错误码
 21. 检查所有实例发送和接收id。同一个can上面接收不能重复，发送不能重复，发送和接收不能相同
+22. 注意全平台命令行支持：cmd，power shell，git bash（win），bash（linux），apple
