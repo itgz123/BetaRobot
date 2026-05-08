@@ -28,11 +28,11 @@
         {
             "label": "build",
             "type": "shell",
-            "command": "if (-not (Test-Path build)) { cmake --preset ${input:selectBuildType} }; cmake --build build -j${config:betaRobot.buildJobs}",
+            "command": "cmake --preset ${input:selectBuildType} 2>$null; cmake --build build -j${config:betaRobot.buildJobs}",
             "options": {
                 "cwd": "${workspaceFolder}"
             },
-            "detail": "使用 CMake + Ninja 编译",
+            "detail": "使用 CMake + Ninja 编译（自动检测配置变化）",
             "group": {
                 "kind": "build",
                 "isDefault": true
