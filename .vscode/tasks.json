@@ -12,15 +12,27 @@
                 "DJI_C"
             ],
             "default": "STM32F407VET6"
+        },
+        {
+            "id": "selectBuildType",
+            "type": "pickString",
+            "description": "选择构建类型",
+            "options": [
+                "Debug",
+                "Release"
+            ],
+            "default": "Debug"
         }
     ],
     "tasks": [
-        // ==================== 构建任务 ====================
         {
             "label": "build",
             "type": "shell",
-            "command": "${config:betaRobot.makeCommand} -j${config:betaRobot.buildJobs}",
-            "detail": "编译（根据 user_cfg.h 的 APP_NAME 和 app_cfg.h 的 DEVELOPMENT_BOARD）",
+            "command": "if (-not (Test-Path build)) { cmake --preset ${input:selectBuildType} }; cmake --build build -j${config:betaRobot.buildJobs}",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "detail": "使用 CMake + Ninja 编译",
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -29,37 +41,59 @@
                 "$gcc"
             ]
         },
-        // ==================== 下载任务 ====================
         {
             "label": "download dap",
             "type": "shell",
-            "command": "${config:betaRobot.makeCommand} download_dap",
-            "detail": "使用DAPlink下载",
-            "group": {},
+            "command": "cmake",
+            "args": [
+                "--build",
+                "build",
+                "--target",
+                "download_dap"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "detail": "使用 DAPlink 下载",
             "problemMatcher": []
         },
         {
             "label": "download jlink",
             "type": "shell",
-            "command": "${config:betaRobot.makeCommand} download_jlink",
-            "detail": "使用Jlink下载",
-            "group": {},
+            "command": "cmake",
+            "args": [
+                "--build",
+                "build",
+                "--target",
+                "download_jlink"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "detail": "使用 J-Link 下载",
             "problemMatcher": []
         },
-        // ==================== 公共任务 ====================
         {
             "label": "clean",
             "type": "shell",
-            "command": "${config:betaRobot.makeCommand} clean",
-            "detail": "清理构建目录",
-            "group": {},
+            "command": "cmake",
+            "args": [
+                "-E",
+                "rm",
+                "-rf",
+                "build"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "detail": "删除构建目录",
             "problemMatcher": []
         },
         {
             "label": "DAP-link RTT",
             "type": "shell",
             "command": "Start-Process openocd -ArgumentList '-f','${workspaceFolder}/hal/${input:selectBoard}/openocd_rtt.cfg'; Start-Sleep -Seconds 2; putty -telnet 127.0.0.1 -P 8888",
-            "detail": "启动DAP-Link RTT服务并用PuTTY连接",
+            "detail": "启动 DAP-Link RTT 服务并用 PuTTY 连接",
             "problemMatcher": [],
             "presentation": {
                 "reveal": "always",

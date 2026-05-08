@@ -1,7 +1,7 @@
 {
     // ==================== BetaRobot 项目配置 ====================
     // 编译相关
-    "betaRobot.makeCommand": "mingw32-make",
-    "betaRobot.buildJobs": 24,
-    "betaRobot.appName": "Assess"
+    "betaRobot.cmakeCommand": "cmake",
+    "betaRobot.ninjaCommand": "ninja",
+    "betaRobot.buildJobs": 24
 }
