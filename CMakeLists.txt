@@ -222,7 +222,7 @@ set(PROJECT_SOURCES
     ${CMAKE_SOURCE_DIR}/bsp/bsp_tim/bsp_tim.c
     ${CMAKE_SOURCE_DIR}/bsp/bsp_usart/bsp_usart.c
     ${CMAKE_SOURCE_DIR}/bsp/bsp_adc/bsp_adc.c
-    ${CMAKE_SOURCE_DIR}/drv/drv_motor/drv_djimotor/drv_djimotor.c
+    ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_djimotor/drv_djimotor.c
     ${CMAKE_SOURCE_DIR}/drv/drv_pid/drv_pid.c
     ${CMAKE_SOURCE_DIR}/drv/drv_chassis/drv_chassis.c
     ${CMAKE_SOURCE_DIR}/drv/drv_sbus/drv_sbus.c
@@ -232,7 +232,7 @@ set(PROJECT_SOURCES
     ${HAL_DIR}/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c
     ${CMAKE_SOURCE_DIR}/drv/drv_bmi088/drv_bmi088.c
     ${CMAKE_SOURCE_DIR}/bsp/bsp_can/bsp_can.c
-    ${CMAKE_SOURCE_DIR}/drv/drv_motor/drv_motor_base.c
+    ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_motor_base.c
 )
 
 # DJI_A 额外加入 arm_atan2_f32.c（CMSIS-DSP V1.10.0 支持）
@@ -282,9 +282,9 @@ target_include_directories(${TARGET_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/drv
     ${CMAKE_SOURCE_DIR}/drv/drv_bmi088
     ${CMAKE_SOURCE_DIR}/drv/drv_chassis
-    ${CMAKE_SOURCE_DIR}/drv/drv_motor
-    ${CMAKE_SOURCE_DIR}/drv/drv_motor/drv_dcmotor
-    ${CMAKE_SOURCE_DIR}/drv/drv_motor/drv_djimotor
+    ${CMAKE_SOURCE_DIR}/drv/drv_acmotor
+    ${CMAKE_SOURCE_DIR}/drv/drv_dcmotor/drv_dcmotor
+    ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_djimotor
     ${CMAKE_SOURCE_DIR}/drv/drv_pid
     ${CMAKE_SOURCE_DIR}/drv/drv_sbus
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT

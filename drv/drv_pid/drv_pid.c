@@ -5,18 +5,17 @@
  * @note 功能特性：
  *       1. 积分限幅 (抗积分饱和)：限制积分项累加上限
  *       2. 梯形积分：提高积分精度
- *       3. 变速积分：误差大时减弱积分，兼具积分分离效果 (默认禁用)
- *       4. 微分先行：仅对测量值微分，避免设定值突变冲击 (默认启用)
+ *       3. 变速积分：误差大时减弱积分，兼具积分分离效果
+ *       4. 微分先行：仅对测量值微分，避免设定值突变冲击
  *       5. 微分滤波：一阶低通滤波抑制高频噪声
  *       6. 死区控制：误差小于死区时不输出
  *       7. 输出限幅：输出限制在 [-1, 1]
  *       8. 前馈控制：提高系统响应速度
  *
  * @note 拓展功能启用规则：
- *       - 不需要掩码的功能（参数为 0 时禁用）：
- *         deadband、d_lpf_rc、coef_a、kf
- *       - 需要掩码的功能（设置参数为 0 会影响功能使用）：
- *         integral_limit、微分先行
+ *       - 所有高级功能统一通过掩码 config_mask 控制启用/禁用
+ *       - deadband 和 kf 通过参数判零控制（deadband > 0 / kf != 0 时生效）
+ *       - 所有高级功能默认禁用，通过对应的 PIDSetXxx 函数逐个开启
  */
 
 #include "drv_pid.h"
@@ -63,7 +62,7 @@ static void f_Trapezoid_Intergral(PIDInstance *pid)
  *        - CoefB < |Err| <= CoefA+CoefB: 积分系数递减
  *        - |Err| > CoefA+CoefB: 不积分
  *
- * @note 当 coef_a > 0 时启用变速积分功能
+ * @note 由 PID_ENABLE_CHANGING_INTEGRATION 掩码控制是否调用
  */
 static void f_Changing_Integration_Rate(PIDInstance *pid)
 {
@@ -73,17 +72,14 @@ static void f_Changing_Integration_Rate(PIDInstance *pid)
         float abs_err = MATH_FABS(pid->error);
         if (abs_err <= pid->coef_b)
         {
-            // 全积分，不修改
             return;
         }
-        else if (pid->coef_a > 0.0001f && abs_err <= (pid->coef_a + pid->coef_b))
+        else if (abs_err <= (pid->coef_a + pid->coef_b))
         {
-            // 积分系数递减
             pid->i_term *= (pid->coef_a - abs_err + pid->coef_b) / pid->coef_a;
         }
-        else if (pid->coef_a > 0.0001f)
+        else
         {
-            // 误差过大，停止积分
             pid->i_term = 0;
         }
     }
@@ -93,7 +89,7 @@ static void f_Changing_Integration_Rate(PIDInstance *pid)
  * @brief 积分限幅
  *        防止积分饱和 (Windup)
  *
- * @note 当 integral_limit != 0 时启用
+ * @note 由 PID_ENABLE_INTEGRAL_LIMIT 掩码控制是否调用
  */
 static void f_Integral_Limit(PIDInstance *pid)
 {
@@ -161,15 +157,12 @@ static void f_Derivative_On_Error(PIDInstance *pid)
  *        一阶低通滤波，抑制高频噪声
  *        Dout = Dout * dt / (RC + dt) + Last_Dout * RC / (RC + dt)
  *
- * @note 当 d_lpf_rc > 0 时启用
+ * @note 由 PID_ENABLE_DERIVATIVE_FILTER 掩码控制是否调用
  */
 static void f_Derivative_Filter(PIDInstance *pid)
 {
-    if (pid->d_lpf_rc > 0.0001f)
-    {
-        float alpha = pid->dt / (pid->d_lpf_rc + pid->dt);
-        pid->d_out = pid->d_out * alpha + pid->last_d_out * (1.0f - alpha);
-    }
+    float alpha = pid->dt / (pid->d_lpf_rc + pid->dt);
+    pid->d_out = pid->d_out * alpha + pid->last_d_out * (1.0f - alpha);
 }
 
 /*------------- 公开接口实现 --------------*/
@@ -197,7 +190,7 @@ void PIDInit(PIDInstance *instance, float kp, float ki, float kd)
     instance->deadband = 0.0f;       // 死区默认禁用
     instance->kf = 0.0f;             // 前馈系数默认 0
 
-    // 功能掩码：微分先行默认启用
+    // 功能掩码
     instance->config_mask = PID_IMPROVE_NONE;
 }
 
@@ -258,39 +251,41 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float d
     instance->p_out = instance->kp * instance->error;
 
     // 4. 积分项
-    // 默认矩形积分
     instance->i_term = instance->ki * instance->error;
 
-    // 梯形积分 (始终使用梯形积分提高精度)
-    f_Trapezoid_Intergral(instance);
+    // 梯形积分
+    if (instance->config_mask & PID_ENABLE_TRAPEZOID_INTEGRAL)
+    {
+        f_Trapezoid_Intergral(instance);
+    }
 
-    // 变速积分 (始终执行，coef_a > 0 时生效)
-    f_Changing_Integration_Rate(instance);
+    // 变速积分
+    if (instance->config_mask & PID_ENABLE_CHANGING_INTEGRATION)
+    {
+        f_Changing_Integration_Rate(instance);
+    }
 
     // 累加积分
     instance->i_out += instance->i_term;
 
-    // 积分限幅 (需要掩码启用)
-    if ((instance->config_mask & PID_ENABLE_INTEGRAL_LIMIT) && instance->integral_limit > 0.0001f)
+    // 积分限幅
+    if (instance->config_mask & PID_ENABLE_INTEGRAL_LIMIT)
     {
         f_Integral_Limit(instance);
     }
 
     // 5. 微分项
-    // 根据掩码选择微分方式
     if (instance->config_mask & PID_ENABLE_DERIVATIVE_ON_MEAS)
     {
-        // 微分先行：仅对测量值微分
         f_Derivative_On_Measurement(instance);
     }
     else
     {
-        // 标准微分：对误差微分
         f_Derivative_On_Error(instance);
     }
 
-    // 微分滤波 (d_lpf_rc > 0 时启用)
-    if (instance->d_lpf_rc > 0.0001f)
+    // 微分滤波
+    if (instance->config_mask & PID_ENABLE_DERIVATIVE_FILTER)
     {
         f_Derivative_Filter(instance);
     }
@@ -340,7 +335,7 @@ void PIDSetIntegralLimit(PIDInstance *instance, float limit, uint8_t enable)
     }
 }
 
-void PIDSetChangingIntegration(PIDInstance *instance, float coef_a, float coef_b)
+void PIDSetChangingIntegration(PIDInstance *instance, float coef_a, float coef_b, uint8_t enable)
 {
     if (instance == NULL)
     {
@@ -348,15 +343,31 @@ void PIDSetChangingIntegration(PIDInstance *instance, float coef_a, float coef_b
     }
     instance->coef_a = coef_a;
     instance->coef_b = coef_b;
+    if (enable)
+    {
+        instance->config_mask |= PID_ENABLE_CHANGING_INTEGRATION;
+    }
+    else
+    {
+        instance->config_mask &= ~PID_ENABLE_CHANGING_INTEGRATION;
+    }
 }
 
-void PIDSetDerivativeFilter(PIDInstance *instance, float rc)
+void PIDSetDerivativeFilter(PIDInstance *instance, float rc, uint8_t enable)
 {
     if (instance == NULL)
     {
         return;
     }
     instance->d_lpf_rc = rc;
+    if (enable)
+    {
+        instance->config_mask |= PID_ENABLE_DERIVATIVE_FILTER;
+    }
+    else
+    {
+        instance->config_mask &= ~PID_ENABLE_DERIVATIVE_FILTER;
+    }
 }
 
 void PIDSetDerivativeOnMeasurement(PIDInstance *instance, uint8_t enable)
@@ -372,5 +383,21 @@ void PIDSetDerivativeOnMeasurement(PIDInstance *instance, uint8_t enable)
     else
     {
         instance->config_mask &= ~PID_ENABLE_DERIVATIVE_ON_MEAS;
+    }
+}
+
+void PIDSetTrapezoidIntegral(PIDInstance *instance, uint8_t enable)
+{
+    if (instance == NULL)
+    {
+        return;
+    }
+    if (enable)
+    {
+        instance->config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL;
+    }
+    else
+    {
+        instance->config_mask &= ~PID_ENABLE_TRAPEZOID_INTEGRAL;
     }
 }
