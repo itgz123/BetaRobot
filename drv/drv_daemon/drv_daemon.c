@@ -50,6 +50,29 @@ void DaemonTask(void)
             {
                 dins->is_online = 0;
                 LOGERROR("[DAEMON] Module 0x%08X OFFLINE", (uint32_t)(uintptr_t)dins->owner_id);
+
+                // 执行离线故障动作
+                switch (dins->fault_action)
+                {
+                case DAEMON_FAULT_BUZZER_SHORT:
+                    break;
+                case DAEMON_FAULT_BUZZER_LONG:
+                    break;
+                case DAEMON_FAULT_LIGHT_SHORT:
+                    break;
+                case DAEMON_FAULT_LIGHT_LONG:
+                    break;
+                case DAEMON_FAULT_RESERVED_5:
+                    break;
+                case DAEMON_FAULT_RESERVED_6:
+                    break;
+                case DAEMON_FAULT_RESERVED_7:
+                    break;
+                case DAEMON_FAULT_NONE:
+                default:
+                    break;
+                }
+
                 if (dins->callback)
                     dins->callback(dins->owner_id);
             }
