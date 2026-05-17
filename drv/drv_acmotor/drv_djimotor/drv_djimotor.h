@@ -15,7 +15,7 @@
 #ifndef __DRV_DJIMOTOR_H
 #define __DRV_DJIMOTOR_H
 
-#include "drv_motor_base.h"
+#include "drv_acmotor_base.h"
 #include "bsp_can.h"
 
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)

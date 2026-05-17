@@ -232,7 +232,7 @@ set(PROJECT_SOURCES
     ${HAL_DIR}/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c
     ${CMAKE_SOURCE_DIR}/drv/drv_bmi088/drv_bmi088.c
     ${CMAKE_SOURCE_DIR}/bsp/bsp_can/bsp_can.c
-    ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_motor_base.c
+    ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_acmotor_base.c
 )
 
 # DJI_A 额外加入 arm_atan2_f32.c（CMSIS-DSP V1.10.0 支持）
