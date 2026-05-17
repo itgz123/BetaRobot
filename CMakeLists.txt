@@ -233,6 +233,7 @@ set(PROJECT_SOURCES
     ${CMAKE_SOURCE_DIR}/drv/drv_bmi088/drv_bmi088.c
     ${CMAKE_SOURCE_DIR}/bsp/bsp_can/bsp_can.c
     ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_acmotor_base.c
+    ${CMAKE_SOURCE_DIR}/drv/drv_daemon/drv_daemon.c
 )
 
 # DJI_A 额外加入 arm_atan2_f32.c（CMSIS-DSP V1.10.0 支持）
@@ -287,6 +288,7 @@ target_include_directories(${TARGET_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_djimotor
     ${CMAKE_SOURCE_DIR}/drv/drv_pid
     ${CMAKE_SOURCE_DIR}/drv/drv_sbus
+    ${CMAKE_SOURCE_DIR}/drv/drv_daemon
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/Config
     ${HAL_DIR}/Drivers/CMSIS/DSP/Include
