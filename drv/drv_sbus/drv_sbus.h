@@ -13,12 +13,14 @@
 
 #include "main.h"
 #include "bsp.h"
+#include "drv_daemon.h"
 
 #ifdef HAL_UART_MODULE_ENABLED
 #include "bsp_usart.h"
 #include "stdint.h"
 
 /*------------- 宏定义 --------------*/
+
 #define SBUS_FRAME_SIZE 25      // SBUS 帧长度
 #define SBUS_CHANNEL_COUNT 16   // 模拟通道数量
 #define SBUS_DIGITAL_CH_COUNT 2 // 数字通道数量
@@ -53,9 +55,10 @@ typedef struct
  */
 typedef struct SBUSInstance
 {
-    USARTInstance *usart_inst;                    // BSP 实例指针
+    USARTInstance *usart_inst;                   // BSP 实例指针
     void (*app_callback)(struct SBUSInstance *); // APP 层回调
     SBUS_Data_t sbus_data;                       // 解析后的通道数据（在中断回调中填充）
+    DaemonInstance *daemon;                      // 看门狗监控实例指针
 } SBUSInstance;
 
 /*------------- 外部函数声明（供 DEF 宏使用）--------------*/
@@ -72,13 +75,16 @@ void SBUSUARTRxCallback(USARTInstance *usart_inst);
  *       parent 指针在注册时设置，指向 SBUSInstance 自身
  *
  * @example
- *   SBUS_INSTANCE_DEF(sbus_inst, UART_SBUS_2, AppCallback);
+ *   SBUS_INSTANCE_DEF(sbus_inst, UART_SBUS_2, AppCallback, 30);
  */
-#define SBUS_INSTANCE_DEF(name, uart_idx, app_cb) \
+#define SBUS_INSTANCE_DEF(name, uart_idx, app_cb, reload)                                    \
     USART_INSTANCE_DEF(name##_uart, uart_idx, USART_DMA_MODE, 25, SBUSUARTRxCallback, NULL); \
-    static SBUSInstance name = {                  \
-        .usart_inst = &name##_uart,               \
-        .app_callback = app_cb}
+    DAEMON_INSTANCE_DEF(name##_daemon, reload);                                              \
+    static SBUSInstance name = {                                                             \
+        .usart_inst = &name##_uart,                                                          \
+        .app_callback = app_cb,                                                              \
+        .daemon = &name##_daemon,                                                            \
+    }
 
 /*------------- 外部接口声明 --------------*/
 

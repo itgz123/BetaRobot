@@ -11,17 +11,10 @@
 static DaemonInstance *s_daemon_instances[DAEMON_MX_CNT] = {NULL};
 static uint8_t s_idx = 0;
 
-void DaemonRegister(DaemonInstance *inst, Daemon_Init_Config_s *config)
+void DaemonRegister(DaemonInstance *inst)
 {
-    if (!inst || !config || s_idx >= DAEMON_MX_CNT)
+    if (!inst || s_idx >= DAEMON_MX_CNT)
         return;
-
-    inst->owner_id = config->owner_id;
-    inst->reload_count = config->reload_count == 0 ? 100 : config->reload_count;
-    inst->callback = config->callback;
-    inst->temp_count = config->init_count == 0 ? 100 : config->init_count;
-    inst->is_online = 1;
-
     s_daemon_instances[s_idx++] = inst;
 }
 
@@ -93,10 +86,9 @@ void DaemonInit(uint32_t priority)
 
 #else
 
-void DaemonRegister(DaemonInstance *inst, Daemon_Init_Config_s *config)
+void DaemonRegister(DaemonInstance *inst)
 {
     (void)inst;
-    (void)config;
 }
 
 void DaemonReload(DaemonInstance *instance)
