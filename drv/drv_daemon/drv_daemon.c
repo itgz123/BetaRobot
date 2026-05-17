@@ -91,4 +91,32 @@ void DaemonInit(uint32_t priority)
     s_daemonTaskHandle = xTaskCreateStatic(StartDaemonTask, "daemonTask", DAEMON_STACK_SIZE, NULL, priority, s_daemonTaskStack, &s_daemonTaskTCB);
 }
 
+#else
+
+void DaemonRegister(DaemonInstance *inst, Daemon_Init_Config_s *config)
+{
+    (void)inst;
+    (void)config;
+}
+
+void DaemonReload(DaemonInstance *instance)
+{
+    (void)instance;
+}
+
+uint8_t DaemonIsOnline(DaemonInstance *instance)
+{
+    (void)instance;
+    return 0;
+}
+
+void DaemonTask(void)
+{
+}
+
+void DaemonInit(uint32_t priority)
+{
+    (void)priority;
+}
+
 #endif // DAEMON_USED
