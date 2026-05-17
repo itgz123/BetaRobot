@@ -4,3 +4,6 @@
 [submodule "app/dcmotor_chassis"]
 	path = app/dcmotor_chassis
 	url = git@gitee.com:trwwrt/BetaRobot-App-dcmotor-chassis.git
+[submodule "cubemx/DJI_C_Assess"]
+	path = cubemx/DJI_C_Assess
+	url = git@gitee.com:trwwrt/BetaRobot-CubeMX-DJI_C_Assess.git

@@ -12,6 +12,8 @@
 #
 # 切换应用：修改 user_cfg.h 中的 APP_NAME
 # 切换开发板：修改 app/<APP_NAME>/app_cfg.h 中的 DEVELOPMENT_BOARD
+# 切换 CubeMX 配置：修改 app/<APP_NAME>/app_cfg.h 中的 HAL_CONFIG_NAME
+# 切换构建类型：修改 user_cfg.h 中的 BUILD_TYPE (Debug/Release)
 ##########################################################################################################################
 
 cmake_minimum_required(VERSION 3.20)
@@ -69,20 +71,40 @@ if(NOT EXISTS "${APP_DIR}/CMakeLists.txt")
 endif()
 
 ######################################
-# 从 app_cfg.h 读取 DEVELOPMENT_BOARD
+# 从 app_cfg.h 读取 HAL_CONFIG_NAME 和 DEVELOPMENT_BOARD
 ######################################
+read_define(HAL_CONFIG_NAME "${APP_DIR}/app_cfg.h" HAL_CONFIG_NAME)
+set(HAL_DIR "${CMAKE_SOURCE_DIR}/cubemx/${HAL_CONFIG_NAME}")
+
 read_define(DEVELOPMENT_BOARD "${APP_DIR}/app_cfg.h" DEVELOPMENT_BOARD)
 set(BOARD "${DEVELOPMENT_BOARD}")
-set(HAL_DIR "${CMAKE_SOURCE_DIR}/hal/${BOARD}")
 
 if(NOT EXISTS "${HAL_DIR}")
-    message(FATAL_ERROR "Unknown DEVELOPMENT_BOARD: ${DEVELOPMENT_BOARD}")
+    message(FATAL_ERROR
+        "HAL_CONFIG_NAME '${HAL_CONFIG_NAME}' → directory not found:\n"
+        "  ${HAL_DIR}\n"
+        "  Possible reasons:\n"
+        "  1. Submodule not initialized: run 'git submodule update --init'\n"
+        "  2. Typo in app/${APP_NAME}/app_cfg.h HAL_CONFIG_NAME\n"
+        "  3. Missing CubeMX config: need to create cubemx/${HAL_CONFIG_NAME}/")
 endif()
 
 # 导入 app 模块定义（源文件列表、头文件路径）
 include("${APP_DIR}/CMakeLists.txt")
 prefix_paths(APP_SOURCE_FILES "${APP_DIR}" ${APP_SOURCES})
 prefix_paths(APP_INCLUDE_PATHS "${APP_DIR}" ${APP_INCLUDE_DIRS})
+
+######################################
+# 从 user_cfg.h 读取 BUILD_TYPE（可选，未定义默认 Debug）
+######################################
+file(STRINGS "${CMAKE_SOURCE_DIR}/user_cfg.h" build_line REGEX "^[ \t]*#[ \t]*define[ \t]+BUILD_TYPE[ \t]+[A-Za-z0-9_]+")
+if(build_line)
+    string(REGEX REPLACE ".*BUILD_TYPE[ \t]+([A-Za-z0-9_]+).*" "\\1" BUILD_TYPE_NAME "${build_line}")
+else()
+    set(BUILD_TYPE_NAME "Debug")
+endif()
+
+set(CMAKE_BUILD_TYPE "${BUILD_TYPE_NAME}" CACHE STRING "" FORCE)
 
 ######################################
 # 配置变更检测：APP/BOARD/BUILD_TYPE/CubeMX 变化时自动清理
@@ -94,7 +116,7 @@ else()
     set(CUBEMX_TIMESTAMP "0")
 endif()
 
-set(CFG_FINGERPRINT "${APP_NAME}.${DEVELOPMENT_BOARD}.${CMAKE_BUILD_TYPE}.${CUBEMX_TIMESTAMP}")
+set(CFG_FINGERPRINT "${APP_NAME}.${DEVELOPMENT_BOARD}.${HAL_CONFIG_NAME}.${CMAKE_BUILD_TYPE}.${CUBEMX_TIMESTAMP}")
 set(CFG_STAMP "${CMAKE_BINARY_DIR}/.cfg_stamp")
 set(CFG_STAMP_DIR "${CMAKE_BINARY_DIR}")
 
@@ -168,16 +190,16 @@ endforeach()
 ######################################
 if(BOARD STREQUAL "STM32F407VET6")
     set(MCU_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
-    set(LINKER_SCRIPT "${HAL_DIR}/STM32F407XX_FLASH.ld")
+    set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/STM32F407XX_FLASH.ld")
 elseif(BOARD STREQUAL "DM_MC02")
     set(MCU_FLAGS -mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard)
-    set(LINKER_SCRIPT "${HAL_DIR}/STM32H723XG_FLASH.ld")
+    set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/STM32H723XG_FLASH.ld")
 elseif(BOARD STREQUAL "DJI_A")
     set(MCU_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
-    set(LINKER_SCRIPT "${HAL_DIR}/STM32F427XX_FLASH.ld")
+    set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/STM32F427XX_FLASH.ld")
 elseif(BOARD STREQUAL "DJI_C")
     set(MCU_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
-    set(LINKER_SCRIPT "${HAL_DIR}/STM32F407XX_FLASH.ld")
+    set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/STM32F407XX_FLASH.ld")
 else()
     message(FATAL_ERROR "Unknown DEVELOPMENT_BOARD: ${DEVELOPMENT_BOARD}")
 endif()
@@ -187,11 +209,11 @@ endif()
 ######################################
 set(PROJECT_SOURCES
     ${HAL_C_SOURCES}
-    ${CMAKE_SOURCE_DIR}/hal/main.c
+    ${CMAKE_SOURCE_DIR}/main.c
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT_printf.c
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT.c
     ${APP_SOURCE_FILES}
-    ${HAL_DIR}/bsp_map.c
+    ${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/bsp_map.c
     ${CMAKE_SOURCE_DIR}/bsp/bsp_dwt/bsp_dwt.c
     ${CMAKE_SOURCE_DIR}/bsp/bsp_gpio/bsp_gpio.c
     ${CMAKE_SOURCE_DIR}/bsp/bsp_log/bsp_log.c
@@ -322,7 +344,7 @@ find_program(OPENOCD_PROGRAM openocd)
 ######################################
 if(OPENOCD_PROGRAM)
     add_custom_target(download_dap
-        COMMAND ${OPENOCD_PROGRAM} -f ${HAL_DIR}/openocd_daplink.cfg -c "program $<TARGET_FILE:${TARGET_NAME}> verify reset exit"
+        COMMAND ${OPENOCD_PROGRAM} -f ${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/openocd_daplink.cfg -c "program $<TARGET_FILE:${TARGET_NAME}> verify reset exit"
         DEPENDS ${TARGET_NAME}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Downloading via DAP-Link..."
@@ -336,7 +358,7 @@ endif()
 
 if(JLINK_PROGRAM)
     add_custom_target(download_jlink
-        COMMAND ${JLINK_PROGRAM} -CommanderScript ${HAL_DIR}/jlink_download.jlink
+        COMMAND ${JLINK_PROGRAM} -CommanderScript ${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/jlink_download.jlink
         DEPENDS ${TARGET_NAME}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMENT "Downloading via J-Link..."
@@ -356,7 +378,7 @@ if(OPENOCD_PROGRAM)
         # Windows: 使用 PowerShell 后台启动 openocd
         add_custom_target(rtt_connect
             COMMAND ${CMAKE_COMMAND} -E echo "Starting OpenOCD RTT server..."
-            COMMAND powershell -Command "Start-Process openocd -ArgumentList '-f','${HAL_DIR}/openocd_rtt.cfg'"
+            COMMAND powershell -Command "Start-Process openocd -ArgumentList '-f','${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/openocd_rtt.cfg'"
             COMMAND ${CMAKE_COMMAND} -E sleep 2
             COMMAND telnet 127.0.0.1 8888
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -366,7 +388,7 @@ if(OPENOCD_PROGRAM)
         # Linux/macOS: 后台启动 openocd
         add_custom_target(rtt_connect
             COMMAND ${CMAKE_COMMAND} -E echo "Starting OpenOCD RTT server..."
-            COMMAND openocd -f ${HAL_DIR}/openocd_rtt.cfg &
+            COMMAND openocd -f ${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/openocd_rtt.cfg &
             COMMAND ${CMAKE_COMMAND} -E sleep 2
             COMMAND telnet 127.0.0.1 8888
             WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -384,4 +406,6 @@ endif()
 ######################################
 message(STATUS "APP_NAME: ${APP_NAME}")
 message(STATUS "DEVELOPMENT_BOARD: ${DEVELOPMENT_BOARD}")
+message(STATUS "HAL_CONFIG_NAME: ${HAL_CONFIG_NAME}")
+message(STATUS "BUILD_TYPE: ${BUILD_TYPE_NAME}")
 message(STATUS "HAL_DIR: ${HAL_DIR}")
