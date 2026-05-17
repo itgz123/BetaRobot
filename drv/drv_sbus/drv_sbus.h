@@ -70,16 +70,19 @@ void SBUSUARTRxCallback(USARTInstance *usart_inst);
  * @param name     实例名称
  * @param uart_idx 板载 UART 枚举（BoardUART_e）
  * @param app_cb   APP 层回调函数
+ * @param reload   daemon 喂狗重载值
  *
  * @note 使用 BSP 层的 USART_INSTANCE_DEF 宏定义底层实例
  *       parent 指针在注册时设置，指向 SBUSInstance 自身
  *
+ * @param fault   daemon 离线故障动作, 见 DaemonFaultAction_e
+ *
  * @example
- *   SBUS_INSTANCE_DEF(sbus_inst, UART_SBUS_2, AppCallback, 30);
+ *   SBUS_INSTANCE_DEF(sbus_inst, UART_SBUS_2, AppCallback, 30, DAEMON_FAULT_BUZZER_SHORT);
  */
-#define SBUS_INSTANCE_DEF(name, uart_idx, app_cb, reload)                                    \
+#define SBUS_INSTANCE_DEF(name, uart_idx, app_cb, reload, fault)                             \
     USART_INSTANCE_DEF(name##_uart, uart_idx, USART_DMA_MODE, 25, SBUSUARTRxCallback, NULL); \
-    DAEMON_INSTANCE_DEF(name##_daemon, reload);                                              \
+    DAEMON_INSTANCE_DEF(name##_daemon, reload, fault);                                       \
     static SBUSInstance name = {                                                             \
         .usart_inst = &name##_uart,                                                          \
         .app_callback = app_cb,                                                              \
