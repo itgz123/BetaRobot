@@ -52,6 +52,10 @@ int8_t SBUSRegister(SBUSInstance *instance)
         return -1;
     }
 
+    // 注册 daemon 看门狗
+    instance->daemon->owner_id = instance;
+    DaemonRegister(instance->daemon);
+
     LOGINFO("[drv_sbus] SBUS instance registered");
     return 0;
 }
@@ -177,6 +181,7 @@ void SBUSUARTRxCallback(USARTInstance *usart_inst)
         // 在中断上下文中解析原始数据为通道数据
         sbus_inst->sbus_data = SBUSDecodeFrame(usart_inst->rx_buff, usart_inst->rx_len);
         sbus_inst->app_callback(sbus_inst);
+        DaemonReload(sbus_inst->daemon);
     }
 }
 

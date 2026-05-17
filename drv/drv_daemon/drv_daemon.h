@@ -29,16 +29,14 @@ typedef struct daemon_ins
     uint8_t is_online;         // 当前在线状态,用于检测状态转换
 } DaemonInstance;
 
-/* daemon初始化配置 */
-typedef struct
-{
-    uint16_t reload_count;     // 喂狗重载值
-    uint16_t init_count;       // 上线等待时间
-    offline_callback callback; // 异常处理函数,当模块发生异常时会被调用
-    void *owner_id;            // id取拥有daemon的实例的地址,如DJIMotorInstance*,cast成void*类型
-} Daemon_Init_Config_s;
+#define DAEMON_INSTANCE_DEF(name, reload) \
+    static DaemonInstance name = {        \
+        .reload_count = reload,           \
+        .temp_count = reload,             \
+        .is_online = 1,                   \
+    }
 
-void DaemonRegister(DaemonInstance *inst, Daemon_Init_Config_s *config);
+void DaemonRegister(DaemonInstance *inst);
 void DaemonReload(DaemonInstance *instance);
 uint8_t DaemonIsOnline(DaemonInstance *instance);
 void DaemonTask(void);
