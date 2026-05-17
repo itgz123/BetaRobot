@@ -3,8 +3,8 @@
  * @brief SBUS 遥控器驱动实现
  *
  * @note DRV 层职责：
- *       1. BSP 回调传递到 APP 层（不解析）
- *       2. 提供 SBUS 协议解析函数（在任务中调用）
+ *       1. BSP 回调中解析 SBUS 数据并传递到 APP 层
+ *       2. 不使用 FreeRTOS（队列由 APP 层管理）
  */
 
 #include "drv_sbus.h"
@@ -171,9 +171,11 @@ void SBUSUARTRxCallback(USARTInstance *usart_inst)
     // 通过 parent 字段获取 SBUSInstance 指针
     SBUSInstance *sbus_inst = (SBUSInstance *)usart_inst->parent;
 
-    // 调用 APP 层回调（不解析！）
+    // 调用 APP 层回调（传递解析后的数据）
     if (sbus_inst != NULL && sbus_inst->app_callback != NULL)
     {
+        // 在中断上下文中解析原始数据为通道数据
+        sbus_inst->sbus_data = SBUSDecodeFrame(usart_inst->rx_buff, usart_inst->rx_len);
         sbus_inst->app_callback(sbus_inst);
     }
 }
