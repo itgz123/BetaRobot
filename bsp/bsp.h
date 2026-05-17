@@ -45,13 +45,13 @@
  *              板级映射（根据开发板选择）
  *============================================*/
 #if DEVELOPMENT_BOARD == STM32F407VET6
-#include "hal/STM32F407VET6/bsp_map.h"
+#include "cubemx/board_config/STM32F407VET6/bsp_map.h"
 #elif DEVELOPMENT_BOARD == DM_MC02
-#include "hal/DM_MC02/bsp_map.h"
+#include "cubemx/board_config/DM_MC02/bsp_map.h"
 #elif DEVELOPMENT_BOARD == DJI_A
-#include "hal/DJI_A/bsp_map.h"
+#include "cubemx/board_config/DJI_A/bsp_map.h"
 #elif DEVELOPMENT_BOARD == DJI_C
-#include "hal/DJI_C/bsp_map.h"
+#include "cubemx/board_config/DJI_C/bsp_map.h"
 #else
 #error "Unsupported DEVELOPMENT_BOARD"
 #endif

@@ -56,7 +56,7 @@ endif()
 
 # 在项目模式下：提供给顶层 CMakeLists.txt 调用的函数
 function(load_cubemx_vars cubemx_cmake_file hal_dir)
-    set(output_file "${CMAKE_BINARY_DIR}/cubemx_vars_${BOARD}.cmake")
+    set(output_file "${CMAKE_BINARY_DIR}/cubemx_vars_${HAL_CONFIG_NAME}.cmake")
     execute_process(
         COMMAND "${CMAKE_COMMAND}"
             -DCUBEMX_CMAKE_FILE=${cubemx_cmake_file}

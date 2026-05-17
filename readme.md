@@ -14,9 +14,3 @@
 bsp＝Windows系统。hal＝硬件驱动。app＝软件。drv＝系统自带软件
 
 ### 文档：
-
-##### todo
-
-1. 根目录makefile把`-I$(HAL_DIR)/`和`$(HAL_DIR)/`放到bsp_math的makefile中。
-2. 把cubemx生成的core在Makefile排除，复制到app中,.mxproject,ioc???。。添加app/<app_name>/core文件夹，makefile同步
-3. core使用子模块？加入app？

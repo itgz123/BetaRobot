@@ -12,23 +12,13 @@
                 "DJI_C"
             ],
             "default": "STM32F407VET6"
-        },
-        {
-            "id": "selectBuildType",
-            "type": "pickString",
-            "description": "选择构建类型",
-            "options": [
-                "Debug",
-                "Release"
-            ],
-            "default": "Debug"
         }
     ],
     "tasks": [
         {
             "label": "build",
             "type": "shell",
-            "command": "cmake --preset ${input:selectBuildType} ; cmake --build build -j24",
+            "command": "cmake --preset default ; cmake --build build -j24",
             "options": {
                 "cwd": "${workspaceFolder}"
             },
