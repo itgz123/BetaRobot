@@ -35,25 +35,6 @@
 #define SBUS_FOOTER_FAILSAFE 0x08   // 失控保护标志
 
 /*------------- 类型定义 --------------*/
-/**
- * @brief SBUS 实例结构体
- * @note 使用指针指向 BSP 实例，在注册时设置 parent
- */
-typedef struct SBUSInstance
-{
-    USARTInstance *usart_inst;                    // BSP 实例指针
-    void (*app_callback)(struct SBUSInstance *); // APP 层回调
-} SBUSInstance;
-
-/**
- * @brief SBUS 原始帧结构体
- * @note 用于中断到任务的队列传递
- */
-typedef struct
-{
-    uint8_t data[25]; // SBUS 原始数据（25字节）
-    uint16_t len;     // 数据长度
-} SBUS_RawFrame_t;
 
 /**
  * @brief SBUS 通道数据结构体
@@ -65,6 +46,17 @@ typedef struct
     uint8_t frame_lost;                        // 帧丢失标志 (0: 正常, 1: 丢失)
     uint8_t failsafe;                          // 失控保护标志 (0: 正常, 1: 失控)
 } SBUS_Data_t;
+
+/**
+ * @brief SBUS 实例结构体
+ * @note 使用指针指向 BSP 实例，在注册时设置 parent
+ */
+typedef struct SBUSInstance
+{
+    USARTInstance *usart_inst;                    // BSP 实例指针
+    void (*app_callback)(struct SBUSInstance *); // APP 层回调
+    SBUS_Data_t sbus_data;                       // 解析后的通道数据（在中断回调中填充）
+} SBUSInstance;
 
 /*------------- 外部函数声明（供 DEF 宏使用）--------------*/
 void SBUSUARTRxCallback(USARTInstance *usart_inst);
@@ -104,7 +96,7 @@ int8_t SBUSRegister(SBUSInstance *instance);
  * @brief 解析 SBUS 数据帧
  * @param data 原始数据指针（25字节）
  * @return 解析后的 SBUS 数据
- * @note 在任务上下文中调用
+ * @note 在中断上下文中调用（由 SBUSUARTRxCallback 触发）
  */
 SBUS_Data_t SBUSDecodeFrame(const uint8_t *data, uint16_t len);
 
