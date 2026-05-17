@@ -4,10 +4,6 @@
 #include <stdint.h>
 #include "app_cfg.h"
 
-#ifdef DAEMON_USED
-
-#define USE_DAEMON
-
 #ifndef DAEMON_FREQ_MS
 #define DAEMON_FREQ_MS 1
 #endif
@@ -47,7 +43,5 @@ void DaemonReload(DaemonInstance *instance);
 uint8_t DaemonIsOnline(DaemonInstance *instance);
 void DaemonTask(void);
 void DaemonInit(uint32_t priority);
-
-#endif // DAEMON_USED
 
 #endif // !__DRV_DAEMON_H
