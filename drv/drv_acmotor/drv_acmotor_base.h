@@ -1,5 +1,5 @@
 /**
- * @file drv_motor_base.h
+ * @file drv_acmotor_base.h
  * @brief 电机抽象基类定义
  *
  * @note DRV 层职责：
@@ -9,8 +9,8 @@
  *       4. 不使用 FreeRTOS
  */
 
-#ifndef __DRV_MOTOR_BASE_H
-#define __DRV_MOTOR_BASE_H
+#ifndef __DRV_ACMOTOR_BASE_H
+#define __DRV_ACMOTOR_BASE_H
 
 #include <stdint.h>
 #include "drv_pid.h"
@@ -320,4 +320,4 @@ static inline void MotorGroupControl(MotorGroupInstance *inst)
         inst->vtable->control(inst);
 }
 
-#endif // __DRV_MOTOR_BASE_H
+#endif // __DRV_ACMOTOR_BASE_H

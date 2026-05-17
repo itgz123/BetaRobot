@@ -1,5 +1,5 @@
 /**
- * @file drv_motor_base.c
+ * @file drv_acmotor_base.c
  * @brief 电机抽象基类实现
  *
  * @note DRV 层职责：
@@ -7,7 +7,7 @@
  *       2. 不使用 FreeRTOS
  */
 
-#include "drv_motor_base.h"
+#include "drv_acmotor_base.h"
 #include <stddef.h>
 
 /*============================================
