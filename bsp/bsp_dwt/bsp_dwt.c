@@ -32,7 +32,7 @@ static void DWT_CNT_Update(void)
         if (cnt_now < s_cyccnt_last)
             s_cyccnt_round_count++;
 
-        s_cyccnt_last = DWT->CYCCNT;
+        s_cyccnt_last = cnt_now;
         s_bit_locker = 0;
     }
 }
