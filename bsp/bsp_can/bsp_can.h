@@ -61,70 +61,48 @@ typedef struct CANInstance
 #endif
 } CANInstance;
 
+/*------------- 配置结构体 --------------*/
+
+/**
+ * @brief CAN 初始化配置结构体
+ * @note 统一掩码模式和列表模式，通过 filter_mode 区分
+ */
+typedef struct
+{
+    uint32_t tx_id;                            // 发送标准ID；CAN_ID_UNUSED(-1) 表示不发送
+    CANFilterMode_e filter_mode;               // 过滤器模式（掩码/列表）
+    uint8_t rx_id_count;                       // 列表模式：有效接收ID数量（1-4）；掩码模式：填1
+    uint32_t rx_id_list[4];                    // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
+    uint32_t rx_mask;                          // 掩码模式：掩码值（列表模式不使用）
+    void (*rx_callback)(struct CANInstance *); // 接收完成回调（可为NULL）
+} CAN_Init_Config_s;
+
 /*------------- 实例定义宏 --------------*/
 
 /**
- * @brief 静态定义CAN实例（掩码模式）
+ * @brief 静态定义CAN实例（仅身份绑定）
  * @param name    实例名称
  * @param can_idx 板载CAN枚举（BoardCAN_e）
- * @param txid    发送标准ID；-1(CAN_ID_UNUSED) 表示不发送
- * @param rxid    接收基准ID；-1(CAN_ID_UNUSED) 表示不接收
- * @param mask    掩码值（用于范围匹配）
- * @param cb      接收回调函数（可为NULL）
- *
- * @example 匹配 0x201-0x208: rxid=0x200, mask=0x7F8
  */
-#define CAN_INSTANCE_DEF_MASK(name, can_idx, txid, rxid, mask, cb)         \
-    static CANInstance name = {                                            \
-        .parent = NULL,                                                    \
-        .can_e = can_idx,                                                  \
-        .map = {0},                                                        \
-        .tx_id = txid,                                                     \
-        .filter_mode = CAN_FILTER_MODE_MASK,                               \
-        .rx_id_count = 1,                                                  \
-        .rx_id_list = {rxid, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED}, \
-        .rx_mask = mask,                                                   \
-        .rx_id_matched = 0,                                                \
-        .tx_buff = {0},                                                    \
-        .rx_buff = {0},                                                    \
-        .rx_len = 0,                                                       \
-        .rx_callback = cb}
-
-/**
- * @brief 静态定义CAN实例（列表模式）
- * @param name    实例名称
- * @param can_idx 板载CAN枚举（BoardCAN_e）
- * @param txid    发送标准ID；-1(CAN_ID_UNUSED) 表示不发送
- * @param id0-id3 接收标准ID列表（最多4个，未使用的填 -1）
- * @param cb      接收回调函数（可为NULL）
- *
- * @note id0 用于 FIFO 分配（奇数→FIFO0，偶数→FIFO1）
- */
-#define CAN_INSTANCE_DEF_LIST(name, can_idx, txid, id0, id1, id2, id3, cb) \
-    static CANInstance name = {                                            \
-        .parent = NULL,                                                    \
-        .can_e = can_idx,                                                  \
-        .map = {0},                                                        \
-        .tx_id = txid,                                                     \
-        .filter_mode = CAN_FILTER_MODE_LIST,                               \
-        .rx_id_count = 4,                                                  \
-        .rx_id_list = {id0, id1, id2, id3},                                \
-        .rx_mask = 0,                                                      \
-        .rx_id_matched = 0,                                                \
-        .tx_buff = {0},                                                    \
-        .rx_buff = {0},                                                    \
-        .rx_len = 0,                                                       \
-        .rx_callback = cb}
+#define CAN_INSTANCE_DEF(name, can_idx) \
+    static CANInstance name = {         \
+        .parent = NULL,                 \
+        .can_e = can_idx,               \
+        .map = {0},                     \
+    }
 
 /*------------- 外部接口声明 --------------*/
 
 /**
  * @brief 注册CAN实例
  * @param instance CAN实例指针（需先通过宏定义）
+ * @param config   初始化配置结构体指针
  * @retval 0 成功
  * @retval -1 失败（实例数超过上限、参数非法或重复注册）
+ *
+ * @note 注册时将 config 中的配置拷贝到 instance，然后配置硬件滤波器并启动CAN
  */
-int8_t CANRegister(CANInstance *instance);
+int8_t CANRegister(CANInstance *instance, const CAN_Init_Config_s *config);
 
 /**
  * @brief 设置发送DLC长度（1~8）

@@ -19,7 +19,7 @@
  * @note 拓展功能启用规则：
  *       - 所有高级功能统一通过掩码 config_mask 控制启用/禁用
  *       - deadband 和 kf 通过参数判零控制（deadband > 0 / kf != 0 时生效）
- *       - 所有高级功能默认禁用，通过对应的 PIDSetXxx 函数逐个开启
+ *       - 所有高级功能通过 PID_Init_Config_s 中的 config_mask 掩码位或配置
  */
 
 #ifndef __DRV_PID_H
@@ -42,11 +42,30 @@ typedef enum
 {
     PID_IMPROVE_NONE = 0x00,                // 无高级功能
     PID_ENABLE_INTEGRAL_LIMIT = 0x01,       // 启用积分限幅
-    PID_ENABLE_DERIVATIVE_ON_MEAS = 0x02,   // 启用微分先行（默认启用）
-    PID_ENABLE_TRAPEZOID_INTEGRAL = 0x04,   // 启用梯形积分（默认启用）
+    PID_ENABLE_DERIVATIVE_ON_MEAS = 0x02,   // 启用微分先行
+    PID_ENABLE_TRAPEZOID_INTEGRAL = 0x04,   // 启用梯形积分
     PID_ENABLE_CHANGING_INTEGRATION = 0x08, // 启用变速积分
     PID_ENABLE_DERIVATIVE_FILTER = 0x10,    // 启用微分滤波
 } PIDConfigMask;
+
+/*------------- 配置结构体 --------------*/
+
+/**
+ * @brief PID 初始化配置结构体
+ */
+typedef struct
+{
+    float kp;             // 比例系数
+    float ki;             // 积分系数
+    float kd;             // 微分系数
+    float integral_limit; // 积分限幅阈值 (0 = 禁用)
+    float coef_a;         // 变速积分参数 A (0 = 禁用)
+    float coef_b;         // 变速积分参数 B
+    float d_lpf_rc;       // 微分滤波时间常数 RC (0 = 禁用)
+    float deadband;       // 死区范围 (0 = 禁用)
+    float kf;             // 前馈系数 (0 = 禁用)
+    uint8_t config_mask;  // 功能配置掩码 (PIDConfigMask 位或)
+} PID_Init_Config_s;
 
 /*------------- 类型定义 --------------*/
 
@@ -106,19 +125,12 @@ typedef struct PIDInstance
 /**
  * @brief 初始化 PID 实例
  * @param instance PID 实例指针
- * @param kp 比例系数
- * @param ki 积分系数
- * @param kd 微分系数
+ * @param config   初始化配置结构体指针
  *
- * @note 初始化后高级功能默认禁用（参数为 0）：
- *       - 死区 = 0
- *       - 积分限幅 = 0
- *       - 前馈系数 = 0
- *       - 微分滤波 RC = 0
- *       - 变速积分参数 CoefA = 0, CoefB = 1
- *       需要使用时直接修改结构体成员
+ * @note 配置结构体包含所有参数和功能掩码，一次性完成初始化
+ *       - 不需要的高级功能将参数设为 0、掩码位不置即可
  */
-void PIDInit(PIDInstance *instance, float kp, float ki, float kd);
+void PIDInit(PIDInstance *instance, const PID_Init_Config_s *config);
 
 /**
  * @brief 重置 PID 状态
@@ -149,54 +161,5 @@ void PIDReset(PIDInstance *instance);
  *       - kf != 0 → 前馈控制（参数判零）
  */
 float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float dt, float feedforward);
-
-/*------------- 配置函数 --------------*/
-
-/**
- * @brief 设置死区
- * @param instance PID 实例指针
- * @param deadband 死区范围，设为 0 禁用
- */
-void PIDSetDeadband(PIDInstance *instance, float deadband);
-
-/**
- * @brief 设置积分限幅
- * @param instance PID 实例指针
- * @param limit 积分限幅阈值
- * @param enable 是否启用（设置掩码标志）
- */
-void PIDSetIntegralLimit(PIDInstance *instance, float limit, uint8_t enable);
-
-/**
- * @brief 设置变速积分参数
- * @param instance PID 实例指针
- * @param coef_a 变速积分参数 A
- * @param coef_b 变速积分参数 B (默认=1)
- * @param enable 是否启用（设置掩码标志）
- */
-void PIDSetChangingIntegration(PIDInstance *instance, float coef_a, float coef_b, uint8_t enable);
-
-/**
- * @brief 设置微分滤波
- * @param instance PID 实例指针
- * @param rc 微分滤波时间常数 RC
- * @param enable 是否启用（设置掩码标志）
- */
-void PIDSetDerivativeFilter(PIDInstance *instance, float rc, uint8_t enable);
-
-/**
- * @brief 设置微分先行
- * @param instance PID 实例指针
- * @param enable 是否启用（设置掩码标志）
- * @note 禁用后改为对误差微分
- */
-void PIDSetDerivativeOnMeasurement(PIDInstance *instance, uint8_t enable);
-
-/**
- * @brief 设置梯形积分
- * @param instance PID 实例指针
- * @param enable 是否启用（设置掩码标志）
- */
-void PIDSetTrapezoidIntegral(PIDInstance *instance, uint8_t enable);
 
 #endif /* __DRV_PID_H */

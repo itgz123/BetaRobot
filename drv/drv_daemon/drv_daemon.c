@@ -11,10 +11,17 @@
 static DaemonInstance *s_daemon_instances[DAEMON_MX_CNT] = {NULL};
 static uint8_t s_idx = 0;
 
-void DaemonRegister(DaemonInstance *inst)
+void DaemonRegister(DaemonInstance *inst, const Daemon_Init_Config_s *config)
 {
-    if (!inst || s_idx >= DAEMON_MX_CNT)
+    if (!inst || !config || s_idx >= DAEMON_MX_CNT)
         return;
+
+    inst->reload_count = config->reload_count;
+    inst->fault_action = config->fault_action;
+    inst->callback = config->callback;
+    inst->owner_id = config->owner_id;
+    inst->temp_count = config->reload_count;
+
     s_daemon_instances[s_idx++] = inst;
 }
 
@@ -102,16 +109,17 @@ ITCM_RAM __attribute__((noreturn)) static void StartDaemonTask(void *argument)
     }
 }
 
-void DaemonInit(uint32_t priority)
+void DaemonInit(void)
 {
-    s_daemonTaskHandle = xTaskCreateStatic(StartDaemonTask, "daemonTask", DAEMON_STACK_SIZE, NULL, priority, s_daemonTaskStack, &s_daemonTaskTCB);
+    s_daemonTaskHandle = xTaskCreateStatic(StartDaemonTask, "daemonTask", DAEMON_STACK_SIZE, NULL, DAEMON_TASK_PRIORITY, s_daemonTaskStack, &s_daemonTaskTCB);
 }
 
 #else
 
-void DaemonRegister(DaemonInstance *inst)
+void DaemonRegister(DaemonInstance *inst, const Daemon_Init_Config_s *config)
 {
     (void)inst;
+    (void)config;
 }
 
 void DaemonReload(DaemonInstance *instance)
@@ -129,9 +137,8 @@ void DaemonTask(void)
 {
 }
 
-void DaemonInit(uint32_t priority)
+void DaemonInit(void)
 {
-    (void)priority;
 }
 
 #endif // DAEMON_USED

@@ -98,17 +98,28 @@ static int8_t DJIMotorReg(MotorInstance *inst)
     DJIMotorInstance *motor = (DJIMotorInstance *)inst;
     DJIMotorPriv_t *priv = &motor->priv;
 
-    // 设置 parent 指针和回调
+    // 设置 parent 指针
     priv->rx_can->parent = motor;
-    priv->rx_can->rx_callback = DJIMotorDecode;
+
+    // 计算接收 ID
+    DJIModel_e model = (DJIModel_e)inst->model;
+    uint32_t rx_id = (model == DJI_MODEL_GM6020) ? (0x204 + priv->motor_id) : (0x200 + priv->motor_id);
+
+    CAN_Init_Config_s can_cfg = {
+        .tx_id = CAN_ID_UNUSED,
+        .filter_mode = CAN_FILTER_MODE_LIST,
+        .rx_id_count = 1,
+        .rx_id_list = {rx_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},
+        .rx_mask = 0,
+        .rx_callback = DJIMotorDecode,
+    };
 
     // 注册接收 CAN 实例
-    if (CANRegister(priv->rx_can) != 0)
+    if (CANRegister(priv->rx_can, &can_cfg) != 0)
         return -1;
 
     // 获取 CAN 总线
     BoardCAN_e can_e = priv->rx_can->can_e;
-    DJIModel_e model = (DJIModel_e)inst->model;
 
     // 计算发送分组
     uint8_t group = DJIMotorGetSenderGroup(can_e, priv->motor_id, model);
@@ -230,9 +241,19 @@ static int8_t DJIMotorGroupReg(MotorGroupInstance *inst)
             continue;
 
         priv->rx_can[i]->parent = group;
-        priv->rx_can[i]->rx_callback = DJIMotorGroupDecode;
 
-        if (CANRegister(priv->rx_can[i]) != 0)
+        uint32_t g_rx_id = (model == DJI_MODEL_GM6020) ? (0x204 + priv->motor_id[i]) : (0x200 + priv->motor_id[i]);
+
+        CAN_Init_Config_s g_can_cfg = {
+            .tx_id = CAN_ID_UNUSED,
+            .filter_mode = CAN_FILTER_MODE_LIST,
+            .rx_id_count = 1,
+            .rx_id_list = {g_rx_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},
+            .rx_mask = 0,
+            .rx_callback = DJIMotorGroupDecode,
+        };
+
+        if (CANRegister(priv->rx_can[i], &g_can_cfg) != 0)
             return -1;
 
         // 获取 CAN 总线（假设所有电机在同一总线）
@@ -496,13 +517,17 @@ static CANInstance *DJIMotorGetOrCreateSender(uint8_t group)
 
     // 初始化发送 CAN 实例
     sender_group[group].can_e = can_e;
-    sender_group[group].tx_id = tx_id;
-    sender_group[group].filter_mode = CAN_FILTER_MODE_MASK;
-    sender_group[group].rx_id_count = 0;
-    sender_group[group].rx_id_list[0] = CAN_ID_UNUSED;
-    sender_group[group].rx_callback = NULL;
 
-    CANRegister(&sender_group[group]);
+    CAN_Init_Config_s snd_cfg = {
+        .tx_id = tx_id,
+        .filter_mode = CAN_FILTER_MODE_MASK,
+        .rx_id_count = 0,
+        .rx_id_list = {CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},
+        .rx_mask = 0,
+        .rx_callback = NULL,
+    };
+
+    CANRegister(&sender_group[group], &snd_cfg);
     sender_init_flag[group] = 1;
 
     return &sender_group[group];

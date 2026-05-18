@@ -15,7 +15,7 @@
  * @note 拓展功能启用规则：
  *       - 所有高级功能统一通过掩码 config_mask 控制启用/禁用
  *       - deadband 和 kf 通过参数判零控制（deadband > 0 / kf != 0 时生效）
- *       - 所有高级功能默认禁用，通过对应的 PIDSetXxx 函数逐个开启
+ *       - 所有高级功能通过 PID_Init_Config_s 中的 config_mask 掩码位或配置
  */
 
 #include "drv_pid.h"
@@ -167,9 +167,14 @@ static void f_Derivative_Filter(PIDInstance *pid)
 
 /*------------- 公开接口实现 --------------*/
 
-void PIDInit(PIDInstance *instance, float kp, float ki, float kd)
+void PIDInit(PIDInstance *instance, const PID_Init_Config_s *config)
 {
     if (instance == NULL)
+    {
+        return;
+    }
+
+    if (config == NULL)
     {
         return;
     }
@@ -178,20 +183,26 @@ void PIDInit(PIDInstance *instance, float kp, float ki, float kd)
     memset(instance, 0, sizeof(PIDInstance));
 
     // 基本参数
-    instance->kp = kp;
-    instance->ki = ki;
-    instance->kd = kd;
+    instance->kp = config->kp;
+    instance->ki = config->ki;
+    instance->kd = config->kd;
 
-    // 高级功能默认禁用 (参数为 0，不影响基本 PID 计算)
-    instance->integral_limit = 0.0f; // 积分限幅默认禁用
-    instance->coef_a = 0.0f;         // 变速积分参数 A 默认 0
-    instance->coef_b = 1.0f;         // 变速积分参数 B 默认 1
-    instance->d_lpf_rc = 0.0f;       // 微分滤波默认禁用
-    instance->deadband = 0.0f;       // 死区默认禁用
-    instance->kf = 0.0f;             // 前馈系数默认 0
+    // 高级功能参数
+    instance->integral_limit = config->integral_limit;
+    instance->coef_a = config->coef_a;
+    instance->coef_b = config->coef_b;
+    instance->d_lpf_rc = config->d_lpf_rc;
+    instance->deadband = config->deadband;
+    instance->kf = config->kf;
 
     // 功能掩码
-    instance->config_mask = PID_IMPROVE_NONE;
+    instance->config_mask = config->config_mask;
+
+    // 变速积分 coef_b 默认值保护
+    if (instance->coef_b < 0.0001f)
+    {
+        instance->coef_b = 1.0f;
+    }
 }
 
 void PIDReset(PIDInstance *instance)
@@ -305,99 +316,4 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float d
     instance->last_d_out = instance->d_out;
 
     return instance->output;
-}
-
-/*------------- 配置函数实现 --------------*/
-
-void PIDSetDeadband(PIDInstance *instance, float deadband)
-{
-    if (instance == NULL)
-    {
-        return;
-    }
-    instance->deadband = deadband;
-}
-
-void PIDSetIntegralLimit(PIDInstance *instance, float limit, uint8_t enable)
-{
-    if (instance == NULL)
-    {
-        return;
-    }
-    instance->integral_limit = limit;
-    if (enable)
-    {
-        instance->config_mask |= PID_ENABLE_INTEGRAL_LIMIT;
-    }
-    else
-    {
-        instance->config_mask &= ~PID_ENABLE_INTEGRAL_LIMIT;
-    }
-}
-
-void PIDSetChangingIntegration(PIDInstance *instance, float coef_a, float coef_b, uint8_t enable)
-{
-    if (instance == NULL)
-    {
-        return;
-    }
-    instance->coef_a = coef_a;
-    instance->coef_b = coef_b;
-    if (enable)
-    {
-        instance->config_mask |= PID_ENABLE_CHANGING_INTEGRATION;
-    }
-    else
-    {
-        instance->config_mask &= ~PID_ENABLE_CHANGING_INTEGRATION;
-    }
-}
-
-void PIDSetDerivativeFilter(PIDInstance *instance, float rc, uint8_t enable)
-{
-    if (instance == NULL)
-    {
-        return;
-    }
-    instance->d_lpf_rc = rc;
-    if (enable)
-    {
-        instance->config_mask |= PID_ENABLE_DERIVATIVE_FILTER;
-    }
-    else
-    {
-        instance->config_mask &= ~PID_ENABLE_DERIVATIVE_FILTER;
-    }
-}
-
-void PIDSetDerivativeOnMeasurement(PIDInstance *instance, uint8_t enable)
-{
-    if (instance == NULL)
-    {
-        return;
-    }
-    if (enable)
-    {
-        instance->config_mask |= PID_ENABLE_DERIVATIVE_ON_MEAS;
-    }
-    else
-    {
-        instance->config_mask &= ~PID_ENABLE_DERIVATIVE_ON_MEAS;
-    }
-}
-
-void PIDSetTrapezoidIntegral(PIDInstance *instance, uint8_t enable)
-{
-    if (instance == NULL)
-    {
-        return;
-    }
-    if (enable)
-    {
-        instance->config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL;
-    }
-    else
-    {
-        instance->config_mask &= ~PID_ENABLE_TRAPEZOID_INTEGRAL;
-    }
 }

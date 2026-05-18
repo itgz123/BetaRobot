@@ -115,11 +115,16 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 
 /*------------- 外部接口实现 --------------*/
 
-int8_t USARTRegister(USARTInstance *instance)
+int8_t USARTRegister(USARTInstance *instance, const USART_Init_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_usart] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_usart] Config is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_idx >= UART_INSTANCE_NUM, -1, LOGERROR("[bsp_usart] Exceeded max instance count!"));
     BSP_RETURN_IF_TRUE_LOG(instance->uart_e >= UART_NUM_MAX, -1, LOGERROR("[bsp_usart] uart_e out of range!"));
+
+    // 将配置拷贝到实例
+    instance->tx_mode = config->tx_mode;
+    instance->rx_callback = config->rx_callback;
 
     // 根据枚举自动填充硬件句柄
     instance->handle = uart_map[instance->uart_e].handle;

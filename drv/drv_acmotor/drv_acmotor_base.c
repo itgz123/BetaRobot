@@ -40,8 +40,14 @@ int8_t MotorSetPID(MotorInstance *inst, MotorLoopType_e loop,
         return -1;
     }
 
-    PIDInit(pid, kp, ki, kd);
-    PIDSetIntegralLimit(pid, integral_limit, integral_limit > 0 ? 1 : 0);
+    PID_Init_Config_s pid_cfg = {
+        .kp = kp,
+        .ki = ki,
+        .kd = kd,
+        .integral_limit = integral_limit,
+        .config_mask = integral_limit > 0 ? PID_ENABLE_INTEGRAL_LIMIT : PID_IMPROVE_NONE,
+    };
+    PIDInit(pid, &pid_cfg);
 
     return 0;
 }
