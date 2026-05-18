@@ -107,7 +107,7 @@ int8_t EncoderRegister(EncoderInstance *instance)
     // 根据枚举自动填充硬件映射
     instance->map = tim_map[instance->tim_e];
     instance->arr = instance->map.htim->Instance->ARR + 1; // 溢出周期 = ARR + 1
-    instance->last_time = DWT_GetTimeline_s();
+    instance->last_time_us = DWT_GetTimeUs();
 
     // 启动编码器
     HAL_TIM_Encoder_Start(instance->map.htim, TIM_CHANNEL_ALL);
@@ -128,13 +128,13 @@ float EncoderGetSpeed(EncoderInstance *instance)
         return 0.0f;
     }
 
-    float current_time = DWT_GetTimeline_s();
+    uint64_t current_time = DWT_GetTimeUs();
     int32_t current_count = (int32_t)__HAL_TIM_GET_COUNTER(instance->map.htim);
 
     // 计算扩展后的总计数：溢出次数 * 溢出周期 + 当前计数值
     instance->total_count = (int64_t)instance->overflow_count * instance->arr + current_count;
 
-    float dt = current_time - instance->last_time;
+    float dt = (float)(current_time - instance->last_time_us) * 1e-6f;
     if (dt > 0.0001f)
     {
         // 使用扩展后的总计数计算速度，正确处理溢出
@@ -142,7 +142,7 @@ float EncoderGetSpeed(EncoderInstance *instance)
     }
 
     instance->last_total_count = instance->total_count;
-    instance->last_time = current_time;
+    instance->last_time_us = current_time;
 
     return instance->speed;
 }

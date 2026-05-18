@@ -20,7 +20,6 @@
 /*============================================
  *              硬件特性配置
  *============================================*/
-#define CPU_FREQ_MHZ 168
 #define CPU_CORE CORTEX_M4
 #define BSP_CAN_IP BSP_CAN_IP_BXCAN
 #define HAS_FPU 1

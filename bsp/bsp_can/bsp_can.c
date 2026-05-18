@@ -594,13 +594,13 @@ uint8_t CANTransmit(CANInstance *instance, uint32_t timeout_ms)
         return 0;
     }
 
-    float start_time = DWT_GetTimeline_ms();
-    float timeout_f = (float)timeout_ms;
+    uint64_t start_time = DWT_GetTimeUs();
+    uint64_t timeout_us = (uint64_t)timeout_ms * 1000;
 
 #if BSP_CAN_IP == BSP_CAN_IP_FDCAN
     while (HAL_FDCAN_GetTxFifoFreeLevel(instance->map.handle) == 0U)
     {
-        if ((DWT_GetTimeline_ms() - start_time) > timeout_f)
+        if ((DWT_GetTimeUs() - start_time) > timeout_us)
         {
             LOGWARNING("[bsp_can] FDCAN Tx FIFO timeout (can_e=%d, tx_id=0x%lX)", instance->can_e, instance->tx_id);
             return 0;
@@ -615,7 +615,7 @@ uint8_t CANTransmit(CANInstance *instance, uint32_t timeout_ms)
 #else
     while (HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle) == 0U)
     {
-        if ((DWT_GetTimeline_ms() - start_time) > timeout_f)
+        if ((DWT_GetTimeUs() - start_time) > timeout_us)
         {
             LOGWARNING("[bsp_can] CAN mailbox timeout (can_e=%d, tx_id=0x%lX)", instance->can_e, instance->tx_id);
             return 0;

@@ -59,7 +59,7 @@ typedef struct
     int32_t total_round; // 总圈数
     uint8_t motor_id;    // 电机 ID (1-8)
     uint8_t tx_slot;     // 发送槽位 (0-3)
-    uint32_t feed_cnt;   // DWT 时间戳
+    uint64_t feed_cnt;   // DWT 时间戳
 } DJIMotorPriv_t;
 
 /*============================================

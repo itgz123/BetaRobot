@@ -45,7 +45,7 @@ typedef struct daemon_ins
     uint16_t temp_count;       // 当前值,减为零说明模块离线或异常
     void *owner_id;            // daemon实例的地址,初始化的时候填入
     uint8_t is_online;         // 当前在线状态,用于检测状态转换
-    uint32_t last_reload_ms;   // 上次喂狗时间戳 (ms)，由 DWT 获取
+    uint64_t last_reload_us;   // 上次喂狗时间戳 (us)，由 DWT 获取
 } DaemonInstance;
 
 /*------------- 配置结构体 --------------*/
@@ -68,7 +68,7 @@ typedef struct
         .is_online = 1,                    \
         .callback = NULL,                  \
         .owner_id = NULL,                  \
-        .last_reload_ms = 0,               \
+        .last_reload_us = 0,               \
     }
 
 void DaemonRegister(DaemonInstance *inst, const Daemon_Init_Config_s *config);
