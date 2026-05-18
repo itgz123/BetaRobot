@@ -32,6 +32,7 @@ void DaemonRegister(DaemonInstance *inst, const Daemon_Init_Config_s *config)
     inst->callback = config->callback;
     inst->owner_id = config->owner_id;
     inst->temp_count = config->reload_count;
+    inst->last_reload_ms = (uint32_t)DWT_GetTimeline_ms();
 
     s_daemon_instances[s_idx++] = inst;
 }
@@ -48,6 +49,7 @@ void DaemonReload(DaemonInstance *instance)
     }
 
     instance->temp_count = instance->reload_count;
+    instance->last_reload_ms = (uint32_t)DWT_GetTimeline_ms();
 }
 
 uint8_t DaemonIsOnline(DaemonInstance *instance)
