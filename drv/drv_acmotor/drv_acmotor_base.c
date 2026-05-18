@@ -1,14 +1,17 @@
 /**
  * @file drv_acmotor_base.c
- * @brief 电机抽象基类实现
+ * @brief 交流电机抽象基类实现
  *
  * @note DRV 层职责：
  *       1. 提供串级 PID 计算框架
- *       2. 不使用 FreeRTOS
+ *       2. 提供限制应用函数
+ *       3. 提供 MIT 协议定点/浮点转换工具
+ *       4. 不使用 FreeRTOS
  */
 
 #include "drv_acmotor_base.h"
 #include <stddef.h>
+#include <math.h>
 
 /*============================================
  *              基类统一接口实现
@@ -17,8 +20,8 @@
 /**
  * @brief 设置 PID 参数
  */
-int8_t MotorSetPID(MotorInstance *inst, MotorLoopType_e loop,
-                   float kp, float ki, float kd, float integral_limit, float max_out)
+int8_t ACMotorSetPID(ACMotorInstance *inst, MotorLoopType_e loop,
+                     float kp, float ki, float kd, float integral_limit, float max_out)
 {
     if (!inst)
         return -1;
@@ -60,14 +63,14 @@ int8_t MotorSetPID(MotorInstance *inst, MotorLoopType_e loop,
  *
  * @note 计算顺序：位置环 → 速度环 → 电流环
  */
-float MotorCascadePID(MotorInstance *inst, float dt)
+float ACMotorCascadePID(ACMotorInstance *inst, float dt)
 {
-    if (!inst || !inst->status.enable)
+    if (!inst || !inst->enable)
         return 0.0f;
 
     MotorControlSetting_t *settings = &inst->settings;
     MotorController_t *controller = &inst->controller;
-    MotorStatus_t *status = &inst->status;
+    MotorData_t *data = &inst->data;
 
     float pid_ref = controller->pid_ref;
 
@@ -91,7 +94,7 @@ float MotorCascadePID(MotorInstance *inst, float dt)
         if (settings->angle_feedback_src == OTHER_FEED && controller->angle_feedback_ptr)
             angle_measure = *controller->angle_feedback_ptr;
         else
-            angle_measure = status->angle;
+            angle_measure = data->position_multi;
 
         pid_ref = PIDCalculate(&controller->angle_pid, pid_ref, angle_measure, dt, 0.0f);
     }
@@ -107,7 +110,7 @@ float MotorCascadePID(MotorInstance *inst, float dt)
         if (settings->speed_feedback_src == OTHER_FEED && controller->speed_feedback_ptr)
             speed_measure = *controller->speed_feedback_ptr;
         else
-            speed_measure = status->speed;
+            speed_measure = data->speed;
 
         pid_ref = PIDCalculate(&controller->speed_pid, pid_ref, speed_measure, dt, 0.0f);
     }
@@ -118,7 +121,7 @@ float MotorCascadePID(MotorInstance *inst, float dt)
         if ((settings->feedforward_flag & CURRENT_FEEDFORWARD) && controller->current_ff_ptr)
             pid_ref += *controller->current_ff_ptr;
 
-        pid_ref = PIDCalculate(&controller->current_pid, pid_ref, status->current, dt, 0.0f);
+        pid_ref = PIDCalculate(&controller->current_pid, pid_ref, data->current, dt, 0.0f);
     }
 
     // 反馈反转处理
@@ -126,4 +129,62 @@ float MotorCascadePID(MotorInstance *inst, float dt)
         pid_ref *= -1.0f;
 
     return pid_ref;
+}
+
+/**
+ * @brief 应用限制到 pid_ref
+ */
+void ACMotorApplyLimits(ACMotorInstance *inst)
+{
+    if (!inst)
+        return;
+
+    MotorLimits_t *limits = &inst->limits;
+    MotorData_t *data = &inst->data;
+    float *pid_ref = &inst->controller.pid_ref;
+
+    // 电流限制
+    if (*pid_ref > limits->current_max)
+        *pid_ref = limits->current_max;
+    else if (*pid_ref < -limits->current_max)
+        *pid_ref = -limits->current_max;
+
+    // 位置限制：到达限位时停止输出
+    if (limits->position_limit_enable)
+    {
+        if (data->position_multi >= limits->position_max ||
+            data->position_multi <= limits->position_min)
+        {
+            *pid_ref = 0.0f;
+        }
+    }
+}
+
+/*============================================
+ *              MIT 协议工具函数
+ *============================================*/
+
+/**
+ * @brief 定点→浮点
+ */
+float ACMotorUintToFloat(uint32_t x, float x_min, float x_max, int bits)
+{
+    uint32_t x_max_uint = (1u << bits) - 1u;
+    return (float)x / (float)x_max_uint * (x_max - x_min) + x_min;
+}
+
+/**
+ * @brief 浮点→定点
+ */
+uint32_t ACMotorFloatToUint(float x, float x_min, float x_max, int bits)
+{
+    float range = x_max - x_min;
+    uint32_t uint_max = (1u << bits) - 1u;
+
+    if (x > x_max)
+        x = x_max;
+    if (x < x_min)
+        x = x_min;
+
+    return (uint32_t)((x - x_min) / range * (float)uint_max);
 }
