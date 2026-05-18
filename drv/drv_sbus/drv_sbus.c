@@ -65,13 +65,16 @@ int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Init_Config_s *config)
     }
 
     // 注册 daemon 看门狗
-    Daemon_Init_Config_s daemon_cfg = {
-        .reload_count = config->daemon_reload,
-        .fault_action = config->daemon_fault,
-        .callback = NULL,
-        .owner_id = instance,
-    };
-    DaemonRegister(instance->daemon, &daemon_cfg);
+    if (instance->daemon != NULL)
+    {
+        Daemon_Init_Config_s daemon_cfg = {
+            .reload_count = config->daemon_reload,
+            .fault_action = config->daemon_fault,
+            .callback = NULL,
+            .owner_id = instance,
+        };
+        DaemonRegister(instance->daemon, &daemon_cfg);
+    }
 
     LOGINFO("[drv_sbus] SBUS instance registered");
     return 0;
