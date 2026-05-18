@@ -168,6 +168,37 @@ int8_t BMI088Register(BMI088Instance *inst)
         return -1;
     }
 
+    if (inst->spi_inst == NULL)
+    {
+        LOGERROR("[drv_bmi088] spi_inst is NULL");
+        return -1;
+    }
+    if (inst->cs_acc == NULL)
+    {
+        LOGERROR("[drv_bmi088] cs_acc is NULL");
+        return -1;
+    }
+    if (inst->cs_gyro == NULL)
+    {
+        LOGERROR("[drv_bmi088] cs_gyro is NULL");
+        return -1;
+    }
+    if (inst->int_acc == NULL)
+    {
+        LOGERROR("[drv_bmi088] int_acc is NULL");
+        return -1;
+    }
+    if (inst->int_gyro == NULL)
+    {
+        LOGERROR("[drv_bmi088] int_gyro is NULL");
+        return -1;
+    }
+    if (inst->heater_pwm == NULL)
+    {
+        LOGERROR("[drv_bmi088] heater_pwm is NULL");
+        return -1;
+    }
+
     // 设置 parent 指针
     inst->spi_inst->parent = inst;
     inst->cs_acc->parent = inst;

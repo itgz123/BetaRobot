@@ -16,6 +16,17 @@ void DaemonRegister(DaemonInstance *inst, const Daemon_Init_Config_s *config)
     if (!inst || !config || s_idx >= DAEMON_MX_CNT)
         return;
 
+    if (config->fault_action > DAEMON_FAULT_RESERVED_7)
+    {
+        LOGERROR("[DAEMON] Invalid fault_action: %d, max: %d", config->fault_action, DAEMON_FAULT_RESERVED_7);
+        return;
+    }
+
+    if (config->owner_id == NULL)
+    {
+        LOGWARNING("[DAEMON] owner_id is NULL, daemon may not identify offline module");
+    }
+
     inst->reload_count = config->reload_count;
     inst->fault_action = config->fault_action;
     inst->callback = config->callback;
@@ -118,8 +129,8 @@ void DaemonInit(void)
 
 void DaemonRegister(DaemonInstance *inst, const Daemon_Init_Config_s *config)
 {
-    (void)inst;
-    (void)config;
+    if (!inst || !config)
+        return;
 }
 
 void DaemonReload(DaemonInstance *instance)
