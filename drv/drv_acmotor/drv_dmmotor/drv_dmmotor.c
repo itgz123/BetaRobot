@@ -235,7 +235,9 @@ static void DMMotorDecode(CANInstance *can_inst)
         DaemonReload(base->daemon);
 
     // 计算 dt
-    base->dt = DWT_GetDeltaT(&priv->feed_cnt);
+    uint64_t now = DWT_GetTimeUs();
+    base->dt = (float)(now - priv->feed_cnt) * 1e-6f;
+    priv->feed_cnt = now;
 
     // ---- 1. 解析 DM 反馈帧 ----
     // D[0] = ID(低4位) | ERR(高4位)

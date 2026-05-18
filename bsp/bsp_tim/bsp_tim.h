@@ -41,7 +41,7 @@ typedef struct EncoderInstance
     int64_t total_count;      // 扩展总计数（用于速度计算）
     int64_t last_total_count; // 上次总计数
     float speed;              // 当前速度（脉冲/秒）
-    float last_time;          // 上次更新时间
+    uint64_t last_time_us;     // 上次更新时间 (us)
 } EncoderInstance;
 
 /*------------- 实例定义宏 --------------*/
@@ -71,7 +71,7 @@ typedef struct EncoderInstance
         .total_count = 0,                   \
         .last_total_count = 0,              \
         .speed = 0.0f,                      \
-        .last_time = 0.0f}
+        .last_time_us = 0}
 
 /*------------- PWM接口声明 --------------*/
 

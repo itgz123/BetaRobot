@@ -77,7 +77,7 @@ typedef struct
     CANInstance *can_inst; // CAN 实例（收发共用）
     uint16_t last_ecd;     // 上一次编码器值（多圈计算）
     int32_t total_round;   // 总圈数
-    uint32_t feed_cnt;     // DWT 时间戳
+    uint64_t feed_cnt;     // DWT 时间戳
     uint8_t was_lost;      // 曾离线标志
     uint16_t lost_cnt;     // 离线计数（控制恢复间隔）
 } DMMotorPriv_t;

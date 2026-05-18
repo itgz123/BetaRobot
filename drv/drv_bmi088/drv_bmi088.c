@@ -468,7 +468,7 @@ BMI088_Data_t BMI088ReadBlocking(BMI088Instance *inst)
     data.temp = (float)raw_temp * BMI088_TEMP_SENS + BMI088_TEMP_OFFSET;
 
     /* 记录时间戳 */
-    data.time_stamp = DWT_GetTimeline_ms();
+    data.time_stamp = (float)DWT_GetTimeUs() * 0.001f;
 
     return data;
 }

@@ -237,7 +237,9 @@ static void DJIMotorDecode(CANInstance *can_inst)
         DaemonReload(base->daemon);
 
     // 计算 dt
-    base->dt = DWT_GetDeltaT(&priv->feed_cnt);
+    uint64_t now = DWT_GetTimeUs();
+    base->dt = (float)(now - priv->feed_cnt) * 1e-6f;
+    priv->feed_cnt = now;
 
     // ---- 1. 填 raw_data ----
     MotorRawData_t *raw = &base->raw_data;
