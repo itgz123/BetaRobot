@@ -45,10 +45,10 @@
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/build/BetaRobot.elf",
             "device": "${input:selectBoard}",
-            "svdFile": "${workspaceFolder}/hal/${input:selectBoard}/${input:selectBoard}.svd",
+            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
             "servertype": "openocd",
             "configFiles": [
-                "${workspaceFolder}/hal/${input:selectBoard}/openocd_daplink.cfg"
+                "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/openocd_daplink.cfg"
             ],
             "runToEntryPoint": "main",
             "rtos": "FreeRTOS",
@@ -66,10 +66,10 @@
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/build/BetaRobot.elf",
             "device": "${input:selectBoard}",
-            "svdFile": "${workspaceFolder}/hal/${input:selectBoard}/${input:selectBoard}.svd",
+            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
             "servertype": "openocd",
             "configFiles": [
-                "${workspaceFolder}/hal/${input:selectBoard}/openocd_daplink.cfg"
+                "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/openocd_daplink.cfg"
             ],
             "runToEntryPoint": "main",
             "rtos": "FreeRTOS",
@@ -97,10 +97,10 @@
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/build/BetaRobot.elf",
             "device": "${input:selectBoard}",
-            "svdFile": "${workspaceFolder}/hal/${input:selectBoard}/${input:selectBoard}.svd",
+            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
             "servertype": "openocd",
             "configFiles": [
-                "${workspaceFolder}/hal/${input:selectBoard}/openocd_daplink.cfg"
+                "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/openocd_daplink.cfg"
             ],
             "rtos": "FreeRTOS"
         },
@@ -112,10 +112,10 @@
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/build/BetaRobot.elf",
             "device": "${input:selectBoard}",
-            "svdFile": "${workspaceFolder}/hal/${input:selectBoard}/${input:selectBoard}.svd",
+            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
             "servertype": "openocd",
             "configFiles": [
-                "${workspaceFolder}/hal/${input:selectBoard}/openocd_daplink.cfg"
+                "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/openocd_daplink.cfg"
             ],
             "rtos": "FreeRTOS",
             "rttConfig": {
@@ -139,7 +139,7 @@
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/build/BetaRobot.elf",
             "device": "${input:jlinkDevice}",
-            "svdFile": "${workspaceFolder}/hal/${input:selectBoard}/${input:selectBoard}.svd",
+            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
             "servertype": "jlink",
             "runToEntryPoint": "main",
             "rtos": "FreeRTOS",
@@ -158,7 +158,7 @@
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/build/BetaRobot.elf",
             "device": "${input:jlinkDevice}",
-            "svdFile": "${workspaceFolder}/hal/${input:selectBoard}/${input:selectBoard}.svd",
+            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
             "servertype": "jlink",
             "runToEntryPoint": "main",
             "rtos": "FreeRTOS",
@@ -187,7 +187,7 @@
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/build/BetaRobot.elf",
             "device": "${input:jlinkDevice}",
-            "svdFile": "${workspaceFolder}/hal/${input:selectBoard}/${input:selectBoard}.svd",
+            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
             "servertype": "jlink",
             "rtos": "FreeRTOS",
             "interface": "swd"
@@ -200,7 +200,7 @@
             "cwd": "${workspaceFolder}",
             "executable": "${workspaceFolder}/build/BetaRobot.elf",
             "device": "${input:jlinkDevice}",
-            "svdFile": "${workspaceFolder}/hal/${input:selectBoard}/${input:selectBoard}.svd",
+            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
             "servertype": "jlink",
             "rtos": "FreeRTOS",
             "interface": "swd",
