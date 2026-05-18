@@ -223,6 +223,7 @@ set(PROJECT_SOURCES
     ${CMAKE_SOURCE_DIR}/bsp/bsp_usart/bsp_usart.c
     ${CMAKE_SOURCE_DIR}/bsp/bsp_adc/bsp_adc.c
     ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_djimotor/drv_djimotor.c
+    ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_dmmotor/drv_dmmotor.c
     ${CMAKE_SOURCE_DIR}/drv/drv_pid/drv_pid.c
     ${CMAKE_SOURCE_DIR}/drv/drv_chassis/drv_chassis.c
     ${CMAKE_SOURCE_DIR}/drv/drv_sbus/drv_sbus.c
@@ -286,6 +287,7 @@ target_include_directories(${TARGET_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/drv/drv_acmotor
     ${CMAKE_SOURCE_DIR}/drv/drv_dcmotor/drv_dcmotor
     ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_djimotor
+    ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_dmmotor
     ${CMAKE_SOURCE_DIR}/drv/drv_pid
     ${CMAKE_SOURCE_DIR}/drv/drv_sbus
     ${CMAKE_SOURCE_DIR}/drv/drv_daemon
