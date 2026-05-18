@@ -29,35 +29,41 @@ typedef struct GPIOInstance
     void (*callback)(struct GPIOInstance *); // EXTI中断回调函数
 } GPIOInstance;
 
+/*------------- 配置结构体 --------------*/
+
+/**
+ * @brief GPIO 初始化配置结构体
+ */
+typedef struct
+{
+    void (*callback)(struct GPIOInstance *); // EXTI中断回调函数（可为NULL）
+} GPIO_Init_Config_s;
+
 /*------------- 实例定义宏 --------------*/
 
 /**
- * @brief 静态定义GPIO实例（使用板载枚举）
- * @param name       实例名称
- * @param gpio_idx   板载GPIO枚举（BoardGPIO_e）
- * @param cb         回调函数（可为NULL）
- * @param parent_ptr 父实例指针（可为NULL，DRV层注册时会设置）
- *
- * @example
- *   GPIO_INSTANCE_DEF(led_green, GPIO_LED_GREEN, led_callback, NULL);
+ * @brief 静态定义GPIO实例（仅身份绑定）
+ * @param name     实例名称
+ * @param gpio_idx 板载GPIO枚举（BoardGPIO_e）
  */
-#define GPIO_INSTANCE_DEF(name, gpio_idx, cb, parent_ptr) \
-    GPIOInstance name = {                                 \
-        .parent = parent_ptr,                             \
-        .gpio_e = gpio_idx,                               \
-        .map = {0},                                       \
-        .pin_state = GPIO_PIN_RESET,                      \
-        .callback = cb}
+#define GPIO_INSTANCE_DEF(name, gpio_idx) \
+    GPIOInstance name = {                 \
+        .parent = NULL,                   \
+        .gpio_e = gpio_idx,               \
+        .map = {0},                       \
+        .pin_state = GPIO_PIN_RESET,      \
+        .callback = NULL}
 
 /*------------- 外部接口声明 --------------*/
 
 /**
  * @brief 注册GPIO实例
  * @param instance GPIO实例指针（需先通过宏定义）
+ * @param config   初始化配置结构体指针
  * @retval 0 成功
  * @retval -1 失败（实例数超过上限）
  */
-int8_t GPIORegister(GPIOInstance *instance);
+int8_t GPIORegister(GPIOInstance *instance, const GPIO_Init_Config_s *config);
 
 /**
  * @brief 翻转GPIO电平

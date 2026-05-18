@@ -16,6 +16,10 @@
 #define DAEMON_MX_CNT 64
 #endif
 
+#ifndef DAEMON_TASK_PRIORITY
+#define DAEMON_TASK_PRIORITY 0
+#endif
+
 /* 离线故障动作枚举（8种, 占uint8_t） */
 typedef enum
 {
@@ -43,18 +47,32 @@ typedef struct daemon_ins
     uint8_t is_online;         // 当前在线状态,用于检测状态转换
 } DaemonInstance;
 
-#define DAEMON_INSTANCE_DEF(name, reload, fault) \
-    static DaemonInstance name = {               \
-        .reload_count = reload,                  \
-        .fault_action = fault,                   \
-        .temp_count = reload,                    \
-        .is_online = 1,                          \
+/*------------- 配置结构体 --------------*/
+
+typedef struct
+{
+    uint16_t reload_count;     // 重载值（喂狗超时阈值）
+    uint8_t fault_action;      // 离线故障动作, 见 DaemonFaultAction_e
+    offline_callback callback; // 异常处理函数（可为NULL）
+    void *owner_id;            // 所属模块实例指针
+} Daemon_Init_Config_s;
+
+/*------------- 实例定义宏 --------------*/
+
+#define DAEMON_INSTANCE_DEF(name)          \
+    static DaemonInstance name = {         \
+        .reload_count = 0,                 \
+        .fault_action = DAEMON_FAULT_NONE, \
+        .temp_count = 0,                   \
+        .is_online = 1,                    \
+        .callback = NULL,                  \
+        .owner_id = NULL,                  \
     }
 
-void DaemonRegister(DaemonInstance *inst);
+void DaemonRegister(DaemonInstance *inst, const Daemon_Init_Config_s *config);
 void DaemonReload(DaemonInstance *instance);
 uint8_t DaemonIsOnline(DaemonInstance *instance);
 void DaemonTask(void);
-void DaemonInit(uint32_t priority);
+void DaemonInit(void);
 
 #endif // !__DRV_DAEMON_H

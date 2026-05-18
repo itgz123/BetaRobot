@@ -42,44 +42,53 @@ typedef struct USARTInstance
     void (*rx_callback)(struct USARTInstance *); // 接收完成回调
 } USARTInstance;
 
+/*------------- 配置结构体 --------------*/
+
+/**
+ * @brief USART 初始化配置结构体
+ */
+typedef struct
+{
+    USART_Work_Mode_e tx_mode;                   // 发送模式（阻塞/中断/DMA）
+    void (*rx_callback)(struct USARTInstance *); // 接收完成回调（可为NULL）
+} USART_Init_Config_s;
+
 /*------------- 实例定义宏 --------------*/
 
 /**
  * @brief 静态定义USART实例（同时定义缓冲区）
- * @param name       实例名称
- * @param uart_idx   板载UART枚举（BoardUART_e）
- * @param mode       发送模式（USART_Work_Mode_e）
- * @param buff_sz    接收缓冲区大小
- * @param cb         接收回调函数（可为NULL）
- * @param parent_ptr 父实例指针（可为NULL，DRV层注册时会设置）
+ * @param name     实例名称
+ * @param uart_idx 板载UART枚举（BoardUART_e）
+ * @param buff_sz  接收缓冲区大小（影响静态内存分配，必须编译期确定）
  *
  * @note DMA_RAM 宏在 Cortex-M7 上将缓冲区放入 RAM_D1 以支持 DMA 访问
  *       在 Cortex-M4 上定义为空
  *
  * @example
- *   USART_INSTANCE_DEF(sbus_uart, UART_SBUS_2, USART_DMA_MODE, 64, sbus_callback, NULL);
+ *   USART_INSTANCE_DEF(sbus_uart, UART_SBUS_2, 64);
  */
-#define USART_INSTANCE_DEF(name, uart_idx, mode, buff_sz, cb, parent_ptr) \
-    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};                 \
-    static USARTInstance name = {                                         \
-        .parent = parent_ptr,                                             \
-        .uart_e = uart_idx,                                               \
-        .handle = NULL,                                                   \
-        .tx_mode = mode,                                                  \
-        .rx_buff = name##_rx_buff,                                        \
-        .rx_buff_size = buff_sz,                                          \
-        .rx_len = 0,                                                      \
-        .rx_callback = cb}
+#define USART_INSTANCE_DEF(name, uart_idx, buff_sz)       \
+    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0}; \
+    static USARTInstance name = {                         \
+        .parent = NULL,                                   \
+        .uart_e = uart_idx,                               \
+        .handle = NULL,                                   \
+        .tx_mode = 0,                                     \
+        .rx_buff = name##_rx_buff,                        \
+        .rx_buff_size = buff_sz,                          \
+        .rx_len = 0,                                      \
+        .rx_callback = NULL}
 
 /*------------- 外部接口声明 --------------*/
 
 /**
  * @brief 注册USART实例
  * @param instance USART实例指针（需先通过宏定义）
+ * @param config   初始化配置结构体指针
  * @retval 0 成功
  * @retval -1 失败（实例数超过上限或重复注册）
  */
-int8_t USARTRegister(USARTInstance *instance);
+int8_t USARTRegister(USARTInstance *instance, const USART_Init_Config_s *config);
 
 /**
  * @brief 发送数据

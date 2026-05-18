@@ -373,11 +373,20 @@ static void CANDispatchBxcanMessage(CAN_HandleTypeDef *hcan, uint32_t fifo)
 
 /*------------- 外部接口实现 --------------*/
 
-int8_t CANRegister(CANInstance *instance)
+int8_t CANRegister(CANInstance *instance, const CAN_Init_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_can] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_can] Config is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_idx >= CAN_INSTANCE_NUM, -1, LOGERROR("[bsp_can] Exceeded max instance count!"));
     BSP_RETURN_IF_TRUE_LOG(instance->can_e >= CAN_NUM_MAX, -1, LOGERROR("[bsp_can] can_e out of range!"));
+
+    // 将配置拷贝到实例
+    instance->tx_id = config->tx_id;
+    instance->filter_mode = config->filter_mode;
+    instance->rx_id_count = config->rx_id_count;
+    memcpy(instance->rx_id_list, config->rx_id_list, sizeof(config->rx_id_list));
+    instance->rx_mask = config->rx_mask;
+    instance->rx_callback = config->rx_callback;
 
     // 检查tx_id范围（-1 表示不发送）
     if (instance->tx_id != CAN_ID_UNUSED && instance->tx_id > 0x7FF)

@@ -35,6 +35,22 @@ typedef enum
 
 #define BMI088_BUFF_SIZE 8 // SPI缓冲区大小：1地址 + 1虚拟 + 6数据（最大）
 
+/*============================ 配置结构体 ============================*/
+
+/**
+ * @brief BMI088 初始化配置结构体
+ */
+typedef struct
+{
+    BMI088_AccRange_e acc_range;   // 加速度计量程
+    uint8_t acc_bwp;               // 加速度计低通滤波器带宽
+    uint8_t acc_odr;               // 加速度计输出数据速率
+    BMI088_GyroRange_e gyro_range; // 陀螺仪量程
+    uint8_t gyro_odr;              // 陀螺仪输出数据速率
+    uint8_t gyro_bw;               // 陀螺仪滤波器带宽
+    BMI088_WorkMode_e work_mode;   // 工作模式（轮询/中断）
+} BMI088_Init_Config_s;
+
 /**
  * @brief IMU 数据结构体
  */
@@ -105,11 +121,11 @@ typedef struct BMI088Instance
 #define BMI088_INSTANCE_DEF(name, spi_idx, cs_acc_idx, cs_gyro_idx, \
                             int_acc_idx, int_gyro_idx, heater_idx)  \
     static uint8_t name##_tx_buff[BMI088_BUFF_SIZE] DMA_RAM = {0};  \
-    SPI_INSTANCE_DEF(name##_spi, spi_idx, SPI_BLOCK_MODE, BMI088_BUFF_SIZE, NULL, NULL); \
-    GPIO_INSTANCE_DEF(name##_cs_acc, cs_acc_idx, NULL, NULL);       \
-    GPIO_INSTANCE_DEF(name##_cs_gyro, cs_gyro_idx, NULL, NULL);     \
-    GPIO_INSTANCE_DEF(name##_int_acc, int_acc_idx, NULL, NULL);     \
-    GPIO_INSTANCE_DEF(name##_int_gyro, int_gyro_idx, NULL, NULL);   \
+    SPI_INSTANCE_DEF(name##_spi, spi_idx, BMI088_BUFF_SIZE);        \
+    GPIO_INSTANCE_DEF(name##_cs_acc, cs_acc_idx);                   \
+    GPIO_INSTANCE_DEF(name##_cs_gyro, cs_gyro_idx);                 \
+    GPIO_INSTANCE_DEF(name##_int_acc, int_acc_idx);                 \
+    GPIO_INSTANCE_DEF(name##_int_gyro, int_gyro_idx);               \
     PWM_INSTANCE_DEF(name##_heater, heater_idx);                    \
     static BMI088Instance name = {                                  \
         .spi_inst = &name##_spi,                                    \
@@ -135,17 +151,11 @@ int8_t BMI088Register(BMI088Instance *inst);
 
 /**
  * @brief 设置BMI088配置并写入寄存器
- * @param inst       BMI088实例指针
- * @param acc_range  加速度计量程
- * @param acc_bwp    加速度计低通滤波器带宽
- * @param acc_odr    加速度计输出数据速率
- * @param gyro_range 陀螺仪量程
- * @param gyro_odr   陀螺仪输出数据速率
- * @param gyro_bw    陀螺仪滤波器带宽
- * @param work_mode  工作模式
+ * @param inst   BMI088实例指针
+ * @param config 初始化配置结构体指针
  * @return 0成功，-1失败
  */
-int8_t BMI088SetConfig(BMI088Instance *inst, BMI088_AccRange_e acc_range, uint8_t acc_bwp, uint8_t acc_odr, BMI088_GyroRange_e gyro_range, uint8_t gyro_odr, uint8_t gyro_bw, BMI088_WorkMode_e work_mode);
+int8_t BMI088SetConfig(BMI088Instance *inst, const BMI088_Init_Config_s *config);
 
 /**
  * @brief 阻塞读取BMI088数据

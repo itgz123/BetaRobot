@@ -175,19 +175,21 @@ int8_t BMI088Register(BMI088Instance *inst)
     inst->int_acc->parent = inst;
     inst->int_gyro->parent = inst;
 
-    if (SPIRegister(inst->spi_inst) != 0)
+    SPI_Init_Config_s spi_cfg = {.work_mode = SPI_BLOCK_MODE, .rx_callback = NULL};
+    if (SPIRegister(inst->spi_inst, &spi_cfg) != 0)
     {
         LOGERROR("[drv_bmi088] SPI register failed");
         return -1;
     }
 
-    if (GPIORegister(inst->cs_acc) != 0)
+    GPIO_Init_Config_s gpio_null = {.callback = NULL};
+    if (GPIORegister(inst->cs_acc, &gpio_null) != 0)
     {
         LOGERROR("[drv_bmi088] cs_acc register failed");
         return -1;
     }
 
-    if (GPIORegister(inst->cs_gyro) != 0)
+    if (GPIORegister(inst->cs_gyro, &gpio_null) != 0)
     {
         LOGERROR("[drv_bmi088] cs_gyro register failed");
         return -1;
@@ -199,12 +201,12 @@ int8_t BMI088Register(BMI088Instance *inst)
     GPIOSet(inst->cs_gyro);
     DWT_Delay(BMI088_DELAY_MS);
 
-    if (GPIORegister(inst->int_acc) != 0)
+    if (GPIORegister(inst->int_acc, &gpio_null) != 0)
     {
         LOGERROR("[drv_bmi088] int_acc register failed");
         return -1;
     }
-    if (GPIORegister(inst->int_gyro) != 0)
+    if (GPIORegister(inst->int_gyro, &gpio_null) != 0)
     {
         LOGERROR("[drv_bmi088] int_gyro register failed");
         return -1;
@@ -220,7 +222,7 @@ int8_t BMI088Register(BMI088Instance *inst)
     return 0;
 }
 
-int8_t BMI088SetConfig(BMI088Instance *inst, BMI088_AccRange_e acc_range, uint8_t acc_bwp, uint8_t acc_odr, BMI088_GyroRange_e gyro_range, uint8_t gyro_odr, uint8_t gyro_bw, BMI088_WorkMode_e work_mode)
+int8_t BMI088SetConfig(BMI088Instance *inst, const BMI088_Init_Config_s *config)
 {
     if (inst == NULL)
     {
@@ -228,14 +230,20 @@ int8_t BMI088SetConfig(BMI088Instance *inst, BMI088_AccRange_e acc_range, uint8_
         return -1;
     }
 
+    if (config == NULL)
+    {
+        LOGERROR("[drv_bmi088] Config is NULL");
+        return -1;
+    }
+
     // 保存用户配置
-    inst->acc_range = acc_range;
-    inst->acc_bwp = acc_bwp;
-    inst->acc_odr = acc_odr;
-    inst->gyro_range = gyro_range;
-    inst->gyro_odr = gyro_odr;
-    inst->gyro_bw = gyro_bw;
-    inst->work_mode = work_mode;
+    inst->acc_range = config->acc_range;
+    inst->acc_bwp = config->acc_bwp;
+    inst->acc_odr = config->acc_odr;
+    inst->gyro_range = config->gyro_range;
+    inst->gyro_odr = config->gyro_odr;
+    inst->gyro_bw = config->gyro_bw;
+    inst->work_mode = config->work_mode;
 
     /*============================ 加速度计初始化 ============================*/
 
@@ -275,14 +283,14 @@ int8_t BMI088SetConfig(BMI088Instance *inst, BMI088_AccRange_e acc_range, uint8_
     }
 
     // 7. 写入量程配置
-    if (BMI088_AccWriteRegWithCheck(inst, BMI088_ACC_RANGE_REG, (uint8_t)acc_range) != 0)
+    if (BMI088_AccWriteRegWithCheck(inst, BMI088_ACC_RANGE_REG, (uint8_t)inst->acc_range) != 0)
     {
         LOGERROR("[drv_bmi088] acc_range write failed");
         return -1;
     }
 
     // 8. 写入滤波器和ODR配置
-    if (BMI088_AccWriteRegWithCheck(inst, BMI088_ACC_CONF_REG, acc_bwp | acc_odr) != 0)
+    if (BMI088_AccWriteRegWithCheck(inst, BMI088_ACC_CONF_REG, inst->acc_bwp | inst->acc_odr) != 0)
     {
         LOGERROR("[drv_bmi088] acc_conf write failed");
         return -1;
@@ -317,14 +325,14 @@ int8_t BMI088SetConfig(BMI088Instance *inst, BMI088_AccRange_e acc_range, uint8_
     }
 
     // 3. 写入量程配置
-    if (BMI088_GyroWriteRegWithCheck(inst, BMI088_GYRO_RANGE_REG, (uint8_t)gyro_range) != 0)
+    if (BMI088_GyroWriteRegWithCheck(inst, BMI088_GYRO_RANGE_REG, (uint8_t)inst->gyro_range) != 0)
     {
         LOGERROR("[drv_bmi088] gyro_range write failed");
         return -1;
     }
 
     // 4. 写入带宽配置（bit[7]必须写入1）
-    if (BMI088_GyroWriteRegWithCheck(inst, BMI088_GYRO_BANDWIDTH_REG, gyro_odr | gyro_bw | BMI088_GYRO_BW_MUST_SET) != 0)
+    if (BMI088_GyroWriteRegWithCheck(inst, BMI088_GYRO_BANDWIDTH_REG, inst->gyro_odr | inst->gyro_bw | BMI088_GYRO_BW_MUST_SET) != 0)
     {
         LOGERROR("[drv_bmi088] gyro_bandwidth write failed");
         return -1;
@@ -365,7 +373,7 @@ int8_t BMI088SetConfig(BMI088Instance *inst, BMI088_AccRange_e acc_range, uint8_
     }
 
     // 中断模式
-    if (work_mode == BMI088_MODE_INT)
+    if (inst->work_mode == BMI088_MODE_INT)
     {
         LOGWARNING("[drv_bmi088] INT mode not support now!");
         // 初始化完毕，切换为dma模式

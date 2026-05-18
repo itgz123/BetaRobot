@@ -15,12 +15,17 @@
 
 /*------------- 外部接口实现 --------------*/
 
-int8_t SBUSRegister(SBUSInstance *instance)
+int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Init_Config_s *config)
 {
-    // 参数检查
     if (instance == NULL)
     {
         LOGERROR("[drv_sbus] Instance is NULL!");
+        return -1;
+    }
+
+    if (config == NULL)
+    {
+        LOGERROR("[drv_sbus] Config is NULL!");
         return -1;
     }
 
@@ -36,25 +41,37 @@ int8_t SBUSRegister(SBUSInstance *instance)
         return -1;
     }
 
-    if (instance->app_callback == NULL)
+    if (config->app_callback == NULL)
     {
         LOGERROR("[drv_sbus] app_callback is NULL!");
         return -1;
     }
 
+    // 将配置拷贝到实例
+    instance->app_callback = config->app_callback;
+
     // 设置 parent 指针，用于 BSP 回调时获取 DRV 实例
     instance->usart_inst->parent = instance;
 
-    // 注册 BSP 层实例（会自动根据 uart_e 填充 handle）
-    if (USARTRegister(instance->usart_inst) != 0)
+    // 注册 BSP 层 USART 实例
+    USART_Init_Config_s usart_cfg = {
+        .tx_mode = USART_DMA_MODE,
+        .rx_callback = SBUSUARTRxCallback,
+    };
+    if (USARTRegister(instance->usart_inst, &usart_cfg) != 0)
     {
         LOGERROR("[drv_sbus] USART register failed!");
         return -1;
     }
 
     // 注册 daemon 看门狗
-    instance->daemon->owner_id = instance;
-    DaemonRegister(instance->daemon);
+    Daemon_Init_Config_s daemon_cfg = {
+        .reload_count = config->daemon_reload,
+        .fault_action = config->daemon_fault,
+        .callback = NULL,
+        .owner_id = instance,
+    };
+    DaemonRegister(instance->daemon, &daemon_cfg);
 
     LOGINFO("[drv_sbus] SBUS instance registered");
     return 0;
