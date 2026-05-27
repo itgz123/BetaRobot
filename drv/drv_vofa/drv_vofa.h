@@ -39,13 +39,13 @@
 
 #ifndef VOFA_UART
 #if DEVELOPMENT_BOARD == DM_MC02
-#define VOFA_UART UART_10
+#define VOFA_UART
 #elif DEVELOPMENT_BOARD == DJI_C
-#define VOFA_UART UART_6
+#error "Please define VOFA_LITE_UART for this board"
 #elif DEVELOPMENT_BOARD == DJI_A
-#define VOFA_UART UART_2
+#error "Please define VOFA_LITE_UART for this board"
 #elif DEVELOPMENT_BOARD == STM32F407VET6
-#error "STM32F407VETX not supported for VOFA"
+#error "Please define VOFA_LITE_UART for this board"
 #endif
 #endif // !VOFA_UART
 
