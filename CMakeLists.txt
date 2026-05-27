@@ -79,6 +79,9 @@ set(HAL_DIR "${CMAKE_SOURCE_DIR}/cubemx/${HAL_CONFIG_NAME}")
 read_define(DEVELOPMENT_BOARD "${APP_DIR}/app_cfg.h" DEVELOPMENT_BOARD)
 set(BOARD "${DEVELOPMENT_BOARD}")
 
+# 读取是否生成反汇编文件（GENERATE_DISASSEMBLY，0=否，1=是）
+read_define(GENERATE_DISASSEMBLY "${APP_DIR}/app_cfg.h" GENERATE_DISASSEMBLY)
+
 if(NOT EXISTS "${HAL_DIR}")
     message(FATAL_ERROR
         "HAL_CONFIG_NAME '${HAL_CONFIG_NAME}' → directory not found:\n"
@@ -340,6 +343,14 @@ add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
     COMMAND ${CMAKE_OBJCOPY} -O binary -S $<TARGET_FILE:${TARGET_NAME}> ${CMAKE_BINARY_DIR}/${TARGET_NAME}.bin
 )
 
+# 根据 GENERATE_DISASSEMBLY 决定是否生成反汇编文件
+if(GENERATE_DISASSEMBLY)
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_OBJDUMP} -d -S $<TARGET_FILE:${TARGET_NAME}> > ${CMAKE_BINARY_DIR}/${TARGET_NAME}.lst
+        COMMENT "Generating disassembly file..."
+    )
+endif()
+
 ######################################
 # 平台检测和工具适配
 ######################################
@@ -416,4 +427,5 @@ message(STATUS "APP_NAME: ${APP_NAME}")
 message(STATUS "DEVELOPMENT_BOARD: ${DEVELOPMENT_BOARD}")
 message(STATUS "HAL_CONFIG_NAME: ${HAL_CONFIG_NAME}")
 message(STATUS "BUILD_TYPE: ${BUILD_TYPE_NAME}")
+message(STATUS "GENERATE_DISASSEMBLY: ${GENERATE_DISASSEMBLY}")
 message(STATUS "HAL_DIR: ${HAL_DIR}")
