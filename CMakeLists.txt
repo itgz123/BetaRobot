@@ -223,7 +223,7 @@ endif()
 ######################################
 set(PROJECT_SOURCES
     ${HAL_C_SOURCES}
-    ${CMAKE_SOURCE_DIR}/main.c
+    ${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/main.c
     ${APP_SOURCE_FILES}
     ${BSP_SOURCE_FILES}
     ${DRV_SOURCE_FILES}
