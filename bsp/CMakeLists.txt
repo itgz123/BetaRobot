@@ -1,0 +1,27 @@
+# bsp 层源文件
+set(BSP_SOURCES
+    bsp_dwt/bsp_dwt.c
+    bsp_gpio/bsp_gpio.c
+    bsp_log/bsp_log.c
+    bsp_math/bsp_math.c
+    bsp_spi/bsp_spi.c
+    bsp_tim/bsp_tim.c
+    bsp_usart/bsp_usart.c
+    bsp_adc/bsp_adc.c
+    bsp_can/bsp_can.c
+)
+
+# bsp 层头文件路径
+set(BSP_INCLUDE_DIRS
+    .
+    bsp_dwt
+    bsp_gpio
+    bsp_log
+    bsp_math
+    bsp_module
+    bsp_spi
+    bsp_tim
+    bsp_usart
+    bsp_adc
+    bsp_can
+)

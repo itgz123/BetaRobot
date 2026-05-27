@@ -97,6 +97,16 @@ include("${APP_DIR}/CMakeLists.txt")
 prefix_paths(APP_SOURCE_FILES "${APP_DIR}" ${APP_SOURCES})
 prefix_paths(APP_INCLUDE_PATHS "${APP_DIR}" ${APP_INCLUDE_DIRS})
 
+# 导入 bsp 模块定义
+include("${CMAKE_SOURCE_DIR}/bsp/CMakeLists.txt")
+prefix_paths(BSP_SOURCE_FILES "${CMAKE_SOURCE_DIR}/bsp" ${BSP_SOURCES})
+prefix_paths(BSP_INCLUDE_PATHS "${CMAKE_SOURCE_DIR}/bsp" ${BSP_INCLUDE_DIRS})
+
+# 导入 drv 模块定义
+include("${CMAKE_SOURCE_DIR}/drv/CMakeLists.txt")
+prefix_paths(DRV_SOURCE_FILES "${CMAKE_SOURCE_DIR}/drv" ${DRV_SOURCES})
+prefix_paths(DRV_INCLUDE_PATHS "${CMAKE_SOURCE_DIR}/drv" ${DRV_INCLUDE_DIRS})
+
 ######################################
 # 从 user_cfg.h 读取 BUILD_TYPE（可选，未定义默认 Debug）
 ######################################
@@ -217,30 +227,13 @@ set(PROJECT_SOURCES
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT_printf.c
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT.c
     ${APP_SOURCE_FILES}
+    ${BSP_SOURCE_FILES}
+    ${DRV_SOURCE_FILES}
     ${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/bsp_map.c
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_dwt/bsp_dwt.c
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_gpio/bsp_gpio.c
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_log/bsp_log.c
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_math/bsp_math.c
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_spi/bsp_spi.c
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_tim/bsp_tim.c
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_usart/bsp_usart.c
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_adc/bsp_adc.c
-    ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_djimotor/drv_djimotor.c
-    ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_dmmotor/drv_dmmotor.c
-    ${CMAKE_SOURCE_DIR}/drv/drv_pid/drv_pid.c
-    ${CMAKE_SOURCE_DIR}/drv/drv_chassis/drv_chassis.c
-    ${CMAKE_SOURCE_DIR}/drv/drv_sbus/drv_sbus.c
     ${HAL_DIR}/Drivers/CMSIS/DSP/Source/CommonTables/arm_common_tables.c
     ${HAL_DIR}/Drivers/CMSIS/DSP/Source/CommonTables/arm_const_structs.c
     ${HAL_DIR}/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_sin_f32.c
     ${HAL_DIR}/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c
-    ${CMAKE_SOURCE_DIR}/drv/drv_bmi088/drv_bmi088.c
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_can/bsp_can.c
-    ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_acmotor_base.c
-    ${CMAKE_SOURCE_DIR}/drv/drv_daemon/drv_daemon.c
-    ${CMAKE_SOURCE_DIR}/drv/drv_vofa/drv_vofa.c
-    ${CMAKE_SOURCE_DIR}/drv/drv_vofa/drv_vofa_lite.c
 )
 
 # DJI_A 额外加入 arm_atan2_f32.c（CMSIS-DSP V1.10.0 支持）
@@ -275,29 +268,9 @@ target_compile_definitions(${TARGET_NAME} PRIVATE
 target_include_directories(${TARGET_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${APP_INCLUDE_PATHS}
+    ${BSP_INCLUDE_PATHS}
+    ${DRV_INCLUDE_PATHS}
     ${HAL_INCLUDE_PATHS}
-    ${CMAKE_SOURCE_DIR}/bsp
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_adc
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_dwt
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_gpio
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_log
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_math
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_module
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_spi
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_tim
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_usart
-    ${CMAKE_SOURCE_DIR}/bsp/bsp_can
-    ${CMAKE_SOURCE_DIR}/drv
-    ${CMAKE_SOURCE_DIR}/drv/drv_bmi088
-    ${CMAKE_SOURCE_DIR}/drv/drv_chassis
-    ${CMAKE_SOURCE_DIR}/drv/drv_acmotor
-    ${CMAKE_SOURCE_DIR}/drv/drv_dcmotor/drv_dcmotor
-    ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_djimotor
-    ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_dmmotor
-    ${CMAKE_SOURCE_DIR}/drv/drv_pid
-    ${CMAKE_SOURCE_DIR}/drv/drv_sbus
-    ${CMAKE_SOURCE_DIR}/drv/drv_daemon
-    ${CMAKE_SOURCE_DIR}/drv/drv_vofa
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/Config
     ${HAL_DIR}/Drivers/CMSIS/DSP/Include
