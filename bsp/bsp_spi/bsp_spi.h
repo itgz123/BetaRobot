@@ -98,29 +98,34 @@ int8_t SPIRegister(SPIInstance *instance, const SPI_Init_Config_s *config);
  * @param instance SPI实例
  * @param data     发送数据指针（外部缓冲区）
  * @param len      数据长度
- * @note 阻塞模式：函数返回后数据传输完成
- *       IT/DMA模式：通过回调通知传输完成
+ * @param timeout_ms 超时时间（毫秒）
+ * @note 阻塞模式：timeout_ms 传递给 HAL_SPI_Transmit
+ *       IT/DMA模式：
+ *         - timeout_ms == 0: 只检查一次状态，忙碌时立即返回
+ *         - timeout_ms > 0:  while 循环等待，直到就绪或超时
  */
-void SPITransmit(SPIInstance *instance, uint8_t *data, uint16_t len);
+void SPITransmit(SPIInstance *instance, uint8_t *data, uint16_t len, uint32_t timeout_ms);
 
 /**
  * @brief SPI接收数据
  * @param instance SPI实例
  * @param len      数据长度（不超过buff_size）
+ * @param timeout_ms 超时时间（毫秒）
  * @note 使用实例中的 rx_buff 接收数据
  *       接收完成后 rx_len 保存实际接收长度
  */
-void SPIReceive(SPIInstance *instance, uint16_t len);
+void SPIReceive(SPIInstance *instance, uint16_t len, uint32_t timeout_ms);
 
 /**
  * @brief SPI全双工收发
  * @param instance SPI实例
  * @param tx_data  发送数据指针（外部缓冲区）
  * @param len      数据长度（不超过buff_size）
+ * @param timeout_ms 超时时间（毫秒）
  * @note 发送使用外部缓冲区 tx_data，接收使用内部缓冲区 rx_buff
  *       DMA/IT模式：通过回调通知传输完成
  */
-void SPITransmitReceive(SPIInstance *instance, uint8_t *tx_data, uint16_t len);
+void SPITransmitReceive(SPIInstance *instance, uint8_t *tx_data, uint16_t len, uint32_t timeout_ms);
 
 #endif // BSP_SPI_MODULE_ENABLED
 

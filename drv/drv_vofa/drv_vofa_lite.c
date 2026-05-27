@@ -71,7 +71,7 @@ static void VofaLiteTxCpltCallback(USARTInstance *instance)
         {
             s_buff_state[i] = BUFF_ACTIVE;
             s_active_buff = i;
-            HAL_UART_Transmit_DMA(instance->handle, s_tx_buff[i], TX_BUFF_SIZE);
+            USARTTransmit(instance, s_tx_buff[i], TX_BUFF_SIZE, 0);
             return;
         }
     }
@@ -126,12 +126,12 @@ void VofaLiteSend(void)
     *p++ = VOFA_JUST_FLOAT_FRAME_END_3;
 
     // 3. 标记写入缓冲区状态并发送
-    if (s_vofa_lite_uart.handle->gState == HAL_UART_STATE_READY)
+    if (USARTIsReady(&s_vofa_lite_uart))
     {
         // DMA 空闲，直接发送
         s_buff_state[s_write_buff] = BUFF_ACTIVE;
         s_active_buff = s_write_buff;
-        HAL_UART_Transmit_DMA(s_vofa_lite_uart.handle, s_tx_buff[s_write_buff], TX_BUFF_SIZE);
+        USARTTransmit(&s_vofa_lite_uart, s_tx_buff[s_write_buff], TX_BUFF_SIZE, 0);
     }
     else
     {

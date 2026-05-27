@@ -80,7 +80,7 @@ static void BMI088_AccReadReg(BMI088Instance *inst, uint8_t reg, uint16_t len)
     inst->tx_len = 1 + 1 + len;
 
     GPIOReset(inst->cs_acc);
-    SPITransmitReceive(inst->spi_inst, inst->tx_buff, inst->tx_len);
+    SPITransmitReceive(inst->spi_inst, inst->tx_buff, inst->tx_len, SPI_BLOCK_TIMEOUT_MS);
     GPIOSet(inst->cs_acc);
 }
 
@@ -94,7 +94,7 @@ static void BMI088_AccWriteReg(BMI088Instance *inst, uint8_t reg, uint8_t data)
     inst->tx_len = 2;
 
     GPIOReset(inst->cs_acc);
-    SPITransmit(inst->spi_inst, inst->tx_buff, inst->tx_len);
+    SPITransmit(inst->spi_inst, inst->tx_buff, inst->tx_len, SPI_BLOCK_TIMEOUT_MS);
     GPIOSet(inst->cs_acc);
 }
 
@@ -127,7 +127,7 @@ static void BMI088_GyroReadReg(BMI088Instance *inst, uint8_t reg, uint16_t len)
     inst->tx_len = 1 + len;
 
     GPIOReset(inst->cs_gyro);
-    SPITransmitReceive(inst->spi_inst, inst->tx_buff, inst->tx_len);
+    SPITransmitReceive(inst->spi_inst, inst->tx_buff, inst->tx_len, SPI_BLOCK_TIMEOUT_MS);
     GPIOSet(inst->cs_gyro);
 }
 
@@ -141,7 +141,7 @@ static void BMI088_GyroWriteReg(BMI088Instance *inst, uint8_t reg, uint8_t data)
     inst->tx_len = 2;
 
     GPIOReset(inst->cs_gyro);
-    SPITransmit(inst->spi_inst, inst->tx_buff, inst->tx_len);
+    SPITransmit(inst->spi_inst, inst->tx_buff, inst->tx_len, SPI_BLOCK_TIMEOUT_MS);
     GPIOSet(inst->cs_gyro);
 }
 

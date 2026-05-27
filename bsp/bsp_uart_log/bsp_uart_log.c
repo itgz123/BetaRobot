@@ -87,7 +87,7 @@ static void BSPLogTryStartDma(void);
 static void BSPLogTryStartDma(void)
 {
     // 检查 UART 状态
-    if (s_log_uart.handle->gState != HAL_UART_STATE_READY)
+    if (!USARTIsReady(&s_log_uart))
     {
         return; // DMA 忙，等待回调
     }
@@ -100,7 +100,7 @@ static void BSPLogTryStartDma(void)
             // 标记为 ACTIVE 并启动发送
             s_buff_state[i] = BUFF_ACTIVE;
             s_active_buff = i;
-            HAL_UART_Transmit_DMA(s_log_uart.handle, (uint8_t *)s_tx_buff[i], s_buff_len[i]);
+            USARTTransmit(&s_log_uart, (uint8_t *)s_tx_buff[i], s_buff_len[i], 0);
             return;
         }
     }
@@ -124,7 +124,7 @@ static void BSPLogTxCpltCallback(USARTInstance *inst)
         {
             s_buff_state[i] = BUFF_ACTIVE;
             s_active_buff = i;
-            HAL_UART_Transmit_DMA(s_log_uart.handle, (uint8_t *)s_tx_buff[i], s_buff_len[i]);
+            USARTTransmit(&s_log_uart, (uint8_t *)s_tx_buff[i], s_buff_len[i], 0);
             return;
         }
     }
@@ -158,8 +158,8 @@ void BSPLogInit(void)
 
 void BSPLogOutput(LogLevel_e level, const char *format, ...)
 {
-    // 1. 频率限制检查
-    uint32_t now = HAL_GetTick();
+    // 1. 频率限制检查（使用 DWT 时间）
+    uint32_t now = (uint32_t)(DWT_GetTimeUs() / 1000);
     if (now - s_global_last_ms >= 1000)
     {
         s_global_count = 0;

@@ -9,6 +9,7 @@
 
 #if UART_INSTANCE_NUM > 0
 
+#include "bsp_dwt.h"
 #include "bsp_uart_log.h"
 #include "string.h"
 
@@ -167,7 +168,7 @@ int8_t USARTRegister(USARTInstance *instance, const USART_Init_Config_s *config)
     return 0;
 }
 
-void USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len)
+void USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len, uint32_t timeout_ms)
 {
     if (instance == NULL || data == NULL || len == 0)
     {
@@ -175,17 +176,23 @@ void USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len)
         return;
     }
 
-    // IT/DMA模式需要检查发送状态
+    // IT/DMA模式需要等待发送状态就绪
     if (instance->tx_mode != USART_BLOCK_MODE)
     {
-        if (instance->handle->gState != HAL_UART_STATE_READY)
+        uint64_t start_time = DWT_GetTimeUs();
+        uint64_t timeout_us = (uint64_t)timeout_ms * 1000;
+
+        while (instance->handle->gState != HAL_UART_STATE_READY)
         {
-            LOGWARNING("[bsp_usart] UART busy, transmit skipped!");
-            return;
+            if ((DWT_GetTimeUs() - start_time) > timeout_us)
+            {
+                LOGWARNING("[bsp_usart] UART busy timeout (uart_e=%d)", instance->uart_e);
+                return;
+            }
         }
     }
 
-    transmit_funcs[instance->tx_mode](instance->handle, data, len, USART_BLOCK_TIMEOUT_MS);
+    transmit_funcs[instance->tx_mode](instance->handle, data, len, timeout_ms);
 }
 
 void USARTRestartReceive(USARTInstance *instance)
@@ -203,6 +210,15 @@ void USARTRestartReceive(USARTInstance *instance)
 
     // 关闭DMA半传输中断，防止两次进入HAL_UARTEx_RxEventCallback()
     __HAL_DMA_DISABLE_IT(instance->handle->hdmarx, DMA_IT_HT);
+}
+
+uint8_t USARTIsReady(USARTInstance *instance)
+{
+    if (instance == NULL || instance->handle == NULL)
+    {
+        return 0;
+    }
+    return (instance->handle->gState == HAL_UART_STATE_READY) ? 1 : 0;
 }
 
 #endif

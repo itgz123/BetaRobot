@@ -137,7 +137,7 @@ static void VofaSend(void)
 
     // 计算发送长度
     uint16_t tx_len = (s_vofa_instance.channel_count + VOFA_USE_DWT_TIME_STAMP) * 4 + 4;
-    USARTTransmit(s_vofa_instance.usart_inst, s_vofa_instance.tx_buff, tx_len);
+    USARTTransmit(s_vofa_instance.usart_inst, s_vofa_instance.tx_buff, tx_len, USART_BLOCK_TIMEOUT_MS);
 }
 
 /*------------- RTOS 任务 --------------*/

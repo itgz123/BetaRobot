@@ -97,10 +97,13 @@ int8_t USARTRegister(USARTInstance *instance, const USART_Init_Config_s *config)
  * @param instance USART实例
  * @param data 发送数据指针
  * @param len 数据长度
- * @note 短时间内连续调用此接口，若采用IT/DMA会导致上一次发送未完成而新的发送取消
- *       若希望连续使用DMA/IT发送，请检查 instance->handle->gState 是否为 HAL_UART_STATE_READY
+ * @param timeout_ms 超时时间（毫秒）
+ * @note 阻塞模式：timeout_ms 传递给 HAL_UART_Transmit
+ *       IT/DMA模式：
+ *         - timeout_ms == 0: 只检查一次状态，忙碌时立即返回
+ *         - timeout_ms > 0:  while 循环等待，直到就绪或超时
  */
-void USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len);
+void USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len, uint32_t timeout_ms);
 
 /**
  * @brief 重新启动接收
@@ -108,6 +111,14 @@ void USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len);
  * @note 用于错误恢复或手动重启接收
  */
 void USARTRestartReceive(USARTInstance *instance);
+
+/**
+ * @brief 检查UART是否就绪（非阻塞）
+ * @param instance USART实例
+ * @retval 1 就绪（可以发送）
+ * @retval 0 忙碌（正在发送）或参数无效
+ */
+uint8_t USARTIsReady(USARTInstance *instance);
 
 #endif // BSP_UART_MODULE_ENABLED
 
