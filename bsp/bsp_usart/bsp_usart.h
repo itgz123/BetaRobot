@@ -40,6 +40,7 @@ typedef struct USARTInstance
     uint16_t rx_buff_size;                       // 接收缓冲区大小
     uint16_t rx_len;                             // 接收数据长度
     void (*rx_callback)(struct USARTInstance *); // 接收完成回调
+    void (*tx_callback)(struct USARTInstance *); // 发送完成回调（DMA模式）
 } USARTInstance;
 
 /*------------- 配置结构体 --------------*/
@@ -51,6 +52,7 @@ typedef struct
 {
     USART_Work_Mode_e tx_mode;                   // 发送模式（阻塞/中断/DMA）
     void (*rx_callback)(struct USARTInstance *); // 接收完成回调（可为NULL）
+    void (*tx_callback)(struct USARTInstance *); // 发送完成回调（DMA模式，可为NULL）
 } USART_Init_Config_s;
 
 /*------------- 实例定义宏 --------------*/
