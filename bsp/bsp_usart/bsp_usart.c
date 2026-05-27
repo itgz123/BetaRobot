@@ -113,6 +113,19 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     }
 }
 
+/**
+ * @brief DMA发送完成回调函数
+ * @param huart 发送完成的串口句柄
+ */
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+    USARTInstance *instance = USARTFindInstanceByHandle(huart);
+    if (instance != NULL && instance->tx_callback != NULL)
+    {
+        instance->tx_callback(instance);
+    }
+}
+
 /*------------- 外部接口实现 --------------*/
 
 int8_t USARTRegister(USARTInstance *instance, const USART_Init_Config_s *config)
@@ -125,6 +138,7 @@ int8_t USARTRegister(USARTInstance *instance, const USART_Init_Config_s *config)
     // 将配置拷贝到实例
     instance->tx_mode = config->tx_mode;
     instance->rx_callback = config->rx_callback;
+    instance->tx_callback = config->tx_callback;
 
     // 根据枚举自动填充硬件句柄
     instance->handle = uart_map[instance->uart_e].handle;
