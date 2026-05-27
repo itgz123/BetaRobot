@@ -3,3 +3,4 @@ CLAUDE.md
 user_cfg.h
 drv/drv_vofa/vofa_user.py
 __pycache__/
+betawave_user.py
