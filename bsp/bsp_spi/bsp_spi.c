@@ -9,7 +9,7 @@
 
 #if SPI_INSTANCE_NUM > 0
 
-#include "bsp_log.h"
+#include "bsp_uart_log.h"
 
 /*------------- 私有类型定义 --------------*/
 
@@ -182,6 +182,7 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
     if (instance != NULL)
     {
         uint32_t error_code = hspi->ErrorCode;
+        (void)error_code;
         LOGWARNING("[spi] Error detected, code=0x%lX (MODF:%d OVR:%d FRE:%d DMA:%d)", error_code,
                    (error_code & HAL_SPI_ERROR_MODF) ? 1 : 0, // 模式错误
                    (error_code & HAL_SPI_ERROR_OVR) ? 1 : 0,  // 溢出错误

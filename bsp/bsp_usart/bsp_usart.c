@@ -9,7 +9,7 @@
 
 #if UART_INSTANCE_NUM > 0
 
-#include "bsp_log.h"
+#include "bsp_uart_log.h"
 #include "string.h"
 
 /*------------- 私有类型定义 --------------*/
@@ -103,6 +103,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     if (instance != NULL)
     {
         uint32_t error_code = huart->ErrorCode;
+        (void)error_code;
         LOGWARNING("[bsp_usart] Error detected, code=0x%lX (PE:%d FE:%d NE:%d ORE:%d DMA:%d)", error_code,
                    (error_code & HAL_UART_ERROR_PE) ? 1 : 0,   // 奇偶校验错误
                    (error_code & HAL_UART_ERROR_FE) ? 1 : 0,   // 帧错误

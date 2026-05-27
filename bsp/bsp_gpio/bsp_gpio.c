@@ -9,7 +9,7 @@
 
 #if GPIO_INSTANCE_NUM > 0
 
-#include "bsp_log.h"
+#include "bsp_uart_log.h"
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_idx = 0;

@@ -2,7 +2,7 @@
 set(BSP_SOURCES
     bsp_dwt/bsp_dwt.c
     bsp_gpio/bsp_gpio.c
-    bsp_log/bsp_log.c
+    bsp_uart_log/bsp_uart_log.c
     bsp_math/bsp_math.c
     bsp_spi/bsp_spi.c
     bsp_tim/bsp_tim.c
@@ -16,7 +16,7 @@ set(BSP_INCLUDE_DIRS
     .
     bsp_dwt
     bsp_gpio
-    bsp_log
+    bsp_uart_log
     bsp_math
     bsp_module
     bsp_spi

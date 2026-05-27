@@ -224,8 +224,6 @@ endif()
 set(PROJECT_SOURCES
     ${HAL_C_SOURCES}
     ${CMAKE_SOURCE_DIR}/main.c
-    ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT_printf.c
-    ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT.c
     ${APP_SOURCE_FILES}
     ${BSP_SOURCE_FILES}
     ${DRV_SOURCE_FILES}
@@ -244,7 +242,6 @@ endif()
 # 启动文件和 RTT 汇编文件
 list(APPEND PROJECT_SOURCES
     ${STARTUP_FILE}
-    ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT/SEGGER_RTT_ASM_ARMv7M.s
 )
 
 ######################################
@@ -271,8 +268,6 @@ target_include_directories(${TARGET_NAME} PRIVATE
     ${BSP_INCLUDE_PATHS}
     ${DRV_INCLUDE_PATHS}
     ${HAL_INCLUDE_PATHS}
-    ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT
-    ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/Config
     ${HAL_DIR}/Drivers/CMSIS/DSP/Include
     ${HAL_DIR}/Drivers/CMSIS/DSP/PrivateInclude
 )

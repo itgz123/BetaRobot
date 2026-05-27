@@ -11,7 +11,7 @@
 #if CAN_INSTANCE_NUM > 0
 
 #include "bsp_dwt.h"
-#include "bsp_log.h"
+#include "bsp_uart_log.h"
 #include "string.h"
 
 /*------------- 私有变量 --------------*/

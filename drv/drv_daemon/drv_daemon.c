@@ -2,7 +2,7 @@
 
 #ifdef DAEMON_USED
 
-#include "bsp_log.h"
+#include "bsp_uart_log.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include "bsp_dwt.h"
