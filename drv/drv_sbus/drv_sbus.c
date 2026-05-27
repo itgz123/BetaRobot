@@ -11,7 +11,7 @@
 
 #ifdef HAL_UART_MODULE_ENABLED
 
-#include "bsp_log.h"
+#include "bsp_uart_log.h"
 
 /*------------- 外部接口实现 --------------*/
 

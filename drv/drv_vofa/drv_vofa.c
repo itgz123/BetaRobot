@@ -9,7 +9,7 @@
 
 #error 不要用这个，用drv\drv_vofa\drv_vofa_lite.h
 
-#include "bsp_log.h"
+#include "bsp_uart_log.h"
 #include "FreeRTOS.h"
 #include "task.h"
 #include "bsp_dwt.h"

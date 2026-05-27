@@ -19,7 +19,7 @@
 #include "bsp_gpio.h"
 #include "bsp_tim.h"
 #include "bsp_dwt.h"
-#include "bsp_log.h"
+#include "bsp_uart_log.h"
 #include "bmi088_reg_def.h"
 
 /**

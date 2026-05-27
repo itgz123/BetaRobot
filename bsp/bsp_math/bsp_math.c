@@ -7,7 +7,7 @@
  */
 
 #include "bsp_math.h"
-#include "bsp_log.h"
+#include "bsp_uart_log.h"
 #include <string.h>
 
 /*============================================

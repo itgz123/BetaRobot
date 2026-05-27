@@ -9,7 +9,7 @@
 
 #ifdef VOFA_LITE_USED
 
-#include "bsp_log.h"
+#include "bsp_uart_log.h"
 #include "bsp_usart.h"
 #include "bsp_dwt.h"
 #include "FreeRTOS.h"

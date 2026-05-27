@@ -9,7 +9,7 @@
 #ifdef HAL_ADC_MODULE_ENABLED
 #if ADC_INSTANCE_NUM > 0
 
-#include "bsp_log.h"
+#include "bsp_uart_log.h"
 
 /*============================================
  *              私有变量
