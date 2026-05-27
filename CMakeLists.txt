@@ -171,8 +171,9 @@ foreach(src IN LISTS MX_Application_Src)
     get_filename_component(abs_src "${src}" ABSOLUTE)
     if(abs_src MATCHES "[/\\\\]Core[/\\\\]Src[/\\\\]main\\.c$")
         continue()
-    elseif(abs_src MATCHES "[/\\\\]startup_.*\\.s$")
-        set(STARTUP_FILE "${abs_src}")
+    elseif(abs_src MATCHES "[/\\\\]startup_([^/\\\\]+)\\.s$")
+        # 使用 board_config 下的启动文件，而不是 CubeMX 生成的
+        set(STARTUP_FILE "${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/startup_${CMAKE_MATCH_1}.s")
     else()
         list(APPEND HAL_C_SOURCES "${abs_src}")
     endif()
@@ -235,6 +236,8 @@ set(PROJECT_SOURCES
     ${CMAKE_SOURCE_DIR}/bsp/bsp_can/bsp_can.c
     ${CMAKE_SOURCE_DIR}/drv/drv_acmotor/drv_acmotor_base.c
     ${CMAKE_SOURCE_DIR}/drv/drv_daemon/drv_daemon.c
+    ${CMAKE_SOURCE_DIR}/drv/drv_vofa/drv_vofa.c
+    ${CMAKE_SOURCE_DIR}/drv/drv_vofa/drv_vofa_lite.c
 )
 
 # DJI_A 额外加入 arm_atan2_f32.c（CMSIS-DSP V1.10.0 支持）
@@ -291,6 +294,7 @@ target_include_directories(${TARGET_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/drv/drv_pid
     ${CMAKE_SOURCE_DIR}/drv/drv_sbus
     ${CMAKE_SOURCE_DIR}/drv/drv_daemon
+    ${CMAKE_SOURCE_DIR}/drv/drv_vofa
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/RTT
     ${CMAKE_SOURCE_DIR}/Middlewares/Third_Party/SEGGER/Config
     ${HAL_DIR}/Drivers/CMSIS/DSP/Include

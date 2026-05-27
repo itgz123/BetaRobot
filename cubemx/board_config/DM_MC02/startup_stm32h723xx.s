@@ -43,6 +43,7 @@ defined in linker script */
 .word  _sbss
 /* end address for the .bss section. defined in linker script */
 .word  _ebss
+
 /* stack used for SystemInit_ExtMemCtl; always internal RAM used */
 
 /**
@@ -94,6 +95,116 @@ FillZerobss:
 LoopFillZerobss:
   cmp r2, r4
   bcc FillZerobss
+
+/* Copy RAM_D1 segment initializers from flash to RAM_D1 */
+  ldr r0, =_sram_d1
+  ldr r1, =_eram_d1
+  ldr r2, =_siram_d1
+  movs r3, #0
+  b LoopCopyRamD1
+
+CopyRamD1:
+  ldr r4, [r2, r3]
+  str r4, [r0, r3]
+  adds r3, r3, #4
+
+LoopCopyRamD1:
+  adds r4, r0, r3
+  cmp r4, r1
+  bcc CopyRamD1
+
+/* Zero fill BSS for RAM_D1 */
+  ldr r0, =_sbss_ram_d1
+  ldr r1, =_ebss_ram_d1
+  movs r2, #0
+  b LoopFillZerobssRamD1
+
+FillZerobssRamD1:
+  str r2, [r0]
+  adds r0, r0, #4
+
+LoopFillZerobssRamD1:
+  cmp r0, r1
+  bcc FillZerobssRamD1
+
+/* Copy RAM_D2 segment initializers from flash to RAM_D2 */
+  ldr r0, =_sram_d2
+  ldr r1, =_eram_d2
+  ldr r2, =_siram_d2
+  movs r3, #0
+  b LoopCopyRamD2
+
+CopyRamD2:
+  ldr r4, [r2, r3]
+  str r4, [r0, r3]
+  adds r3, r3, #4
+
+LoopCopyRamD2:
+  adds r4, r0, r3
+  cmp r4, r1
+  bcc CopyRamD2
+
+/* Zero fill BSS for RAM_D2 */
+  ldr r0, =_sbss_ram_d2
+  ldr r1, =_ebss_ram_d2
+  movs r2, #0
+  b LoopFillZerobssRamD2
+
+FillZerobssRamD2:
+  str r2, [r0]
+  adds r0, r0, #4
+
+LoopFillZerobssRamD2:
+  cmp r0, r1
+  bcc FillZerobssRamD2
+
+/* Copy RAM_D3 segment initializers from flash to RAM_D3 */
+  ldr r0, =_sram_d3
+  ldr r1, =_eram_d3
+  ldr r2, =_siram_d3
+  movs r3, #0
+  b LoopCopyRamD3
+
+CopyRamD3:
+  ldr r4, [r2, r3]
+  str r4, [r0, r3]
+  adds r3, r3, #4
+
+LoopCopyRamD3:
+  adds r4, r0, r3
+  cmp r4, r1
+  bcc CopyRamD3
+
+/* Zero fill BSS for RAM_D3 */
+  ldr r0, =_sbss_ram_d3
+  ldr r1, =_ebss_ram_d3
+  movs r2, #0
+  b LoopFillZerobssRamD3
+
+FillZerobssRamD3:
+  str r2, [r0]
+  adds r0, r0, #4
+
+LoopFillZerobssRamD3:
+  cmp r0, r1
+  bcc FillZerobssRamD3
+
+/* Copy ITCMRAM segment initializers from flash to ITCMRAM */
+  ldr r0, =_sitcmram
+  ldr r1, =_eitcmram
+  ldr r2, =_siitcmram
+  movs r3, #0
+  b LoopCopyItcmram
+
+CopyItcmram:
+  ldr r4, [r2, r3]
+  str r4, [r0, r3]
+  adds r3, r3, #4
+
+LoopCopyItcmram:
+  adds r4, r0, r3
+  cmp r4, r1
+  bcc CopyItcmram
 
 /* Call static constructors */
     bl __libc_init_array
