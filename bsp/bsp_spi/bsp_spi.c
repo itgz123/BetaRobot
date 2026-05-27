@@ -9,6 +9,7 @@
 
 #if SPI_INSTANCE_NUM > 0
 
+#include "bsp_dwt.h"
 #include "bsp_uart_log.h"
 
 /*------------- 私有类型定义 --------------*/
@@ -93,23 +94,6 @@ static const SPI_ReceiveFunc receive_funcs[] = {
     [SPI_IT_MODE] = (SPI_ReceiveFunc)HAL_SPI_Receive_IT,
     [SPI_DMA_MODE] = (SPI_ReceiveFunc)HAL_SPI_Receive_DMA,
 };
-
-/*------------- 私有函数 --------------*/
-
-/**
- * @brief 检查SPI是否就绪
- * @param instance SPI实例
- * @retval 1 就绪
- * @retval 0 忙碌
- */
-static uint8_t SPIIsReady(SPIInstance *instance)
-{
-    if (instance == NULL || instance->handle == NULL)
-    {
-        return 0;
-    }
-    return (instance->handle->State == HAL_SPI_STATE_READY);
-}
 
 /*------------- HAL回调函数重写 --------------*/
 
@@ -215,7 +199,7 @@ int8_t SPIRegister(SPIInstance *instance, const SPI_Init_Config_s *config)
     return 0;
 }
 
-void SPITransmit(SPIInstance *instance, uint8_t *data, uint16_t len)
+void SPITransmit(SPIInstance *instance, uint8_t *data, uint16_t len, uint32_t timeout_ms)
 {
     if (instance == NULL || data == NULL || len == 0)
     {
@@ -223,21 +207,27 @@ void SPITransmit(SPIInstance *instance, uint8_t *data, uint16_t len)
         return;
     }
 
-    // IT/DMA模式需要检查状态
+    // IT/DMA模式需要等待状态就绪
     if (instance->work_mode != SPI_BLOCK_MODE)
     {
-        if (!SPIIsReady(instance))
+        uint64_t start_time = DWT_GetTimeUs();
+        uint64_t timeout_us = (uint64_t)timeout_ms * 1000;
+
+        while (instance->handle->State != HAL_SPI_STATE_READY)
         {
-            LOGWARNING("[bsp_spi] SPI busy, transmit skipped!");
-            return;
+            if (timeout_ms > 0 && (DWT_GetTimeUs() - start_time) > timeout_us)
+            {
+                LOGWARNING("[bsp_spi] SPI busy timeout (spi_e=%d)", instance->spi_e);
+                return;
+            }
         }
     }
 
     instance->last_xfer_len = len;
-    transmit_funcs[instance->work_mode](instance->handle, data, len, SPI_BLOCK_TIMEOUT_MS);
+    transmit_funcs[instance->work_mode](instance->handle, data, len, timeout_ms);
 }
 
-void SPIReceive(SPIInstance *instance, uint16_t len)
+void SPIReceive(SPIInstance *instance, uint16_t len, uint32_t timeout_ms)
 {
     if (instance == NULL || len == 0)
     {
@@ -251,22 +241,28 @@ void SPIReceive(SPIInstance *instance, uint16_t len)
         len = instance->buff_size;
     }
 
-    // IT/DMA模式需要检查状态
+    // IT/DMA模式需要等待状态就绪
     if (instance->work_mode != SPI_BLOCK_MODE)
     {
-        if (!SPIIsReady(instance))
+        uint64_t start_time = DWT_GetTimeUs();
+        uint64_t timeout_us = (uint64_t)timeout_ms * 1000;
+
+        while (instance->handle->State != HAL_SPI_STATE_READY)
         {
-            LOGWARNING("[bsp_spi] SPI busy, receive skipped!");
-            return;
+            if (timeout_ms > 0 && (DWT_GetTimeUs() - start_time) > timeout_us)
+            {
+                LOGWARNING("[bsp_spi] SPI busy timeout (spi_e=%d)", instance->spi_e);
+                return;
+            }
         }
     }
 
     instance->rx_len = 0;
     instance->last_xfer_len = len;
-    receive_funcs[instance->work_mode](instance->handle, instance->rx_buff, len, SPI_BLOCK_TIMEOUT_MS);
+    receive_funcs[instance->work_mode](instance->handle, instance->rx_buff, len, timeout_ms);
 }
 
-void SPITransmitReceive(SPIInstance *instance, uint8_t *tx_data, uint16_t len)
+void SPITransmitReceive(SPIInstance *instance, uint8_t *tx_data, uint16_t len, uint32_t timeout_ms)
 {
     if (instance == NULL || tx_data == NULL || len == 0)
     {
@@ -280,19 +276,25 @@ void SPITransmitReceive(SPIInstance *instance, uint8_t *tx_data, uint16_t len)
         len = instance->buff_size;
     }
 
-    // IT/DMA模式需要检查状态
+    // IT/DMA模式需要等待状态就绪
     if (instance->work_mode != SPI_BLOCK_MODE)
     {
-        if (!SPIIsReady(instance))
+        uint64_t start_time = DWT_GetTimeUs();
+        uint64_t timeout_us = (uint64_t)timeout_ms * 1000;
+
+        while (instance->handle->State != HAL_SPI_STATE_READY)
         {
-            LOGWARNING("[bsp_spi] SPI busy, transmit/receive skipped!");
-            return;
+            if (timeout_ms > 0 && (DWT_GetTimeUs() - start_time) > timeout_us)
+            {
+                LOGWARNING("[bsp_spi] SPI busy timeout (spi_e=%d)", instance->spi_e);
+                return;
+            }
         }
     }
 
     instance->rx_len = 0;
     instance->last_xfer_len = len;
-    transmit_receive_funcs[instance->work_mode](instance->handle, tx_data, instance->rx_buff, len, SPI_BLOCK_TIMEOUT_MS);
+    transmit_receive_funcs[instance->work_mode](instance->handle, tx_data, instance->rx_buff, len, timeout_ms);
 }
 
 #endif
