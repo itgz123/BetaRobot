@@ -1,3 +1,5 @@
 build/
 CLAUDE.md
 user_cfg.h
+drv/drv_vofa/vofa_user.py
+__pycache__/

@@ -217,7 +217,7 @@ SECTIONS
   {
     *(.bss)
     *(.bss*)
-    *(COMMON)
+    *(.COMMON)
 
       . = ALIGN(4);
     _ebss = .;         /* define a global symbol at bss end */
@@ -228,6 +228,87 @@ SECTIONS
 
   PROVIDE( __bss_start = __tbss_start );
   PROVIDE( __bss_size = __bss_end - __bss_start );
+
+  /* RAM_D1 section - DMA accessible, 320KB AXI SRAM */
+  .ram_d1 :
+  {
+    . = ALIGN(4);
+    _sram_d1 = .;
+    *(.ram_d1)
+    *(.ram_d1*)
+    . = ALIGN(4);
+    _eram_d1 = .;
+  } >RAM_D1 AT> FLASH
+  _siram_d1 = LOADADDR(.ram_d1);
+
+  /* BSS for RAM_D1 - zero-initialized DMA buffers */
+  .bss_ram_d1 (NOLOAD) :
+  {
+    . = ALIGN(4);
+    _sbss_ram_d1 = .;
+    *(.bss_ram_d1)
+    *(.bss_ram_d1*)
+    . = ALIGN(4);
+    _ebss_ram_d1 = .;
+  } >RAM_D1
+
+  /* RAM_D2 section - Peripheral DMA, 32KB SRAM1/2/3 */
+  .ram_d2 :
+  {
+    . = ALIGN(4);
+    _sram_d2 = .;
+    *(.ram_d2)
+    *(.ram_d2*)
+    . = ALIGN(4);
+    _eram_d2 = .;
+  } >RAM_D2 AT> FLASH
+  _siram_d2 = LOADADDR(.ram_d2);
+
+  /* BSS for RAM_D2 - zero-initialized peripheral buffers */
+  .bss_ram_d2 (NOLOAD) :
+  {
+    . = ALIGN(4);
+    _sbss_ram_d2 = .;
+    *(.bss_ram_d2)
+    *(.bss_ram_d2*)
+    . = ALIGN(4);
+    _ebss_ram_d2 = .;
+  } >RAM_D2
+
+  /* RAM_D3 section - Low power domain, 16KB SRAM4 */
+  .ram_d3 :
+  {
+    . = ALIGN(4);
+    _sram_d3 = .;
+    *(.ram_d3)
+    *(.ram_d3*)
+    . = ALIGN(4);
+    _eram_d3 = .;
+  } >RAM_D3 AT> FLASH
+  _siram_d3 = LOADADDR(.ram_d3);
+
+  /* BSS for RAM_D3 - zero-initialized low power buffers */
+  .bss_ram_d3 (NOLOAD) :
+  {
+    . = ALIGN(4);
+    _sbss_ram_d3 = .;
+    *(.bss_ram_d3)
+    *(.bss_ram_d3*)
+    . = ALIGN(4);
+    _ebss_ram_d3 = .;
+  } >RAM_D3
+
+  /* ITCMRAM section - Fast code execution, 64KB Instruction TCM */
+  .itcmram :
+  {
+    . = ALIGN(4);
+    _sitcmram = .;
+    *(.itcmram)
+    *(.itcmram*)
+    . = ALIGN(4);
+    _eitcmram = .;
+  } >ITCMRAM AT> FLASH
+  _siitcmram = LOADADDR(.itcmram);
 
   /* User_heap_stack section, used to check that there is enough RAM left */
   ._user_heap_stack (NOLOAD) :
