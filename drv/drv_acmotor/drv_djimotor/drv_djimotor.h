@@ -83,78 +83,23 @@ extern const ACMotorInterface_s djimotor_vtable;
  *============================================*/
 
 /**
- * @brief 定义 DJI 单电机实例
- * @param name       实例名称
- * @param can_idx    板载 CAN 枚举 (CAN_1 / CAN_2)
- * @param mid        电机 ID (1-8)
- * @param mmodel     电机型号 (DJI_MODEL_M3508 / M2006 / GM6020)
- * @param outer_loop 外层闭环类型
- * @param close_loop 启用的闭环组合
- * @param cur_kp/ki/kd 电流环 PID 参数
- * @param spd_kp/ki/kd 速度环 PID 参数
- * @param ang_kp/ki/kd 位置环 PID 参数
+ * @brief 定义 DJI 单电机实例（简化版）
+ * @param name    实例名称
+ * @param can_idx 板载 CAN 枚举 (CAN_1 / CAN_2)
+ * @note 初始化通过 ACMotor_Init_Config_s 在运行时完成
  */
-#define DJIMOTOR_INSTANCE_DEF(name, can_idx, mid, mmodel,                                                                                         \
-                              outer_loop, close_loop,                                                                                             \
-                              cur_kp, cur_ki, cur_kd,                                                                                             \
-                              spd_kp, spd_ki, spd_kd,                                                                                             \
-                              ang_kp, ang_ki, ang_kd)                                                                                             \
-    CAN_INSTANCE_DEF(name##_rx, can_idx);                                                                                                         \
-    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                                           \
-    static DJIMotorInstance name = {                                                                                                              \
-        .base = {                                                                                                                                 \
-            .vtable = &djimotor_vtable,                                                                                                           \
-            .brand = MOTOR_BRAND_DJI,                                                                                                             \
-            .model = mmodel,                                                                                                                      \
-            .can = &name##_rx,                                                                                                                    \
-            .raw_data = {0},                                                                                                                      \
-            .data = {0},                                                                                                                          \
-            .settings = {                                                                                                                         \
-                .outer_loop_type = outer_loop,                                                                                                    \
-                .close_loop_type = close_loop,                                                                                                    \
-                .motor_reverse = 0,                                                                                                               \
-                .feedback_reverse = 0,                                                                                                            \
-                .angle_feedback_src = MOTOR_FEED,                                                                                                 \
-                .speed_feedback_src = MOTOR_FEED,                                                                                                 \
-                .feedforward_flag = FEEDFORWARD_NONE,                                                                                             \
-            },                                                                                                                                    \
-            .controller = {                                                                                                                       \
-                .angle_feedback_ptr = NULL,                                                                                                       \
-                .speed_feedback_ptr = NULL,                                                                                                       \
-                .speed_ff_ptr = NULL,                                                                                                             \
-                .current_ff_ptr = NULL,                                                                                                           \
-                .current_pid = {.kp = cur_kp, .ki = cur_ki, .kd = cur_kd},                                                                        \
-                .speed_pid = {.kp = spd_kp, .ki = spd_ki, .kd = spd_kd},                                                                          \
-                .angle_pid = {.kp = ang_kp, .ki = ang_ki, .kd = ang_kd},                                                                          \
-                .pid_ref = 0.0f,                                                                                                                  \
-            },                                                                                                                                    \
-            .limits = {                                                                                                                           \
-                .position_min = -1e6f,                                                                                                            \
-                .position_max = 1e6f,                                                                                                             \
-                .speed_max = 1e6f,                                                                                                                \
-                .current_max = 20.0f,                                                                                                             \
-                .position_limit_enable = 0,                                                                                                       \
-            },                                                                                                                                    \
-            .daemon = &name##_daemon,                                                                                                             \
-            .reduction_ratio = (mmodel) == DJI_MODEL_M3508 ? DJI_REDUCTION_RATIO_M3508 : (mmodel) == DJI_MODEL_M2006 ? DJI_REDUCTION_RATIO_M2006  \
-                                                                                     : (mmodel) == DJI_MODEL_GM6020  ? DJI_REDUCTION_RATIO_GM6020 \
-                                                                                                                     : 1.0f,                      \
-            .torque_coef = (mmodel) == DJI_MODEL_M3508 ? DJI_TORQUE_COEF_M3508 : (mmodel) == DJI_MODEL_M2006 ? DJI_TORQUE_COEF_M2006              \
-                                                                             : (mmodel) == DJI_MODEL_GM6020  ? DJI_TORQUE_COEF_GM6020             \
-                                                                                                             : 0.3f,                              \
-            .enable = 0,                                                                                                                          \
-            .dt = 0.0f,                                                                                                                           \
-            .priv = NULL,                                                                                                                         \
-        },                                                                                                                                        \
-        .priv = {                                                                                                                                 \
-            .rx_can = &name##_rx,                                                                                                                 \
-            .tx_can = NULL,                                                                                                                       \
-            .last_ecd = 0,                                                                                                                        \
-            .total_round = 0,                                                                                                                     \
-            .motor_id = mid,                                                                                                                      \
-            .tx_slot = 0,                                                                                                                         \
-            .feed_cnt = 0,                                                                                                                        \
-        },                                                                                                                                        \
+#define DJIMOTOR_INSTANCE_DEF(name, can_idx) \
+    CAN_INSTANCE_DEF(name##_rx, can_idx);    \
+    DAEMON_INSTANCE_DEF(name##_daemon);      \
+    static DJIMotorInstance name = {         \
+        .base = {                            \
+            .vtable = &djimotor_vtable,      \
+            .can = &name##_rx,               \
+            .daemon = &name##_daemon,        \
+        },                                   \
+        .priv = {                            \
+            .rx_can = &name##_rx,            \
+        },                                   \
     }
 
 #endif // BSP_CAN_MODULE_ENABLED

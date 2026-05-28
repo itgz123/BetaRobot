@@ -1,7 +1,7 @@
 # drv 层源文件
 set(DRV_SOURCES
     drv_acmotor/drv_djimotor/drv_djimotor.c
-    drv_acmotor/drv_dmmotor/drv_dmmotor.c
+    # drv_acmotor/drv_dmmotor/drv_dmmotor.c
     drv_pid/drv_pid.c
     drv_chassis/drv_chassis.c
     drv_sbus/drv_sbus.c
@@ -19,7 +19,7 @@ set(DRV_INCLUDE_DIRS
     drv_chassis
     drv_acmotor
     drv_acmotor/drv_djimotor
-    drv_acmotor/drv_dmmotor
+    # drv_acmotor/drv_dmmotor
     drv_pid
     drv_sbus
     drv_daemon
