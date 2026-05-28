@@ -4,7 +4,7 @@
  *
  * @note 数据流：
  *       CAN中断 → DJIMotorDecode → raw_data + data（含滤波+多圈）
- *       APP任务 → DJIMotorControl → ApplyLimits + 打包CAN + 发送
+ *       APP任务 → DJIMotorSend → ApplyLimits + 打包CAN + 发送
  */
 
 #include "drv_djimotor.h"
@@ -28,17 +28,11 @@ static uint8_t sender_init_flag[6] = {0};
  *============================================*/
 
 // 单电机虚函数实现
-static int8_t DJIMotorReg(ACMotorInstance *inst);
-static int8_t DJIMotorInit(ACMotorInstance *inst);
+static int8_t DJIMotorRegister(ACMotorInstance *inst, ACMotor_Init_Config_s *cfg);
 static void DJIMotorEnable(ACMotorInstance *inst);
-static void DJIMotorStop(ACMotorInstance *inst);
+static void DJIMotorDisable(ACMotorInstance *inst);
 static void DJIMotorSetRef(ACMotorInstance *inst, float ref);
-static void DJIMotorSetOuterLoop(ACMotorInstance *inst, MotorLoopType_e loop);
-static void DJIMotorGetData(ACMotorInstance *inst, MotorData_t *data_out);
-static int8_t DJIMotorSetPID(ACMotorInstance *inst, MotorLoopType_e loop, float kp, float ki, float kd, float integral_limit, float max_out);
-static void DJIMotorChangeFeedback(ACMotorInstance *inst, MotorLoopType_e loop, FeedbackSource_e src);
-static void DJIMotorSetLimits(ACMotorInstance *inst, MotorLimits_t *limits);
-static void DJIMotorControl(ACMotorInstance *inst);
+static void DJIMotorSend(ACMotorInstance *inst);
 
 // 内部辅助函数
 static void DJIMotorDecode(CANInstance *can_inst);
@@ -50,36 +44,56 @@ static CANInstance *DJIMotorGetOrCreateSender(uint8_t group);
  *============================================*/
 
 const ACMotorInterface_s djimotor_vtable = {
-    .reg = DJIMotorReg,
-    .init = DJIMotorInit,
+    .register_ = DJIMotorRegister,
     .enable = DJIMotorEnable,
-    .stop = DJIMotorStop,
+    .disable = DJIMotorDisable,
     .set_ref = DJIMotorSetRef,
-    .set_outer_loop = DJIMotorSetOuterLoop,
-    .get_data = DJIMotorGetData,
-    .set_pid = DJIMotorSetPID,
-    .change_feedback = DJIMotorChangeFeedback,
-    .set_limits = DJIMotorSetLimits,
-    .control = DJIMotorControl,
+    .send = DJIMotorSend,
 };
 
 /*============================================
  *              单电机虚函数实现
  *============================================*/
 
-static int8_t DJIMotorReg(ACMotorInstance *inst)
+static int8_t DJIMotorRegister(ACMotorInstance *inst, ACMotor_Init_Config_s *cfg)
 {
-    if (!inst)
+    if (!inst || !cfg)
         return -1;
 
     DJIMotorInstance *motor = (DJIMotorInstance *)inst;
     DJIMotorPriv_t *priv = &motor->priv;
+
+    // 填充基类字段
+    inst->brand = cfg->brand;
+    inst->model = cfg->model;
+    inst->reduction_ratio = cfg->reduction_ratio;
+    inst->torque_coef = cfg->torque_coef;
+    inst->settings.outer_loop_type = cfg->outer_loop_type;
+    inst->settings.close_loop_type = cfg->close_loop_type;
+    inst->settings.motor_reverse = cfg->motor_reverse;
+    inst->settings.feedback_reverse = cfg->feedback_reverse;
+    inst->settings.angle_feedback_src = cfg->angle_feedback_src;
+    inst->settings.speed_feedback_src = cfg->speed_feedback_src;
+    inst->settings.feedforward_flag = cfg->feedforward_flag;
+    inst->limits = cfg->limits;
+    inst->controller.pid_ref = 0.0f;
+
+    // 配置 PID
+    if (cfg->current_pid_cfg)
+        PIDInit(&inst->controller.current_pid, cfg->current_pid_cfg);
+    if (cfg->speed_pid_cfg)
+        PIDInit(&inst->controller.speed_pid, cfg->speed_pid_cfg);
+    if (cfg->angle_pid_cfg)
+        PIDInit(&inst->controller.angle_pid, cfg->angle_pid_cfg);
 
     // 设置 parent 指针
     priv->rx_can->parent = motor;
 
     // 同步基类 can 指针
     inst->can = priv->rx_can;
+
+    // 记录 motor_id
+    priv->motor_id = cfg->motor_id;
 
     // 计算接收 ID
     DJIModel_e model = (DJIModel_e)inst->model;
@@ -114,24 +128,18 @@ static int8_t DJIMotorReg(ACMotorInstance *inst)
     if (inst->daemon)
     {
         Daemon_Init_Config_s daemon_cfg = {
-            .reload_count = 5,
-            .fault_action = DAEMON_FAULT_NONE,
-            .callback = NULL,
+            .reload_count = cfg->daemon_reload,
+            .fault_action = cfg->daemon_fault_action,
+            .callback = cfg->lost_callback,
             .owner_id = motor,
         };
         DaemonRegister(inst->daemon, &daemon_cfg);
     }
 
-    return 0;
-}
-
-static int8_t DJIMotorInit(ACMotorInstance *inst)
-{
-    if (!inst)
-        return -1;
-
+    // 初始化完成
     inst->enable = 1;
     inst->data.fresh = 0;
+
     return 0;
 }
 
@@ -141,7 +149,7 @@ static void DJIMotorEnable(ACMotorInstance *inst)
         inst->enable = 1;
 }
 
-static void DJIMotorStop(ACMotorInstance *inst)
+static void DJIMotorDisable(ACMotorInstance *inst)
 {
     if (inst)
         inst->enable = 0;
@@ -153,44 +161,10 @@ static void DJIMotorSetRef(ACMotorInstance *inst, float ref)
         inst->controller.pid_ref = ref;
 }
 
-static void DJIMotorSetOuterLoop(ACMotorInstance *inst, MotorLoopType_e loop)
-{
-    if (inst)
-        inst->settings.outer_loop_type = loop;
-}
-
-static void DJIMotorGetData(ACMotorInstance *inst, MotorData_t *data_out)
-{
-    if (inst && data_out)
-        *data_out = inst->data;
-}
-
-static int8_t DJIMotorSetPID(ACMotorInstance *inst, MotorLoopType_e loop, float kp, float ki, float kd, float integral_limit, float max_out)
-{
-    return ACMotorSetPID(inst, loop, kp, ki, kd, integral_limit, max_out);
-}
-
-static void DJIMotorChangeFeedback(ACMotorInstance *inst, MotorLoopType_e loop, FeedbackSource_e src)
-{
-    if (!inst)
-        return;
-
-    if (loop == MOTOR_LOOP_ANGLE)
-        inst->settings.angle_feedback_src = src;
-    else if (loop == MOTOR_LOOP_SPEED)
-        inst->settings.speed_feedback_src = src;
-}
-
-static void DJIMotorSetLimits(ACMotorInstance *inst, MotorLimits_t *limits)
-{
-    if (inst && limits)
-        inst->limits = *limits;
-}
-
 /**
- * @brief 单电机控制：限幅 + 打包 + 发送
+ * @brief 单电机发送：限幅 + 打包 + 发送
  */
-static void DJIMotorControl(ACMotorInstance *inst)
+static void DJIMotorSend(ACMotorInstance *inst)
 {
     if (!inst || !inst->enable)
         return;
@@ -246,8 +220,8 @@ static void DJIMotorDecode(CANInstance *can_inst)
     raw->raw_encoder = ((uint16_t)rx[0] << 8) | rx[1];   // ecd 0-8191
     raw->raw_velocity = (int16_t)((rx[2] << 8) | rx[3]); // rpm
     raw->raw_current = (int16_t)((rx[4] << 8) | rx[5]);  // 电流原始值
-    raw->raw_temperature = (int8_t)rx[6];                // °C
-    raw->raw_temperature2 = 0;                           // DJI 无 MOS 温度
+    raw->raw_temperature_motor = (int8_t)rx[6];                // °C
+    raw->raw_temperature_mos = 0;                           // DJI 无 MOS 温度
     raw->error_code = rx[7];                             // 错误码
     raw->fresh = 1;
 
@@ -281,7 +255,7 @@ static void DJIMotorDecode(CANInstance *can_inst)
     d->torque = d->current * base->torque_coef * ratio;
 
     // 温度
-    d->temperature = (float)raw->raw_temperature;
+    d->temperature = (float)raw->raw_temperature_motor;
     d->temperature_mos = 0.0f;
 
     // 错误标志

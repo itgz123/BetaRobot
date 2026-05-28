@@ -4,7 +4,7 @@
  *
  * @note 数据流：
  *       CAN中断 → DMMotorDecode → raw_data + data（含多圈+双温度）
- *       APP任务 → DMMotorControl → ApplyLimits + MIT帧（仅填t_ff）+ 发送
+ *       APP任务 → DMMotorSend → ApplyLimits + MIT帧（仅填t_ff）+ 发送
  */
 
 #include "drv_dmmotor.h"
@@ -20,17 +20,11 @@
  *============================================*/
 
 // 单电机虚函数实现
-static int8_t DMMotorReg(ACMotorInstance *inst);
-static int8_t DMMotorInit(ACMotorInstance *inst);
+static int8_t DMMotorRegister(ACMotorInstance *inst, ACMotor_Init_Config_s *cfg);
 static void DMMotorEnable(ACMotorInstance *inst);
-static void DMMotorStop(ACMotorInstance *inst);
+static void DMMotorDisable(ACMotorInstance *inst);
 static void DMMotorSetRef(ACMotorInstance *inst, float ref);
-static void DMMotorSetOuterLoop(ACMotorInstance *inst, MotorLoopType_e loop);
-static void DMMotorGetData(ACMotorInstance *inst, MotorData_t *data_out);
-static int8_t DMMotorSetPID(ACMotorInstance *inst, MotorLoopType_e loop, float kp, float ki, float kd, float integral_limit, float max_out);
-static void DMMotorChangeFeedback(ACMotorInstance *inst, MotorLoopType_e loop, FeedbackSource_e src);
-static void DMMotorSetLimits(ACMotorInstance *inst, MotorLimits_t *limits);
-static void DMMotorControl(ACMotorInstance *inst);
+static void DMMotorSend(ACMotorInstance *inst);
 
 // 内部辅助函数
 static void DMMotorDecode(CANInstance *can_inst);
@@ -43,48 +37,62 @@ static uint16_t DMErrorToFlags(uint8_t err_code);
  *============================================*/
 
 const ACMotorInterface_s dmmotor_vtable = {
-    .reg = DMMotorReg,
-    .init = DMMotorInit,
-    .enable = DMMotorEnable,
-    .stop = DMMotorStop,
-    .set_ref = DMMotorSetRef,
-    .set_outer_loop = DMMotorSetOuterLoop,
-    .get_data = DMMotorGetData,
-    .set_pid = DMMotorSetPID,
-    .change_feedback = DMMotorChangeFeedback,
-    .set_limits = DMMotorSetLimits,
-    .control = DMMotorControl,
+    .register_ = DMMotorRegister,
+    .enable    = DMMotorEnable,
+    .disable   = DMMotorDisable,
+    .set_ref   = DMMotorSetRef,
+    .send      = DMMotorSend,
 };
 
 /*============================================
  *              单电机虚函数实现
  *============================================*/
 
-static int8_t DMMotorReg(ACMotorInstance *inst)
+static int8_t DMMotorRegister(ACMotorInstance *inst, ACMotor_Init_Config_s *cfg)
 {
-    if (!inst)
+    if (!inst || !cfg)
         return -1;
 
     DMMotorInstance *motor = (DMMotorInstance *)inst;
     DMMotorPriv_t *priv = &motor->priv;
+
+    // 填充基类字段
+    inst->brand = cfg->brand;
+    inst->model = cfg->model;
+    inst->reduction_ratio = cfg->reduction_ratio;
+    inst->torque_coef = cfg->torque_coef;
+    inst->settings.outer_loop_type = cfg->outer_loop_type;
+    inst->settings.close_loop_type = cfg->close_loop_type;
+    inst->settings.motor_reverse = cfg->motor_reverse;
+    inst->settings.feedback_reverse = cfg->feedback_reverse;
+    inst->settings.angle_feedback_src = cfg->angle_feedback_src;
+    inst->settings.speed_feedback_src = cfg->speed_feedback_src;
+    inst->settings.feedforward_flag = cfg->feedforward_flag;
+    inst->limits = cfg->limits;
+    inst->controller.pid_ref = 0.0f;
+
+    // 配置 PID
+    if (cfg->current_pid_cfg)
+        PIDInit(&inst->controller.current_pid, cfg->current_pid_cfg);
+    if (cfg->speed_pid_cfg)
+        PIDInit(&inst->controller.speed_pid, cfg->speed_pid_cfg);
+    if (cfg->angle_pid_cfg)
+        PIDInit(&inst->controller.angle_pid, cfg->angle_pid_cfg);
 
     // 同步基类 can 指针
     inst->can = priv->can_inst;
 
     // 配置 CAN 实例（收发共用）
     priv->can_inst->parent = motor;
-
-    // rx_id / tx_id 已由 CAN_INSTANCE_DEF + 外部配置设好
-    // 注册接收回调
     priv->can_inst->rx_callback = DMMotorDecode;
 
     // 注册 daemon
     if (inst->daemon)
     {
         Daemon_Init_Config_s daemon_cfg = {
-            .reload_count = DM_DAEMON_RELOAD,
-            .fault_action = DAEMON_FAULT_NONE,
-            .callback = DMMotorLostCallback,
+            .reload_count = cfg->daemon_reload,
+            .fault_action = cfg->daemon_fault_action,
+            .callback = cfg->lost_callback ? cfg->lost_callback : DMMotorLostCallback,
             .owner_id = motor,
         };
         DaemonRegister(inst->daemon, &daemon_cfg);
@@ -93,16 +101,10 @@ static int8_t DMMotorReg(ACMotorInstance *inst)
     // 发送使能命令
     DMMotorSetMode(motor, DM_CMD_MOTOR_MODE);
 
-    return 0;
-}
-
-static int8_t DMMotorInit(ACMotorInstance *inst)
-{
-    if (!inst)
-        return -1;
-
+    // 初始化完成
     inst->enable = 1;
     inst->data.fresh = 0;
+
     return 0;
 }
 
@@ -114,7 +116,7 @@ static void DMMotorEnable(ACMotorInstance *inst)
     DMMotorSetMode((DMMotorInstance *)inst, DM_CMD_MOTOR_MODE);
 }
 
-static void DMMotorStop(ACMotorInstance *inst)
+static void DMMotorDisable(ACMotorInstance *inst)
 {
     if (!inst)
         return;
@@ -128,43 +130,10 @@ static void DMMotorSetRef(ACMotorInstance *inst, float ref)
         inst->controller.pid_ref = ref;
 }
 
-static void DMMotorSetOuterLoop(ACMotorInstance *inst, MotorLoopType_e loop)
-{
-    if (inst)
-        inst->settings.outer_loop_type = loop;
-}
-
-static void DMMotorGetData(ACMotorInstance *inst, MotorData_t *data_out)
-{
-    if (inst && data_out)
-        *data_out = inst->data;
-}
-
-static int8_t DMMotorSetPID(ACMotorInstance *inst, MotorLoopType_e loop, float kp, float ki, float kd, float integral_limit, float max_out)
-{
-    return ACMotorSetPID(inst, loop, kp, ki, kd, integral_limit, max_out);
-}
-
-static void DMMotorChangeFeedback(ACMotorInstance *inst, MotorLoopType_e loop, FeedbackSource_e src)
-{
-    if (!inst)
-        return;
-    if (loop == MOTOR_LOOP_ANGLE)
-        inst->settings.angle_feedback_src = src;
-    else if (loop == MOTOR_LOOP_SPEED)
-        inst->settings.speed_feedback_src = src;
-}
-
-static void DMMotorSetLimits(ACMotorInstance *inst, MotorLimits_t *limits)
-{
-    if (inst && limits)
-        inst->limits = *limits;
-}
-
 /**
- * @brief 单电机控制：限幅 + MIT帧（仅填t_ff）+ 发送
+ * @brief 单电机发送：限幅 + MIT帧（仅填t_ff）+ 发送
  */
-static void DMMotorControl(ACMotorInstance *inst)
+static void DMMotorSend(ACMotorInstance *inst)
 {
     if (!inst)
         return;
@@ -183,10 +152,8 @@ static void DMMotorControl(ACMotorInstance *inst)
     float output = inst->controller.pid_ref;
 
     // 钳位到 DM 力矩范围
-    if (output > DM_T_MAX)
-        output = DM_T_MAX;
-    if (output < DM_T_MIN)
-        output = DM_T_MIN;
+    if (output > DM_T_MAX) output = DM_T_MAX;
+    if (output < DM_T_MIN) output = DM_T_MIN;
 
     uint16_t t_ff = (uint16_t)ACMotorFloatToUint(output, DM_T_MIN, DM_T_MAX, 12);
 
@@ -244,21 +211,21 @@ static void DMMotorDecode(CANInstance *can_inst)
     // D[1:2] = POS[15:0], D[3:4] = VEL[11:0], D[4:5] = T[11:0]
     // D[6] = T_MOS, D[7] = T_Rotor
     MotorRawData_t *raw = &base->raw_data;
-    raw->error_code = rx[0] >> 4;                               // ERR 4bit
-    raw->raw_encoder = ((uint16_t)rx[1] << 8) | rx[2];          // POS 16bit
-    raw->raw_velocity = ((uint16_t)rx[3] << 4) | (rx[4] >> 4);  // VEL 12bit
-    raw->raw_current = (((uint16_t)rx[4] & 0x0F) << 8) | rx[5]; // T 12bit
-    raw->raw_temperature2 = (int8_t)rx[6];                      // T_MOS
-    raw->raw_temperature = (int8_t)rx[7];                       // T_Rotor 线圈
+    raw->error_code       = rx[0] >> 4;                               // ERR 4bit
+    raw->raw_encoder      = ((uint16_t)rx[1] << 8) | rx[2];          // POS 16bit
+    raw->raw_velocity     = ((uint16_t)rx[3] << 4) | (rx[4] >> 4);   // VEL 12bit
+    raw->raw_current      = (((uint16_t)rx[4] & 0x0F) << 8) | rx[5]; // T 12bit
+    raw->raw_temperature_mos = (int8_t)rx[6];                           // T_MOS
+    raw->raw_temperature_motor  = (int8_t)rx[7];                           // T_Rotor 线圈
     raw->fresh = 1;
 
     // ---- 2. 单位转换 → data ----
     MotorData_t *d = &base->data;
     float ratio = base->reduction_ratio;
 
-    float pos = ACMotorUintToFloat(raw->raw_encoder, DM_P_MIN, DM_P_MAX, 16);
+    float pos = ACMotorUintToFloat(raw->raw_encoder,  DM_P_MIN, DM_P_MAX, 16);
     float vel = ACMotorUintToFloat(raw->raw_velocity, DM_V_MIN, DM_V_MAX, 12);
-    float tor = ACMotorUintToFloat(raw->raw_current, DM_T_MIN, DM_T_MAX, 12);
+    float tor = ACMotorUintToFloat(raw->raw_current,  DM_T_MIN, DM_T_MAX, 12);
 
     // ---- 3. 多圈累积（半量程 0x8000 判向） ----
     uint16_t last_ecd = priv->last_ecd;
@@ -287,8 +254,8 @@ static void DMMotorDecode(CANInstance *can_inst)
     d->current = tor / base->torque_coef;
 
     // 温度 (°C)
-    d->temperature = (float)raw->raw_temperature;
-    d->temperature_mos = (float)raw->raw_temperature2;
+    d->temperature     = (float)raw->raw_temperature_motor;
+    d->temperature_mos = (float)raw->raw_temperature_mos;
 
     // 错误标志
     d->error_flags = DMErrorToFlags(raw->error_code);
@@ -338,26 +305,16 @@ static uint16_t DMErrorToFlags(uint8_t err_code)
 {
     switch (err_code)
     {
-    case 0x01:
-        return 0x0000; // 使能（正常）
-    case 0x00:
-        return 0x0001; // 失能
-    case 0x08:
-        return 0x0002; // 超压
-    case 0x09:
-        return 0x0004; // 欠压
-    case 0x0A:
-        return 0x0008; // 过流
-    case 0x0B:
-        return 0x0010; // MOS 过温
-    case 0x0C:
-        return 0x0020; // 线圈过温
-    case 0x0D:
-        return 0x0040; // 通讯丢失
-    case 0x0E:
-        return 0x0080; // 过载
-    default:
-        return 0x8000; // 未知错误
+    case 0x01: return 0x0000; // 使能（正常）
+    case 0x00: return 0x0001; // 失能
+    case 0x08: return 0x0002; // 超压
+    case 0x09: return 0x0004; // 欠压
+    case 0x0A: return 0x0008; // 过流
+    case 0x0B: return 0x0010; // MOS 过温
+    case 0x0C: return 0x0020; // 线圈过温
+    case 0x0D: return 0x0040; // 通讯丢失
+    case 0x0E: return 0x0080; // 过载
+    default:   return 0x8000; // 未知错误
     }
 }
 

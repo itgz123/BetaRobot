@@ -20,6 +20,7 @@
 #include <stdint.h>
 #include "drv_pid.h"
 #include "drv_daemon.h"
+#include "bsp_can.h"
 
 /*============================================
  *              电机品牌枚举
@@ -95,13 +96,13 @@ typedef enum
 
 typedef struct
 {
-    uint32_t raw_encoder;    // 编码器原始值
-    int32_t raw_velocity;    // 原始速度值
-    int32_t raw_current;     // 原始电流/力矩值
-    int8_t raw_temperature;  // 线圈温度 (°C)
-    int8_t raw_temperature2; // MOS/驱动温度 (°C)，无此传感器填0
-    uint8_t error_code;      // 品牌错误码
-    uint8_t fresh;           // 新数据标志
+    uint32_t raw_encoder;         // 编码器原始值
+    int32_t raw_velocity;         // 原始速度值
+    int32_t raw_current;          // 原始电流/力矩值
+    int8_t raw_temperature_motor; // 线圈温度 (°C)
+    int8_t raw_temperature_mos;   // MOS/驱动温度 (°C)，无此传感器填0
+    uint8_t error_code;           // 品牌错误码
+    uint8_t fresh;                // 新数据标志
 } MotorRawData_t;
 
 /*============================================
@@ -172,6 +173,50 @@ typedef struct
  *============================================*/
 
 typedef struct ACMotorInstance ACMotorInstance;
+typedef struct ACMotor_Init_Config_s ACMotor_Init_Config_s;
+
+/*============================================
+ *              单电机初始化配置结构体
+ *============================================*/
+
+struct ACMotor_Init_Config_s
+{
+    // CAN 配置
+    BoardCAN_e can_e; // CAN 总线 (CAN_1 / CAN_2)
+    uint32_t rx_id;   // 接收 ID
+    uint32_t tx_id;   // 发送 ID
+
+    // 电机身份
+    MotorBrand_e brand;
+    uint8_t model;    // DJI_MODEL_M3508 / DM_MODEL_4310 等
+    uint8_t motor_id; // DJI 需要 (1-8)
+
+    // 电机特征
+    float reduction_ratio; // 减速比
+    float torque_coef;     // 扭矩系数 (N·m/A)
+
+    // 控制设置
+    MotorLoopType_e outer_loop_type;
+    MotorLoopType_e close_loop_type;
+    uint8_t motor_reverse;
+    uint8_t feedback_reverse;
+    FeedbackSource_e angle_feedback_src;
+    FeedbackSource_e speed_feedback_src;
+    FeedforwardType_e feedforward_flag;
+
+    // PID 参数（可选，NULL 表示不配置）
+    PID_Init_Config_s *current_pid_cfg;
+    PID_Init_Config_s *speed_pid_cfg;
+    PID_Init_Config_s *angle_pid_cfg;
+
+    // 限制
+    MotorLimits_t limits;
+
+    // Daemon 配置
+    uint16_t daemon_reload; // 喂狗超时阈值
+    DaemonFaultAction_e daemon_fault_action;
+    void (*lost_callback)(void *owner); // 离线回调
+};
 
 /*============================================
  *              单电机虚函数表
@@ -179,17 +224,11 @@ typedef struct ACMotorInstance ACMotorInstance;
 
 typedef struct
 {
-    int8_t (*reg)(ACMotorInstance *inst);  // 注册函数（CAN注册 + daemon注册）
-    int8_t (*init)(ACMotorInstance *inst); // 初始化函数
+    int8_t (*register_)(ACMotorInstance *inst, ACMotor_Init_Config_s *config); // 注册+初始化
     void (*enable)(ACMotorInstance *inst);
-    void (*stop)(ACMotorInstance *inst);
+    void (*disable)(ACMotorInstance *inst);
     void (*set_ref)(ACMotorInstance *inst, float ref);
-    void (*set_outer_loop)(ACMotorInstance *inst, MotorLoopType_e loop);
-    void (*get_data)(ACMotorInstance *inst, MotorData_t *data_out);
-    int8_t (*set_pid)(ACMotorInstance *inst, MotorLoopType_e loop, float kp, float ki, float kd, float integral_limit, float max_out);
-    void (*change_feedback)(ACMotorInstance *inst, MotorLoopType_e loop, FeedbackSource_e src);
-    void (*set_limits)(ACMotorInstance *inst, MotorLimits_t *limits);
-    void (*control)(ACMotorInstance *inst); // 限幅 + 发包
+    void (*send)(ACMotorInstance *inst); // 限幅+发包
 } ACMotorInterface_s;
 
 /*============================================
@@ -209,7 +248,8 @@ struct ACMotorInstance
 
     // 数据（CAN回调填入）
     MotorRawData_t raw_data;
-    MotorData_t data;
+    MotorData_t data;      // 当前数据
+    MotorData_t data_last; // 上次数据
 
     // 控制
     MotorControlSetting_t settings;
@@ -277,13 +317,15 @@ uint32_t ACMotorFloatToUint(float x, float x_min, float x_max, int bits);
  *              单电机内联辅助函数
  *============================================*/
 
-static inline int8_t ACMotorRegister(ACMotorInstance *inst)
+// 注册（通过 vtable）
+static inline int8_t ACMotorRegister(ACMotorInstance *inst, ACMotor_Init_Config_s *config)
 {
-    if (inst && inst->vtable && inst->vtable->reg)
-        return inst->vtable->reg(inst);
+    if (inst && inst->vtable && inst->vtable->register_)
+        return inst->vtable->register_(inst, config);
     return -1;
 }
 
+// 使能（通过 vtable）
 static inline void ACMotorEnable(ACMotorInstance *inst)
 {
     if (inst && inst->vtable && inst->vtable->enable)
@@ -292,14 +334,16 @@ static inline void ACMotorEnable(ACMotorInstance *inst)
         inst->enable = 1;
 }
 
-static inline void ACMotorStop(ACMotorInstance *inst)
+// 失能（通过 vtable）
+static inline void ACMotorDisable(ACMotorInstance *inst)
 {
-    if (inst && inst->vtable && inst->vtable->stop)
-        inst->vtable->stop(inst);
+    if (inst && inst->vtable && inst->vtable->disable)
+        inst->vtable->disable(inst);
     if (inst)
         inst->enable = 0;
 }
 
+// 设置参考值（通过 vtable）
 static inline void ACMotorSetRef(ACMotorInstance *inst, float ref)
 {
     if (inst && inst->vtable && inst->vtable->set_ref)
@@ -308,41 +352,11 @@ static inline void ACMotorSetRef(ACMotorInstance *inst, float ref)
         inst->controller.pid_ref = ref;
 }
 
-static inline void ACMotorSetOuterLoop(ACMotorInstance *inst, MotorLoopType_e loop)
+// 发送（通过 vtable）
+static inline void ACMotorSend(ACMotorInstance *inst)
 {
-    if (inst && inst->vtable && inst->vtable->set_outer_loop)
-        inst->vtable->set_outer_loop(inst, loop);
-    else if (inst)
-        inst->settings.outer_loop_type = loop;
-}
-
-static inline void ACMotorGetData(ACMotorInstance *inst, MotorData_t *data_out)
-{
-    if (inst && inst->vtable && inst->vtable->get_data)
-        inst->vtable->get_data(inst, data_out);
-    else if (inst && data_out)
-        *data_out = inst->data;
-}
-
-static inline void ACMotorSetLimits(ACMotorInstance *inst, MotorLimits_t *limits)
-{
-    if (inst && inst->vtable && inst->vtable->set_limits)
-        inst->vtable->set_limits(inst, limits);
-    else if (inst && limits)
-        inst->limits = *limits;
-}
-
-static inline void ACMotorControl(ACMotorInstance *inst)
-{
-    if (inst && inst->vtable && inst->vtable->control)
-        inst->vtable->control(inst);
-}
-
-static inline uint8_t ACMotorIsOnline(ACMotorInstance *inst)
-{
-    if (!inst || !inst->daemon)
-        return 0;
-    return DaemonIsOnline(inst->daemon);
+    if (inst && inst->vtable && inst->vtable->send)
+        inst->vtable->send(inst);
 }
 
 #endif // __DRV_ACMOTOR_BASE_H
