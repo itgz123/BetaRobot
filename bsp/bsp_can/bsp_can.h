@@ -66,12 +66,12 @@ typedef struct CANInstance
 /**
  * @brief CAN 初始化配置结构体
  * @note 统一掩码模式和列表模式，通过 filter_mode 区分
+ * @note rx_id_count 会根据 rx_id_list 自动计算，无需用户填写
  */
 typedef struct
 {
     uint32_t tx_id;                            // 发送标准ID；CAN_ID_UNUSED(-1) 表示不发送
     CANFilterMode_e filter_mode;               // 过滤器模式（掩码/列表）
-    uint8_t rx_id_count;                       // 列表模式：有效接收ID数量（1-4）；掩码模式：填1
     uint32_t rx_id_list[4];                    // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
     uint32_t rx_mask;                          // 掩码模式：掩码值（列表模式不使用）
     void (*rx_callback)(struct CANInstance *); // 接收完成回调（可为NULL）
