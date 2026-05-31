@@ -81,41 +81,72 @@ static HAL_StatusTypeDef CANFdcanAddFilter(CANInstance *instance)
         return HAL_ERROR;
     }
 
-    // 检查过滤器索引是否超出上限
-    if (s_fdcan_filter_idx[instance->can_e] >= FDCAN_FILTER_MAX)
-    {
-        LOGERROR("[bsp_can] FDCAN filter index overflow! max=%d, current=%d", FDCAN_FILTER_MAX, s_fdcan_filter_idx[instance->can_e]);
-        return HAL_ERROR;
-    }
-
     FDCAN_FilterTypeDef filter = {0};
-    filter.FilterIndex = s_fdcan_filter_idx[instance->can_e]++;
-    filter.FilterConfig = (instance->rx_id_list[0] & 1U) ? FDCAN_FILTER_TO_RXFIFO0 : FDCAN_FILTER_TO_RXFIFO1;
     filter.IdType = FDCAN_STANDARD_ID;
+    filter.RxBufferIndex = 0;
     filter.IsCalibrationMsg = 0;
 
     if (instance->filter_mode == CAN_FILTER_MODE_LIST)
     {
-        // FDCAN 列表模式：使用 DUAL 类型，FilterID1 和 FilterID2 为两个精确 ID
-        // 注意：FDCAN 每个 filter 只能匹配 2 个 ID，列表模式下只使用前 2 个
-        filter.FilterType = FDCAN_FILTER_DUAL;
-        filter.FilterID1 = instance->rx_id_list[0];
-        filter.FilterID2 = instance->rx_id_list[1];
+        // FDCAN 列表模式：每个 DUAL 过滤器只能匹配 2 个 ID
+        // 需要根据 rx_id_count 分配 ceil(rx_id_count/2) 个过滤器以支持最多 4 个 ID
+        uint8_t num_filters = (instance->rx_id_count + 1U) / 2U;
+
+        for (uint8_t f = 0; f < num_filters; f++)
+        {
+            // 检查过滤器索引是否超出上限
+            if (s_fdcan_filter_idx[instance->can_e] >= FDCAN_FILTER_MAX)
+            {
+                LOGERROR("[bsp_can] FDCAN filter index overflow! max=%d, current=%d", FDCAN_FILTER_MAX, s_fdcan_filter_idx[instance->can_e]);
+                return HAL_ERROR;
+            }
+
+            uint32_t id0 = instance->rx_id_list[f * 2U];
+            uint32_t id1 = instance->rx_id_list[f * 2U + 1U];
+
+            // 如果 id1 无效，使用 id0 作为第二个 ID（匹配同一个 ID）
+            if (id1 == CAN_ID_UNUSED || id1 > 0x7FF)
+            {
+                id1 = id0;
+            }
+
+            filter.FilterIndex = s_fdcan_filter_idx[instance->can_e]++;
+            filter.FilterConfig = (id0 & 1U) ? FDCAN_FILTER_TO_RXFIFO0 : FDCAN_FILTER_TO_RXFIFO1;
+            filter.FilterType = FDCAN_FILTER_DUAL;
+            filter.FilterID1 = id0;
+            filter.FilterID2 = id1;
+
+            if (HAL_FDCAN_ConfigFilter(instance->map.handle, &filter) != HAL_OK)
+            {
+                return HAL_ERROR;
+            }
+        }
     }
     else
     {
-        // FDCAN 掩码模式：使用 RANGE 或 MASK 类型
-        // 使用 CLASSIC 类型：FilterID1 为 ID，FilterID2 为掩码
+        // 检查过滤器索引是否超出上限
+        if (s_fdcan_filter_idx[instance->can_e] >= FDCAN_FILTER_MAX)
+        {
+            LOGERROR("[bsp_can] FDCAN filter index overflow! max=%d, current=%d", FDCAN_FILTER_MAX, s_fdcan_filter_idx[instance->can_e]);
+            return HAL_ERROR;
+        }
+
+        // FDCAN 掩码模式：使用 MASK 类型，FilterID1 为 ID，FilterID2 为掩码
+        filter.FilterIndex = s_fdcan_filter_idx[instance->can_e]++;
+        filter.FilterConfig = (instance->rx_id_list[0] & 1U) ? FDCAN_FILTER_TO_RXFIFO0 : FDCAN_FILTER_TO_RXFIFO1;
         filter.FilterType = FDCAN_FILTER_MASK;
         filter.FilterID1 = instance->rx_id_list[0];
         filter.FilterID2 = instance->rx_mask;
+
+        return HAL_FDCAN_ConfigFilter(instance->map.handle, &filter);
     }
 
-    return HAL_FDCAN_ConfigFilter(instance->map.handle, &filter);
+    return HAL_OK;
 }
 
-static HAL_StatusTypeDef CANFdcanStartIfNeeded(FDCAN_HandleTypeDef *handle)
+static HAL_StatusTypeDef CANFdcanInitIfNeeded(FDCAN_HandleTypeDef *handle)
 {
+    // 检查该CAN外设是否已初始化（已有实例注册）
     for (uint8_t i = 0; i < s_idx; i++)
     {
         if (s_can_instance[i]->map.handle == handle)
@@ -124,7 +155,21 @@ static HAL_StatusTypeDef CANFdcanStartIfNeeded(FDCAN_HandleTypeDef *handle)
         }
     }
 
+    // 首次注册该CAN外设实例时，执行全局配置
+    // 全局过滤器：拒绝所有未匹配专用过滤器的消息（专用过滤器在CANFdcanAddFilter中配置）
     if (HAL_FDCAN_ConfigGlobalFilter(handle, FDCAN_REJECT, FDCAN_REJECT, FDCAN_REJECT_REMOTE, FDCAN_REJECT_REMOTE) != HAL_OK)
+    {
+        return HAL_ERROR;
+    }
+
+    // 配置中断线分配：FIFO0+错误 -> IT0, FIFO1 -> IT1
+    // 注意：HAL_FDCAN_ConfigInterruptLines 是覆盖式调用，需将同一中断线的所有中断源合并
+    uint32_t line0_ints = FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_BUS_OFF | FDCAN_IT_ERROR_WARNING | FDCAN_IT_ERROR_PASSIVE;
+    if (HAL_FDCAN_ConfigInterruptLines(handle, line0_ints, FDCAN_INTERRUPT_LINE0) != HAL_OK)
+    {
+        return HAL_ERROR;
+    }
+    if (HAL_FDCAN_ConfigInterruptLines(handle, FDCAN_IT_RX_FIFO1_NEW_MESSAGE, FDCAN_INTERRUPT_LINE1) != HAL_OK)
     {
         return HAL_ERROR;
     }
@@ -256,20 +301,34 @@ static HAL_StatusTypeDef CANBxcanAddFilter(CANInstance *instance)
     if (instance->filter_mode == CAN_FILTER_MODE_LIST)
     {
         // 16位列表模式：每个filter bank可配置4个精确ID
+        // HAL库16位过滤器寄存器映射：
+        // FR1 = (FilterMaskIdLow << 16) | FilterIdLow → 第1ID在FilterIdLow，第2ID在FilterMaskIdLow
+        // FR2 = (FilterMaskIdHigh << 16) | FilterIdHigh → 第3ID在FilterIdHigh，第4ID在FilterMaskIdHigh
+        // CAN_ID_UNUSED 槽位配置为 0（不匹配有效ID）
         filter.FilterMode = CAN_FILTERMODE_IDLIST;
-        filter.FilterIdHigh = (instance->rx_id_list[0] & 0x7FFU) << 3;
-        filter.FilterIdLow = (instance->rx_id_list[1] & 0x7FFU) << 3;
-        filter.FilterMaskIdHigh = (instance->rx_id_list[2] & 0x7FFU) << 3;
-        filter.FilterMaskIdLow = (instance->rx_id_list[3] & 0x7FFU) << 3;
+        filter.FilterIdLow = (instance->rx_id_list[0] != CAN_ID_UNUSED && instance->rx_id_list[0] <= 0x7FF)
+                                 ? (instance->rx_id_list[0] & 0x7FFU) << 3
+                                 : 0;
+        filter.FilterMaskIdLow = (instance->rx_id_list[1] != CAN_ID_UNUSED && instance->rx_id_list[1] <= 0x7FF)
+                                     ? (instance->rx_id_list[1] & 0x7FFU) << 3
+                                     : 0;
+        filter.FilterIdHigh = (instance->rx_id_list[2] != CAN_ID_UNUSED && instance->rx_id_list[2] <= 0x7FF)
+                                  ? (instance->rx_id_list[2] & 0x7FFU) << 3
+                                  : 0;
+        filter.FilterMaskIdHigh = (instance->rx_id_list[3] != CAN_ID_UNUSED && instance->rx_id_list[3] <= 0x7FF)
+                                      ? (instance->rx_id_list[3] & 0x7FFU) << 3
+                                      : 0;
     }
     else
     {
         // 16位掩码模式：支持范围匹配
+        // HAL库16位掩码过滤器寄存器映射：
+        // FR1 = (FilterMaskIdLow << 16) | FilterIdLow → FilterIdLow为ID，FilterMaskIdLow为掩码
         filter.FilterMode = CAN_FILTERMODE_IDMASK;
-        filter.FilterIdHigh = (instance->rx_id_list[0] & 0x7FFU) << 3;
-        filter.FilterIdLow = 0; // 未使用
-        filter.FilterMaskIdHigh = (instance->rx_mask & 0x7FFU) << 3;
-        filter.FilterMaskIdLow = 0; // 未使用
+        filter.FilterIdLow = (instance->rx_id_list[0] & 0x7FFU) << 3;
+        filter.FilterMaskIdLow = (instance->rx_mask & 0x7FFU) << 3;
+        filter.FilterIdHigh = 0;
+        filter.FilterMaskIdHigh = 0;
     }
 
     return HAL_CAN_ConfigFilter(instance->map.handle, &filter);
@@ -383,7 +442,6 @@ int8_t CANRegister(CANInstance *instance, const CAN_Init_Config_s *config)
     // 将配置拷贝到实例
     instance->tx_id = config->tx_id;
     instance->filter_mode = config->filter_mode;
-    instance->rx_id_count = config->rx_id_count;
     memcpy(instance->rx_id_list, config->rx_id_list, sizeof(config->rx_id_list));
     instance->rx_mask = config->rx_mask;
     instance->rx_callback = config->rx_callback;
@@ -395,29 +453,18 @@ int8_t CANRegister(CANInstance *instance, const CAN_Init_Config_s *config)
         return -1;
     }
 
-    // 检查过滤器模式参数
-    if (instance->filter_mode == CAN_FILTER_MODE_LIST)
+    // 检查过滤器模式参数，同时计算有效的 rx_id_count
+    instance->rx_id_count = 0;
+    for (uint8_t i = 0; i < 4; i++)
     {
-        // 列表模式：检查 rx_id_count 有效性
-        if (instance->rx_id_count == 0 || instance->rx_id_count > 4)
+        if (instance->rx_id_list[i] != CAN_ID_UNUSED && instance->rx_id_list[i] <= 0x7FF)
         {
-            LOGERROR("[bsp_can] Invalid rx_id_count=%d for list mode, must be 1-4", instance->rx_id_count);
-            return -1;
+            instance->rx_id_count++;
         }
-
-        // 重新计算 rx_id_count：只统计非 CAN_ID_UNUSED 的条目
-        uint8_t valid_count = 0;
-        for (uint8_t i = 0; i < instance->rx_id_count; i++)
-        {
-            if (instance->rx_id_list[i] != CAN_ID_UNUSED)
-            {
-                valid_count++;
-            }
-        }
-        instance->rx_id_count = valid_count;
-        // rx_id_count == 0 允许（仅发送不接收）
     }
-    else if (instance->filter_mode != CAN_FILTER_MODE_MASK)
+    // rx_id_count == 0 允许（仅发送不接收）
+
+    if (instance->filter_mode != CAN_FILTER_MODE_LIST && instance->filter_mode != CAN_FILTER_MODE_MASK)
     {
         LOGERROR("[bsp_can] Invalid filter_mode=%d", instance->filter_mode);
         return -1;
@@ -510,6 +557,9 @@ int8_t CANRegister(CANInstance *instance, const CAN_Init_Config_s *config)
     }
 
 #if BSP_CAN_IP == BSP_CAN_IP_FDCAN
+    // 先清零整个 tx_header 结构体，确保所有字段都有确定值
+    memset(&instance->tx_header, 0, sizeof(instance->tx_header));
+
     if (instance->tx_id != CAN_ID_UNUSED)
     {
         instance->tx_header.Identifier = instance->tx_id;
@@ -522,28 +572,24 @@ int8_t CANRegister(CANInstance *instance, const CAN_Init_Config_s *config)
         instance->tx_header.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
         instance->tx_header.MessageMarker = 0;
     }
-    else
-    {
-        memset(&instance->tx_header, 0, sizeof(instance->tx_header));
-    }
 
     if (need_rx_filter)
     {
         BSP_RETURN_IF_TRUE_LOG(CANFdcanAddFilter(instance) != HAL_OK, -1, LOGERROR("[bsp_can] FDCAN filter config failed! can_e=%d rx_id=0x%lX", instance->can_e, instance->rx_id_list[0]));
     }
 
-    BSP_RETURN_IF_TRUE_LOG(CANFdcanStartIfNeeded(instance->map.handle) != HAL_OK, -1, LOGERROR("[bsp_can] FDCAN start/notification init failed! can_e=%d", instance->can_e));
+    BSP_RETURN_IF_TRUE_LOG(CANFdcanInitIfNeeded(instance->map.handle) != HAL_OK, -1, LOGERROR("[bsp_can] FDCAN init failed! can_e=%d", instance->can_e));
 #else
+    // 先清零整个 tx_header 结构体，确保所有字段都有确定值
+    memset(&instance->tx_header, 0, sizeof(instance->tx_header));
+
     if (instance->tx_id != CAN_ID_UNUSED)
     {
         instance->tx_header.StdId = instance->tx_id;
         instance->tx_header.IDE = CAN_ID_STD;
         instance->tx_header.RTR = CAN_RTR_DATA;
         instance->tx_header.DLC = 8;
-    }
-    else
-    {
-        memset(&instance->tx_header, 0, sizeof(instance->tx_header));
+        // ExtId 和 TransmitGlobalTime 已被 memset 清零
     }
 
     if (need_rx_filter)
@@ -703,30 +749,31 @@ void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
 void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
 {
     uint32_t error = HAL_CAN_GetError(hcan);
-    uint32_t esr = hcan->Instance->ESR;
-    uint8_t tec = (esr >> 16) & 0xFF;
-    uint8_t rec = (esr >> 24) & 0x7F;
 
-    if (error & HAL_CAN_ERROR_BOF)
-    {
-        LOGERROR("[bsp_can] CAN Bus-off! TEC=%d, REC=%d", tec, rec);
-    }
-    else if (error & HAL_CAN_ERROR_EPV)
-    {
-        LOGWARNING("[bsp_can] CAN Error Passive! TEC=%d, REC=%d", tec, rec);
-    }
-    else if (error & HAL_CAN_ERROR_EWG)
-    {
-        LOGWARNING("[bsp_can] CAN Error Warning! TEC=%d, REC=%d", tec, rec);
-    }
-    else if (error != HAL_CAN_ERROR_NONE)
-    {
-        LOGWARNING("[bsp_can] CAN Error: 0x%08lX, TEC=%d, REC=%d", error, tec, rec);
-    }
-
-    // 清除软件错误标志
     if (error != HAL_CAN_ERROR_NONE)
     {
+        uint32_t esr = hcan->Instance->ESR;
+        uint8_t tec = (esr >> 16) & 0xFF;
+        uint8_t rec = (esr >> 24) & 0x7F;
+
+        if (error & HAL_CAN_ERROR_BOF)
+        {
+            LOGERROR("[bsp_can] CAN Bus-off! TEC=%d, REC=%d", tec, rec);
+        }
+        else if (error & HAL_CAN_ERROR_EPV)
+        {
+            LOGWARNING("[bsp_can] CAN Error Passive! TEC=%d, REC=%d", tec, rec);
+        }
+        else if (error & HAL_CAN_ERROR_EWG)
+        {
+            LOGWARNING("[bsp_can] CAN Error Warning! TEC=%d, REC=%d", tec, rec);
+        }
+        else
+        {
+            LOGWARNING("[bsp_can] CAN Error: 0x%08lX, TEC=%d, REC=%d", error, tec, rec);
+        }
+
+        // 清除软件错误标志
         HAL_CAN_ResetError(hcan);
     }
 }

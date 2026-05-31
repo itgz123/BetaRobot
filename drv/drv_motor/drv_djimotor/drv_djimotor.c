@@ -66,7 +66,6 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
         CAN_Init_Config_s can_cfg = {
             .tx_id = tx_id,
             .filter_mode = CAN_FILTER_MODE_LIST,
-            .rx_id_count = 1,
             .rx_id_list = {rx_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},
             .rx_mask = 0,
             .rx_callback = NULL, // todo:之后要添加回调函数
