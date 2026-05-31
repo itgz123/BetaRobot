@@ -21,7 +21,7 @@
 #endif
 
 /* 离线故障动作枚举（8种, 占uint8_t） */
-typedef enum
+typedef enum uint8_t // 或者typedef enum : uint8_t
 {
     DAEMON_FAULT_NONE = 0,         // 无动作
     DAEMON_FAULT_BUZZER_SHORT = 1, // 蜂鸣器短叫
@@ -39,23 +39,23 @@ typedef void (*offline_callback)(void *);
 /* daemon结构体定义 */
 typedef struct daemon_ins
 {
-    uint16_t reload_count;     // 重载值
-    uint8_t fault_action;      // 离线故障动作, 见 DaemonFaultAction_e
-    offline_callback callback; // 异常处理函数,当模块发生异常时会被调用
-    uint16_t temp_count;       // 当前值,减为零说明模块离线或异常
-    void *owner_id;            // daemon实例的地址,初始化的时候填入
-    uint8_t is_online;         // 当前在线状态,用于检测状态转换
-    uint64_t last_reload_us;   // 上次喂狗时间戳 (us)，由 DWT 获取
+    uint16_t reload_count;            // 重载值
+    DaemonFaultAction_e fault_action; // 离线故障动作, 见 DaemonFaultAction_e
+    offline_callback callback;        // 异常处理函数,当模块发生异常时会被调用
+    uint16_t temp_count;              // 当前值,减为零说明模块离线或异常
+    void *owner_id;                   // daemon实例的地址,初始化的时候填入
+    uint8_t is_online;                // 当前在线状态,用于检测状态转换
+    uint64_t last_reload_us;          // 上次喂狗时间戳 (us)，由 DWT 获取
 } DaemonInstance;
 
 /*------------- 配置结构体 --------------*/
 
 typedef struct
 {
-    uint16_t reload_count;     // 重载值（喂狗超时阈值）
-    uint8_t fault_action;      // 离线故障动作, 见 DaemonFaultAction_e
-    offline_callback callback; // 异常处理函数（可为NULL）
-    void *owner_id;            // 所属模块实例指针
+    uint16_t reload_count;            // 重载值（喂狗超时阈值）
+    DaemonFaultAction_e fault_action; // 离线故障动作, 见 DaemonFaultAction_e
+    offline_callback callback;        // 异常处理函数（可为NULL）
+    void *owner_id;                   // 所属模块实例指针
 } Daemon_Init_Config_s;
 
 /*------------- 实例定义宏 --------------*/
