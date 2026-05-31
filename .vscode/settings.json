@@ -3,5 +3,6 @@
     // 编译相关
     "betaRobot.cmakeCommand": "cmake",
     "betaRobot.ninjaCommand": "ninja",
-    "betaRobot.buildJobs": 24
+    "betaRobot.buildJobs": 24,
+    "cortex-debug.variableUseNaturalFormat": false
 }
