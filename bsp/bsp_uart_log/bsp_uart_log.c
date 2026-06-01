@@ -40,7 +40,7 @@ typedef enum
 /*============= 私有变量 =============*/
 
 // USART 实例（静态定义，仅发送，接收缓冲区最小）
-USART_INSTANCE_DEF(s_log_uart, UART_LOG_UART, 1);
+USART_INSTANCE_DEF(s_log_uart, 1);
 
 // 三个发送缓冲区（放在 DMA_RAM 区域）
 static char s_tx_buff[UART_LOG_BUFF_COUNT][UART_LOG_BUFF_SIZE] DMA_RAM = {0};
@@ -136,6 +136,7 @@ void BSPLogInit(void)
 {
     // 注册 USART（使用 DMA 模式 + 发送回调）
     USART_Init_Config_s usart_cfg = {
+        .uart_e = UART_LOG_UART,
         .tx_mode = USART_DMA_MODE,
         .rx_callback = NULL,
         .tx_callback = BSPLogTxCpltCallback,

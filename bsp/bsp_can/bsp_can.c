@@ -437,9 +437,10 @@ int8_t CANRegister(CANInstance *instance, const CAN_Init_Config_s *config)
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_can] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_can] Config is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_idx >= CAN_INSTANCE_NUM, -1, LOGERROR("[bsp_can] Exceeded max instance count!"));
-    BSP_RETURN_IF_TRUE_LOG(instance->can_e >= CAN_NUM_MAX, -1, LOGERROR("[bsp_can] can_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(config->can_e >= CAN_NUM_MAX, -1, LOGERROR("[bsp_can] can_e out of range!"));
 
     // 将配置拷贝到实例
+    instance->can_e = config->can_e;
     instance->tx_id = config->tx_id;
     instance->filter_mode = config->filter_mode;
     memcpy(instance->rx_id_list, config->rx_id_list, sizeof(config->rx_id_list));

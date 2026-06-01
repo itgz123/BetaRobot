@@ -50,6 +50,7 @@ typedef struct USARTInstance
  */
 typedef struct
 {
+    BoardUART_e uart_e;                          // 板载UART枚举（注册时用于查找映射）
     USART_Work_Mode_e tx_mode;                   // 发送模式（阻塞/中断/DMA）
     void (*rx_callback)(struct USARTInstance *); // 接收完成回调（可为NULL）
     void (*tx_callback)(struct USARTInstance *); // 发送完成回调（DMA模式，可为NULL）
@@ -60,26 +61,19 @@ typedef struct
 /**
  * @brief 静态定义USART实例（同时定义缓冲区）
  * @param name     实例名称
- * @param uart_idx 板载UART枚举（BoardUART_e）
  * @param buff_sz  接收缓冲区大小（影响静态内存分配，必须编译期确定）
  *
  * @note DMA_RAM 宏在 Cortex-M7 上将缓冲区放入 RAM_D1 以支持 DMA 访问
  *       在 Cortex-M4 上定义为空
  *
  * @example
- *   USART_INSTANCE_DEF(sbus_uart, UART_SBUS_2, 64);
+ *   USART_INSTANCE_DEF(sbus_uart, 64);
  */
-#define USART_INSTANCE_DEF(name, uart_idx, buff_sz)       \
-    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0}; \
-    static USARTInstance name = {                         \
-        .parent = NULL,                                   \
-        .uart_e = uart_idx,                               \
-        .handle = NULL,                                   \
-        .tx_mode = 0,                                     \
-        .rx_buff = name##_rx_buff,                        \
-        .rx_buff_size = buff_sz,                          \
-        .rx_len = 0,                                      \
-        .rx_callback = NULL}
+#define USART_INSTANCE_DEF(name, buff_sz)                    \
+    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};   \
+    static USARTInstance name = {                            \
+        .rx_buff = name##_rx_buff,                          \
+        .rx_buff_size = buff_sz}
 
 /*------------- 外部接口声明 --------------*/
 

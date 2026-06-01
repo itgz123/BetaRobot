@@ -86,9 +86,10 @@ int8_t GPIORegister(GPIOInstance *instance, const GPIO_Init_Config_s *config)
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_gpio] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_gpio] Config is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_idx >= GPIO_INSTANCE_NUM, -1, LOGERROR("[bsp_gpio] Exceeded max instance count!"));
-    BSP_RETURN_IF_TRUE_LOG(instance->gpio_e >= GPIO_NUM_MAX, -1, LOGERROR("[bsp_gpio] gpio_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(config->gpio_e >= GPIO_NUM_MAX, -1, LOGERROR("[bsp_gpio] gpio_e out of range!"));
 
     // 将配置拷贝到实例
+    instance->gpio_e = config->gpio_e;
     instance->callback = config->callback;
 
     // 根据枚举自动填充硬件映射

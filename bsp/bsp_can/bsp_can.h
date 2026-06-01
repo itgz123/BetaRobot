@@ -70,6 +70,7 @@ typedef struct CANInstance
  */
 typedef struct
 {
+    BoardCAN_e can_e;                           // 板载CAN枚举（注册时用于查找映射）
     uint32_t tx_id;                            // 发送标准ID；CAN_ID_UNUSED(-1) 表示不发送
     CANFilterMode_e filter_mode;               // 过滤器模式（掩码/列表）
     uint32_t rx_id_list[4];                    // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
@@ -84,12 +85,7 @@ typedef struct
  * @param name    实例名称
  * @param can_idx 板载CAN枚举（BoardCAN_e）
  */
-#define CAN_INSTANCE_DEF(name, can_idx) \
-    static CANInstance name = {         \
-        .parent = NULL,                 \
-        .can_e = can_idx,               \
-        .map = {0},                     \
-    }
+#define CAN_INSTANCE_DEF(name) static CANInstance name
 
 /*------------- 外部接口声明 --------------*/
 

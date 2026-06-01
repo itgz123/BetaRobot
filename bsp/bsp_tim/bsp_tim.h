@@ -44,44 +44,48 @@ typedef struct EncoderInstance
     uint64_t last_time_us;     // 上次更新时间 (us)
 } EncoderInstance;
 
+/*------------- 配置结构体 --------------*/
+
+/**
+ * @brief PWM 初始化配置结构体
+ */
+typedef struct
+{
+    BoardTIM_e tim_e; // 板载TIM枚举（注册时用于查找映射）
+} PWM_Init_Config_s;
+
+/**
+ * @brief 编码器 初始化配置结构体
+ */
+typedef struct
+{
+    BoardTIM_e tim_e; // 板载TIM枚举（注册时用于查找映射）
+} Encoder_Init_Config_s;
+
 /*------------- 实例定义宏 --------------*/
 
 /**
  * @brief PWM实例静态定义宏
- * @param name    实例名称
- * @param tim_idx 板载TIM枚举（TIM_PWM_1~4）
+ * @param name 实例名称
  */
-#define PWM_INSTANCE_DEF(name, tim_idx) \
-    PWMInstance name = {                \
-        .tim_e = tim_idx,               \
-        .map = {NULL, 0},               \
-        .dutyratio = 0.0f}
+#define PWM_INSTANCE_DEF(name) PWMInstance name
 
 /**
  * @brief 编码器实例静态定义宏
- * @param name    实例名称
- * @param tim_idx 板载TIM枚举（TIM_ENCODER_1~4）
+ * @param name 实例名称
  */
-#define ENCODER_INSTANCE_DEF(name, tim_idx) \
-    EncoderInstance name = {                \
-        .tim_e = tim_idx,                   \
-        .map = {NULL, 0},                   \
-        .arr = 0,                           \
-        .overflow_count = 0,                \
-        .total_count = 0,                   \
-        .last_total_count = 0,              \
-        .speed = 0.0f,                      \
-        .last_time_us = 0}
+#define ENCODER_INSTANCE_DEF(name) EncoderInstance name
 
 /*------------- PWM接口声明 --------------*/
 
 /**
  * @brief 注册PWM实例
  * @param instance PWM实例指针
+ * @param config   初始化配置结构体指针
  * @return 0成功，-1失败
  * @note 注册即启动PWM输出
  */
-int8_t PWMRegister(PWMInstance *instance);
+int8_t PWMRegister(PWMInstance *instance, const PWM_Init_Config_s *config);
 
 /**
  * @brief 设置PWM占空比
@@ -95,10 +99,11 @@ void PWMSetDutyRatio(PWMInstance *instance, float dutyratio);
 /**
  * @brief 注册编码器实例
  * @param instance 编码器实例指针
+ * @param config   初始化配置结构体指针
  * @return 0成功，-1失败
  * @note 注册即启动编码器，自动使能更新中断
  */
-int8_t EncoderRegister(EncoderInstance *instance);
+int8_t EncoderRegister(EncoderInstance *instance, const Encoder_Init_Config_s *config);
 
 /**
  * @brief 获取当前速度（脉冲/秒）

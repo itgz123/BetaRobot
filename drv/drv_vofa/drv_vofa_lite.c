@@ -33,7 +33,7 @@ typedef enum
 /*------------- 静态实例定义 --------------*/
 
 // USART 实例（静态定义）
-USART_INSTANCE_DEF(s_vofa_lite_uart, VOFA_LITE_UART, 1);
+USART_INSTANCE_DEF(s_vofa_lite_uart, 1);
 
 // 三套发送缓冲区（放在 DMA_RAM 区域）
 static uint8_t s_tx_buff[3][TX_BUFF_SIZE] DMA_RAM = {0};
@@ -83,6 +83,7 @@ void VofaLiteInit(void)
 {
     // 注册 USART（使用 DMA 模式 + 发送完成回调）
     USART_Init_Config_s usart_cfg = {
+        .uart_e = VOFA_LITE_UART,
         .tx_mode = USART_DMA_MODE,
         .rx_callback = NULL,
         .tx_callback = VofaLiteTxCpltCallback,

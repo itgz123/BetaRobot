@@ -36,7 +36,8 @@ typedef struct GPIOInstance
  */
 typedef struct
 {
-    void (*callback)(struct GPIOInstance *); // EXTI中断回调函数（可为NULL）
+    BoardGPIO_e gpio_e;                         // 板载GPIO枚举（注册时用于查找映射）
+    void (*callback)(struct GPIOInstance *);    // EXTI中断回调函数（可为NULL）
 } GPIO_Init_Config_s;
 
 /*------------- 实例定义宏 --------------*/
@@ -46,13 +47,7 @@ typedef struct
  * @param name     实例名称
  * @param gpio_idx 板载GPIO枚举（BoardGPIO_e）
  */
-#define GPIO_INSTANCE_DEF(name, gpio_idx) \
-    GPIOInstance name = {                 \
-        .parent = NULL,                   \
-        .gpio_e = gpio_idx,               \
-        .map = {0},                       \
-        .pin_state = GPIO_PIN_RESET,      \
-        .callback = NULL}
+#define GPIO_INSTANCE_DEF(name) static GPIOInstance name
 
 /*------------- 外部接口声明 --------------*/
 

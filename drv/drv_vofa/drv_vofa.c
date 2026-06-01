@@ -40,7 +40,7 @@ typedef struct
 /*------------- 静态单例实例 --------------*/
 
 // USART 实例（静态定义）
-USART_INSTANCE_DEF(s_vofa_uart, VOFA_UART, 1);
+USART_INSTANCE_DEF(s_vofa_uart, 1);
 
 // VOFA 单例实例
 static VofaInstance s_vofa_instance = {

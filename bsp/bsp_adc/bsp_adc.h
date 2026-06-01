@@ -34,18 +34,24 @@ typedef struct ADCInstance
 } ADCInstance;
 
 /*============================================
+ *              配置结构体
+ *============================================*/
+/**
+ * @brief ADC 初始化配置结构体
+ */
+typedef struct
+{
+    BoardADC_e adc_e; // 板载ADC枚举（注册时查找映射）
+} ADC_Init_Config_s;
+
+/*============================================
  *              实例定义宏
  *============================================*/
 /**
  * @brief 静态定义ADC实例
- * @param name  实例名称
- * @param adc_idx 板载ADC枚举（BoardADC_e）
+ * @param name 实例名称
  */
-#define ADC_INSTANCE_DEF(name, adc_idx) \
-    static ADCInstance name = {         \
-        .parent = NULL,                 \
-        .adc_e = adc_idx,               \
-        .adc_map = {0}}
+#define ADC_INSTANCE_DEF(name) static ADCInstance name
 
 /*============================================
  *              接口函数声明
@@ -53,10 +59,11 @@ typedef struct ADCInstance
 /**
  * @brief 注册ADC实例
  * @param instance ADC实例指针
+ * @param config   初始化配置结构体指针
  * @return 0:成功 -1:失败
  * @note 注册时会执行ADC校准
  */
-int8_t ADCRegister(ADCInstance *instance);
+int8_t ADCRegister(ADCInstance *instance, const ADC_Init_Config_s *config);
 
 /**
  * @brief 获取ADC转换值（轮询模式）

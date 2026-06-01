@@ -25,11 +25,15 @@ static PWMInstance **s_pwm_instance = NULL;
 
 /*------------- PWM接口实现 --------------*/
 
-int8_t PWMRegister(PWMInstance *instance)
+int8_t PWMRegister(PWMInstance *instance, const PWM_Init_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_tim] PWM instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_tim] PWM config is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_pwm_idx >= PWM_INSTANCE_NUM, -1, LOGERROR("[bsp_tim] PWM exceeded max instance count!"));
-    BSP_RETURN_IF_TRUE_LOG(instance->tim_e >= TIM_NUM_MAX, -1, LOGERROR("[bsp_tim] PWM tim_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(config->tim_e >= TIM_NUM_MAX, -1, LOGERROR("[bsp_tim] PWM tim_e out of range!"));
+
+    // 将配置拷贝到实例
+    instance->tim_e = config->tim_e;
 
     // 重复注册检查
     for (uint8_t i = 0; i < s_pwm_idx; i++)
@@ -88,11 +92,15 @@ static EncoderInstance **s_encoder_instance = NULL;
 
 /*------------- 编码器接口实现 --------------*/
 
-int8_t EncoderRegister(EncoderInstance *instance)
+int8_t EncoderRegister(EncoderInstance *instance, const Encoder_Init_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_tim] Encoder instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_tim] Encoder config is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_encoder_idx >= ENCODER_INSTANCE_NUM, -1, LOGERROR("[bsp_tim] Encoder exceeded max instance count!"));
-    BSP_RETURN_IF_TRUE_LOG(instance->tim_e >= TIM_NUM_MAX, -1, LOGERROR("[bsp_tim] Encoder tim_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(config->tim_e >= TIM_NUM_MAX, -1, LOGERROR("[bsp_tim] Encoder tim_e out of range!"));
+
+    // 将配置拷贝到实例
+    instance->tim_e = config->tim_e;
 
     // 重复注册检查
     for (uint8_t i = 0; i < s_encoder_idx; i++)
