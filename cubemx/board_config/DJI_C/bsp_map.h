@@ -36,30 +36,101 @@
 /*============================================
  *              映射结构体类型
  *============================================*/
-typedef struct { GPIO_TypeDef *port; uint16_t pin; } GPIO_Map_t;
-typedef struct { TIM_HandleTypeDef *htim; uint32_t channel; } TIM_Map_t;
-typedef struct { UART_HandleTypeDef *handle; } UART_Map_t;
-typedef struct { CAN_HandleTypeDef *handle; } CAN_Map_t;
-typedef struct { SPI_HandleTypeDef *handle; } SPI_Map_t;
-typedef struct { I2C_HandleTypeDef *handle; } I2C_Map_t;
-typedef struct { ADC_HandleTypeDef *handle; uint32_t channel; } ADC_Map_t;
+typedef struct
+{
+    GPIO_TypeDef *port;
+    uint16_t pin;
+} GPIO_Map_t;
+typedef struct
+{
+    TIM_HandleTypeDef *htim;
+    uint32_t channel;
+} TIM_Map_t;
+typedef struct
+{
+    UART_HandleTypeDef *handle;
+} UART_Map_t;
+typedef struct
+{
+    CAN_HandleTypeDef *handle;
+} CAN_Map_t;
+typedef struct
+{
+    SPI_HandleTypeDef *handle;
+} SPI_Map_t;
+typedef struct
+{
+    I2C_HandleTypeDef *handle;
+} I2C_Map_t;
+typedef struct
+{
+    ADC_HandleTypeDef *handle;
+    uint32_t channel;
+} ADC_Map_t;
 
 /*============================================
  *              板载资源枚举
  *============================================*/
-typedef enum { GPIO_USER_KEY = 0, GPIO_BMI088_CS_ACCEL, GPIO_BMI088_CS_GYRO,
-    GPIO_BMI088_INT_ACCEL, GPIO_BMI088_INT_GYRO, GPIO_IST8310_DRDY,
-    GPIO_IST8310_RSTN, GPIO_NUM_MAX } BoardGPIO_e;
+typedef enum
+{
+    GPIO_USER_KEY = 0,
+    GPIO_BMI088_CS_ACCEL,
+    GPIO_BMI088_CS_GYRO,
+    GPIO_BMI088_INT_ACCEL,
+    GPIO_BMI088_INT_GYRO,
+    GPIO_IST8310_DRDY,
+    GPIO_IST8310_RSTN,
+    GPIO_NUM_MAX
+} BoardGPIO_e;
 
-typedef enum { TIM_PWM_1 = 0, TIM_PWM_2, TIM_PWM_3, TIM_PWM_4,
-    TIM_LED_B, TIM_LED_G, TIM_LED_R, TIM_PWM_5, TIM_PWM_6, TIM_PWM_7,
-    TIM_LASER, TIM_BUZZER, TIM_HEATER, TIM_NUM_MAX } BoardTIM_e;
+typedef enum
+{
+    TIM_PWM_1 = 0,
+    TIM_PWM_2,
+    TIM_PWM_3,
+    TIM_PWM_4,
+    TIM_LED_B,
+    TIM_LED_G,
+    TIM_LED_R,
+    TIM_PWM_5,
+    TIM_PWM_6,
+    TIM_PWM_7,
+    TIM_LASER,
+    TIM_BUZZER,
+    TIM_HEATER,
+    TIM_NUM_MAX
+} BoardTIM_e;
 
-typedef enum { UART_SBUS = 0, UART_1, UART_6, UART_NUM_MAX } BoardUART_e;
-typedef enum { CAN_1 = 0, CAN_2, CAN_NUM_MAX } BoardCAN_e;
-typedef enum { SPI_BMI088 = 0, SPI_EX_2, SPI_NUM_MAX } BoardSPI_e;
-typedef enum { I2C_EX_2 = 0, I2C_IST8310, I2C_NUM_MAX } BoardI2C_e;
-typedef enum { ADC_BAT = 0, ADC_NUM_MAX } BoardADC_e;
+typedef enum
+{
+    UART_SBUS = 0,
+    UART_1,
+    UART_6,
+    UART_NUM_MAX
+} BoardUART_e;
+typedef enum
+{
+    CAN_1 = 0,
+    CAN_2,
+    CAN_NUM_MAX
+} BoardCAN_e;
+typedef enum
+{
+    SPI_BMI088 = 0,
+    SPI_EX_2,
+    SPI_NUM_MAX
+} BoardSPI_e;
+typedef enum
+{
+    I2C_EX_2 = 0,
+    I2C_IST8310,
+    I2C_NUM_MAX
+} BoardI2C_e;
+typedef enum
+{
+    ADC_BAT = 0,
+    ADC_NUM_MAX
+} BoardADC_e;
 
 /*============================================
  *              逻辑实例数量配置
