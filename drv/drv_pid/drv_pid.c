@@ -69,7 +69,7 @@ static void f_Changing_Integration_Rate(PIDInstance *pid)
     // 积分呈累积趋势时才处理
     if (pid->error * pid->i_out > 0)
     {
-        float abs_err = MATH_FABS(pid->error);
+        float abs_err = FABS(pid->error);
         if (abs_err <= pid->coef_b)
         {
             return;
@@ -97,7 +97,7 @@ static void f_Integral_Limit(PIDInstance *pid)
     float temp_output = pid->p_out + temp_i_out + pid->d_out;
 
     // 输出超限时，如果积分还在累积，则停止当前积分增量
-    if (MATH_FABS(temp_output) > PID_MAX)
+    if (FABS(temp_output) > PID_MAX)
     {
         if (pid->error * pid->i_out > 0)
         {
@@ -249,7 +249,7 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float d
     instance->error = setpoint - measure;
 
     // 2. 死区控制 (deadband > 0 时启用)
-    if (instance->deadband > 0.0001f && MATH_FABS(instance->error) < instance->deadband)
+    if (instance->deadband > 0.0001f && FABS(instance->error) < instance->deadband)
     {
         instance->i_out = 0.0f;
         instance->last_error = instance->error;

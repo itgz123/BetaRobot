@@ -32,25 +32,57 @@
 /*============================================
  *              映射结构体类型
  *============================================*/
-typedef struct { GPIO_TypeDef *port; uint16_t pin; } GPIO_Map_t;
-typedef struct { TIM_HandleTypeDef *htim; uint32_t channel; } TIM_Map_t;
-typedef struct { UART_HandleTypeDef *handle; } UART_Map_t;
+typedef struct
+{
+    GPIO_TypeDef *port;
+    uint16_t pin;
+} GPIO_Map_t;
+typedef struct
+{
+    TIM_HandleTypeDef *htim;
+    uint32_t channel;
+} TIM_Map_t;
+typedef struct
+{
+    UART_HandleTypeDef *handle;
+} UART_Map_t;
 
 /*============================================
  *              板载资源枚举
  *============================================*/
-typedef enum { GPIO_LED_G = 0, GPIO_LED_R,
-    GPIO_MOTOR1_IN1, GPIO_MOTOR1_IN2,
-    GPIO_MOTOR2_IN1, GPIO_MOTOR2_IN2,
-    GPIO_MOTOR3_IN1, GPIO_MOTOR3_IN2,
-    GPIO_MOTOR4_IN1, GPIO_MOTOR4_IN2,
-    GPIO_NUM_MAX } BoardGPIO_e;
+typedef enum
+{
+    GPIO_LED_G = 0,
+    GPIO_LED_R,
+    GPIO_MOTOR1_IN1,
+    GPIO_MOTOR1_IN2,
+    GPIO_MOTOR2_IN1,
+    GPIO_MOTOR2_IN2,
+    GPIO_MOTOR3_IN1,
+    GPIO_MOTOR3_IN2,
+    GPIO_MOTOR4_IN1,
+    GPIO_MOTOR4_IN2,
+    GPIO_NUM_MAX
+} BoardGPIO_e;
 
-typedef enum { TIM_PWM_1 = 0, TIM_PWM_2, TIM_PWM_3, TIM_PWM_4,
-    TIM_ENCODER_1, TIM_ENCODER_2, TIM_ENCODER_3, TIM_ENCODER_4,
-    TIM_NUM_MAX } BoardTIM_e;
+typedef enum
+{
+    TIM_PWM_1 = 0,
+    TIM_PWM_2,
+    TIM_PWM_3,
+    TIM_PWM_4,
+    TIM_ENCODER_1,
+    TIM_ENCODER_2,
+    TIM_ENCODER_3,
+    TIM_ENCODER_4,
+    TIM_NUM_MAX
+} BoardTIM_e;
 
-typedef enum { UART_SBUS = 0, UART_NUM_MAX } BoardUART_e;
+typedef enum
+{
+    UART_SBUS = 0,
+    UART_NUM_MAX
+} BoardUART_e;
 
 /*============================================
  *              逻辑实例数量配置
