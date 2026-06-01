@@ -1,5 +1,5 @@
 # drv 层源文件
-set(DRV_SOURCES
+set(MODULE_SOURCES
     drv_pid/drv_pid.c
     drv_chassis/drv_chassis.c
     drv_sbus/drv_sbus.c
@@ -11,7 +11,7 @@ set(DRV_SOURCES
 )
 
 # drv 层头文件路径
-set(DRV_INCLUDE_DIRS
+set(MODULE_INCLUDE_DIRS
     drv_bmi088
     drv_chassis
     drv_pid

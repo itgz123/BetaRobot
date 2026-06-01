@@ -18,7 +18,7 @@
 
 cmake_minimum_required(VERSION 3.20)
 
-project(BetaRobot C ASM)
+project(BetaRobot VERSION 1.0.0 LANGUAGES C ASM)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 11)
@@ -101,20 +101,19 @@ if(NOT EXISTS "${HAL_DIR}")
         "  3. Missing CubeMX config: need to create cubemx/${HAL_CONFIG_NAME}/")
 endif()
 
-# 导入 app 模块定义（源文件列表、头文件路径）
-include("${APP_DIR}/CMakeLists.txt")
-prefix_paths(APP_SOURCE_FILES "${APP_DIR}" ${APP_SOURCES})
-prefix_paths(APP_INCLUDE_PATHS "${APP_DIR}" ${APP_INCLUDE_DIRS})
+# 导入模块（include 子 CMakeLists.txt 并添加路径前缀）
+function(import_module module_dir result_sources result_includes)
+    include("${module_dir}/CMakeLists.txt")
+    prefix_paths(${result_sources} "${module_dir}" ${MODULE_SOURCES})
+    prefix_paths(${result_includes} "${module_dir}" ${MODULE_INCLUDE_DIRS})
+    set(${result_sources} ${${result_sources}} PARENT_SCOPE)
+    set(${result_includes} ${${result_includes}} PARENT_SCOPE)
+endfunction()
 
-# 导入 bsp 模块定义
-include("${CMAKE_SOURCE_DIR}/bsp/CMakeLists.txt")
-prefix_paths(BSP_SOURCE_FILES "${CMAKE_SOURCE_DIR}/bsp" ${BSP_SOURCES})
-prefix_paths(BSP_INCLUDE_PATHS "${CMAKE_SOURCE_DIR}/bsp" ${BSP_INCLUDE_DIRS})
-
-# 导入 drv 模块定义
-include("${CMAKE_SOURCE_DIR}/drv/CMakeLists.txt")
-prefix_paths(DRV_SOURCE_FILES "${CMAKE_SOURCE_DIR}/drv" ${DRV_SOURCES})
-prefix_paths(DRV_INCLUDE_PATHS "${CMAKE_SOURCE_DIR}/drv" ${DRV_INCLUDE_DIRS})
+# 导入 app/bsp/drv 模块
+import_module("${APP_DIR}" APP_SOURCE_FILES APP_INCLUDE_PATHS)
+import_module("${CMAKE_SOURCE_DIR}/bsp" BSP_SOURCE_FILES BSP_INCLUDE_PATHS)
+import_module("${CMAKE_SOURCE_DIR}/drv" DRV_SOURCE_FILES DRV_INCLUDE_PATHS)
 
 ######################################
 # 从 user_cfg.h 读取 BUILD_TYPE（可选，未定义默认 Debug）
@@ -123,6 +122,12 @@ file(STRINGS "${CMAKE_SOURCE_DIR}/user_cfg.h" build_line REGEX "^[ \t]*#[ \t]*de
 if(build_line)
     string(REGEX REPLACE ".*BUILD_TYPE[ \t]+([A-Za-z0-9_]+).*" "\\1" BUILD_TYPE_NAME "${build_line}")
 else()
+    set(BUILD_TYPE_NAME "Debug")
+endif()
+
+set(ALLOWED_BUILD_TYPES Debug Release RelWithDebInfo MinSizeRel)
+if(NOT BUILD_TYPE_NAME IN_LIST ALLOWED_BUILD_TYPES)
+    message(WARNING "Invalid BUILD_TYPE '${BUILD_TYPE_NAME}', defaulting to Debug. Allowed: ${ALLOWED_BUILD_TYPES}")
     set(BUILD_TYPE_NAME "Debug")
 endif()
 
@@ -199,6 +204,10 @@ foreach(src IN LISTS MX_Application_Src)
     endif()
 endforeach()
 
+if(NOT STARTUP_FILE OR NOT EXISTS "${STARTUP_FILE}")
+    message(FATAL_ERROR "Startup file not found for board ${BOARD}")
+endif()
+
 set(HAL_DEFINES)
 foreach(def IN LISTS MX_Defines_Syms)
     if(def)
@@ -207,23 +216,23 @@ foreach(def IN LISTS MX_Defines_Syms)
 endforeach()
 
 ######################################
-# MCU 配置（根据开发板类型）
+# MCU 配置（数据驱动）
 ######################################
-if(BOARD STREQUAL "STM32F407VET6")
-    set(MCU_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
-    set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/STM32F407XX_FLASH.ld")
-elseif(BOARD STREQUAL "DM_MC02")
-    set(MCU_FLAGS -mcpu=cortex-m7 -mthumb -mfpu=fpv5-d16 -mfloat-abi=hard)
-    set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/STM32H723XG_FLASH.ld")
-elseif(BOARD STREQUAL "DJI_A")
-    set(MCU_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
-    set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/STM32F427XX_FLASH.ld")
-elseif(BOARD STREQUAL "DJI_C")
-    set(MCU_FLAGS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=hard)
-    set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/STM32F407XX_FLASH.ld")
-else()
-    message(FATAL_ERROR "Unknown DEVELOPMENT_BOARD: ${DEVELOPMENT_BOARD}")
+# 开发板配置表: CPU;FPU;链接脚本
+set(BOARD_CFG_STM32F407VET6 "cortex-m4;fpv4-sp-d16;STM32F407XX_FLASH.ld")
+set(BOARD_CFG_DM_MC02      "cortex-m7;fpv5-d16;STM32H723XG_FLASH.ld")
+set(BOARD_CFG_DJI_A        "cortex-m4;fpv4-sp-d16;STM32F427XX_FLASH.ld")
+set(BOARD_CFG_DJI_C        "cortex-m4;fpv4-sp-d16;STM32F407XX_FLASH.ld")
+
+if(NOT DEFINED BOARD_CFG_${BOARD})
+    message(FATAL_ERROR "Unknown DEVELOPMENT_BOARD: ${BOARD}")
 endif()
+
+list(GET BOARD_CFG_${BOARD} 0 MCU_CPU)
+list(GET BOARD_CFG_${BOARD} 1 MCU_FPU)
+list(GET BOARD_CFG_${BOARD} 2 LD_SCRIPT)
+set(MCU_FLAGS -mcpu=${MCU_CPU} -mthumb -mfpu=${MCU_FPU} -mfloat-abi=hard)
+set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/${LD_SCRIPT}")
 
 ######################################
 # 项目源文件列表
@@ -292,8 +301,7 @@ target_compile_options(${TARGET_NAME} PRIVATE
     $<$<CONFIG:Debug>:-g>
     $<$<CONFIG:Debug>:-gdwarf-2>
     $<$<CONFIG:Release>:-Os>
-    $<$<COMPILE_LANGUAGE:ASM>:-x>
-    $<$<COMPILE_LANGUAGE:ASM>:assembler-with-cpp>
+    $<$<COMPILE_LANGUAGE:ASM>:-x assembler-with-cpp>
 )
 
 ######################################
