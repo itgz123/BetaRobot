@@ -68,6 +68,7 @@ void SBUSUARTRxCallback(USARTInstance *usart_inst);
 
 typedef struct
 {
+    BoardUART_e uart_e;                         // 板载UART枚举（注册时用于查找映射）
     void (*app_callback)(struct SBUSInstance *); // APP 层回调函数
     uint16_t daemon_reload;                      // daemon 喂狗重载值
     uint8_t daemon_fault;                        // daemon 离线故障动作
@@ -75,23 +76,22 @@ typedef struct
 
 /*------------- 实例定义宏 --------------*/
 /**
- * @brief 静态定义 SBUS 实例（仅身份绑定）
- * @param name     实例名称
- * @param uart_idx 板载 UART 枚举（BoardUART_e）
+ * @brief 静态定义 SBUS 实例
+ * @param name 实例名称
  *
  * @note 使用 BSP 层的 USART_INSTANCE_DEF 宏定义底层实例
  *       parent 指针在注册时设置，指向 SBUSInstance 自身
  *
  * @example
- *   SBUS_INSTANCE_DEF(sbus_inst, UART_SBUS_2);
+ *   SBUS_INSTANCE_DEF(sbus_inst);
  */
-#define SBUS_INSTANCE_DEF(name, uart_idx)                       \
-    USART_INSTANCE_DEF(name##_uart, uart_idx, SBUS_FRAME_SIZE); \
-    DAEMON_INSTANCE_DEF(name##_daemon);                         \
-    static SBUSInstance name = {                                \
-        .usart_inst = &name##_uart,                             \
-        .app_callback = NULL,                                   \
-        .daemon = &name##_daemon,                               \
+#define SBUS_INSTANCE_DEF(name)                       \
+    USART_INSTANCE_DEF(name##_uart, SBUS_FRAME_SIZE); \
+    DAEMON_INSTANCE_DEF(name##_daemon);               \
+    static SBUSInstance name = {                      \
+        .usart_inst = &name##_uart,                   \
+        .app_callback = NULL,                         \
+        .daemon = &name##_daemon,                     \
     }
 
 /*------------- 外部接口声明 --------------*/

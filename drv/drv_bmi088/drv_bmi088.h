@@ -42,13 +42,19 @@ typedef enum
  */
 typedef struct
 {
-    BMI088_AccRange_e acc_range;   // 加速度计量程
-    uint8_t acc_bwp;               // 加速度计低通滤波器带宽
-    uint8_t acc_odr;               // 加速度计输出数据速率
+    BoardSPI_e spi_e;             // 板载SPI枚举
+    BoardGPIO_e cs_acc_e;         // 加速度计片选GPIO枚举
+    BoardGPIO_e cs_gyro_e;        // 陀螺仪片选GPIO枚举
+    BoardGPIO_e int_acc_e;        // 加速度计中断GPIO枚举
+    BoardGPIO_e int_gyro_e;       // 陀螺仪中断GPIO枚举
+    BoardTIM_e heater_e;          // 加热PWM枚举
+    BMI088_AccRange_e acc_range;  // 加速度计量程
+    uint8_t acc_bwp;              // 加速度计低通滤波器带宽
+    uint8_t acc_odr;              // 加速度计输出数据速率
     BMI088_GyroRange_e gyro_range; // 陀螺仪量程
-    uint8_t gyro_odr;              // 陀螺仪输出数据速率
-    uint8_t gyro_bw;               // 陀螺仪滤波器带宽
-    BMI088_WorkMode_e work_mode;   // 工作模式（轮询/中断）
+    uint8_t gyro_odr;             // 陀螺仪输出数据速率
+    uint8_t gyro_bw;              // 陀螺仪滤波器带宽
+    BMI088_WorkMode_e work_mode;  // 工作模式（轮询/中断）
 } BMI088_Init_Config_s;
 
 /**
@@ -103,59 +109,40 @@ typedef struct BMI088Instance
 
 /**
  * @brief BMI088实例静态定义宏
- * @param name        实例名称
- * @param spi_idx     板载SPI枚举
- * @param cs_acc_idx  加速度计片选GPIO枚举
- * @param cs_gyro_idx 陀螺仪片选GPIO枚举
- * @param int_acc_idx 加速度计中断GPIO枚举
- * @param int_gyro_idx 陀螺仪中断GPIO枚举（无则填0）
- * @param heater_idx  加热PWM枚举（无则填0）
+ * @param name 实例名称
  *
  * @note 使用 BSP 层的实例定义宏，parent 在注册时设置
  *       初始化时默认使用阻塞模式，初始化完成后可切换到DMA模式
  *
  * @example
- *   BMI088_INSTANCE_DEF(bmi088, SPI_BMI088_2, GPIO_BMI088_CS_ACCEL, GPIO_BMI088_CS_GYRO,
- *                       GPIO_BMI088_INT_ACCEL, GPIO_BMI088_INT_GYRO, TIM_HEATER);
+ *   BMI088_INSTANCE_DEF(bmi088);
  */
-#define BMI088_INSTANCE_DEF(name, spi_idx, cs_acc_idx, cs_gyro_idx, \
-                            int_acc_idx, int_gyro_idx, heater_idx)  \
+#define BMI088_INSTANCE_DEF(name)                                    \
     static uint8_t name##_tx_buff[BMI088_BUFF_SIZE] DMA_RAM = {0};  \
-    SPI_INSTANCE_DEF(name##_spi, spi_idx, BMI088_BUFF_SIZE);        \
-    GPIO_INSTANCE_DEF(name##_cs_acc, cs_acc_idx);                   \
-    GPIO_INSTANCE_DEF(name##_cs_gyro, cs_gyro_idx);                 \
-    GPIO_INSTANCE_DEF(name##_int_acc, int_acc_idx);                 \
-    GPIO_INSTANCE_DEF(name##_int_gyro, int_gyro_idx);               \
-    PWM_INSTANCE_DEF(name##_heater, heater_idx);                    \
-    static BMI088Instance name = {                                  \
-        .spi_inst = &name##_spi,                                    \
-        .cs_acc = &name##_cs_acc,                                   \
-        .cs_gyro = &name##_cs_gyro,                                 \
-        .int_acc = &name##_int_acc,                                 \
-        .int_gyro = &name##_int_gyro,                               \
-        .heater_pwm = &name##_heater,                               \
-        .tx_buff = name##_tx_buff,                                  \
-        .tx_len = 0,                                                \
-        .acc_offset = {0.0f, 0.0f, 0.0f},                           \
-        .gyro_offset = {0.0f, 0.0f, 0.0f},                          \
-    }
+    SPI_INSTANCE_DEF(name##_spi, BMI088_BUFF_SIZE);                  \
+    GPIO_INSTANCE_DEF(name##_cs_acc);                                \
+    GPIO_INSTANCE_DEF(name##_cs_gyro);                               \
+    GPIO_INSTANCE_DEF(name##_int_acc);                               \
+    GPIO_INSTANCE_DEF(name##_int_gyro);                              \
+    PWM_INSTANCE_DEF(name##_heater);                                 \
+    static BMI088Instance name = {                                   \
+        .spi_inst = &name##_spi,                                     \
+        .cs_acc = &name##_cs_acc,                                    \
+        .cs_gyro = &name##_cs_gyro,                                  \
+        .int_acc = &name##_int_acc,                                  \
+        .int_gyro = &name##_int_gyro,                                \
+        .heater_pwm = &name##_heater,                                \
+        .tx_buff = name##_tx_buff}
 
 /*============================ 公开接口声明 ============================*/
 
 /**
- * @brief 注册BMI088实例
- * @param inst BMI088实例指针
- * @return 0成功，-1失败
- */
-int8_t BMI088Register(BMI088Instance *inst);
-
-/**
- * @brief 设置BMI088配置并写入寄存器
+ * @brief 注册BMI088实例（包含BSP子实例注册和传感器配置）
  * @param inst   BMI088实例指针
  * @param config 初始化配置结构体指针
  * @return 0成功，-1失败
  */
-int8_t BMI088SetConfig(BMI088Instance *inst, const BMI088_Init_Config_s *config);
+int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config);
 
 /**
  * @brief 阻塞读取BMI088数据

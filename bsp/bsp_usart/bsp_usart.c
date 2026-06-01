@@ -135,9 +135,10 @@ int8_t USARTRegister(USARTInstance *instance, const USART_Init_Config_s *config)
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_usart] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_usart] Config is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_idx >= UART_INSTANCE_NUM, -1, LOGERROR("[bsp_usart] Exceeded max instance count!"));
-    BSP_RETURN_IF_TRUE_LOG(instance->uart_e >= UART_NUM_MAX, -1, LOGERROR("[bsp_usart] uart_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(config->uart_e >= UART_NUM_MAX, -1, LOGERROR("[bsp_usart] uart_e out of range!"));
 
     // 将配置拷贝到实例
+    instance->uart_e = config->uart_e;
     instance->tx_mode = config->tx_mode;
     instance->rx_callback = config->rx_callback;
     instance->tx_callback = config->tx_callback;

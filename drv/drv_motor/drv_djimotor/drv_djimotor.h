@@ -44,6 +44,7 @@ typedef struct
 
 typedef struct
 {
+    BoardCAN_e can_e;                          // 板载CAN枚举（注册时用于查找映射）
     uint8_t model;                    // 型号
     uint16_t reload_count;            // 重载值（喂狗超时阈值）
     DaemonFaultAction_e fault_action; // 离线故障动作, 见 DaemonFaultAction_e
@@ -55,12 +56,12 @@ typedef struct
  *              单电机实例定义宏
  *============================================*/
 
-#define DJIMOTOR_INSTANCE_DEF(name, can_idx) \
-    CAN_INSTANCE_DEF(name##_can, can_idx);   \
-    DAEMON_INSTANCE_DEF(name##_daemon);      \
-    static DJIMotorInstance name = {         \
-        .can = &name##_can,                  \
-        .daemon = &name##_daemon,            \
+#define DJIMOTOR_INSTANCE_DEF(name)  \
+    CAN_INSTANCE_DEF(name##_can);    \
+    DAEMON_INSTANCE_DEF(name##_daemon); \
+    static DJIMotorInstance name = { \
+        .can = &name##_can,          \
+        .daemon = &name##_daemon,    \
     }
 
 int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg);

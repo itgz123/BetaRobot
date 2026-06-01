@@ -160,11 +160,17 @@ static uint8_t BMI088_GyroWriteRegWithCheck(BMI088Instance *inst, uint8_t reg, u
 
 /*============================ 公开接口实现 ============================*/
 
-int8_t BMI088Register(BMI088Instance *inst)
+int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
 {
     if (inst == NULL)
     {
         LOGERROR("[drv_bmi088] Instance is NULL");
+        return -1;
+    }
+
+    if (config == NULL)
+    {
+        LOGERROR("[drv_bmi088] Config is NULL");
         return -1;
     }
 
@@ -206,21 +212,22 @@ int8_t BMI088Register(BMI088Instance *inst)
     inst->int_acc->parent = inst;
     inst->int_gyro->parent = inst;
 
-    SPI_Init_Config_s spi_cfg = {.work_mode = SPI_BLOCK_MODE, .rx_callback = NULL};
+    SPI_Init_Config_s spi_cfg = {.spi_e = config->spi_e, .work_mode = SPI_BLOCK_MODE, .rx_callback = NULL};
     if (SPIRegister(inst->spi_inst, &spi_cfg) != 0)
     {
         LOGERROR("[drv_bmi088] SPI register failed");
         return -1;
     }
 
-    GPIO_Init_Config_s gpio_null = {.callback = NULL};
-    if (GPIORegister(inst->cs_acc, &gpio_null) != 0)
+    GPIO_Init_Config_s gpio_cs_acc = {.gpio_e = config->cs_acc_e, .callback = NULL};
+    if (GPIORegister(inst->cs_acc, &gpio_cs_acc) != 0)
     {
         LOGERROR("[drv_bmi088] cs_acc register failed");
         return -1;
     }
 
-    if (GPIORegister(inst->cs_gyro, &gpio_null) != 0)
+    GPIO_Init_Config_s gpio_cs_gyro = {.gpio_e = config->cs_gyro_e, .callback = NULL};
+    if (GPIORegister(inst->cs_gyro, &gpio_cs_gyro) != 0)
     {
         LOGERROR("[drv_bmi088] cs_gyro register failed");
         return -1;
@@ -232,41 +239,27 @@ int8_t BMI088Register(BMI088Instance *inst)
     GPIOSet(inst->cs_gyro);
     DWT_Delay(BMI088_DELAY_MS);
 
-    if (GPIORegister(inst->int_acc, &gpio_null) != 0)
+    GPIO_Init_Config_s gpio_int_acc = {.gpio_e = config->int_acc_e, .callback = NULL};
+    if (GPIORegister(inst->int_acc, &gpio_int_acc) != 0)
     {
         LOGERROR("[drv_bmi088] int_acc register failed");
         return -1;
     }
-    if (GPIORegister(inst->int_gyro, &gpio_null) != 0)
+    GPIO_Init_Config_s gpio_int_gyro = {.gpio_e = config->int_gyro_e, .callback = NULL};
+    if (GPIORegister(inst->int_gyro, &gpio_int_gyro) != 0)
     {
         LOGERROR("[drv_bmi088] int_gyro register failed");
         return -1;
     }
 
-    if (PWMRegister(inst->heater_pwm) != 0)
+    PWM_Init_Config_s pwm_heater = {.tim_e = config->heater_e};
+    if (PWMRegister(inst->heater_pwm, &pwm_heater) != 0)
     {
         LOGERROR("[drv_bmi088] heater_pwm register failed");
         return -1;
     }
 
-    LOGINFO("[drv_bmi088] BMI088 instance registered");
-    return 0;
-}
-
-int8_t BMI088SetConfig(BMI088Instance *inst, const BMI088_Init_Config_s *config)
-{
-    if (inst == NULL)
-    {
-        LOGERROR("[drv_bmi088] Instance is NULL");
-        return -1;
-    }
-
-    if (config == NULL)
-    {
-        LOGERROR("[drv_bmi088] Config is NULL");
-        return -1;
-    }
-
+    // 合并 SetConfig 逻辑
     // 保存用户配置
     inst->acc_range = config->acc_range;
     inst->acc_bwp = config->acc_bwp;

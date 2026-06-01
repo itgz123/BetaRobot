@@ -45,7 +45,7 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
     uint16_t rx_id = can_rx_id_base[cfg->model] + cfg->motor_id;
     uint8_t group_idx = (rx_id - 0x201) / 4;          // 计算结果0-2。0x201-0x204/0x205-0x208/0x209-0x20b
     uint8_t motor_idx_in_group = (rx_id - 0x201) % 4; // 结果0-3
-    BoardCAN_e can_e = inst->can->can_e;
+    BoardCAN_e can_e = cfg->can_e;
 
     // 检查是否已经初始化
     if (1 == s_send_groups[can_e][group_idx].motor_init_flag[motor_idx_in_group])
@@ -64,6 +64,7 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
     if (inst->can)
     {
         CAN_Init_Config_s can_cfg = {
+            .can_e = cfg->can_e,
             .tx_id = tx_id,
             .filter_mode = CAN_FILTER_MODE_LIST,
             .rx_id_list = {rx_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},

@@ -182,9 +182,10 @@ int8_t SPIRegister(SPIInstance *instance, const SPI_Init_Config_s *config)
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_spi] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_spi] Config is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_idx >= SPI_INSTANCE_NUM, -1, LOGERROR("[bsp_spi] Exceeded max instance count!"));
-    BSP_RETURN_IF_TRUE_LOG(instance->spi_e >= SPI_NUM_MAX, -1, LOGERROR("[bsp_spi] spi_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(config->spi_e >= SPI_NUM_MAX, -1, LOGERROR("[bsp_spi] spi_e out of range!"));
 
     // 将配置拷贝到实例
+    instance->spi_e = config->spi_e;
     instance->work_mode = config->work_mode;
     instance->rx_callback = config->rx_callback;
 

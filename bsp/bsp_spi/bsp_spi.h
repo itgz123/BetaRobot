@@ -51,8 +51,9 @@ typedef struct SPIInstance
  */
 typedef struct
 {
-    SPI_Work_Mode_e work_mode;                 // 工作模式（阻塞/中断/DMA）
-    void (*rx_callback)(struct SPIInstance *); // 接收完成回调（可为NULL，仅DMA/IT模式有效）
+    BoardSPI_e spi_e;                           // 板载SPI枚举（注册时用于查找映射）
+    SPI_Work_Mode_e work_mode;                  // 工作模式（阻塞/中断/DMA）
+    void (*rx_callback)(struct SPIInstance *);  // 接收完成回调（可为NULL，仅DMA/IT模式有效）
 } SPI_Init_Config_s;
 
 /*------------- 实例定义宏 --------------*/
@@ -60,27 +61,19 @@ typedef struct
 /**
  * @brief 静态定义SPI实例（同时定义接收缓冲区）
  * @param name     实例名称
- * @param spi_idx  板载SPI枚举（BoardSPI_e）
  * @param buff_sz  接收缓冲区大小（影响静态内存分配，必须编译期确定）
  *
  * @note DMA_RAM 宏在 Cortex-M7 上将缓冲区放入 RAM_D1 以支持 DMA 访问
  *       在 Cortex-M4 上定义为空
  *
  * @example
- *   SPI_INSTANCE_DEF(bmi088_spi, SPI_BMI088, 64);
+ *   SPI_INSTANCE_DEF(bmi088_spi, 64);
  */
-#define SPI_INSTANCE_DEF(name, spi_idx, buff_sz)          \
-    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0}; \
-    static SPIInstance name = {                           \
-        .parent = NULL,                                   \
-        .spi_e = spi_idx,                                 \
-        .handle = NULL,                                   \
-        .work_mode = 0,                                   \
-        .rx_buff = name##_rx_buff,                        \
-        .buff_size = buff_sz,                             \
-        .rx_len = 0,                                      \
-        .last_xfer_len = 0,                               \
-        .rx_callback = NULL}
+#define SPI_INSTANCE_DEF(name, buff_sz)                      \
+    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};   \
+    static SPIInstance name = {                              \
+        .rx_buff = name##_rx_buff,                          \
+        .buff_size = buff_sz}
 
 /*------------- 外部接口声明 --------------*/
 

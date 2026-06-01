@@ -35,12 +35,6 @@ int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Init_Config_s *config)
         return -1;
     }
 
-    if (instance->usart_inst->uart_e >= UART_NUM_MAX)
-    {
-        LOGERROR("[drv_sbus] Invalid uart_e: %d", instance->usart_inst->uart_e);
-        return -1;
-    }
-
     if (config->app_callback == NULL)
     {
         LOGERROR("[drv_sbus] app_callback is NULL!");
@@ -55,6 +49,7 @@ int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Init_Config_s *config)
 
     // 注册 BSP 层 USART 实例
     USART_Init_Config_s usart_cfg = {
+        .uart_e = config->uart_e,
         .tx_mode = USART_DMA_MODE,
         .rx_callback = SBUSUARTRxCallback,
     };

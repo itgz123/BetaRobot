@@ -47,11 +47,15 @@ static HAL_StatusTypeDef ADCConfigChannel(ADCInstance *instance)
  * @brief 注册ADC实例
  * @note 注册时执行ADC校准
  */
-int8_t ADCRegister(ADCInstance *instance)
+int8_t ADCRegister(ADCInstance *instance, const ADC_Init_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[BSP_ADC] Register failed: instance is NULL"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[BSP_ADC] Register failed: config is NULL"));
     BSP_RETURN_IF_TRUE_LOG(s_idx >= ADC_INSTANCE_NUM, -1, LOGERROR("[BSP_ADC] Register failed: instance num exceeded %d", ADC_INSTANCE_NUM));
-    BSP_RETURN_IF_TRUE_LOG(instance->adc_e >= ADC_NUM_MAX, -1, LOGERROR("[BSP_ADC] Register failed: adc_e out of range"));
+    BSP_RETURN_IF_TRUE_LOG(config->adc_e >= ADC_NUM_MAX, -1, LOGERROR("[BSP_ADC] Register failed: adc_e out of range"));
+
+    // 将配置拷贝到实例
+    instance->adc_e = config->adc_e;
 
     // 自动填充硬件映射
     instance->adc_map = adc_map[instance->adc_e];
