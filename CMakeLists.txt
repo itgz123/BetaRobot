@@ -79,6 +79,15 @@ set(HAL_DIR "${CMAKE_SOURCE_DIR}/cubemx/${HAL_CONFIG_NAME}")
 read_define(DEVELOPMENT_BOARD "${APP_DIR}/app_cfg.h" DEVELOPMENT_BOARD)
 set(BOARD "${DEVELOPMENT_BOARD}")
 
+# 从 bsp_map.h 读取 CPU 内核类型，用于 ARM_MATH_CM4/CM7 定义
+read_define(CPU_CORE "${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/bsp_map.h" CPU_CORE)
+# CPU_CORE 定义为 CORTEX_M4 或 CORTEX_M7，CMSIS-DSP 需要 ARM_MATH_CM4 或 ARM_MATH_CM7
+if(CPU_CORE STREQUAL "CORTEX_M7")
+    set(ARM_MATH_DEFINE "ARM_MATH_CM7")
+else()
+    set(ARM_MATH_DEFINE "ARM_MATH_CM4")
+endif()
+
 # 读取是否生成反汇编文件（GENERATE_DISASSEMBLY，0=否，1=是）
 read_define(GENERATE_DISASSEMBLY "${APP_DIR}/app_cfg.h" GENERATE_DISASSEMBLY)
 
@@ -228,14 +237,15 @@ set(PROJECT_SOURCES
     ${BSP_SOURCE_FILES}
     ${DRV_SOURCE_FILES}
     ${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/bsp_map.c
+    # CMSIS-DSP 源文件
     ${HAL_DIR}/Drivers/CMSIS/DSP/Source/CommonTables/arm_common_tables.c
     ${HAL_DIR}/Drivers/CMSIS/DSP/Source/CommonTables/arm_const_structs.c
     ${HAL_DIR}/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_sin_f32.c
     ${HAL_DIR}/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_cos_f32.c
 )
 
-# DJI_A 额外加入 arm_atan2_f32.c（CMSIS-DSP V1.10.0 支持）
-if(BOARD STREQUAL "DJI_A")
+# V1.10.0 开发板额外加入 arm_atan2_f32.c（DM_MC02 使用 V1.6.0 无此文件）
+if(NOT BOARD STREQUAL "DM_MC02")
     list(APPEND PROJECT_SOURCES ${HAL_DIR}/Drivers/CMSIS/DSP/Source/FastMathFunctions/arm_atan2_f32.c)
 endif()
 
@@ -256,7 +266,7 @@ set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX ".elf")
 target_compile_definitions(${TARGET_NAME} PRIVATE
     ${HAL_DEFINES}
     DEVELOPMENT_BOARD=${DEVELOPMENT_BOARD}
-    ARM_MATH_CM4
+    ${ARM_MATH_DEFINE}
 )
 
 ######################################
@@ -268,6 +278,7 @@ target_include_directories(${TARGET_NAME} PRIVATE
     ${BSP_INCLUDE_PATHS}
     ${DRV_INCLUDE_PATHS}
     ${HAL_INCLUDE_PATHS}
+    # CMSIS-DSP 头文件
     ${HAL_DIR}/Drivers/CMSIS/DSP/Include
     ${HAL_DIR}/Drivers/CMSIS/DSP/PrivateInclude
 )

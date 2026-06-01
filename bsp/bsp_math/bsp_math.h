@@ -33,47 +33,6 @@
 #endif
 
 /*============================================
- *              硬件特性查询接口
- *============================================*/
-
-/**
- * @brief 检查FPU是否可用
- * @return 1-可用, 0-不可用
- */
-static inline uint8_t BSP_Math_HasFPU(void)
-{
-#if HAS_FPU
-    return 1;
-#else
-    return 0;
-#endif
-}
-
-/**
- * @brief 检查DSP指令集是否可用
- * @return 1-可用, 0-不可用
- */
-static inline uint8_t BSP_Math_HasDSP(void)
-{
-#if HAS_DSP
-    return 1;
-#else
-    return 0;
-#endif
-}
-
-/*============================================
- *              初始化接口
- *============================================*/
-
-/**
- * @brief 初始化数学模块
- * @note 根据硬件特性自动初始化：
- *       - FPU: 启用浮点运算（已在启动代码中完成）
- */
-void BSP_Math_Init(void);
-
-/*============================================
  *              三角函数接口（inline 实现）
  *============================================*/
 
@@ -136,12 +95,11 @@ static inline void BSP_Math_SinCos(float theta, float *p_sin, float *p_cos)
  * @return atan2(y, x)（弧度）
  * @note 优先级：CMSIS-DSP (V1.9.0+) > 标准库
  * @note arm_atan2_f32 仅在 CMSIS-DSP V1.9.0+ 版本中可用
- *       DJI_A 使用 V1.10.0，支持 arm_atan2_f32
- *       其他开发板使用旧版本，回退到标准库
+ *       DM_MC02 使用 V1.6.0，不支持 arm_atan2_f32，回退到标准库
  */
 static inline float BSP_Math_Atan2(float y, float x)
 {
-#if HAS_DSP && (DEVELOPMENT_BOARD == DJI_A)
+#if HAS_DSP && (DEVELOPMENT_BOARD != DM_MC02)
     float result;
     arm_atan2_f32(y, x, &result);
     return result;
@@ -181,67 +139,6 @@ static inline float BSP_Math_Fabs(float x)
 {
     return (x >= 0.0f) ? x : -x;
 }
-
-/*============================================
- *              CRC 计算接口（纯软件实现）
- *============================================*/
-
-/**
- * @brief CRC计算配置结构体
- */
-typedef struct
-{
-    uint32_t init_value; // 初始值
-    uint32_t poly_size;  // 多项式宽度: 7, 8, 16, 32
-    uint32_t poly;       // 生成多项式
-    uint8_t reverse_in;  // 输入反转
-    uint8_t reverse_out; // 输出反转
-} BSP_CRC_Config_t;
-
-/**
- * @brief CRC7计算
- * @param data 数据指针
- * @param len 数据长度
- * @param init_val 初始值
- * @return CRC7校验值
- */
-uint8_t BSP_Math_CRC7(const uint8_t *data, uint32_t len, uint8_t init_val);
-
-/**
- * @brief CRC8计算
- * @param data 数据指针
- * @param len 数据长度
- * @param init_val 初始值
- * @return CRC8校验值
- */
-uint8_t BSP_Math_CRC8(const uint8_t *data, uint32_t len, uint8_t init_val);
-
-/**
- * @brief CRC16计算
- * @param data 数据指针
- * @param len 数据长度
- * @param init_val 初始值
- * @return CRC16校验值
- */
-uint16_t BSP_Math_CRC16(const uint8_t *data, uint32_t len, uint16_t init_val);
-
-/**
- * @brief CRC32计算
- * @param data 数据指针
- * @param len 数据长度
- * @param init_val 初始值
- * @return CRC32校验值
- */
-uint32_t BSP_Math_CRC32(const uint8_t *data, uint32_t len, uint32_t init_val);
-
-/**
- * @brief 自定义CRC计算
- * @param config CRC配置
- * @param data 数据指针
- * @param len 数据长度
- * @return CRC校验值
- */
-uint32_t BSP_Math_CRC_Custom(const BSP_CRC_Config_t *config, const uint8_t *data, uint32_t len);
 
 /*============================================
  *              通用数学宏定义
@@ -297,7 +194,7 @@ uint32_t BSP_Math_CRC_Custom(const BSP_CRC_Config_t *config, const uint8_t *data
 #endif
 
 /* 浮点绝对值 */
-#define MATH_FABS(x) ((x) > 0.0f ? (x) : -(x))
+#define FABS(x) ((x) > 0.0f ? (x) : -(x))
 
 /* 平方 */
 #define SQ(x) ((x) * (x))

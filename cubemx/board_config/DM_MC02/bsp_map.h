@@ -41,34 +41,104 @@
 /*============================================
  *              映射结构体类型
  *============================================*/
-typedef struct { GPIO_TypeDef *port; uint16_t pin; } GPIO_Map_t;
-typedef struct { TIM_HandleTypeDef *htim; uint32_t channel; } TIM_Map_t;
-typedef struct { UART_HandleTypeDef *handle; } UART_Map_t;
-typedef struct { FDCAN_HandleTypeDef *handle; } CAN_Map_t;
-typedef struct { SPI_HandleTypeDef *handle; } SPI_Map_t;
-typedef struct { I2C_HandleTypeDef *handle; } I2C_Map_t;
-typedef struct { ADC_HandleTypeDef *handle; uint32_t channel; } ADC_Map_t;
+typedef struct
+{
+    GPIO_TypeDef *port;
+    uint16_t pin;
+} GPIO_Map_t;
+typedef struct
+{
+    TIM_HandleTypeDef *htim;
+    uint32_t channel;
+} TIM_Map_t;
+typedef struct
+{
+    UART_HandleTypeDef *handle;
+} UART_Map_t;
+typedef struct
+{
+    FDCAN_HandleTypeDef *handle;
+} CAN_Map_t;
+typedef struct
+{
+    SPI_HandleTypeDef *handle;
+} SPI_Map_t;
+typedef struct
+{
+    I2C_HandleTypeDef *handle;
+} I2C_Map_t;
+typedef struct
+{
+    ADC_HandleTypeDef *handle;
+    uint32_t channel;
+} ADC_Map_t;
 
 /*============================================
  *              板载资源枚举
  *============================================*/
-typedef enum { GPIO_BMI088_CS_ACCEL = 0, GPIO_BMI088_CS_GYRO,
-    GPIO_BMI088_INT_ACCEL, GPIO_BMI088_INT_GYRO,
-    GPIO_POWER_24V_EN1, GPIO_POWER_24V_EN2, GPIO_POWER_5V_EN,
-    GPIO_LCD_KEY1, GPIO_LCD_KEY2, GPIO_EX_KEY, GPIO_USER_KEY,
-    GPIO_NUM_MAX } BoardGPIO_e;
+typedef enum
+{
+    GPIO_BMI088_CS_ACCEL = 0,
+    GPIO_BMI088_CS_GYRO,
+    GPIO_BMI088_INT_ACCEL,
+    GPIO_BMI088_INT_GYRO,
+    GPIO_POWER_24V_EN1,
+    GPIO_POWER_24V_EN2,
+    GPIO_POWER_5V_EN,
+    GPIO_LCD_KEY1,
+    GPIO_LCD_KEY2,
+    GPIO_EX_KEY,
+    GPIO_USER_KEY,
+    GPIO_NUM_MAX
+} BoardGPIO_e;
 
-typedef enum { TIM_PWM_1 = 0, TIM_PWM_2, TIM_PWM_3, TIM_PWM_4,
-    TIM_HEATER, TIM_BUZZER, TIM_NUM_MAX } BoardTIM_e;
+typedef enum
+{
+    TIM_PWM_1 = 0,
+    TIM_PWM_2,
+    TIM_PWM_3,
+    TIM_PWM_4,
+    TIM_HEATER,
+    TIM_BUZZER,
+    TIM_NUM_MAX
+} BoardTIM_e;
 
-typedef enum { UART_1 = 0, UART_SBUS, UART_RS485_2, UART_RS485_3,
-    UART_7, UART_EX_8, UART_EX_9, UART_10,
-    UART_NUM_MAX } BoardUART_e;
+typedef enum
+{
+    UART_1 = 0,
+    UART_SBUS,
+    UART_RS485_2,
+    UART_RS485_3,
+    UART_7,
+    UART_EX_8,
+    UART_EX_9,
+    UART_10,
+    UART_NUM_MAX
+} BoardUART_e;
 
-typedef enum { CAN_1 = 0, CAN_2, CAN_3, CAN_NUM_MAX } BoardCAN_e;
-typedef enum { SPI_LCD_1 = 0, SPI_BMI088, SPI_NUM_MAX } BoardSPI_e;
-typedef enum { I2C_LCD_2 = 0, I2C_NUM_MAX } BoardI2C_e;
-typedef enum { ADC_BAT = 0, ADC_NUM_MAX } BoardADC_e;
+typedef enum
+{
+    CAN_1 = 0,
+    CAN_2,
+    CAN_3,
+    CAN_NUM_MAX
+} BoardCAN_e;
+typedef enum
+{
+    SPI_LCD_1 = 0,
+    SPI_BMI088,
+    SPI_NUM_MAX
+} BoardSPI_e;
+typedef enum
+{
+    I2C_LCD_2 = 0,
+    I2C_NUM_MAX
+} BoardI2C_e;
+typedef enum
+{
+    ADC_BAT = 0,
+    ADC_NUM_MAX
+} BoardADC_e;
 
 #define VOLTAGE_TRANFER 0.00055389404296875f
 
