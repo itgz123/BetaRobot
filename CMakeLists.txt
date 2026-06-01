@@ -30,7 +30,17 @@ set(TARGET_NAME BetaRobot)
 ######################################
 # 辅助函数
 ######################################
-# 从头文件读取宏定义值
+# 检测宏是否定义（开关型宏，不需要值）
+function(check_define output file_name define_name)
+    file(STRINGS "${file_name}" define_line REGEX "^[ \t]*#[ \t]*define[ \t]+${define_name}([ \t]|$)")
+    if(define_line)
+        set(${output} ON PARENT_SCOPE)
+    else()
+        set(${output} OFF PARENT_SCOPE)
+    endif()
+endfunction()
+
+# 从头文件读取宏定义值（需要具体值的宏）
 function(read_define output file_name define_name)
     file(STRINGS "${file_name}" define_line REGEX "^[ \t]*#[ \t]*define[ \t]+${define_name}[ \t]+[A-Za-z0-9_]+")
     if(NOT define_line)
@@ -88,8 +98,8 @@ else()
     set(ARM_MATH_DEFINE "ARM_MATH_CM4")
 endif()
 
-# 读取是否生成反汇编文件（GENERATE_DISASSEMBLY，0=否，1=是）
-read_define(GENERATE_DISASSEMBLY "${APP_DIR}/app_cfg.h" GENERATE_DISASSEMBLY)
+# 读取是否生成反汇编文件（GENERATE_DISASSEMBLY，开关型宏）
+check_define(GENERATE_DISASSEMBLY "${APP_DIR}/app_cfg.h" GENERATE_DISASSEMBLY)
 
 if(NOT EXISTS "${HAL_DIR}")
     message(FATAL_ERROR
