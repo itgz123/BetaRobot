@@ -191,9 +191,7 @@ set(HAL_C_SOURCES
 set(STARTUP_FILE)
 foreach(src IN LISTS MX_Application_Src)
     get_filename_component(abs_src "${src}" ABSOLUTE)
-    if(abs_src MATCHES "[/\\\\]Core[/\\\\]Src[/\\\\]main\\.c$")
-        continue()
-    elseif(abs_src MATCHES "[/\\\\]startup_([^/\\\\]+)\\.s$")
+    if(abs_src MATCHES "[/\\\\]startup_([^/\\\\]+)\\.s$")
         # 使用 board_config 下的启动文件，而不是 CubeMX 生成的
         set(STARTUP_FILE "${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/startup_${CMAKE_MATCH_1}.s")
     else()
@@ -232,7 +230,6 @@ endif()
 ######################################
 set(PROJECT_SOURCES
     ${HAL_C_SOURCES}
-    ${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/main.c
     ${APP_SOURCE_FILES}
     ${BSP_SOURCE_FILES}
     ${DRV_SOURCE_FILES}
