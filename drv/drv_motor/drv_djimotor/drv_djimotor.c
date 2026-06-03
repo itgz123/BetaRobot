@@ -12,12 +12,6 @@
 #define DJI_MOTOR_GROUP_2 2   // 接收ID: 0x209-0x20b
 #define DJI_MOTOR_GROUP_NUM 3 // 3组电机
 
-typedef struct
-{
-    DJIMotorInstance *motors[4]; // 组内4个电机指针
-    uint8_t motor_init_flag[4];  // 电机是否初始化标志
-} DJIMotorSendGroup_t;
-
 static DJIMotorSendGroup_t s_send_groups[CAN_NUM_MAX][DJI_MOTOR_GROUP_NUM] = {0};
 
 /**
@@ -36,41 +30,41 @@ static void DJIMotorRxCallback(CANInstance *can)
         return;
 
     DJIMotorInstance *motor = (DJIMotorInstance *)can->parent;
-    uint8_t *data = can->rx_buff;
+    // uint8_t *data = can->rx_buff;
 
-    // 解析原始数据
-    motor->raw_encoder = ((uint16_t)data[0] << 8) | data[1];
-    motor->raw_velocity = ((int16_t)data[2] << 8) | data[3];
-    motor->raw_current = ((int16_t)data[4] << 8) | data[5];
-    motor->raw_temperature_motor = (int8_t)data[6];
-    motor->error_code = data[7];
+    // // 解析原始数据
+    // motor->raw_encoder = ((uint16_t)data[0] << 8) | data[1];
+    // motor->raw_velocity = ((int16_t)data[2] << 8) | data[3];
+    // motor->raw_current = ((int16_t)data[4] << 8) | data[5];
+    // motor->raw_temperature_motor = (int8_t)data[6];
+    // motor->error_code = data[7];
 
-    // 获取电机参数（查表）
-    uint8_t model = motor->model;
-    if (model >= DJI_MODEL_NUM)
-        return;
+    // // 获取电机参数（查表）
+    // uint8_t model = motor->model;
+    // if (model >= DJI_MODEL_NUM)
+    //     return;
 
-    float reduction_ratio = dji_motor_params[model].reduction_ratio;
-    float torque_coef = dji_motor_params[model].torque_coef;
-    uint16_t current_max = dji_motor_params[model].current_max;
+    // float reduction_ratio = dji_motor_params[model].reduction_ratio;
+    // float torque_coef = dji_motor_params[model].torque_coef;
+    // uint16_t current_max = dji_motor_params[model].current_max;
 
-    // 计算单圈位置 (rad) [0, 2π)
-    motor->position_single = (float)motor->raw_encoder * M_2PI / DJI_ENCODER_RESOLUTION;
+    // // 计算单圈位置 (rad) [0, 2π)
+    // motor->position_single = (float)motor->raw_encoder * M_2PI / DJI_ENCODER_RESOLUTION;
 
-    // 计算扭矩 (N·m)
-    motor->torque = (float)motor->raw_current * torque_coef;
+    // // 计算扭矩 (N·m)
+    // motor->torque = (float)motor->raw_current * torque_coef;
 
-    // 速度: rpm -> rad/s (考虑减速比)
-    motor->speed = (float)motor->raw_velocity * M_2PI / 60.0f / reduction_ratio;
+    // // 速度: rpm -> rad/s (考虑减速比)
+    // motor->speed = (float)motor->raw_velocity * M_2PI / 60.0f / reduction_ratio;
 
-    // 电流/电压值归一化
-    motor->current = (float)motor->raw_current / current_max;
+    // // 电流/电压值归一化
+    // motor->current = (float)motor->raw_current / current_max;
 
-    // 温度
-    motor->temperature = (float)motor->raw_temperature_motor;
+    // // 温度
+    // motor->temperature = (float)motor->raw_temperature_motor;
 
-    // 错误标志
-    motor->error_flags = motor->error_code;
+    // // 错误标志
+    // motor->error_flags = motor->error_code;
 
     // 喂狗（如果使用了守护进程）
     if (motor->daemon)

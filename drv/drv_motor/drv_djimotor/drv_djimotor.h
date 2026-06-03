@@ -54,24 +54,24 @@ const uint16_t can_tx_id[DJI_MODEL_NUM][2] = {
     [DJI_MODEL_GM6020][0] = 0x1fe,       // 1-4号
     [DJI_MODEL_GM6020][1] = 0x2fe,       // 5-7号
 };
-
-/*============================================
- *              DJI 单电机实例结构体
- *============================================*/
 typedef struct
 {
-    uint8_t model;
-    CANInstance *can;
-    DaemonInstance *daemon;
-    float set_ref;
-    uint8_t enable;
-    uint8_t motor_id; // 电机 ID (1-8)
+    DJIMotorInstance *motors[4]; // 组内4个电机指针
+    uint8_t motor_init_flag[4];  // 电机是否初始化标志
+} DJIMotorSendGroup_t;
+// 数据结构体
+typedef struct
+{
     // 原始数据
     uint16_t raw_encoder;         // 编码器原始值
     int16_t raw_velocity;         // 原始速度值
     int16_t raw_current;          // 原始电流/力矩值
     int8_t raw_temperature_motor; // 线圈温度 (°C)
-    uint8_t error_code;           // 品牌错误码
+    uint8_t error_code;           // 错误码
+} djimotor_raw_data;
+
+typedef struct
+{
     // 标准单位制数据
     float position_single; // 单圈位置 (rad) [0, 2π)
     float position_multi;  // 多圈位置 (rad)
@@ -79,7 +79,31 @@ typedef struct
     float torque;          // 力矩 (N·m)
     float current;         // 电流 (A)
     float temperature;     // 线圈温度 (°C)
-    uint16_t error_flags;  // 统一错误码
+} djimotor_data;
+
+/*============================================
+ *              DJI 单电机实例结构体
+ *============================================*/
+typedef struct
+{
+    uint8_t brand;
+    uint8_t model;
+    CANInstance *can;
+    DaemonInstance *daemon;
+    uint8_t enable;
+    uint64_t last_cnt;
+    // 控制器
+    // 以上之后放到电机基类
+    float set_ref;
+    uint8_t motor_id; // 电机 ID (1-8)
+    // 数据
+    djimotor_raw_data data_raw;
+    djimotor_data data_now;
+    djimotor_data data_last;
+    uint8_t speed_src; // 选择速度使用反馈或者位置差分
+    // 分组发送设置
+    DJIMotorSendGroup_t *sender_group; // 分组
+    uint8_t motor_idx_in_group;        // 组内编号
 } DJIMotorInstance;
 
 typedef struct
