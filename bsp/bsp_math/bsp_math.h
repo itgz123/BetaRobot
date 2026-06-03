@@ -199,4 +199,25 @@ static inline float BSP_Math_Fabs(float x)
 /* 平方 */
 #define SQ(x) ((x) * (x))
 
+/*============================================
+ *              角度处理函数
+ *============================================*/
+
+/**
+ * @brief 计算两个角度的最短角度差（弧度）
+ * @param from 起始角度（弧度）
+ * @param to 目标角度（弧度）
+ * @return 角度差（弧度），范围 (-π, π]
+ * @note 用于计算多圈位置累加、最短路径运动等
+ */
+static inline float BSP_Math_AngleDiff(float from, float to)
+{
+    float diff = to - from;
+    while (diff > M_PI)
+        diff -= M_2PI;
+    while (diff <= -M_PI)
+        diff += M_2PI;
+    return diff;
+}
+
 #endif // __BSP_MATH_H
