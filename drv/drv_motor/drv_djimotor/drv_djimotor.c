@@ -3,16 +3,14 @@
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
 #include "bsp_dwt.h"
+#include "bsp_math.h"
 
 #define CAN_TRANSMIT_TIMEOUT 1
 
-typedef enum
-{
-    DJI_MOTOR_GROUP_0 = 0, // 接收ID: 0x201-0x204
-    DJI_MOTOR_GROUP_1 = 1, // 接收ID: 0x205-0x208
-    DJI_MOTOR_GROUP_2 = 2, // 接收ID: 0x209-0x20b
-    DJI_MOTOR_GROUP_NUM,   // 3组电机
-} DJIMotorGroup_e;         // 一个CAN上最多3组DJI电机
+#define DJI_MOTOR_GROUP_0 0   // 接收ID: 0x201-0x204
+#define DJI_MOTOR_GROUP_1 1   // 接收ID: 0x205-0x208
+#define DJI_MOTOR_GROUP_2 2   // 接收ID: 0x209-0x20b
+#define DJI_MOTOR_GROUP_NUM 3 // 3组电机
 
 typedef struct
 {
@@ -21,19 +19,65 @@ typedef struct
 } DJIMotorSendGroup_t;
 
 static DJIMotorSendGroup_t s_send_groups[CAN_NUM_MAX][DJI_MOTOR_GROUP_NUM] = {0};
-const uint16_t can_tx_id[DJI_MODEL_NUM][2] = {
-    [DJI_MODEL_M2006][0] = 0x200,  // 1-4号
-    [DJI_MODEL_M2006][1] = 0x1ff,  // 5-8号
-    [DJI_MODEL_M3508][0] = 0x200,  // 1-4号
-    [DJI_MODEL_M3508][1] = 0x1ff,  // 5-8号
-    [DJI_MODEL_GM6020][0] = 0x1fe, // 1-4号
-    [DJI_MODEL_GM6020][1] = 0x2fe, // 5-7号
-};
-const uint16_t can_rx_id_base[DJI_MODEL_NUM] = {
-    [DJI_MODEL_M2006] = 0x200,
-    [DJI_MODEL_M3508] = 0x200,
-    [DJI_MODEL_GM6020] = 0x204,
-};
+
+/**
+ * @brief DJI电机接收回调函数
+ * @param can CAN实例指针
+ * @note 数据格式：
+ *       DATA[0-1]: 转子机械角度 (0~8191 对应 0~360°)
+ *       DATA[2-3]: 转子转速
+ *       DATA[4-5]: 实际转矩电流 (int16)
+ *       DATA[6]:    电机温度 (°C)
+ *       DATA[7]:    错误码
+ */
+static void DJIMotorRxCallback(CANInstance *can)
+{
+    if (!can || !can->parent)
+        return;
+
+    DJIMotorInstance *motor = (DJIMotorInstance *)can->parent;
+    uint8_t *data = can->rx_buff;
+
+    // 解析原始数据
+    motor->raw_encoder = ((uint16_t)data[0] << 8) | data[1];
+    motor->raw_velocity = ((int16_t)data[2] << 8) | data[3];
+    motor->raw_current = ((int16_t)data[4] << 8) | data[5];
+    motor->raw_temperature_motor = (int8_t)data[6];
+    motor->error_code = data[7];
+
+    // 获取电机参数（查表）
+    uint8_t model = motor->model;
+    if (model >= DJI_MODEL_NUM)
+        return;
+
+    float reduction_ratio = dji_motor_params[model].reduction_ratio;
+    float torque_coef = dji_motor_params[model].torque_coef;
+    uint16_t current_max = dji_motor_params[model].current_max;
+
+    // 计算单圈位置 (rad) [0, 2π)
+    motor->position_single = (float)motor->raw_encoder * M_2PI / DJI_ENCODER_RESOLUTION;
+
+    // 计算扭矩 (N·m)
+    motor->torque = (float)motor->raw_current * torque_coef;
+
+    // 速度: rpm -> rad/s (考虑减速比)
+    motor->speed = (float)motor->raw_velocity * M_2PI / 60.0f / reduction_ratio;
+
+    // 电流/电压值归一化
+    motor->current = (float)motor->raw_current / current_max;
+
+    // 温度
+    motor->temperature = (float)motor->raw_temperature_motor;
+
+    // 错误标志
+    motor->error_flags = motor->error_code;
+
+    // 喂狗（如果使用了守护进程）
+    if (motor->daemon)
+    {
+        DaemonReload(motor->daemon);
+    }
+}
 
 int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
 {
@@ -42,7 +86,7 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
 
     // 计算发送ID和接收ID
     uint16_t tx_id = can_tx_id[cfg->model][(cfg->motor_id - 1) / 4];
-    uint16_t rx_id = can_rx_id_base[cfg->model] + cfg->motor_id;
+    uint16_t rx_id = dji_motor_params[cfg->model].can_rx_id_base + cfg->motor_id;
     uint8_t group_idx = (rx_id - 0x201) / 4;          // 计算结果0-2。0x201-0x204/0x205-0x208/0x209-0x20b
     uint8_t motor_idx_in_group = (rx_id - 0x201) % 4; // 结果0-3
     BoardCAN_e can_e = cfg->can_e;
@@ -69,9 +113,10 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
             .filter_mode = CAN_FILTER_MODE_LIST,
             .rx_id_list = {rx_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},
             .rx_mask = 0,
-            .rx_callback = NULL, // todo:之后要添加回调函数
+            .rx_callback = DJIMotorRxCallback,
         };
         CANRegister(inst->can, &can_cfg);
+        inst->can->parent = inst; // 设置父实例指针
     }
 
     if (inst->daemon)
