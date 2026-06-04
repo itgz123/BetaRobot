@@ -86,18 +86,19 @@ struct DJIMotorInstance
     uint8_t brand;
     uint8_t model;
     CANInstance *can;
-    DaemonInstance *daemon; // 可以提供时间戳
-    uint8_t enable;         // 使能标志
+    DaemonInstance *daemon;   // 可以提供时间戳
+    uint8_t enable;           // 使能标志
+    uint64_t last_rx_time_us; // 上次接收时间戳 (us)，用于位置差分计算速度
     // 控制器
-    // 以上之后放到电机基类
+    // 以上属性之后放到电机基类，还要添加一个虚函数表
+
     float set_ref;
     uint8_t motor_id; // 电机 ID (1-8)
     // 数据
     DJIMotorRawData_s data_raw;
     DJIMotorData_s data[2];
     uint8_t data_now_idx;
-    uint8_t speed_src;        // 选择速度使用反馈或者位置差分
-    uint64_t last_rx_time_us; // 上次接收时间戳 (us)，用于位置差分计算速度
+    uint8_t speed_src; // 选择速度使用反馈或者位置差分
     // 分组发送设置
     DJIMotorSendGroup_s *sender_group; // 分组
     uint8_t motor_idx_in_group;        // 组内编号
