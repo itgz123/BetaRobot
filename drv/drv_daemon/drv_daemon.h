@@ -21,7 +21,7 @@
 #endif
 
 /* 离线故障动作枚举（8种, 占uint8_t） */
-typedef enum uint8_t // 或者typedef enum : uint8_t
+typedef enum : uint8_t
 {
     DAEMON_FAULT_NONE = 0,         // 无动作
     DAEMON_FAULT_BUZZER_SHORT = 1, // 蜂鸣器短叫
