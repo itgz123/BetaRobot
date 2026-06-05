@@ -23,11 +23,11 @@
 
 /*------------- 缓冲区状态枚举 --------------*/
 
-typedef enum
+typedef enum : uint8_t
 {
-    BUFF_IDLE = 0,   // 空闲，可写入或发送
-    BUFF_PENDING,    // 待发送，等待 DMA
-    BUFF_ACTIVE,     // DMA 正在发送
+    BUFF_IDLE = 0, // 空闲，可写入或发送
+    BUFF_PENDING,  // 待发送，等待 DMA
+    BUFF_ACTIVE,   // DMA 正在发送
 } BuffState_e;
 
 /*------------- 静态实例定义 --------------*/

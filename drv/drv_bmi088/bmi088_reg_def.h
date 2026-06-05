@@ -79,7 +79,7 @@
  * @note bit[4:2] - error_code: 持续错误的错误状态
  * @note 访问: RO
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_ACC_ERR_FATAL = 1 << 0,              // 存在致命错误
     BMI088_ACC_ERR_CODE_NO_ERROR = 0x00 << 2,   // 无错误
@@ -91,7 +91,7 @@ typedef enum
  * @note bit[7] - acc_drdy: 加速度计数据就绪标志
  * @note 访问: RO
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_ACC_STATUS_DRDY = 1 << 7, // 加速度数据已就绪
 } BMI088_AccStatus_e;
@@ -101,7 +101,7 @@ typedef enum
  * @note bit[7] - acc_drdy: 加速度数据就绪中断标志
  * @note 访问: RO
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_ACC_INT_STAT_DRDY = 1 << 7, // 数据就绪中断已触发
 } BMI088_AccIntStat_e;
@@ -112,7 +112,7 @@ typedef enum
  * @note bit[3:0] - acc_odr: 输出数据速率
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_ACC_BWP_OSR4 = 0x08 << 4,   // 4倍过采样
     BMI088_ACC_BWP_OSR2 = 0x09 << 4,   // 2倍过采样
@@ -133,7 +133,7 @@ typedef enum
  * @note bit[1:0] - acc_range: 测量量程
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_ACC_RANGE_3G = 0x00,  // ±3g
     BMI088_ACC_RANGE_6G = 0x01,  // ±6g
@@ -150,7 +150,7 @@ typedef enum
  * @note bit[1] - int1_lvl: 有效状态 (0=低电平有效, 1=高电平有效)
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_INT1_IN = 1 << 4,            // 启用 INT1 作为输入引脚
     BMI088_INT1_OUT = 1 << 3,           // 启用 INT1 作为输出引脚
@@ -166,7 +166,7 @@ typedef enum
  * @note bit[1] - int2_lvl: 有效状态 (0=低电平有效, 1=高电平有效)
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_INT2_IN = 1 << 4,            // 启用 INT2 作为输入引脚
     BMI088_INT2_OUT = 1 << 3,           // 启用 INT2 作为输出引脚
@@ -184,7 +184,7 @@ typedef enum
  * @note bit[0] - int1_full: FIFO 满中断映射到 INT1
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     // INT2 中断映射
     BMI088_INT2_DRDY = 1 << 6, // 数据就绪中断映射到 INT2
@@ -202,7 +202,7 @@ typedef enum
  * @note 启用传感器自检信号，自检需要由用户主动关闭
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_ACC_SELF_TEST_OFF = 0x00, // 自检关闭
     BMI088_ACC_SELF_TEST_NEG = 0x09, // 启用负极性自检信号
@@ -214,7 +214,7 @@ typedef enum
  * @note bit[7:0] - acc_pwr_save: 电源保存模式
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_ACC_PWR_SAVE_ACTIVE = 0x00,  // 活动模式
     BMI088_ACC_PWR_SAVE_SUSPEND = 0x03, // 挂起模式
@@ -225,7 +225,7 @@ typedef enum
  * @note bit[7:0] - acc_enable: 加速度计使能
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_ACC_ENABLE_ON = 0x04, // 加速度计开启
 } BMI088_AccPwrCtrl_e;
@@ -245,7 +245,7 @@ typedef enum
  * @note bit[4] - fifo_int: FIFO 中断状态
  * @note 访问: RO
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_GYRO_INT_STAT_DRDY = 1 << 7, // 数据就绪中断已触发
     BMI088_GYRO_INT_STAT_FIFO = 1 << 4, // FIFO 中断已触发
@@ -256,7 +256,7 @@ typedef enum
  * @note bit[7:0] - gyro_range: 测量量程
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_GYRO_RANGE_2000 = 0x00, // ±2000°/s
     BMI088_GYRO_RANGE_1000 = 0x01, // ±1000°/s
@@ -274,7 +274,7 @@ typedef enum
  * @note ODR与BW绑定，需选择兼容组合
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_GYRO_BW_MUST_SET = 0x80,
 
@@ -299,7 +299,7 @@ typedef enum
  * @note bit[7:0] - gyro_pm: 电源模式
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_GYRO_PM_NORMAL = 0x00,       // 正常模式
     BMI088_GYRO_PM_SUSPEND = 0x80,      // 挂起模式
@@ -319,7 +319,7 @@ typedef enum
  * @note bit[6] - fifo_en: 启用 FIFO 中断
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_GYRO_INT_DATA_EN = 1 << 7, // 启用新数据中断
     BMI088_GYRO_INT_FIFO_EN = 1 << 6, // 启用 FIFO 中断
@@ -333,7 +333,7 @@ typedef enum
  * @note bit[0] - int3_lvl: INT3 有效状态 (0=低电平有效, 1=高电平有效)
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_INT4_OD_OPEN_DRAIN = 1 << 3, // INT4 开漏输出 (默认推挽)
     BMI088_INT4_LVL_HIGH = 1 << 2,      // INT4 高电平有效 (默认低电平)
@@ -349,7 +349,7 @@ typedef enum
  * @note bit[0] - int3_data: 数据就绪中断映射到 INT3
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_INT4_DATA = 1 << 7, // 数据就绪中断映射到 INT4
     BMI088_INT4_FIFO = 1 << 5, // FIFO 中断映射到 INT4
@@ -365,7 +365,7 @@ typedef enum
  * @note bit[0] - trig_bist: 触发自检 (W)
  * @note 访问: RW (部分位只读/只写)
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_GYRO_SELF_TEST_RATE_OK = 1 << 4,   // 传感器功能正常
     BMI088_GYRO_SELF_TEST_BIST_FAIL = 1 << 2, // 自检失败
@@ -379,7 +379,7 @@ typedef enum
  * @note bit[6:0] - fifo_frame_counter: FIFO 帧计数器
  * @note 访问: RO
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_GYRO_FIFO_OVERRUN = 1 << 7, // FIFO 溢出
 } BMI088_GyroFifoStatus_e;
@@ -388,7 +388,7 @@ typedef enum
  * @brief GYRO_FIFO_WM_EN (0x1E) FIFO 水印使能寄存器
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_GYRO_FIFO_WM_DISABLE = 0x08, // FIFO 水印中断禁用
     BMI088_GYRO_FIFO_WM_ENABLE = 0x88,  // FIFO 水印中断启用
@@ -400,7 +400,7 @@ typedef enum
  * @note bit[4] - ext_fifo_s_sel: 选择外部 FIFO 同步源 (0=INT3, 1=INT4)
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_GYRO_EXT_FIFO_S_EN = 1 << 5,       // 启用外部 FIFO 同步模式
     BMI088_GYRO_EXT_FIFO_S_SEL_INT4 = 1 << 4, // 源是引脚 INT4 (默认 INT3)
@@ -411,7 +411,7 @@ typedef enum
  * @note fifo_mode: FIFO 模式设置
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_GYRO_FIFO_MODE_BYPASS = 0x00, // 旁路模式
     BMI088_GYRO_FIFO_MODE_FIFO = 0x40,   // FIFO 模式 (满后停止)
@@ -424,7 +424,7 @@ typedef enum
  * @note bit[6:4] - fifo_downs: 降采样因子 2^fifo_downs
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_ACC_FIFO_DOWNS_BIT7 = 0x80, // bit[7] 必须为 1
 } BMI088_AccFifoDowns_e;
@@ -435,7 +435,7 @@ typedef enum
  * @note bit[0] - mode: FIFO 模式 (0=STREAM, 1=FIFO)
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_ACC_FIFO_CONFIG_0_BIT1 = 0x02, // bit[1] 必须为 1
     BMI088_ACC_FIFO_MODE_STREAM = 0x00,   // STREAM 模式
@@ -450,7 +450,7 @@ typedef enum
  * @note bit[2] - int2_en: 启用存储 INT2 中断事件
  * @note 访问: RW
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_ACC_FIFO_ACC_EN = 1 << 6,        // 启用存储加速度计数据
     BMI088_ACC_FIFO_CONFIG_1_BIT4 = 1 << 4, // bit[4] 必须为 1

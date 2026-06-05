@@ -25,7 +25,7 @@
 /**
  * @brief BMI088 工作模式枚举
  */
-typedef enum
+typedef enum : uint8_t
 {
     BMI088_MODE_POLLING = 0, // 阻塞模式：主动轮询读取6轴数据
     BMI088_MODE_INT,         // 中断模式：数据就绪后中断通知主控
@@ -42,19 +42,19 @@ typedef enum
  */
 typedef struct
 {
-    BoardSPI_e spi_e;             // 板载SPI枚举
-    BoardGPIO_e cs_acc_e;         // 加速度计片选GPIO枚举
-    BoardGPIO_e cs_gyro_e;        // 陀螺仪片选GPIO枚举
-    BoardGPIO_e int_acc_e;        // 加速度计中断GPIO枚举
-    BoardGPIO_e int_gyro_e;       // 陀螺仪中断GPIO枚举
-    BoardTIM_e heater_e;          // 加热PWM枚举
-    BMI088_AccRange_e acc_range;  // 加速度计量程
-    uint8_t acc_bwp;              // 加速度计低通滤波器带宽
-    uint8_t acc_odr;              // 加速度计输出数据速率
+    BoardSPI_e spi_e;              // 板载SPI枚举
+    BoardGPIO_e cs_acc_e;          // 加速度计片选GPIO枚举
+    BoardGPIO_e cs_gyro_e;         // 陀螺仪片选GPIO枚举
+    BoardGPIO_e int_acc_e;         // 加速度计中断GPIO枚举
+    BoardGPIO_e int_gyro_e;        // 陀螺仪中断GPIO枚举
+    BoardTIM_e heater_e;           // 加热PWM枚举
+    BMI088_AccRange_e acc_range;   // 加速度计量程
+    uint8_t acc_bwp;               // 加速度计低通滤波器带宽
+    uint8_t acc_odr;               // 加速度计输出数据速率
     BMI088_GyroRange_e gyro_range; // 陀螺仪量程
-    uint8_t gyro_odr;             // 陀螺仪输出数据速率
-    uint8_t gyro_bw;              // 陀螺仪滤波器带宽
-    BMI088_WorkMode_e work_mode;  // 工作模式（轮询/中断）
+    uint8_t gyro_odr;              // 陀螺仪输出数据速率
+    uint8_t gyro_bw;               // 陀螺仪滤波器带宽
+    BMI088_WorkMode_e work_mode;   // 工作模式（轮询/中断）
 } BMI088_Init_Config_s;
 
 /**
@@ -117,21 +117,21 @@ typedef struct BMI088Instance
  * @example
  *   BMI088_INSTANCE_DEF(bmi088);
  */
-#define BMI088_INSTANCE_DEF(name)                                    \
-    static uint8_t name##_tx_buff[BMI088_BUFF_SIZE] DMA_RAM = {0};  \
-    SPI_INSTANCE_DEF(name##_spi, BMI088_BUFF_SIZE);                  \
-    GPIO_INSTANCE_DEF(name##_cs_acc);                                \
-    GPIO_INSTANCE_DEF(name##_cs_gyro);                               \
-    GPIO_INSTANCE_DEF(name##_int_acc);                               \
-    GPIO_INSTANCE_DEF(name##_int_gyro);                              \
-    PWM_INSTANCE_DEF(name##_heater);                                 \
-    static BMI088Instance name = {                                   \
-        .spi_inst = &name##_spi,                                     \
-        .cs_acc = &name##_cs_acc,                                    \
-        .cs_gyro = &name##_cs_gyro,                                  \
-        .int_acc = &name##_int_acc,                                  \
-        .int_gyro = &name##_int_gyro,                                \
-        .heater_pwm = &name##_heater,                                \
+#define BMI088_INSTANCE_DEF(name)                                  \
+    static uint8_t name##_tx_buff[BMI088_BUFF_SIZE] DMA_RAM = {0}; \
+    SPI_INSTANCE_DEF(name##_spi, BMI088_BUFF_SIZE);                \
+    GPIO_INSTANCE_DEF(name##_cs_acc);                              \
+    GPIO_INSTANCE_DEF(name##_cs_gyro);                             \
+    GPIO_INSTANCE_DEF(name##_int_acc);                             \
+    GPIO_INSTANCE_DEF(name##_int_gyro);                            \
+    PWM_INSTANCE_DEF(name##_heater);                               \
+    static BMI088Instance name = {                                 \
+        .spi_inst = &name##_spi,                                   \
+        .cs_acc = &name##_cs_acc,                                  \
+        .cs_gyro = &name##_cs_gyro,                                \
+        .int_acc = &name##_int_acc,                                \
+        .int_gyro = &name##_int_gyro,                              \
+        .heater_pwm = &name##_heater,                              \
         .tx_buff = name##_tx_buff}
 
 /*============================ 公开接口声明 ============================*/
