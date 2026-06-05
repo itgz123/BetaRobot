@@ -9,8 +9,9 @@
  *       - 微分先行 (对测量值微分，避免设定值突变冲击)
  *       - 微分项滤波 (抑制高频噪声)
  *       - 死区控制
- *       - 输出限幅
+ *       - 输出限幅 (可配置)
  *       - 前馈控制
+ *       - 内置时间戳 (自动计算 dt)
  *
  * @note DRV 层职责：
  *       - 提供纯计算函数，无状态依赖
@@ -26,11 +27,7 @@
 #define __DRV_PID_H
 
 #include <stdint.h>
-
-/*------------- 宏定义 --------------*/
-
-#define PID_MAX 1.0f  // 输出上限
-#define PID_MIN -1.0f // 输出下限
+#include "bsp_dwt.h"
 
 /*------------- 掩码枚举 --------------*/
 
@@ -46,6 +43,7 @@ typedef enum
     PID_ENABLE_TRAPEZOID_INTEGRAL = 0x04,   // 启用梯形积分
     PID_ENABLE_CHANGING_INTEGRATION = 0x08, // 启用变速积分
     PID_ENABLE_DERIVATIVE_FILTER = 0x10,    // 启用微分滤波
+    PID_ENABLE_OUTPUT_LIMIT = 0x20,         // 启用输出限幅
 } PIDConfigMask;
 
 /*------------- 配置结构体 --------------*/
@@ -64,6 +62,8 @@ typedef struct
     float d_lpf_rc;       // 微分滤波时间常数 RC (0 = 禁用)
     float deadband;       // 死区范围 (0 = 禁用)
     float kf;             // 前馈系数 (0 = 禁用)
+    float out_max;        // 输出上限 (需要 PID_ENABLE_OUTPUT_LIMIT)
+    float out_min;        // 输出下限 (需要 PID_ENABLE_OUTPUT_LIMIT)
     uint8_t config_mask;  // 功能配置掩码 (PIDConfigMask 位或)
 } PID_Init_Config_s;
 
@@ -99,6 +99,10 @@ typedef struct PIDInstance
     // 前馈控制
     float kf; // 前馈系数
 
+    // 输出限幅 (需要掩码 PID_ENABLE_OUTPUT_LIMIT 启用)
+    float out_max; // 输出上限
+    float out_min; // 输出下限
+
     /*------------- 功能配置掩码 -------------*/
     uint8_t config_mask; // 功能配置掩码
 
@@ -117,7 +121,8 @@ typedef struct PIDInstance
     float feedforward_out; // 前馈输出
     float output;          // 总输出
 
-    float dt; // 时间间隔 (秒)，由外部传入
+    float dt;          // 时间间隔 (秒)，自动计算
+    uint64_t time_us;  // 上次计算时间戳 (us)
 } PIDInstance;
 
 /*------------- 外部接口声明 --------------*/
@@ -142,14 +147,15 @@ void PIDReset(PIDInstance *instance);
 /**
  * @brief PID 计算 (位置式)
  * @param instance PID 实例指针
- * @param setpoint 目标值 (归一化 [-1, 1])
- * @param measure 测量值 (归一化 [-1, 1])
- * @param dt 时间间隔 (秒)，由 APP 层通过 DWT 获取后传入
- * @param feedforward 前馈值 (已乘以前馈系数的外部前馈)
- * @return 控制输出 (归一化 [-1, 1])
+ * @param setpoint 目标值
+ * @param measure 测量值
+ * @param feedforward 前馈值
+ * @return 控制输出
  *
  * @note 位置式 PID 公式：
  *       u(k) = Kp*e(k) + Ki*Σe + Kd*(e(k)-e(k-1))/dt
+ *
+ * @note dt 由内部时间戳自动计算，首次调用 dt=0
  *
  * @note 拓展功能根据 config_mask 掩码启用：
  *       - PID_ENABLE_TRAPEZOID_INTEGRAL → 梯形积分
@@ -157,9 +163,10 @@ void PIDReset(PIDInstance *instance);
  *       - PID_ENABLE_INTEGRAL_LIMIT → 积分限幅
  *       - PID_ENABLE_DERIVATIVE_ON_MEAS → 微分先行
  *       - PID_ENABLE_DERIVATIVE_FILTER → 微分滤波
+ *       - PID_ENABLE_OUTPUT_LIMIT → 输出限幅
  *       - deadband > 0 → 死区控制（参数判零）
  *       - kf != 0 → 前馈控制（参数判零）
  */
-float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float dt, float feedforward);
+float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float feedforward);
 
 #endif /* __DRV_PID_H */

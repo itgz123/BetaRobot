@@ -9,7 +9,7 @@
  *       4. 微分先行：仅对测量值微分，避免设定值突变冲击
  *       5. 微分滤波：一阶低通滤波抑制高频噪声
  *       6. 死区控制：误差小于死区时不输出
- *       7. 输出限幅：输出限制在 [-1, 1]
+ *       7. 输出限幅：可配置输出范围
  *       8. 前馈控制：提高系统响应速度
  *
  * @note 拓展功能启用规则：
@@ -23,7 +23,6 @@
 #include <string.h>
 
 /*------------- 私有函数声明 --------------*/
-static float clamp(float value, float min, float max);
 static void f_Trapezoid_Intergral(PIDInstance *pid);
 static void f_Changing_Integration_Rate(PIDInstance *pid);
 static void f_Integral_Limit(PIDInstance *pid);
@@ -32,18 +31,6 @@ static void f_Derivative_On_Error(PIDInstance *pid);
 static void f_Derivative_Filter(PIDInstance *pid);
 
 /*------------- 私有函数实现 --------------*/
-
-/**
- * @brief 限幅函数
- */
-static float clamp(float value, float min, float max)
-{
-    if (value > max)
-        return max;
-    if (value < min)
-        return min;
-    return value;
-}
 
 /**
  * @brief 梯形积分
@@ -97,11 +84,14 @@ static void f_Integral_Limit(PIDInstance *pid)
     float temp_output = pid->p_out + temp_i_out + pid->d_out;
 
     // 输出超限时，如果积分还在累积，则停止当前积分增量
-    if (FABS(temp_output) > PID_MAX)
+    if (pid->config_mask & PID_ENABLE_OUTPUT_LIMIT)
     {
-        if (pid->error * pid->i_out > 0)
+        if (FABS(temp_output) > pid->out_max)
         {
-            pid->i_term = 0;
+            if (pid->error * pid->i_out > 0)
+            {
+                pid->i_term = 0;
+            }
         }
     }
 
@@ -195,6 +185,10 @@ void PIDInit(PIDInstance *instance, const PID_Init_Config_s *config)
     instance->deadband = config->deadband;
     instance->kf = config->kf;
 
+    // 输出限幅参数
+    instance->out_max = config->out_max;
+    instance->out_min = config->out_min;
+
     // 功能掩码
     instance->config_mask = config->config_mask;
 
@@ -226,21 +220,27 @@ void PIDReset(PIDInstance *instance)
     instance->feedforward_out = 0.0f;
     instance->output = 0.0f;
     instance->dt = 0.0f;
+    instance->time_us = 0;
 }
 
-float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float dt, float feedforward)
+float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float feedforward)
 {
     if (instance == NULL)
     {
         return 0.0f;
     }
 
-    // 保存时间间隔
-    instance->dt = dt;
-
-    // 0. 输入限幅 (归一化到 [-1, 1])
-    setpoint = clamp(setpoint, PID_MIN, PID_MAX);
-    measure = clamp(measure, PID_MIN, PID_MAX);
+    // 计算时间间隔 (自动)
+    uint64_t now_us = DWT_GetTimeUs();
+    if (instance->time_us > 0)
+    {
+        instance->dt = (now_us - instance->time_us) * 1e-6f;
+    }
+    else
+    {
+        instance->dt = 0.0f; // 首次调用
+    }
+    instance->time_us = now_us;
 
     // 保存测量值
     instance->measure = measure;
@@ -307,8 +307,11 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float d
     // 7. 计算总输出
     instance->output = instance->p_out + instance->i_out + instance->d_out + instance->feedforward_out;
 
-    // 8. 输出限幅
-    instance->output = clamp(instance->output, PID_MIN, PID_MAX);
+    // 8. 输出限幅 (可配置)
+    if (instance->config_mask & PID_ENABLE_OUTPUT_LIMIT)
+    {
+        instance->output = BSP_Math_Clamp(instance->output, instance->out_min, instance->out_max);
+    }
 
     // 9. 保存状态
     instance->last_error = instance->error;
