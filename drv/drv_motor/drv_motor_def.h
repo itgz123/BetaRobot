@@ -21,11 +21,10 @@ typedef enum : uint8_t
  *============================================*/
 typedef enum : uint8_t
 {
-    DJI_MODEL_M3508 = 0,    // C620 电调，带减速
-    DJI_MODEL_M3508_DIRECT, // C620 电调，直驱（无减速）
-    DJI_MODEL_M2006,        // C610 电调
-    DJI_MODEL_GM6020,       // 云台电机
-    DJI_MODEL_NUM,          // DJI电机型号数量
+    DJI_MODEL_M3508 = 0, // C620 电调，带减速
+    DJI_MODEL_M2006,     // C610 电调
+    DJI_MODEL_GM6020,    // 云台电机
+    DJI_MODEL_NUM,       // DJI电机型号数量
 } DJIModel_e;
 
 /*============================================
@@ -70,17 +69,10 @@ typedef enum : int8_t
  *============================================*/
 typedef struct
 {
-    // cna协议参数
     uint16_t current_max;        // 电流最大值 (原始值)
+    float current_max_a;         // 电流最大值 (安培)
     uint16_t encoder_resolution; // 编码器分辨率
-    // 电机参数（都每用上）
-    float torque_coef;     // 扭矩系数 (N·m/A)
-    float reduction_ratio; // 减速比
-    float no_load_speed;   // 空载转速 (rpm)
-    float rated_speed;     // 额定转速 (rpm)
-    float rated_torque;    // 额定扭矩 (N·m)
-    float rated_current;   // 额定电流 (A)
-    float current_scale;   // 电流转换系数 (A/LSB)
+    float no_load_speed;         // 空载转速 (rad/s)
 } MotorParams_s;
 
 /*============================================
@@ -88,40 +80,22 @@ typedef struct
  *============================================*/
 typedef struct MotorController_s MotorController_s;
 typedef struct MotorControllerSetting_s MotorControllerSetting_s;
+typedef struct MotorPIDSetting_s MotorPIDSetting_s;
 typedef struct MotorBase_s MotorBase_s;
 
 /*============================================
- *              控制器结构体（运行时使用）
+ *              PID 简化配置结构体（初始化时使用）
  *============================================*/
-struct MotorController_s
+struct MotorPIDSetting_s
 {
-    /* 控制设置 */
-    MotorLoopType_e loop_type;           // 控制模式
-    MotorDirection_e motor_direction;    // 电机方向
-    MotorDirection_e feedback_direction; // 反馈方向
-    MotorFeedbackSrc_e angle_src;        // 角度反馈来源
-    MotorFeedbackSrc_e speed_src;        // 速度反馈来源
-    float max_angle;                     // 位置限幅
-
-    /* 前馈指针 */
-    float *speed_feedforward_ptr;    // 速度前馈指针，传入NULL不使用
-    float *position_feedforward_ptr; // 位置前馈指针，传入NULL不使用
-
-    /* 外部反馈指针 */
-    float *angle_external_ptr; // 外部角度反馈指针
-    float *speed_external_ptr; // 外部速度反馈指针
-
-    /* PID 控制器实例 */
-    PIDInstance pid_speed; // 速度环 PID 实例
-    PIDInstance pid_angle; // 位置环 PID 实例
-
-    /* 控制状态 */
-    float ref;    // 当前控制参考值
-    float output; // 控制输出 (浮点，统一接口)
+    float kp;             // 比例系数
+    float ki;             // 积分系数
+    float kd;             // 微分系数
+    float integral_limit; // 积分限幅阈值 (0 = 禁用)
 };
 
 /*============================================
- *              控制器设置结构体（初始化时使用）
+ *              控制器设置结构
  *============================================*/
 struct MotorControllerSetting_s
 {
@@ -140,10 +114,20 @@ struct MotorControllerSetting_s
     /* 外部反馈指针 */
     float *angle_external_ptr; // 外部角度反馈指针
     float *speed_external_ptr; // 外部速度反馈指针
+};
 
-    /* PID 配置 */
-    PID_Init_Config_s pid_speed_config; // 速度环 PID 配置
-    PID_Init_Config_s pid_angle_config; // 位置环 PID 配置
+/*============================================
+ *              控制器结构体
+ *============================================*/
+struct MotorController_s
+{
+    /* PID 控制器实例 */
+    PIDInstance pid_speed; // 速度环 PID 实例
+    PIDInstance pid_angle; // 位置环 PID 实例
+
+    /* 控制状态 */
+    float ref;    // 当前控制参考值 (速度环: rad/s, 位置环: rad)
+    float output; // 控制输出原始值 (用于CAN发送)
 };
 
 /*============================================
@@ -160,7 +144,8 @@ struct MotorBase_s
     uint8_t enable; // 使能标志
 
     /* 控制器 */
-    MotorController_s controller; // 控制器
+    MotorControllerSetting_s setting; // 控制器设置
+    MotorController_s controller;     // 控制器
 
     /* 统一接口 */
     CANInstance *can;       // CAN 实例指针

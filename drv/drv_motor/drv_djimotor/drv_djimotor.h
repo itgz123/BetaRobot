@@ -33,10 +33,10 @@ typedef struct
 
 typedef struct
 {
-    uint16_t raw_encoder;         // 编码器原始值
-    int16_t raw_velocity;         // 原始速度值
-    int16_t raw_current;          // 原始电流值
-    int8_t raw_temperature_motor; // 线圈温度
+    uint16_t raw_encoder;         // 编码器原始值 (0-8191)
+    int16_t raw_velocity;         // 速度原始值 (RPM)
+    int16_t raw_current;          // 电流原始值
+    int8_t raw_temperature_motor; // 线圈温度 (°C)
     uint8_t error_code;           // 错误码
 } DJIMotorRawData_s;
 
@@ -65,6 +65,7 @@ struct DJIMotorInstance
     DJIMotorData_s data[2];
     uint8_t data_now_idx;
     MotorSpeedSrc_e speed_src; // 速度来源选择
+    float speed_lpf_rc;        // 速度低通滤波时间常数 RC (0=禁用)
 
     /* 分组发送 (DJI 特有) */
     DJIMotorSendGroup_s *sender_group;
@@ -83,9 +84,14 @@ typedef struct
     offline_callback lost_callback;   // 异常处理函数（可为NULL）
     uint8_t motor_id;                 // 电机 ID (1-8)
     MotorSpeedSrc_e speed_src;        // 速度来源：反馈速度/位置微分
+    float speed_lpf_rc;               // 速度低通滤波时间常数 RC (0=禁用)
 
     /* 控制器设置 */
-    MotorControllerSetting_s controller_setting;
+    MotorControllerSetting_s controller_setting; // 控制器设置
+
+    /* PID 设置 */
+    MotorPIDSetting_s pid_speed_setting; // 速度环 PID 设置
+    MotorPIDSetting_s pid_angle_setting; // 位置环 PID 设置
 } DJIMotor_Init_Config_s;
 
 /*============================================

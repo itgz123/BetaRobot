@@ -9,12 +9,12 @@
  *       4. 微分先行：仅对测量值微分，避免设定值突变冲击
  *       5. 微分滤波：一阶低通滤波抑制高频噪声
  *       6. 死区控制：误差小于死区时不输出
- *       7. 输出限幅：可配置输出范围
- *       8. 前馈控制：提高系统响应速度
+ *       7. 输出滤波：一阶低通滤波平滑输出
+ *       8. 输出限幅：可配置输出范围
+ *       9. 前馈控制：提高系统响应速度
  *
  * @note 拓展功能启用规则：
  *       - 所有高级功能统一通过掩码 config_mask 控制启用/禁用
- *       - deadband 和 kf 通过参数判零控制（deadband > 0 / kf != 0 时生效）
  *       - 所有高级功能通过 PID_Init_Config_s 中的 config_mask 掩码位或配置
  */
 
@@ -29,6 +29,7 @@ static void f_Integral_Limit(PIDInstance *pid);
 static void f_Derivative_On_Measurement(PIDInstance *pid);
 static void f_Derivative_On_Error(PIDInstance *pid);
 static void f_Derivative_Filter(PIDInstance *pid);
+static void f_Output_Filter(PIDInstance *pid);
 
 /*------------- 私有函数实现 --------------*/
 
@@ -155,6 +156,19 @@ static void f_Derivative_Filter(PIDInstance *pid)
     pid->d_out = pid->d_out * alpha + pid->last_d_out * (1.0f - alpha);
 }
 
+/**
+ * @brief 输出滤波
+ *        一阶低通滤波，平滑输出信号
+ *        Output = Output * dt / (RC + dt) + Last_Output * RC / (RC + dt)
+ *
+ * @note 由 PID_ENABLE_OUTPUT_FILTER 掩码控制是否调用
+ */
+static void f_Output_Filter(PIDInstance *pid)
+{
+    float alpha = pid->dt / (pid->out_lpf_rc + pid->dt);
+    pid->output = pid->output * alpha + pid->last_output * (1.0f - alpha);
+}
+
 /*------------- 公开接口实现 --------------*/
 
 void PIDInit(PIDInstance *instance, const PID_Init_Config_s *config)
@@ -182,8 +196,8 @@ void PIDInit(PIDInstance *instance, const PID_Init_Config_s *config)
     instance->coef_a = config->coef_a;
     instance->coef_b = config->coef_b;
     instance->d_lpf_rc = config->d_lpf_rc;
+    instance->out_lpf_rc = config->out_lpf_rc;
     instance->deadband = config->deadband;
-    instance->kf = config->kf;
 
     // 输出限幅参数
     instance->out_max = config->out_max;
@@ -219,6 +233,7 @@ void PIDReset(PIDInstance *instance)
 
     instance->feedforward_out = 0.0f;
     instance->output = 0.0f;
+    instance->last_output = 0.0f;
     instance->dt = 0.0f;
     instance->time_us = 0;
 }
@@ -248,8 +263,8 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float f
     // 1. 计算误差
     instance->error = setpoint - measure;
 
-    // 2. 死区控制 (deadband > 0 时启用)
-    if (instance->deadband > 0.0001f && FABS(instance->error) < instance->deadband)
+    // 2. 死区控制
+    if ((instance->config_mask & PID_ENABLE_DEADBAND) && FABS(instance->error) < instance->deadband)
     {
         instance->i_out = 0.0f;
         instance->last_error = instance->error;
@@ -301,22 +316,36 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float f
         f_Derivative_Filter(instance);
     }
 
-    // 6. 前馈控制
-    instance->feedforward_out = instance->kf * feedforward;
+    // 6. 前馈控制 (直接使用传入的前馈值)
+    if (instance->config_mask & PID_ENABLE_FEEDFORWARD)
+    {
+        instance->feedforward_out = feedforward;
+    }
+    else
+    {
+        instance->feedforward_out = 0.0f;
+    }
 
     // 7. 计算总输出
     instance->output = instance->p_out + instance->i_out + instance->d_out + instance->feedforward_out;
 
-    // 8. 输出限幅 (可配置)
+    // 8. 输出滤波
+    if (instance->config_mask & PID_ENABLE_OUTPUT_FILTER)
+    {
+        f_Output_Filter(instance);
+    }
+
+    // 9. 输出限幅 (可配置)
     if (instance->config_mask & PID_ENABLE_OUTPUT_LIMIT)
     {
         instance->output = BSP_Math_Clamp(instance->output, instance->out_min, instance->out_max);
     }
 
-    // 9. 保存状态
+    // 10. 保存状态
     instance->last_error = instance->error;
     instance->last_measure = measure;
     instance->last_d_out = instance->d_out;
+    instance->last_output = instance->output;
 
     return instance->output;
 }

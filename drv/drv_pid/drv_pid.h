@@ -9,6 +9,7 @@
  *       - 微分先行 (对测量值微分，避免设定值突变冲击)
  *       - 微分项滤波 (抑制高频噪声)
  *       - 死区控制
+ *       - 输出滤波 (一阶低通滤波平滑输出)
  *       - 输出限幅 (可配置)
  *       - 前馈控制
  *       - 内置时间戳 (自动计算 dt)
@@ -19,7 +20,6 @@
  *
  * @note 拓展功能启用规则：
  *       - 所有高级功能统一通过掩码 config_mask 控制启用/禁用
- *       - deadband 和 kf 通过参数判零控制（deadband > 0 / kf != 0 时生效）
  *       - 所有高级功能通过 PID_Init_Config_s 中的 config_mask 掩码位或配置
  */
 
@@ -43,7 +43,10 @@ typedef enum
     PID_ENABLE_TRAPEZOID_INTEGRAL = 0x04,   // 启用梯形积分
     PID_ENABLE_CHANGING_INTEGRATION = 0x08, // 启用变速积分
     PID_ENABLE_DERIVATIVE_FILTER = 0x10,    // 启用微分滤波
-    PID_ENABLE_OUTPUT_LIMIT = 0x20,         // 启用输出限幅
+    PID_ENABLE_OUTPUT_FILTER = 0x20,        // 启用输出滤波
+    PID_ENABLE_OUTPUT_LIMIT = 0x40,         // 启用输出限幅
+    PID_ENABLE_DEADBAND = 0x80,             // 启用死区控制
+    PID_ENABLE_FEEDFORWARD = 0x100,         // 启用前馈控制
 } PIDConfigMask;
 
 /*------------- 配置结构体 --------------*/
@@ -60,11 +63,11 @@ typedef struct
     float coef_a;         // 变速积分参数 A (0 = 禁用)
     float coef_b;         // 变速积分参数 B
     float d_lpf_rc;       // 微分滤波时间常数 RC (0 = 禁用)
+    float out_lpf_rc;     // 输出滤波时间常数 RC (0 = 禁用)
     float deadband;       // 死区范围 (0 = 禁用)
-    float kf;             // 前馈系数 (0 = 禁用)
     float out_max;        // 输出上限 (需要 PID_ENABLE_OUTPUT_LIMIT)
     float out_min;        // 输出下限 (需要 PID_ENABLE_OUTPUT_LIMIT)
-    uint8_t config_mask;  // 功能配置掩码 (PIDConfigMask 位或)
+    uint16_t config_mask; // 功能配置掩码 (PIDConfigMask 位或)
 } PID_Init_Config_s;
 
 /*------------- 类型定义 --------------*/
@@ -93,18 +96,18 @@ typedef struct PIDInstance
     // 微分滤波 (参数 > 0 时启用)
     float d_lpf_rc; // 微分滤波时间常数 RC = 1/omegac
 
-    // 死区控制 (参数 > 0 时启用)
-    float deadband; // 死区范围 (误差小于此值时不输出)
+    // 输出滤波 (需要掩码 PID_ENABLE_OUTPUT_FILTER 启用)
+    float out_lpf_rc; // 输出滤波时间常数 RC = 1/omegac
 
-    // 前馈控制
-    float kf; // 前馈系数
+    // 死区控制 (需要掩码 PID_ENABLE_DEADBAND 启用)
+    float deadband; // 死区范围 (误差小于此值时不输出)
 
     // 输出限幅 (需要掩码 PID_ENABLE_OUTPUT_LIMIT 启用)
     float out_max; // 输出上限
     float out_min; // 输出下限
 
     /*------------- 功能配置掩码 -------------*/
-    uint8_t config_mask; // 功能配置掩码
+    uint16_t config_mask; // 功能配置掩码
 
     /*------------- 状态变量 -------------*/
     float measure;      // 当前测量值
@@ -120,9 +123,10 @@ typedef struct PIDInstance
 
     float feedforward_out; // 前馈输出
     float output;          // 总输出
+    float last_output;     // 上次输出 (用于输出滤波)
 
-    float dt;          // 时间间隔 (秒)，自动计算
-    uint64_t time_us;  // 上次计算时间戳 (us)
+    float dt;         // 时间间隔 (秒)，自动计算
+    uint64_t time_us; // 上次计算时间戳 (us)
 } PIDInstance;
 
 /*------------- 外部接口声明 --------------*/
@@ -163,9 +167,10 @@ void PIDReset(PIDInstance *instance);
  *       - PID_ENABLE_INTEGRAL_LIMIT → 积分限幅
  *       - PID_ENABLE_DERIVATIVE_ON_MEAS → 微分先行
  *       - PID_ENABLE_DERIVATIVE_FILTER → 微分滤波
+ *       - PID_ENABLE_OUTPUT_FILTER → 输出滤波
  *       - PID_ENABLE_OUTPUT_LIMIT → 输出限幅
- *       - deadband > 0 → 死区控制（参数判零）
- *       - kf != 0 → 前馈控制（参数判零）
+ *       - PID_ENABLE_DEADBAND → 死区控制
+ *       - PID_ENABLE_FEEDFORWARD → 前馈控制
  */
 float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float feedforward);
 

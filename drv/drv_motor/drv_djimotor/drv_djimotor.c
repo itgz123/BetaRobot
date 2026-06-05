@@ -8,6 +8,41 @@
 
 #define CAN_TRANSMIT_TIMEOUT 1
 
+/*
+ * ============================================
+ *              DJI 电机分组策略说明
+ * ============================================
+ *
+ * 【问题背景】
+ * DJI 电机通过 CAN 总线通信，一帧 CAN 数据最多携带 4 个电机的控制值。
+ * 因此需要将电机分组，每组共用一帧发送报文。
+ *
+ * 【两种分组策略】
+ *
+ * 策略 A：按发送 ID 分组（参考代码采用）
+ *   - 优点：发送简单，每组固定使用一个 tx_id
+ *   - 缺点：M3508/M2006 ID 5-8 和 GM6020 ID 1-4 的 rx_id 重叠（都是 0x205-0x208）
+ *           如果挂载在同一 CAN 总线上，会导致接收 ID 冲突
+ *
+ * 策略 B：按接收 ID 分组（本代码采用）✓
+ *   - 优点：天然避免接收 ID 冲突，同一 CAN 总线上不会有两个电机响应同一个 rx_id
+ *   - 缺点：同一组内可能有不同的 tx_id，需要在发送时额外处理
+ *
+ * 【本代码实现】
+ * 采用策略 B，按接收 ID 分组：
+ *   - Group 0: rx_id 0x201-0x204（M3508/M2006 ID 1-4，tx_id=0x200）
+ *   - Group 1: rx_id 0x205-0x208（M3508/M2006 ID 5-8 tx_id=0x1FF，或 GM6020 ID 1-4 tx_id=0x1FE）
+ *   - Group 2: rx_id 0x209-0x20B（GM6020 ID 5-7，tx_id=0x2FE）
+ *
+ * 发送处理：
+ *   由于 Group 1 可能包含不同 tx_id 的电机，DJIMotorSend() 会检查组内电机的 tx_id，
+ *   将相同 tx_id 的电机数据打包到同一帧发送，不同 tx_id 则分别发送多帧。
+ *
+ * 【关键约束】
+ *   如果两个电机的 rx_id 不同，它们的 tx_id 必然不同，不会共用同一发送帧。
+ *   因此按 rx_id 分组是安全的，只需在发送时处理 tx_id 差异。
+ */
+
 #define DJI_MOTOR_GROUP_0 0   // 接收ID: 0x201-0x204
 #define DJI_MOTOR_GROUP_1 1   // 接收ID: 0x205-0x208
 #define DJI_MOTOR_GROUP_2 2   // 接收ID: 0x209-0x20b
@@ -21,35 +56,36 @@
 #define C620_CURRENT_MAX 16384   // C620 (M3508) 电流范围 ±16384 → ±20A
 #define GM6020_CURRENT_MAX 16384 // GM6020 电流范围 ±16384 → ±3A
 
-// 电流转换系数 (实际电流A / 原始值)
-#define C610_CURRENT_SCALE (10.0f / 10000.0f)  // 0.001 A/LSB
-#define C620_CURRENT_SCALE (20.0f / 16384.0f)  // ≈0.00122 A/LSB
-#define GM6020_CURRENT_SCALE (3.0f / 16384.0f) // ≈0.000183 A/LSB
+// 电调电流范围 (安培)
+#define C610_CURRENT_MAX_A 10.0f  // C610 (M2006) 最大电流 10A
+#define C620_CURRENT_MAX_A 20.0f  // C620 (M3508) 最大电流 20A
+#define GM6020_CURRENT_MAX_A 3.0f // GM6020 最大电流 3A
+
+// 空载转速 (rad/s), rpm * 2π / 60
+#define M3508_NO_LOAD_SPEED (9400.0f * M_2PI / 60.0f)  // ≈983.7 rad/s
+#define M2006_NO_LOAD_SPEED (18000.0f * M_2PI / 60.0f) // ≈1884.0 rad/s
+#define GM6020_NO_LOAD_SPEED (320.0f * M_2PI / 60.0f)  // ≈33.5 rad/s
 
 /*============================================
  *              电机参数表定义
  *============================================*/
 const MotorParams_s dji_motor_params[DJI_MODEL_NUM] = {
-    [DJI_MODEL_M3508] = {C620_CURRENT_MAX, DJI_ENCODER_RESOLUTION, 0.3f, 3591.0f / 187.0f, 482.0f, 469.0f, 3.0f, 10.0f, C620_CURRENT_SCALE},
-    [DJI_MODEL_M3508_DIRECT] = {C620_CURRENT_MAX, DJI_ENCODER_RESOLUTION, 0.02f, 1.0f, 9400.0f, 9085.0f, 0.16f, 10.0f, C620_CURRENT_SCALE},
-    [DJI_MODEL_M2006] = {C610_CURRENT_MAX, DJI_ENCODER_RESOLUTION, 0.18f, 36.0f, 500.0f, 416.0f, 1.0f, 3.0f, C610_CURRENT_SCALE},
-    [DJI_MODEL_GM6020] = {GM6020_CURRENT_MAX, DJI_ENCODER_RESOLUTION, 0.741f, 1.0f, 320.0f, 132.0f, 1.2f, 1.62f, GM6020_CURRENT_SCALE},
+    [DJI_MODEL_M3508] = {C620_CURRENT_MAX, C620_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, M3508_NO_LOAD_SPEED},
+    [DJI_MODEL_M2006] = {C610_CURRENT_MAX, C610_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, M2006_NO_LOAD_SPEED},
+    [DJI_MODEL_GM6020] = {GM6020_CURRENT_MAX, GM6020_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, GM6020_NO_LOAD_SPEED},
 };
 
 const uint16_t can_tx_id[DJI_MODEL_NUM][2] = {
-    [DJI_MODEL_M3508][0] = 0x200,        // 1-4号
-    [DJI_MODEL_M3508][1] = 0x1ff,        // 5-8号
-    [DJI_MODEL_M3508_DIRECT][0] = 0x200, // 1-4号
-    [DJI_MODEL_M3508_DIRECT][1] = 0x1ff, // 5-8号
-    [DJI_MODEL_M2006][0] = 0x200,        // 1-4号
-    [DJI_MODEL_M2006][1] = 0x1ff,        // 5-8号
-    [DJI_MODEL_GM6020][0] = 0x1fe,       // 1-4号
-    [DJI_MODEL_GM6020][1] = 0x2fe,       // 5-7号
+    [DJI_MODEL_M3508][0] = 0x200,  // 1-4号
+    [DJI_MODEL_M3508][1] = 0x1ff,  // 5-8号
+    [DJI_MODEL_M2006][0] = 0x200,  // 1-4号
+    [DJI_MODEL_M2006][1] = 0x1ff,  // 5-8号
+    [DJI_MODEL_GM6020][0] = 0x1fe, // 1-4号
+    [DJI_MODEL_GM6020][1] = 0x2fe, // 5-7号
 };
 
 const uint16_t can_rx_id_base[DJI_MODEL_NUM] = {
     [DJI_MODEL_M3508] = 0x200,
-    [DJI_MODEL_M3508_DIRECT] = 0x200,
     [DJI_MODEL_M2006] = 0x200,
     [DJI_MODEL_GM6020] = 0x204,
 };
@@ -90,6 +126,7 @@ static void DJIMotorRxCallback(CANInstance *can)
     if (model >= DJI_MODEL_NUM)
         return;
 
+    float current_max_a = dji_motor_params[model].current_max_a;
     uint16_t current_max = dji_motor_params[model].current_max;
     uint16_t encoder_resolution = dji_motor_params[model].encoder_resolution;
 
@@ -97,33 +134,51 @@ static void DJIMotorRxCallback(CANInstance *can)
     motor->data[now_idx].position_single = (float)motor->data_raw.raw_encoder * M_2PI / encoder_resolution;
 
     // 计算多圈位置 (rad)
+    // BSP_Math_AngleDiff 返回最短角度差，正确处理边界穿越
     motor->data[now_idx].position_multi = motor->data[last_idx].position_multi + BSP_Math_AngleDiff(motor->data[last_idx].position_single, motor->data[now_idx].position_single);
 
+    // 记录时间戳
+    uint64_t now_time_us = DWT_GetTimeUs();
+    motor->data[now_idx].time_stamp = now_time_us;
+    float dt = (now_time_us - motor->data[last_idx].time_stamp) * 1e-6f; // us -> s
+
     // 计算速度 (rad/s) - 转子速度
+    float raw_speed;
     if (motor->speed_src == MOTOR_SPEED_SRC_FEEDBACK)
     {
         // 使用反馈速度
-        motor->data[now_idx].speed = (float)motor->data_raw.raw_velocity * M_2PI / 60.0f;
+        raw_speed = (float)motor->data_raw.raw_velocity * M_2PI / 60.0f;
     }
     else
     {
         // 使用位置差分计算速度
-        uint64_t now_time_us = DWT_GetTimeUs();
-        float dt = (now_time_us - motor->data[last_idx].time_stamp) * 1e-6f; // us -> s
         if (dt > 0.0f)
         {
-            motor->data[now_idx].speed = (motor->data[now_idx].position_multi - motor->data[last_idx].position_multi) / dt;
+            raw_speed = (motor->data[now_idx].position_multi - motor->data[last_idx].position_multi) / dt;
+        }
+        else
+        {
+            raw_speed = 0.0f;
         }
     }
 
-    // 电流 (A)
-    motor->data[now_idx].current = (float)motor->data_raw.raw_current / current_max;
+    // 速度低通滤波: speed = (1-alpha) * raw + alpha * last, alpha = RC / (RC + dt)
+    // alpha 越大，滤波越强（响应越慢）
+    if (motor->speed_lpf_rc > 0.0f && dt > 0.0f)
+    {
+        float alpha = motor->speed_lpf_rc / (motor->speed_lpf_rc + dt);
+        motor->data[now_idx].speed = (1.0f - alpha) * raw_speed + alpha * motor->data[last_idx].speed;
+    }
+    else
+    {
+        motor->data[now_idx].speed = raw_speed;
+    }
+
+    // 电流 (A) - 使用安培单位
+    motor->data[now_idx].current = (float)motor->data_raw.raw_current / (float)current_max * current_max_a;
 
     // 温度
     motor->data[now_idx].temperature = (float)motor->data_raw.raw_temperature_motor;
-
-    // 记录时间戳
-    motor->data[now_idx].time_stamp = DWT_GetTimeUs();
 
     // 切换索引，更新当前数据
     motor->data_now_idx = last_idx;
@@ -140,20 +195,20 @@ static void DJIMotorRxCallback(CANInstance *can)
  *============================================*/
 static float DJIMotor_GetAngle(DJIMotorInstance *inst)
 {
-    MotorController_s *ctrl = &inst->base.controller;
-    if (ctrl->angle_src == MOTOR_FEEDBACK_EXTERNAL && ctrl->angle_external_ptr)
+    MotorControllerSetting_s *setting = &inst->base.setting;
+    if (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr)
     {
-        return *ctrl->angle_external_ptr;
+        return *setting->angle_external_ptr;
     }
     return inst->data[inst->data_now_idx].position_multi;
 }
 
 static float DJIMotor_GetSpeed(DJIMotorInstance *inst)
 {
-    MotorController_s *ctrl = &inst->base.controller;
-    if (ctrl->speed_src == MOTOR_FEEDBACK_EXTERNAL && ctrl->speed_external_ptr)
+    MotorControllerSetting_s *setting = &inst->base.setting;
+    if (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr)
     {
-        return *ctrl->speed_external_ptr;
+        return *setting->speed_external_ptr;
     }
     return inst->data[inst->data_now_idx].speed;
 }
@@ -185,31 +240,56 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
     inst->base.enable = 0;
 
     // 初始化控制器设置
-    inst->base.controller.loop_type = cfg->controller_setting.loop_type;
-    inst->base.controller.motor_direction = cfg->controller_setting.motor_direction;
-    inst->base.controller.feedback_direction = cfg->controller_setting.feedback_direction;
-    inst->base.controller.angle_src = cfg->controller_setting.angle_src;
-    inst->base.controller.speed_src = cfg->controller_setting.speed_src;
-    inst->base.controller.max_angle = cfg->controller_setting.max_angle;
-    inst->base.controller.speed_feedforward_ptr = cfg->controller_setting.speed_feedforward_ptr;
-    inst->base.controller.position_feedforward_ptr = cfg->controller_setting.position_feedforward_ptr;
-    inst->base.controller.angle_external_ptr = cfg->controller_setting.angle_external_ptr;
-    inst->base.controller.speed_external_ptr = cfg->controller_setting.speed_external_ptr;
+    inst->base.setting = cfg->controller_setting;
+
+    // 初始化控制器状态
     inst->base.controller.ref = 0.0f;
     inst->base.controller.output = 0.0f;
 
-    // 初始化 PID 控制器
+    // 获取输出限幅
+    float current_max_a = dji_motor_params[cfg->model].current_max_a;
+    float speed_max = dji_motor_params[cfg->model].no_load_speed;
+
+    // PID 固定配置掩码
+    uint16_t pid_mask = PID_ENABLE_INTEGRAL_LIMIT |
+                        PID_ENABLE_TRAPEZOID_INTEGRAL |
+                        PID_ENABLE_DERIVATIVE_ON_MEAS |
+                        PID_ENABLE_OUTPUT_LIMIT |
+                        PID_ENABLE_FEEDFORWARD;
+
+    // 初始化速度环 PID (输出限幅: 电流安培值)
     if (cfg->controller_setting.loop_type & MOTOR_LOOP_SPEED)
     {
-        PIDInit(&inst->base.controller.pid_speed, &cfg->controller_setting.pid_speed_config);
+        PID_Init_Config_s pid_speed_config = {
+            .kp = cfg->pid_speed_setting.kp,
+            .ki = cfg->pid_speed_setting.ki,
+            .kd = cfg->pid_speed_setting.kd,
+            .integral_limit = cfg->pid_speed_setting.integral_limit,
+            .out_max = current_max_a,
+            .out_min = -current_max_a,
+            .config_mask = pid_mask,
+        };
+        PIDInit(&inst->base.controller.pid_speed, &pid_speed_config);
     }
+
+    // 初始化位置环 PID (输出限幅: 空载速度 rad/s)
     if (cfg->controller_setting.loop_type & MOTOR_LOOP_ANGLE)
     {
-        PIDInit(&inst->base.controller.pid_angle, &cfg->controller_setting.pid_angle_config);
+        PID_Init_Config_s pid_angle_config = {
+            .kp = cfg->pid_angle_setting.kp,
+            .ki = cfg->pid_angle_setting.ki,
+            .kd = cfg->pid_angle_setting.kd,
+            .integral_limit = cfg->pid_angle_setting.integral_limit,
+            .out_max = speed_max,
+            .out_min = -speed_max,
+            .config_mask = pid_mask,
+        };
+        PIDInit(&inst->base.controller.pid_angle, &pid_angle_config);
     }
 
     // 初始化速度来源
     inst->speed_src = cfg->speed_src;
+    inst->speed_lpf_rc = cfg->speed_lpf_rc;
 
     // 初始化数据缓冲
     inst->data_now_idx = 0;
@@ -270,6 +350,67 @@ void DJIMotorSetRef(DJIMotorInstance *inst, float ref)
     inst->base.controller.ref = ref;
 }
 
+/**
+ * @brief 单个电机控制计算
+ */
+static void DJIMotor_Calculate(DJIMotorInstance *inst)
+{
+    if (!inst || !inst->base.enable)
+        return;
+
+    MotorControllerSetting_s *setting = &inst->base.setting;
+    MotorController_s *ctrl = &inst->base.controller;
+
+    float setpoint = ctrl->ref;
+    float measure;
+    float output = 0.0f;
+
+    uint8_t model = inst->base.model;
+    if (model >= DJI_MODEL_NUM)
+        return;
+
+    // 电机方向处理 (直接乘)
+    setpoint *= setting->motor_direction;
+
+    // 位置环 (最外环)
+    if (setting->loop_type & MOTOR_LOOP_ANGLE)
+    {
+        if (setting->position_feedforward_ptr)
+        {
+            setpoint += *setting->position_feedforward_ptr;
+        }
+        measure = DJIMotor_GetAngle(inst);
+        setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, 0.0f);
+    }
+
+    // 速度环
+    if (setting->loop_type & MOTOR_LOOP_SPEED)
+    {
+        if (setting->speed_feedforward_ptr)
+        {
+            setpoint += *setting->speed_feedforward_ptr;
+        }
+        measure = DJIMotor_GetSpeed(inst);
+        output = PIDCalculate(&ctrl->pid_speed, setpoint, measure, 0.0f);
+    }
+    else
+    {
+        // 无速度环时，直接输出
+        output = setpoint;
+    }
+
+    // 反馈方向处理 (直接乘)
+    output *= setting->feedback_direction;
+
+    // 输出限幅 (PID内置，此处仅做最终保护，单位: 安培)
+    float current_max_a = dji_motor_params[model].current_max_a;
+    output = BSP_Math_Clamp(output, -current_max_a, current_max_a);
+
+    // 转换为 CAN 发送原始值 (安培 -> 原始值)
+    uint16_t current_max = dji_motor_params[model].current_max;
+    ctrl->output = output / current_max_a * (float)current_max;
+}
+
 void DJIMotorSend(DJIMotorInstance *inst)
 {
     if (!inst || !inst->sender_group || !inst->base.can)
@@ -278,74 +419,70 @@ void DJIMotorSend(DJIMotorInstance *inst)
     DJIMotorSendGroup_s *group = inst->sender_group;
     CANInstance *can = inst->base.can;
 
-    // ===== 控制计算 =====
-    if (inst->base.enable)
-    {
-        MotorController_s *ctrl = &inst->base.controller;
-
-        float ref = ctrl->ref;
-        float setpoint = ref;
-        float measure;
-        float output = 0.0f;
-
-        // 获取电流限幅
-        uint8_t model = inst->base.model;
-        if (model < DJI_MODEL_NUM)
-        {
-            uint16_t current_max = dji_motor_params[model].current_max;
-
-            // 电机方向处理 (直接乘)
-            setpoint *= ctrl->motor_direction;
-
-            // 位置环 (最外环)
-            if (ctrl->loop_type & MOTOR_LOOP_ANGLE)
-            {
-                if (ctrl->position_feedforward_ptr)
-                {
-                    setpoint += *ctrl->position_feedforward_ptr;
-                }
-                measure = DJIMotor_GetAngle(inst);
-                setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, 0.0f);
-            }
-
-            // 速度环
-            if (ctrl->loop_type & MOTOR_LOOP_SPEED)
-            {
-                if (ctrl->speed_feedforward_ptr)
-                {
-                    setpoint += *ctrl->speed_feedforward_ptr;
-                }
-                measure = DJIMotor_GetSpeed(inst);
-                output = PIDCalculate(&ctrl->pid_speed, setpoint, measure, 0.0f);
-            }
-            else
-            {
-                // 无速度环时，直接输出
-                output = setpoint;
-            }
-
-            // 反馈方向处理 (直接乘)
-            output *= ctrl->feedback_direction;
-
-            // 输出限幅
-            ctrl->output = BSP_Math_Clamp(output, -(float)current_max, (float)current_max);
-        }
-    }
-
-    // ===== 打包发送 =====
+    // ===== 控制计算：组内所有已初始化电机 =====
     for (int i = 0; i < 4; i++)
     {
-        int16_t cur = 0;
-        DJIMotorInstance *m = group->motors[i];
-        if (m && m->base.enable)
+        if (group->motor_init_flag[i] && group->motors[i])
         {
-            cur = (int16_t)m->base.controller.output;
+            DJIMotor_Calculate(group->motors[i]);
         }
-        can->tx_buff[i * 2] = (uint8_t)(cur >> 8);       // 高字节
-        can->tx_buff[i * 2 + 1] = (uint8_t)(cur & 0xFF); // 低字节
     }
 
-    CANTransmit(can, CAN_TRANSMIT_TIMEOUT);
+    // ===== 按 tx_id 分帧发送 =====
+    // 由于按 rx_id 分组，同一组内可能存在不同 tx_id 的电机
+    // 例如 Group 1 (rx_id 0x205-0x208) 可能包含：
+    //   - M3508/M2006 ID 5-8 (tx_id=0x1FF)
+    //   - GM6020 ID 1-4 (tx_id=0x1FE)
+    // 因此需要收集组内所有不同的 tx_id，分别打包发送
+
+    // Step 1: 收集组内不同的 tx_id
+    uint16_t tx_ids[4] = {0};
+    uint8_t tx_id_count = 0;
+
+    for (int i = 0; i < 4; i++)
+    {
+        if (group->motor_init_flag[i] && group->motors[i] && group->motors[i]->base.can)
+        {
+            uint16_t id = group->motors[i]->base.can->tx_id;
+            uint8_t found = 0;
+            for (int j = 0; j < tx_id_count; j++)
+            {
+                if (tx_ids[j] == id)
+                {
+                    found = 1;
+                    break;
+                }
+            }
+            if (!found)
+            {
+                tx_ids[tx_id_count++] = id;
+            }
+        }
+    }
+
+    // Step 2: 按 tx_id 分别打包发送
+    // 每个 tx_id 发送一帧 CAN 报文，包含对应的 4 个电机位置（部分可能为空）
+    for (int t = 0; t < tx_id_count; t++)
+    {
+        uint16_t current_tx_id = tx_ids[t];
+        can->tx_id = current_tx_id;
+
+        for (int i = 0; i < 4; i++)
+        {
+            int16_t cur = 0;
+            DJIMotorInstance *m = group->motors[i];
+            // 只有匹配当前 tx_id 的电机才填充数据
+            if (group->motor_init_flag[i] && m && m->base.enable &&
+                m->base.can && m->base.can->tx_id == current_tx_id)
+            {
+                cur = (int16_t)m->base.controller.output;
+            }
+            can->tx_buff[i * 2] = (uint8_t)(cur >> 8);
+            can->tx_buff[i * 2 + 1] = (uint8_t)(cur & 0xFF);
+        }
+
+        CANTransmit(can, CAN_TRANSMIT_TIMEOUT);
+    }
 }
 
 #endif // HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED
