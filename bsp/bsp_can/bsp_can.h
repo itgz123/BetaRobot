@@ -29,7 +29,7 @@
 /**
  * @brief CAN过滤器模式枚举
  */
-typedef enum
+typedef enum : uint8_t
 {
     CAN_FILTER_MODE_MASK = 0, // 掩码模式（支持范围匹配）
     CAN_FILTER_MODE_LIST = 1  // 列表模式（最多4个精确ID）
@@ -70,7 +70,7 @@ typedef struct CANInstance
  */
 typedef struct
 {
-    BoardCAN_e can_e;                           // 板载CAN枚举（注册时用于查找映射）
+    BoardCAN_e can_e;                          // 板载CAN枚举（注册时用于查找映射）
     uint32_t tx_id;                            // 发送标准ID；CAN_ID_UNUSED(-1) 表示不发送
     CANFilterMode_e filter_mode;               // 过滤器模式（掩码/列表）
     uint32_t rx_id_list[4];                    // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效

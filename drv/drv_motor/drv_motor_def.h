@@ -65,6 +65,15 @@ typedef enum : int8_t
 } MotorDirection_e;
 
 /*============================================
+ *              使能枚举
+ *============================================*/
+typedef enum : uint8_t
+{
+    MOTOR_DISABLE = 0, // 禁用
+    MOTOR_ENABLE = 1,  // 使能
+} MotorEnable_e;
+
+/*============================================
  *              电机参数结构体
  *============================================*/
 typedef struct
@@ -139,9 +148,9 @@ struct MotorBase_s
     // const MotorVTable_s *vtable; // 先预留，之后再实现
 
     /* 基本属性 */
-    uint8_t brand;  // 电机品牌
-    uint8_t model;  // 电机型号
-    uint8_t enable; // 使能标志
+    MotorBrand_e brand;   // 电机品牌
+    DJIModel_e model;     // 电机型号
+    MotorEnable_e enable; // 使能标志
 
     /* 控制器 */
     MotorControllerSetting_s setting; // 控制器设置

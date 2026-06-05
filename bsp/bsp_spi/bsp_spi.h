@@ -21,7 +21,7 @@
 /**
  * @brief SPI工作模式枚举
  */
-typedef enum
+typedef enum : uint8_t
 {
     SPI_BLOCK_MODE = 0, // 阻塞模式
     SPI_IT_MODE,        // 中断模式
@@ -51,9 +51,9 @@ typedef struct SPIInstance
  */
 typedef struct
 {
-    BoardSPI_e spi_e;                           // 板载SPI枚举（注册时用于查找映射）
-    SPI_Work_Mode_e work_mode;                  // 工作模式（阻塞/中断/DMA）
-    void (*rx_callback)(struct SPIInstance *);  // 接收完成回调（可为NULL，仅DMA/IT模式有效）
+    BoardSPI_e spi_e;                          // 板载SPI枚举（注册时用于查找映射）
+    SPI_Work_Mode_e work_mode;                 // 工作模式（阻塞/中断/DMA）
+    void (*rx_callback)(struct SPIInstance *); // 接收完成回调（可为NULL，仅DMA/IT模式有效）
 } SPI_Init_Config_s;
 
 /*------------- 实例定义宏 --------------*/
@@ -69,10 +69,10 @@ typedef struct
  * @example
  *   SPI_INSTANCE_DEF(bmi088_spi, 64);
  */
-#define SPI_INSTANCE_DEF(name, buff_sz)                      \
-    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};   \
-    static SPIInstance name = {                              \
-        .rx_buff = name##_rx_buff,                          \
+#define SPI_INSTANCE_DEF(name, buff_sz)                   \
+    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0}; \
+    static SPIInstance name = {                           \
+        .rx_buff = name##_rx_buff,                        \
         .buff_size = buff_sz}
 
 /*------------- 外部接口声明 --------------*/

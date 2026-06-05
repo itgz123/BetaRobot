@@ -20,7 +20,7 @@
 /**
  * @brief USART发送模式枚举
  */
-typedef enum
+typedef enum : uint8_t
 {
     USART_BLOCK_MODE = 0, // 阻塞模式
     USART_IT_MODE,        // 中断模式
@@ -69,10 +69,10 @@ typedef struct
  * @example
  *   USART_INSTANCE_DEF(sbus_uart, 64);
  */
-#define USART_INSTANCE_DEF(name, buff_sz)                    \
-    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};   \
-    static USARTInstance name = {                            \
-        .rx_buff = name##_rx_buff,                          \
+#define USART_INSTANCE_DEF(name, buff_sz)                 \
+    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0}; \
+    static USARTInstance name = {                         \
+        .rx_buff = name##_rx_buff,                        \
         .rx_buff_size = buff_sz}
 
 /*------------- 外部接口声明 --------------*/

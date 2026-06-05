@@ -35,7 +35,7 @@
  * @brief PID 功能配置掩码
  * @note 用于需要掩码区分"禁用"和"参数为0"的功能
  */
-typedef enum
+typedef enum : uint16_t
 {
     PID_IMPROVE_NONE = 0x00,                // 无高级功能
     PID_ENABLE_INTEGRAL_LIMIT = 0x01,       // 启用积分限幅
@@ -56,18 +56,18 @@ typedef enum
  */
 typedef struct
 {
-    float kp;             // 比例系数
-    float ki;             // 积分系数
-    float kd;             // 微分系数
-    float integral_limit; // 积分限幅阈值 (0 = 禁用)
-    float coef_a;         // 变速积分参数 A (0 = 禁用)
-    float coef_b;         // 变速积分参数 B
-    float d_lpf_rc;       // 微分滤波时间常数 RC (0 = 禁用)
-    float out_lpf_rc;     // 输出滤波时间常数 RC (0 = 禁用)
-    float deadband;       // 死区范围 (0 = 禁用)
-    float out_max;        // 输出上限 (需要 PID_ENABLE_OUTPUT_LIMIT)
-    float out_min;        // 输出下限 (需要 PID_ENABLE_OUTPUT_LIMIT)
-    uint16_t config_mask; // 功能配置掩码 (PIDConfigMask 位或)
+    float kp;                  // 比例系数
+    float ki;                  // 积分系数
+    float kd;                  // 微分系数
+    float integral_limit;      // 积分限幅阈值 (0 = 禁用)
+    float coef_a;              // 变速积分参数 A (0 = 禁用)
+    float coef_b;              // 变速积分参数 B
+    float d_lpf_rc;            // 微分滤波时间常数 RC (0 = 禁用)
+    float out_lpf_rc;          // 输出滤波时间常数 RC (0 = 禁用)
+    float deadband;            // 死区范围 (0 = 禁用)
+    float out_max;             // 输出上限 (需要 PID_ENABLE_OUTPUT_LIMIT)
+    float out_min;             // 输出下限 (需要 PID_ENABLE_OUTPUT_LIMIT)
+    PIDConfigMask config_mask; // 功能配置掩码
 } PID_Init_Config_s;
 
 /*------------- 类型定义 --------------*/
@@ -107,7 +107,7 @@ typedef struct PIDInstance
     float out_min; // 输出下限
 
     /*------------- 功能配置掩码 -------------*/
-    uint16_t config_mask; // 功能配置掩码
+    PIDConfigMask config_mask; // 功能配置掩码
 
     /*------------- 状态变量 -------------*/
     float measure;      // 当前测量值

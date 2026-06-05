@@ -78,7 +78,7 @@
 
 /*============= 日志级别枚举 =============*/
 
-typedef enum
+typedef enum : uint8_t
 {
     LOG_LEVEL_DEBUG = 0,
     LOG_LEVEL_INFO,
