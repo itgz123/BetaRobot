@@ -188,6 +188,10 @@ static inline float BSP_Math_Fabs(float x)
 #define DEG_TO_RAD(deg) ((deg) * M_PI / 180.0f)
 #define RAD_TO_DEG(rad) ((rad) * 180.0f / M_PI)
 
+/* RPM与rad/s转换 */
+#define RPM_TO_RADPS(rpm) ((rpm) * M_2PI / 60.0f)
+#define RADPS_TO_RPM(radps) ((radps) * 60.0f / M_2PI)
+
 /* 限制范围 */
 #define MATH_CLAMP(x, min, max) ((x) < (min) ? (min) : ((x) > (max) ? (max) : (x)))
 
