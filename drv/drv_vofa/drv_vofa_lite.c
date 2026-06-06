@@ -21,6 +21,14 @@
 // 缓冲区 = (时间戳1 + 用户通道) * 4 + 帧尾4字节
 #define TX_BUFF_SIZE ((1 + VOFA_LITE_CHANNELS) * 4 + 4)
 
+/*------------- 联合体：float与uint8_t互转 --------------*/
+
+typedef union
+{
+    float f;
+    uint8_t b[4];
+} FloatBytes_u;
+
 /*------------- 缓冲区状态枚举 --------------*/
 
 typedef enum : uint8_t
@@ -107,20 +115,27 @@ void VofaLiteSetChannel(uint8_t ch, float value)
         return;
     }
 
-    // 直接写入当前写入缓冲区的对应位置
-    // 位置计算：4(时间戳) + (ch-1)*4
+    // 使用联合体直接写入，避免 memcpy 函数调用
+    FloatBytes_u fb = {.f = value};
     uint8_t *p = &s_tx_buff[s_write_buff][4 + (ch - 1) * 4];
-    memcpy(p, &value, 4);
+    p[0] = fb.b[0];
+    p[1] = fb.b[1];
+    p[2] = fb.b[2];
+    p[3] = fb.b[3];
 }
 
 void VofaLiteSend(void)
 {
-    // 1. 填充时间戳到写入缓冲区
-    float timestamp = (float)DWT_GetTimeUs();
-    memcpy(&s_tx_buff[s_write_buff][0], &timestamp, 4);
+    // 1. 填充时间戳到写入缓冲区（使用联合体避免 memcpy）
+    FloatBytes_u ts = {.f = (float)DWT_GetTimeUs()};
+    uint8_t *p = s_tx_buff[s_write_buff];
+    p[0] = ts.b[0];
+    p[1] = ts.b[1];
+    p[2] = ts.b[2];
+    p[3] = ts.b[3];
 
     // 2. 填充帧尾
-    uint8_t *p = &s_tx_buff[s_write_buff][4 + VOFA_LITE_CHANNELS * 4];
+    p = &s_tx_buff[s_write_buff][4 + VOFA_LITE_CHANNELS * 4];
     *p++ = VOFA_JUST_FLOAT_FRAME_END_0;
     *p++ = VOFA_JUST_FLOAT_FRAME_END_1;
     *p++ = VOFA_JUST_FLOAT_FRAME_END_2;
