@@ -64,8 +64,6 @@ struct DJIMotorInstance
     DJIMotorRawData_s data_raw;
     DJIMotorData_s data[2];
     uint8_t data_now_idx;
-    MotorSpeedSrc_e speed_src; // 速度来源选择
-    float speed_lpf_rc;        // 速度低通滤波时间常数 RC (0=禁用)
 
     /* 分组发送 (DJI 特有) */
     DJIMotorSendGroup_s *sender_group;
