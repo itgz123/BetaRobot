@@ -43,8 +43,8 @@ typedef struct
 typedef struct
 {
     float position_single; // 单圈位置 (rad) [0, 2π)
-    float position_multi;  // 多圈位置 (rad)
     float speed;           // 速度 (rad/s)
+    float position_multi;  // 多圈位置 (rad)
     float current;         // 电流 (A)
     float temperature;     // 线圈温度 (°C)
     uint64_t time_stamp;   // 接收时间戳
@@ -81,7 +81,6 @@ typedef struct
     uint8_t model;                    // 型号
     uint16_t reload_count;            // 重载值（喂狗超时阈值）
     DaemonFaultAction_e fault_action; // 离线故障动作
-    offline_callback lost_callback;   // 异常处理函数（可为NULL）
     uint8_t motor_id;                 // 电机 ID (1-8)
     MotorSpeedSrc_e speed_src;        // 速度来源：反馈速度/位置微分
     float speed_lpf_rc;               // 速度低通滤波时间常数 RC (0=禁用)
@@ -90,8 +89,8 @@ typedef struct
     MotorControllerSetting_s controller_setting; // 控制器设置
 
     /* PID 设置 */
-    MotorPIDSetting_s pid_speed_setting; // 速度环 PID 设置
-    MotorPIDSetting_s pid_angle_setting; // 位置环 PID 设置
+    PID_Init_Config_s pid_speed_setting; // 速度环 PID 设置
+    PID_Init_Config_s pid_angle_setting; // 位置环 PID 设置
 } DJIMotor_Init_Config_s;
 
 /*============================================
@@ -107,10 +106,10 @@ typedef struct
     }
 
 int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg);
-void DJIMotorEnable(DJIMotorInstance *inst);
-void DJIMotorDisable(DJIMotorInstance *inst);
-void DJIMotorSetRef(DJIMotorInstance *inst, float ref);
-void DJIMotorSend(DJIMotorInstance *inst); // 按照can的接收id分组，只要调用同1组的任意一个电机的发送函数，即可发送整组电机
+void DJIMotorEnable(void *inst);
+void DJIMotorDisable(void *inst);
+void DJIMotorSetRef(void *inst, float ref);
+void DJIMotorSend(void *inst); // 按照can的接收id分组，只要调用同1组的任意一个电机的发送函数，即可发送整组电机
 
 #endif // BSP_CAN_MODULE_ENABLED
 

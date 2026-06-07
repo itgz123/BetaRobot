@@ -6,6 +6,7 @@
  *       - 积分限幅 (抗积分饱和)
  *       - 梯形积分
  *       - 变速积分 (误差大时减弱积分作用)
+ *       - 比例先行 (对测量值比例计算，避免设定值突变冲击)
  *       - 微分先行 (对测量值微分，避免设定值突变冲击)
  *       - 微分项滤波 (抑制高频噪声)
  *       - 死区控制
@@ -42,11 +43,11 @@ typedef enum : uint16_t
     PID_ENABLE_DERIVATIVE_ON_MEAS = 0x02,   // 启用微分先行
     PID_ENABLE_TRAPEZOID_INTEGRAL = 0x04,   // 启用梯形积分
     PID_ENABLE_CHANGING_INTEGRATION = 0x08, // 启用变速积分
-    PID_ENABLE_DERIVATIVE_FILTER = 0x10,    // 启用微分滤波
-    PID_ENABLE_OUTPUT_FILTER = 0x20,        // 启用输出滤波
-    PID_ENABLE_OUTPUT_LIMIT = 0x40,         // 启用输出限幅
-    PID_ENABLE_DEADBAND = 0x80,             // 启用死区控制
-    PID_ENABLE_FEEDFORWARD = 0x100,         // 启用前馈控制
+    PID_ENABLE_PROPORTIONAL_ON_MEAS = 0x10, // 启用比例先行
+    PID_ENABLE_DERIVATIVE_FILTER = 0x20,    // 启用微分滤波
+    PID_ENABLE_OUTPUT_FILTER = 0x40,        // 启用输出滤波
+    PID_ENABLE_OUTPUT_LIMIT = 0x80,         // 启用输出限幅
+    PID_ENABLE_DEADBAND = 0x100,            // 启用死区控制
 } PIDConfigMask;
 
 /*------------- 配置结构体 --------------*/
@@ -111,7 +112,7 @@ typedef struct PIDInstance
 
     /*------------- 状态变量 -------------*/
     float measure;      // 当前测量值
-    float last_measure; // 上次测量值 (用于微分先行)
+    float last_measure; // 上次测量值 (用于微分先行/比例先行)
     float error;        // 当前误差
     float last_error;   // 上次误差
 
@@ -165,12 +166,13 @@ void PIDReset(PIDInstance *instance);
  *       - PID_ENABLE_TRAPEZOID_INTEGRAL → 梯形积分
  *       - PID_ENABLE_CHANGING_INTEGRATION → 变速积分
  *       - PID_ENABLE_INTEGRAL_LIMIT → 积分限幅
+ *       - PID_ENABLE_PROPORTIONAL_ON_MEAS → 比例先行
  *       - PID_ENABLE_DERIVATIVE_ON_MEAS → 微分先行
  *       - PID_ENABLE_DERIVATIVE_FILTER → 微分滤波
  *       - PID_ENABLE_OUTPUT_FILTER → 输出滤波
  *       - PID_ENABLE_OUTPUT_LIMIT → 输出限幅
  *       - PID_ENABLE_DEADBAND → 死区控制
- *       - PID_ENABLE_FEEDFORWARD → 前馈控制
+ *       - feedforward 参数传 0 表示无前馈
  */
 float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float feedforward);
 

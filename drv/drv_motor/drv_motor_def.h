@@ -6,6 +6,11 @@
 #include "drv_daemon.h"
 #include "drv_pid.h"
 
+#define MotorEnable(inst) ((inst)->base.vtable->enable(inst))
+#define MotorDisable(inst) ((inst)->base.vtable->disable(inst))
+#define MotorSetRef(inst, ref) ((inst)->base.vtable->set_ref(inst, ref))
+#define MotorSend(inst) ((inst)->base.vtable->send(inst))
+
 /*============================================
  *              电机品牌枚举
  *============================================*/
@@ -21,9 +26,9 @@ typedef enum : uint8_t
  *============================================*/
 typedef enum : uint8_t
 {
-    DJI_MODEL_M3508 = 0, // C620 电调，带减速
+    DJI_MODEL_M3508 = 0, // C620 电调
     DJI_MODEL_M2006,     // C610 电调
-    DJI_MODEL_GM6020,    // 云台电机
+    DJI_MODEL_GM6020,    // GM6020 电机
     DJI_MODEL_NUM,       // DJI电机型号数量
 } DJIModel_e;
 
@@ -45,6 +50,15 @@ typedef enum : uint8_t
     MOTOR_FEEDBACK_MOTOR = 0, // 使用电机自身传感器
     MOTOR_FEEDBACK_EXTERNAL,  // 使用外部传感器（如 IMU）
 } MotorFeedbackSrc_e;
+
+/*============================================
+ *              前馈来源枚举
+ *============================================*/
+typedef enum : uint8_t
+{
+    MOTOR_FEEDFORWARD_DISABLE = 0, // 不使用前馈
+    MOTOR_FEEDFORWARD_EXTERNAL,    // 使用外部前馈
+} MotorFeedforwardSrc_e;
 
 /*============================================
  *              速度来源枚举
@@ -74,6 +88,15 @@ typedef enum : uint8_t
 } MotorEnable_e;
 
 /*============================================
+ *              位置限位使能枚举
+ *============================================*/
+typedef enum : uint8_t
+{
+    MOTOR_ANGLE_LIMIT_DISABLE = 0, // 禁用位置限位
+    MOTOR_ANGLE_LIMIT_ENABLE = 1,  // 启用位置限位
+} MotorAngleLimit_e;
+
+/*============================================
  *              电机参数结构体
  *============================================*/
 typedef struct
@@ -89,18 +112,17 @@ typedef struct
  *============================================*/
 typedef struct MotorController_s MotorController_s;
 typedef struct MotorControllerSetting_s MotorControllerSetting_s;
-typedef struct MotorPIDSetting_s MotorPIDSetting_s;
 typedef struct MotorBase_s MotorBase_s;
-
+typedef struct MotorVTable_s MotorVTable_s;
 /*============================================
- *              PID 简化配置结构体（初始化时使用）
+ *              虚函数表
  *============================================*/
-struct MotorPIDSetting_s
+struct MotorVTable_s
 {
-    float kp;             // 比例系数
-    float ki;             // 积分系数
-    float kd;             // 微分系数
-    float integral_limit; // 积分限幅阈值 (0 = 禁用)
+    void (*enable)(void *inst);             // 使能电机
+    void (*disable)(void *inst);            // 禁用电机
+    void (*set_ref)(void *inst, float ref); // 设置参考值
+    void (*send)(void *inst);               // 发送控制数据
 };
 
 /*============================================
@@ -112,13 +134,23 @@ struct MotorControllerSetting_s
     MotorLoopType_e loop_type;           // 控制模式
     MotorDirection_e motor_direction;    // 电机方向
     MotorDirection_e feedback_direction; // 反馈方向
-    MotorFeedbackSrc_e angle_src;        // 角度反馈来源
-    MotorFeedbackSrc_e speed_src;        // 速度反馈来源
-    float max_angle;                     // 位置限幅
 
-    /* 前馈指针 */
-    float *speed_feedforward_ptr;    // 速度前馈指针，传入NULL不使用
-    float *position_feedforward_ptr; // 位置前馈指针，传入NULL不使用
+    /* 位置限位 */
+    MotorAngleLimit_e angle_limit_enable; // 位置限位使能
+    float angle_limit_min;                // 位置下限
+    float angle_limit_max;                // 位置上限
+
+    /* 前馈来源 */
+    MotorFeedforwardSrc_e speed_feedforward_src;    // 速度前馈来源
+    MotorFeedforwardSrc_e position_feedforward_src; // 位置前馈来源
+
+    /* 外部前馈指针 */
+    float *speed_feedforward_ptr;    // 速度前馈指针
+    float *position_feedforward_ptr; // 位置前馈指针
+
+    /* 反馈来源 */
+    MotorFeedbackSrc_e angle_src; // 角度反馈来源
+    MotorFeedbackSrc_e speed_src; // 速度反馈来源
 
     /* 外部反馈指针 */
     float *angle_external_ptr; // 外部角度反馈指针
@@ -145,7 +177,7 @@ struct MotorController_s
 struct MotorBase_s
 {
     /* 虚函数表 */
-    // const MotorVTable_s *vtable; // 先预留，之后再实现
+    const MotorVTable_s *vtable;
 
     /* 基本属性 */
     MotorBrand_e brand;   // 电机品牌

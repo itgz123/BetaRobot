@@ -92,6 +92,21 @@ const uint16_t can_rx_id_base[DJI_MODEL_NUM] = {
 
 static DJIMotorSendGroup_s s_send_groups[CAN_NUM_MAX][DJI_MOTOR_GROUP_NUM] = {0};
 
+/*============================================
+ *              虚函数表实例
+ *============================================*/
+void DJIMotor_Enable(void *inst);
+void DJIMotor_Disable(void *inst);
+void DJIMotor_SetRef(void *inst, float ref);
+void DJIMotor_Send(void *inst);
+
+const static MotorVTable_s s_dji_motor_vtable = {
+    .enable = DJIMotor_Enable,
+    .disable = DJIMotor_Disable,
+    .set_ref = DJIMotor_SetRef,
+    .send = DJIMotor_Send,
+};
+
 /**
  * @brief DJI电机接收回调函数
  * @param can CAN实例指针
@@ -164,6 +179,7 @@ static void DJIMotorRxCallback(CANInstance *can)
 
     // 速度低通滤波: speed = (1-alpha) * raw + alpha * last, alpha = RC / (RC + dt)
     // alpha 越大，滤波越强（响应越慢）
+    // 当 RC = 0 或 dt = 0 时，直接使用原始速度（滤波关闭）
     if (motor->speed_lpf_rc > 0.0f && dt > 0.0f)
     {
         float alpha = motor->speed_lpf_rc / (motor->speed_lpf_rc + dt);
@@ -213,6 +229,21 @@ static float DJIMotor_GetSpeed(DJIMotorInstance *inst)
     return inst->data[inst->data_now_idx].speed;
 }
 
+/**
+ * @brief DJI电机守护进程回调函数
+ * @param owner 守护进程所有者指针 (DJIMotorInstance*)
+ * @note 电机离线时调用，清空 PID 状态避免积分累积
+ */
+static void DJIMotorDaemonCallback(void *owner)
+{
+    if (!owner)
+        return;
+
+    DJIMotorInstance *motor = (DJIMotorInstance *)owner;
+    PIDReset(&motor->base.controller.pid_speed);
+    PIDReset(&motor->base.controller.pid_angle);
+}
+
 int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
 {
     if (!inst || !cfg)
@@ -237,7 +268,8 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
     inst->base.brand = MOTOR_BRAND_DJI;
     inst->base.model = cfg->model;
     inst->motor_id = cfg->motor_id;
-    inst->base.enable = 0;
+    inst->base.enable = MOTOR_DISABLE;
+    inst->base.vtable = &s_dji_motor_vtable;
 
     // 初始化控制器设置
     inst->base.setting = cfg->controller_setting;
@@ -250,41 +282,28 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
     float current_max_a = dji_motor_params[cfg->model].current_max_a;
     float speed_max = dji_motor_params[cfg->model].no_load_speed;
 
-    // PID 固定配置掩码
-    uint16_t pid_mask = PID_ENABLE_INTEGRAL_LIMIT |
-                        PID_ENABLE_TRAPEZOID_INTEGRAL |
-                        PID_ENABLE_DERIVATIVE_ON_MEAS |
-                        PID_ENABLE_OUTPUT_LIMIT |
-                        PID_ENABLE_FEEDFORWARD;
-
     // 初始化速度环 PID (输出限幅: 电流安培值)
     if (cfg->controller_setting.loop_type & MOTOR_LOOP_SPEED)
     {
-        PID_Init_Config_s pid_speed_config = {
-            .kp = cfg->pid_speed_setting.kp,
-            .ki = cfg->pid_speed_setting.ki,
-            .kd = cfg->pid_speed_setting.kd,
-            .integral_limit = cfg->pid_speed_setting.integral_limit,
-            .out_max = current_max_a,
-            .out_min = -current_max_a,
-            .config_mask = pid_mask,
-        };
-        PIDInit(&inst->base.controller.pid_speed, &pid_speed_config);
+        // 添加固定掩码
+        cfg->pid_speed_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL | PID_ENABLE_OUTPUT_LIMIT;
+        // 设置输出限幅
+        cfg->pid_speed_setting.out_max = current_max_a;
+        cfg->pid_speed_setting.out_min = -current_max_a;
+
+        PIDInit(&inst->base.controller.pid_speed, &cfg->pid_speed_setting);
     }
 
     // 初始化位置环 PID (输出限幅: 空载速度 rad/s)
     if (cfg->controller_setting.loop_type & MOTOR_LOOP_ANGLE)
     {
-        PID_Init_Config_s pid_angle_config = {
-            .kp = cfg->pid_angle_setting.kp,
-            .ki = cfg->pid_angle_setting.ki,
-            .kd = cfg->pid_angle_setting.kd,
-            .integral_limit = cfg->pid_angle_setting.integral_limit,
-            .out_max = speed_max,
-            .out_min = -speed_max,
-            .config_mask = pid_mask,
-        };
-        PIDInit(&inst->base.controller.pid_angle, &pid_angle_config);
+        // 添加固定掩码
+        cfg->pid_angle_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL | PID_ENABLE_OUTPUT_LIMIT;
+        // 设置输出限幅
+        cfg->pid_angle_setting.out_max = speed_max;
+        cfg->pid_angle_setting.out_min = -speed_max;
+
+        PIDInit(&inst->base.controller.pid_angle, &cfg->pid_angle_setting);
     }
 
     // 初始化速度来源
@@ -319,7 +338,7 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
     if (inst->base.daemon)
     {
         Daemon_Init_Config_s config = {
-            .callback = cfg->lost_callback,
+            .callback = DJIMotorDaemonCallback,
             .fault_action = cfg->fault_action,
             .owner_id = inst,
             .reload_count = cfg->reload_count};
@@ -327,27 +346,6 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
     }
 
     return 0;
-}
-
-void DJIMotorEnable(DJIMotorInstance *inst)
-{
-    if (!inst)
-        return;
-    inst->base.enable = 1;
-}
-
-void DJIMotorDisable(DJIMotorInstance *inst)
-{
-    if (!inst)
-        return;
-    inst->base.enable = 0;
-}
-
-void DJIMotorSetRef(DJIMotorInstance *inst, float ref)
-{
-    if (!inst)
-        return;
-    inst->base.controller.ref = ref;
 }
 
 /**
@@ -375,23 +373,33 @@ static void DJIMotor_Calculate(DJIMotorInstance *inst)
     // 位置环 (最外环)
     if (setting->loop_type & MOTOR_LOOP_ANGLE)
     {
-        if (setting->position_feedforward_ptr)
+        // 位置输入限位
+        if ((setting->angle_limit_enable == MOTOR_ANGLE_LIMIT_ENABLE) && (setting->angle_limit_min < setting->angle_limit_max))
         {
-            setpoint += *setting->position_feedforward_ptr;
+            setpoint = BSP_Math_Clamp(setpoint, setting->angle_limit_min, setting->angle_limit_max);
+        }
+
+        float position_feedforward = 0.0f;
+        if (setting->position_feedforward_src == MOTOR_FEEDFORWARD_EXTERNAL &&
+            setting->position_feedforward_ptr)
+        {
+            position_feedforward = *setting->position_feedforward_ptr;
         }
         measure = DJIMotor_GetAngle(inst);
-        setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, 0.0f);
+        setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, position_feedforward);
     }
 
     // 速度环
     if (setting->loop_type & MOTOR_LOOP_SPEED)
     {
-        if (setting->speed_feedforward_ptr)
+        float speed_feedforward = 0.0f;
+        if (setting->speed_feedforward_src == MOTOR_FEEDFORWARD_EXTERNAL &&
+            setting->speed_feedforward_ptr)
         {
-            setpoint += *setting->speed_feedforward_ptr;
+            speed_feedforward = *setting->speed_feedforward_ptr;
         }
         measure = DJIMotor_GetSpeed(inst);
-        output = PIDCalculate(&ctrl->pid_speed, setpoint, measure, 0.0f);
+        output = PIDCalculate(&ctrl->pid_speed, setpoint, measure, speed_feedforward);
     }
     else
     {
@@ -411,13 +419,44 @@ static void DJIMotor_Calculate(DJIMotorInstance *inst)
     ctrl->output = output / current_max_a * (float)current_max;
 }
 
-void DJIMotorSend(DJIMotorInstance *inst)
+/*============================================
+ *              虚函数实现
+ *============================================*/
+void DJIMotor_Enable(void *inst)
 {
-    if (!inst || !inst->sender_group || !inst->base.can)
+    if (!inst)
+        return;
+    DJIMotorInstance *motor = (DJIMotorInstance *)inst;
+    motor->base.enable = MOTOR_ENABLE;
+}
+
+void DJIMotor_Disable(void *inst)
+{
+    if (!inst)
+        return;
+    DJIMotorInstance *motor = (DJIMotorInstance *)inst;
+    motor->base.enable = MOTOR_DISABLE;
+}
+
+void DJIMotor_SetRef(void *inst, float ref)
+{
+    if (!inst)
+        return;
+    DJIMotorInstance *motor = (DJIMotorInstance *)inst;
+    motor->base.controller.ref = ref;
+}
+
+void DJIMotor_Send(void *inst)
+{
+    if (!inst)
+        return;
+    DJIMotorInstance *motor = (DJIMotorInstance *)inst;
+
+    if (!motor->sender_group || !motor->base.can)
         return;
 
-    DJIMotorSendGroup_s *group = inst->sender_group;
-    CANInstance *can = inst->base.can;
+    DJIMotorSendGroup_s *group = motor->sender_group;
+    CANInstance *can = motor->base.can;
 
     // ===== 控制计算：组内所有已初始化电机 =====
     for (int i = 0; i < 4; i++)
