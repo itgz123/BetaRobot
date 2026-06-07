@@ -31,6 +31,7 @@ typedef enum : uint8_t
     DAEMON_FAULT_RESERVED_5 = 5,   // 预留
     DAEMON_FAULT_RESERVED_6 = 6,   // 预留
     DAEMON_FAULT_RESERVED_7 = 7,   // 预留
+    DAEMON_FAULT_NUM,              // 默认行为数量
 } DaemonFaultAction_e;
 
 /* 模块离线处理函数指针 */

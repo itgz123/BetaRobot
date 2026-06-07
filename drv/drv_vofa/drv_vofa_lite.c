@@ -12,8 +12,6 @@
 #include "bsp_uart_log.h"
 #include "bsp_usart.h"
 #include "bsp_dwt.h"
-#include "FreeRTOS.h"
-#include "task.h"
 #include <string.h>
 
 /*------------- 发送缓冲区大小计算 --------------*/
