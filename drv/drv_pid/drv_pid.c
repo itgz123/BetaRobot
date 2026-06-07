@@ -6,12 +6,13 @@
  *       1. 积分限幅 (抗积分饱和)：限制积分项累加上限
  *       2. 梯形积分：提高积分精度
  *       3. 变速积分：误差大时减弱积分，兼具积分分离效果
- *       4. 微分先行：仅对测量值微分，避免设定值突变冲击
- *       5. 微分滤波：一阶低通滤波抑制高频噪声
- *       6. 死区控制：误差小于死区时不输出
- *       7. 输出滤波：一阶低通滤波平滑输出
- *       8. 输出限幅：可配置输出范围
- *       9. 前馈控制：提高系统响应速度
+ *       4. 比例先行：对测量值比例计算，避免设定值突变冲击
+ *       5. 微分先行：仅对测量值微分，避免设定值突变冲击
+ *       6. 微分滤波：一阶低通滤波抑制高频噪声
+ *       7. 死区控制：误差小于死区时不输出
+ *       8. 输出滤波：一阶低通滤波平滑输出
+ *       9. 输出限幅：可配置输出范围
+ *       10. 前馈控制：提高系统响应速度
  *
  * @note 拓展功能启用规则：
  *       - 所有高级功能统一通过掩码 config_mask 控制启用/禁用
@@ -26,6 +27,7 @@
 static void f_Trapezoid_Intergral(PIDInstance *pid);
 static void f_Changing_Integration_Rate(PIDInstance *pid);
 static void f_Integral_Limit(PIDInstance *pid);
+static void f_Proportional_On_Measurement(PIDInstance *pid);
 static void f_Derivative_On_Measurement(PIDInstance *pid);
 static void f_Derivative_On_Error(PIDInstance *pid);
 static void f_Derivative_Filter(PIDInstance *pid);
@@ -127,6 +129,26 @@ static void f_Derivative_On_Measurement(PIDInstance *pid)
 }
 
 /**
+ * @brief 比例先行
+ *        仅对测量值比例计算，避免设定值突变引起的比例冲击
+ *        Pout = Kp * (Last_Measure - Measure) / dt
+ *
+ * @note 与微分先行类似，但应用于比例项
+ *       适用于设定值频繁突变的场景
+ */
+static void f_Proportional_On_Measurement(PIDInstance *pid)
+{
+    if (pid->dt > 0.0001f)
+    {
+        pid->p_out = pid->kp * (pid->last_measure - pid->measure) / pid->dt;
+    }
+    else
+    {
+        pid->p_out = 0;
+    }
+}
+
+/**
  * @brief 对误差微分
  *        标准微分方式，对误差进行微分
  *        Dout = Kd * (Err - Last_Err) / dt
@@ -149,9 +171,15 @@ static void f_Derivative_On_Error(PIDInstance *pid)
  *        Dout = Dout * dt / (RC + dt) + Last_Dout * RC / (RC + dt)
  *
  * @note 由 PID_ENABLE_DERIVATIVE_FILTER 掩码控制是否调用
+ *       当 RC = 0 时，alpha = 1，滤波关闭，直接输出当前值
  */
 static void f_Derivative_Filter(PIDInstance *pid)
 {
+    if (pid->d_lpf_rc <= 0.0f || pid->dt <= 0.0f)
+    {
+        // RC = 0 或 dt = 0 时，直接使用当前微分值（滤波关闭）
+        return;
+    }
     float alpha = pid->dt / (pid->d_lpf_rc + pid->dt);
     pid->d_out = pid->d_out * alpha + pid->last_d_out * (1.0f - alpha);
 }
@@ -162,9 +190,15 @@ static void f_Derivative_Filter(PIDInstance *pid)
  *        Output = Output * dt / (RC + dt) + Last_Output * RC / (RC + dt)
  *
  * @note 由 PID_ENABLE_OUTPUT_FILTER 掩码控制是否调用
+ *       当 RC = 0 时，alpha = 1，滤波关闭，直接输出当前值
  */
 static void f_Output_Filter(PIDInstance *pid)
 {
+    if (pid->out_lpf_rc <= 0.0f || pid->dt <= 0.0f)
+    {
+        // RC = 0 或 dt = 0 时，直接使用当前输出值（滤波关闭）
+        return;
+    }
     float alpha = pid->dt / (pid->out_lpf_rc + pid->dt);
     pid->output = pid->output * alpha + pid->last_output * (1.0f - alpha);
 }
@@ -274,7 +308,14 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float f
     }
 
     // 3. 比例项
-    instance->p_out = instance->kp * instance->error;
+    if (instance->config_mask & PID_ENABLE_PROPORTIONAL_ON_MEAS)
+    {
+        f_Proportional_On_Measurement(instance);
+    }
+    else
+    {
+        instance->p_out = instance->kp * instance->error;
+    }
 
     // 4. 积分项
     instance->i_term = instance->ki * instance->error;
@@ -316,15 +357,8 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float f
         f_Derivative_Filter(instance);
     }
 
-    // 6. 前馈控制 (直接使用传入的前馈值)
-    if (instance->config_mask & PID_ENABLE_FEEDFORWARD)
-    {
-        instance->feedforward_out = feedforward;
-    }
-    else
-    {
-        instance->feedforward_out = 0.0f;
-    }
+    // 6. 前馈控制 (直接使用传入的前馈值，不需要前馈时传 0)
+    instance->feedforward_out = feedforward;
 
     // 7. 计算总输出
     instance->output = instance->p_out + instance->i_out + instance->d_out + instance->feedforward_out;
