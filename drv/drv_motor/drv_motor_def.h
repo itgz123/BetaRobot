@@ -108,27 +108,34 @@ typedef struct
 } MotorParams_s;
 
 /*============================================
- *              前向声明
- *============================================*/
-typedef struct MotorController_s MotorController_s;
-typedef struct MotorControllerSetting_s MotorControllerSetting_s;
-typedef struct MotorBase_s MotorBase_s;
-typedef struct MotorVTable_s MotorVTable_s;
-/*============================================
  *              虚函数表
  *============================================*/
-struct MotorVTable_s
+typedef struct MotorVTable_s
 {
     void (*enable)(void *inst);             // 使能电机
     void (*disable)(void *inst);            // 禁用电机
     void (*set_ref)(void *inst, float ref); // 设置参考值
     void (*send)(void *inst);               // 发送控制数据
-};
+} MotorVTable_s;
+
+/*============================================
+ *              控制器结构体
+ *============================================*/
+typedef struct
+{
+    /* PID 控制器实例 */
+    PIDInstance pid_speed; // 速度环 PID 实例
+    PIDInstance pid_angle; // 位置环 PID 实例
+
+    /* 控制状态 */
+    float ref;    // 当前控制参考值 (速度环: rad/s, 位置环: rad)
+    float output; // 控制输出原始值 (用于CAN发送)
+} MotorController_s;
 
 /*============================================
  *              控制器设置结构
  *============================================*/
-struct MotorControllerSetting_s
+typedef struct
 {
     /* 控制设置 */
     MotorLoopType_e loop_type;           // 控制模式
@@ -155,26 +162,12 @@ struct MotorControllerSetting_s
     /* 外部反馈指针 */
     float *angle_external_ptr; // 外部角度反馈指针
     float *speed_external_ptr; // 外部速度反馈指针
-};
-
-/*============================================
- *              控制器结构体
- *============================================*/
-struct MotorController_s
-{
-    /* PID 控制器实例 */
-    PIDInstance pid_speed; // 速度环 PID 实例
-    PIDInstance pid_angle; // 位置环 PID 实例
-
-    /* 控制状态 */
-    float ref;    // 当前控制参考值 (速度环: rad/s, 位置环: rad)
-    float output; // 控制输出原始值 (用于CAN发送)
-};
+} MotorControllerSetting_s;
 
 /*============================================
  *              电机基类结构体
  *============================================*/
-struct MotorBase_s
+typedef struct
 {
     /* 虚函数表 */
     const MotorVTable_s *vtable;
@@ -191,6 +184,6 @@ struct MotorBase_s
     /* 统一接口 */
     CANInstance *can;       // CAN 实例指针
     DaemonInstance *daemon; // 守护进程实例
-};
+} MotorBase_s;
 
 #endif // !DRV_MOTOR_DEF_H
