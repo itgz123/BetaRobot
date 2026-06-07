@@ -3,13 +3,23 @@
 #ifdef DAEMON_USED
 
 #include "bsp_uart_log.h"
-#include "FreeRTOS.h"
-#include "task.h"
+#include "bsp_freertos.h"
 #include "bsp_dwt.h"
+#include "bsp_tim.h"
 
 // 用于保存所有的daemon instance
 static DaemonInstance *s_daemon_instances[DAEMON_MX_CNT] = {NULL};
 static uint8_t s_idx = 0;
+
+// 蜂鸣器鸣叫声音表格
+const uint8_t voice_map[DAEMON_FAULT_NUM][12] = {0};
+static uint8_t buzzer_flag = 0;
+
+// 蜂鸣器pwm
+PWM_INSTANCE_DEF(buzzer_pwm);
+
+// Daemon 任务实例
+TASK_INSTANCE_DEF(daemon_task, DAEMON_STACK_SIZE);
 
 void DaemonRegister(DaemonInstance *inst, const Daemon_Init_Config_s *config)
 {
@@ -70,43 +80,47 @@ void DaemonTask(void)
             {
                 dins->is_online = 0;
                 LOGERROR("[DAEMON] Module 0x%08X OFFLINE", (uint32_t)(uintptr_t)dins->owner_id);
-
-                // 执行离线故障动作
-                switch (dins->fault_action)
-                {
-                case DAEMON_FAULT_BUZZER_SHORT:
-                    break;
-                case DAEMON_FAULT_BUZZER_LONG:
-                    break;
-                case DAEMON_FAULT_LIGHT_SHORT:
-                    break;
-                case DAEMON_FAULT_LIGHT_LONG:
-                    break;
-                case DAEMON_FAULT_RESERVED_5:
-                    break;
-                case DAEMON_FAULT_RESERVED_6:
-                    break;
-                case DAEMON_FAULT_RESERVED_7:
-                    break;
-                case DAEMON_FAULT_NONE:
-                default:
-                    break;
-                }
-
-                if (dins->callback)
-                    dins->callback(dins->owner_id);
+            }
+        }
+        else
+        {
+            // 执行离线故障动作
+            switch (dins->fault_action)
+            {
+            case DAEMON_FAULT_BUZZER_SHORT:
+                buzzer_flag = 1;
+                break;
+            case DAEMON_FAULT_BUZZER_LONG:
+                break;
+            case DAEMON_FAULT_LIGHT_SHORT:
+                break;
+            case DAEMON_FAULT_LIGHT_LONG:
+                break;
+            case DAEMON_FAULT_RESERVED_5:
+                break;
+            case DAEMON_FAULT_RESERVED_6:
+                break;
+            case DAEMON_FAULT_RESERVED_7:
+                break;
+            case DAEMON_FAULT_NONE:
+            default:
+                break;
+            }
+            if (dins->callback)
+            {
+                // 每次检查都调用回调（持续掉线状态）
+                dins->callback(dins->owner_id);
             }
         }
     }
+
+    PWMSetDutyRatio(&buzzer_pwm, (buzzer_flag / 2.0f));
+    buzzer_flag = 0;
 }
 
 /*==================== RTOS 任务 ====================*/
 
-static TaskHandle_t s_daemonTaskHandle;
-static StackType_t s_daemonTaskStack[DAEMON_STACK_SIZE];
-static StaticTask_t s_daemonTaskTCB;
-
-ITCM_RAM __attribute__((noreturn)) static void StartDaemonTask(void *argument)
+ITCM_RAM static void DaemonTaskFunc(void *argument)
 {
     static uint64_t start;
     static uint64_t dt;
@@ -124,7 +138,14 @@ ITCM_RAM __attribute__((noreturn)) static void StartDaemonTask(void *argument)
 
 void DaemonInit(void)
 {
-    s_daemonTaskHandle = xTaskCreateStatic(StartDaemonTask, "daemonTask", DAEMON_STACK_SIZE, NULL, DAEMON_TASK_PRIORITY, s_daemonTaskStack, &s_daemonTaskTCB);
+    Task_Init_Config_s task_cfg = {
+        .func = DaemonTaskFunc,
+        .priority = DAEMON_TASK_PRIORITY,
+    };
+    TaskRegister(&daemon_task, &task_cfg);
+
+    PWM_Init_Config_s pwm_cfg = {.tim_e = TIM_BUZZER};
+    PWMRegister(&buzzer_pwm, &pwm_cfg);
 }
 
 #else
