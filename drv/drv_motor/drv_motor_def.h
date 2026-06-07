@@ -181,6 +181,10 @@ typedef struct
     MotorControllerSetting_s setting; // 控制器设置
     MotorController_s controller;     // 控制器
 
+    /* 速度计算 */
+    MotorSpeedSrc_e speed_src; // 速度来源选择
+    float speed_lpf_rc;        // 速度低通滤波时间常数 RC (0=禁用)
+
     /* 统一接口 */
     CANInstance *can;       // CAN 实例指针
     DaemonInstance *daemon; // 守护进程实例
