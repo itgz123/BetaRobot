@@ -6,12 +6,13 @@
 #include "drv_daemon.h"
 #include "drv_pid.h"
 
-#define MotorEnable(inst) ((inst)->base.vtable->enable(inst))
-#define MotorDisable(inst) ((inst)->base.vtable->disable(inst))
-#define MotorSetRef(inst, ref) ((inst)->base.vtable->set_ref(inst, ref))
-#define MotorSend(inst) ((inst)->base.vtable->send(inst))
-#define MotorGetAngle(inst) ((inst)->base.vtable->get_angle(inst))
-#define MotorGetSpeed(inst) ((inst)->base.vtable->get_speed(inst))
+// 使用下面的宏必须确保所有电机派生类的 base 成员都是结构体的第一个成员
+#define MotorEnable(inst) (((MotorBase_s *)(inst))->vtable->enable(inst))
+#define MotorDisable(inst) (((MotorBase_s *)(inst))->vtable->disable(inst))
+#define MotorSetRef(inst, ref) (((MotorBase_s *)(inst))->vtable->set_ref(inst, ref))
+#define MotorSend(inst) (((MotorBase_s *)(inst))->vtable->send(inst))
+#define MotorGetAngle(inst) (((MotorBase_s *)(inst))->vtable->get_angle(inst))
+#define MotorGetSpeed(inst) (((MotorBase_s *)(inst))->vtable->get_speed(inst))
 
 /*============================================
  *              电机品牌枚举
