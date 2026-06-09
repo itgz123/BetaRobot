@@ -99,12 +99,16 @@ void DJIMotor_Enable(void *inst);
 void DJIMotor_Disable(void *inst);
 void DJIMotor_SetRef(void *inst, float ref);
 void DJIMotor_Send(void *inst);
+float DJIMotor_GetAngle(void *inst);
+float DJIMotor_GetSpeed(void *inst);
 
 const static MotorVTable_s s_dji_motor_vtable = {
     .enable = DJIMotor_Enable,
     .disable = DJIMotor_Disable,
     .set_ref = DJIMotor_SetRef,
     .send = DJIMotor_Send,
+    .get_angle = DJIMotor_GetAngle,
+    .get_speed = DJIMotor_GetSpeed,
 };
 
 /**
@@ -125,10 +129,6 @@ static void DJIMotorRxCallback(CANInstance *can)
     DJIMotorInstance *motor = (DJIMotorInstance *)can->parent;
     uint8_t *data = can->rx_buff;
 
-    // 双缓冲索引切换
-    uint8_t now_idx = motor->base.data_now_idx;
-    uint8_t last_idx = 1 - now_idx;
-
     // 解析原始数据
     motor->data_raw.raw_encoder = ((uint16_t)data[0] << 8) | data[1];
     motor->data_raw.raw_velocity = ((int16_t)data[2] << 8) | data[3];
@@ -145,17 +145,23 @@ static void DJIMotorRxCallback(CANInstance *can)
     uint16_t current_max = dji_motor_params[model].current_max;
     uint16_t encoder_resolution = dji_motor_params[model].encoder_resolution;
 
+    // 保存上次数据
+    float last_position_single = motor->data.position_single;
+    float last_position_multi = motor->data.position_multi;
+    motor->data.last_speed = motor->data.speed;
+    uint64_t last_time_stamp = motor->data.last_time_stamp;
+
     // 计算单圈位置 (rad) [0, 2π)
-    motor->base.data[now_idx].position_single = (float)motor->data_raw.raw_encoder * M_2PI / encoder_resolution;
+    motor->data.position_single = (float)motor->data_raw.raw_encoder * M_2PI / encoder_resolution;
 
     // 计算多圈位置 (rad)
     // BSP_Math_AngleDiff 返回最短角度差，正确处理边界穿越
-    motor->base.data[now_idx].position_multi = motor->base.data[last_idx].position_multi + BSP_Math_AngleDiff(motor->base.data[last_idx].position_single, motor->base.data[now_idx].position_single);
+    motor->data.position_multi = last_position_multi + BSP_Math_AngleDiff(last_position_single, motor->data.position_single);
 
     // 记录时间戳
     uint64_t now_time_us = DWT_GetTimeUs();
-    motor->base.data[now_idx].time_stamp = now_time_us;
-    float dt = (now_time_us - motor->base.data[last_idx].time_stamp) * 1e-6f; // us -> s
+    motor->data.last_time_stamp = now_time_us;
+    float dt = (now_time_us - last_time_stamp) * 1e-6f; // us -> s
 
     // 计算速度 (rad/s) - 转子速度
     float raw_speed;
@@ -169,7 +175,7 @@ static void DJIMotorRxCallback(CANInstance *can)
         // 使用位置差分计算速度
         if (dt > 0.0f)
         {
-            raw_speed = (motor->base.data[now_idx].position_multi - motor->base.data[last_idx].position_multi) / dt;
+            raw_speed = (motor->data.position_multi - last_position_multi) / dt;
         }
         else
         {
@@ -183,21 +189,18 @@ static void DJIMotorRxCallback(CANInstance *can)
     if (motor->base.speed_lpf_rc > 0.0f && dt > 0.0f)
     {
         float alpha = motor->base.speed_lpf_rc / (motor->base.speed_lpf_rc + dt);
-        motor->base.data[now_idx].speed = (1.0f - alpha) * raw_speed + alpha * motor->base.data[last_idx].speed;
+        motor->data.speed = (1.0f - alpha) * raw_speed + alpha * motor->data.last_speed;
     }
     else
     {
-        motor->base.data[now_idx].speed = raw_speed;
+        motor->data.speed = raw_speed;
     }
 
     // 电流 (A) - 使用安培单位
-    motor->current = (float)motor->data_raw.raw_current / (float)current_max * current_max_a;
+    motor->data.current = (float)motor->data_raw.raw_current / (float)current_max * current_max_a;
 
     // 温度
-    motor->temperature = (float)motor->data_raw.raw_temperature_motor;
-
-    // 切换索引，更新当前数据
-    motor->base.data_now_idx = last_idx;
+    motor->data.temperature = (float)motor->data_raw.raw_temperature_motor;
 
     // 喂狗
     if (motor->base.daemon)
@@ -207,26 +210,32 @@ static void DJIMotorRxCallback(CANInstance *can)
 }
 
 /*============================================
- *              反馈获取函数
+ *              反馈获取函数 (虚函数实现)
  *============================================*/
-static float DJIMotor_GetAngle(DJIMotorInstance *inst)
+float DJIMotor_GetAngle(void *inst)
 {
-    MotorControllerSetting_s *setting = &inst->base.setting;
+    if (!inst)
+        return 0.0f;
+    DJIMotorInstance *motor = (DJIMotorInstance *)inst;
+    MotorControllerSetting_s *setting = &motor->base.setting;
     if (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr)
     {
         return *setting->angle_external_ptr;
     }
-    return inst->base.data[inst->base.data_now_idx].position_multi;
+    return motor->data.position_multi;
 }
 
-static float DJIMotor_GetSpeed(DJIMotorInstance *inst)
+float DJIMotor_GetSpeed(void *inst)
 {
-    MotorControllerSetting_s *setting = &inst->base.setting;
+    if (!inst)
+        return 0.0f;
+    DJIMotorInstance *motor = (DJIMotorInstance *)inst;
+    MotorControllerSetting_s *setting = &motor->base.setting;
     if (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr)
     {
         return *setting->speed_external_ptr;
     }
-    return inst->base.data[inst->base.data_now_idx].speed;
+    return motor->data.speed;
 }
 
 /**
@@ -311,9 +320,8 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
     inst->base.speed_lpf_rc = cfg->speed_lpf_rc;
 
     // 初始化数据缓冲
-    inst->base.data_now_idx = 0;
     memset(&inst->data_raw, 0, sizeof(DJIMotorRawData_s));
-    memset(inst->base.data, 0, sizeof(inst->base.data));
+    memset(&inst->data, 0, sizeof(DJIMotorData_s));
 
     // 保存分组信息
     inst->sender_group = &s_send_groups[can_e][group_idx];
