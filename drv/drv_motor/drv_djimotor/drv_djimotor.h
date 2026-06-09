@@ -40,16 +40,6 @@ typedef struct
     uint8_t error_code;           // 错误码
 } DJIMotorRawData_s;
 
-typedef struct
-{
-    float position_single; // 单圈位置 (rad) [0, 2π)
-    float speed;           // 速度 (rad/s)
-    float position_multi;  // 多圈位置 (rad)
-    float current;         // 电流 (A)
-    float temperature;     // 线圈温度 (°C)
-    uint64_t time_stamp;   // 接收时间戳
-} DJIMotorData_s;          // 速度和位置是转子的速度和位置，不是减速箱输出轴速度和位置
-
 /*============================================
  *              DJI 电机实例结构体
  *============================================*/
@@ -62,8 +52,8 @@ struct DJIMotorInstance
 
     /* 数据缓冲 (DJI 特有) */
     DJIMotorRawData_s data_raw;
-    DJIMotorData_s data[2];
-    uint8_t data_now_idx;
+    float current;     // 电流 (A)
+    float temperature; // 线圈温度 (°C)
 
     /* 分组发送 (DJI 特有) */
     DJIMotorSendGroup_s *sender_group;
