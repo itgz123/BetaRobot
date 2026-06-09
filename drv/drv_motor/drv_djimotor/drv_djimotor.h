@@ -81,7 +81,8 @@ typedef struct
     DaemonFaultAction_e fault_action; // 离线故障动作
     uint8_t motor_id;                 // 电机 ID (1-8)
     MotorSpeedSrc_e speed_src;        // 速度来源：反馈速度/位置微分
-    float speed_lpf_rc;               // 速度低通滤波时间常数 RC (0=禁用)
+    MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
+    float speed_lpf_rc;               // 速度低通滤波时间常数 RC
 
     /* 控制器设置 */
     MotorControllerSetting_s controller_setting; // 控制器设置
@@ -107,6 +108,8 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg);
 void DJIMotorEnable(void *inst);
 void DJIMotorDisable(void *inst);
 void DJIMotorSetRef(void *inst, float ref);
+float DJIMotor_GetAngle(void *inst);
+float DJIMotor_GetSpeed(void *inst);
 void DJIMotorSend(void *inst); // 按照can的接收id分组，只要调用同1组的任意一个电机的发送函数，即可发送整组电机
 
 #endif // BSP_CAN_MODULE_ENABLED
