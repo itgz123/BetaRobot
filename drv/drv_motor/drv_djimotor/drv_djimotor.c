@@ -185,8 +185,7 @@ static void DJIMotorRxCallback(CANInstance *can)
 
     // 速度低通滤波: speed = (1-alpha) * raw + alpha * last, alpha = RC / (RC + dt)
     // alpha 越大，滤波越强（响应越慢）
-    // 当 RC = 0 或 dt = 0 时，直接使用原始速度（滤波关闭）
-    if (motor->base.speed_lpf_rc > 0.0f && dt > 0.0f)
+    if (motor->base.speed_lpf_enable == MOTOR_SPEED_LPF_ENABLE && dt > 0.0f)
     {
         float alpha = motor->base.speed_lpf_rc / (motor->base.speed_lpf_rc + dt);
         motor->data.speed = (1.0f - alpha) * raw_speed + alpha * motor->data.last_speed;
@@ -317,6 +316,7 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
 
     // 初始化速度来源
     inst->base.speed_src = cfg->speed_src;
+    inst->base.speed_lpf_enable = cfg->speed_lpf_enable;
     inst->base.speed_lpf_rc = cfg->speed_lpf_rc;
 
     // 初始化数据缓冲

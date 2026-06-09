@@ -99,6 +99,15 @@ typedef enum : uint8_t
 } MotorAngleLimit_e;
 
 /*============================================
+ *              速度滤波使能枚举
+ *============================================*/
+typedef enum : uint8_t
+{
+    MOTOR_SPEED_LPF_DISABLE = 0, // 禁用速度低通滤波
+    MOTOR_SPEED_LPF_ENABLE = 1,  // 启用速度低通滤波
+} MotorSpeedLpf_e;
+
+/*============================================
  *              电机参数结构体
  *============================================*/
 typedef struct
@@ -186,8 +195,9 @@ typedef struct
     MotorController_s controller;     // 控制器
 
     /* 速度计算 */
-    MotorSpeedSrc_e speed_src; // 速度来源选择
-    float speed_lpf_rc;        // 速度低通滤波时间常数 RC (0=禁用)
+    MotorSpeedSrc_e speed_src;        // 速度来源选择
+    MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
+    float speed_lpf_rc;               // 速度低通滤波时间常数 RC
 
     /* 统一接口 */
     CANInstance *can;       // CAN 实例指针
