@@ -109,17 +109,6 @@ typedef enum : uint8_t
 } MotorSpeedLpf_e;
 
 /*============================================
- *              电机参数结构体
- *============================================*/
-typedef struct
-{
-    uint16_t current_max;        // 电流最大值 (原始值)
-    float current_max_a;         // 电流最大值 (安培)
-    uint16_t encoder_resolution; // 编码器分辨率
-    float no_load_speed;         // 空载转速 (rad/s)
-} MotorParams_s;
-
-/*============================================
  *              虚函数表
  *============================================*/
 typedef struct MotorVTable_s

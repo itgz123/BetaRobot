@@ -61,18 +61,23 @@
 #define C620_CURRENT_MAX_A 20.0f  // C620 (M3508) 最大电流 20A
 #define GM6020_CURRENT_MAX_A 3.0f // GM6020 最大电流 3A
 
-// 空载转速 (rad/s), rpm * 2π / 60
-#define M3508_NO_LOAD_SPEED (9400.0f * M_2PI / 60.0f)  // ≈983.7 rad/s
-#define M2006_NO_LOAD_SPEED (18000.0f * M_2PI / 60.0f) // ≈1884.0 rad/s
-#define GM6020_NO_LOAD_SPEED (320.0f * M_2PI / 60.0f)  // ≈33.5 rad/s
+// 扭矩系数 (Nm/A)
+#define M3508_TORQUE_COEFF 0.02f
+#define M2006_TORQUE_COEFF 0.005f
+#define GM6020_TORQUE_COEFF 0.741f
+
+// 扭矩范围
+#define M3508_TORQUE_MAX_NM 0.4f
+#define M2006_TORQUE_MAX_NM 0.05f
+#define GM6020_TORQUE_MAX_NM 2.223f
 
 /*============================================
  *              电机参数表定义
  *============================================*/
-const MotorParams_s dji_motor_params[DJI_MODEL_NUM] = {
-    [DJI_MODEL_M3508] = {C620_CURRENT_MAX, C620_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, M3508_NO_LOAD_SPEED},
-    [DJI_MODEL_M2006] = {C610_CURRENT_MAX, C610_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, M2006_NO_LOAD_SPEED},
-    [DJI_MODEL_GM6020] = {GM6020_CURRENT_MAX, GM6020_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, GM6020_NO_LOAD_SPEED},
+const DJIMotorParams_s dji_motor_params[DJI_MODEL_NUM] = {
+    [DJI_MODEL_M3508] = {C620_CURRENT_MAX, C620_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, M3508_TORQUE_COEFF, M3508_TORQUE_MAX_NM},
+    [DJI_MODEL_M2006] = {C610_CURRENT_MAX, C610_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, M2006_TORQUE_COEFF, M2006_TORQUE_MAX_NM},
+    [DJI_MODEL_GM6020] = {GM6020_CURRENT_MAX, GM6020_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, GM6020_TORQUE_COEFF, GM6020_TORQUE_MAX_NM},
 };
 
 const uint16_t can_tx_id[DJI_MODEL_NUM][2] = {
@@ -286,31 +291,17 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
     inst->base.controller.ref = 0.0f;
     inst->base.controller.output = 0.0f;
 
-    // 获取输出限幅
-    float current_max_a = dji_motor_params[cfg->model].current_max_a;
-    float speed_max = dji_motor_params[cfg->model].no_load_speed;
-
-    // 初始化速度环 PID (输出限幅: 电流安培值)
+    // 初始化速度环 PID
     if (cfg->controller_setting.loop_type & MOTOR_LOOP_SPEED)
     {
-        // 添加固定掩码
-        cfg->pid_speed_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL | PID_ENABLE_OUTPUT_LIMIT;
-        // 设置输出限幅
-        cfg->pid_speed_setting.out_max = current_max_a;
-        cfg->pid_speed_setting.out_min = -current_max_a;
-
+        cfg->pid_speed_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL;
         PIDInit(&inst->base.controller.pid_speed, &cfg->pid_speed_setting);
     }
 
-    // 初始化位置环 PID (输出限幅: 空载速度 rad/s)
+    // 初始化位置环 PID
     if (cfg->controller_setting.loop_type & MOTOR_LOOP_ANGLE)
     {
-        // 添加固定掩码
-        cfg->pid_angle_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL | PID_ENABLE_OUTPUT_LIMIT;
-        // 设置输出限幅
-        cfg->pid_angle_setting.out_max = speed_max;
-        cfg->pid_angle_setting.out_min = -speed_max;
-
+        cfg->pid_angle_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL;
         PIDInit(&inst->base.controller.pid_angle, &cfg->pid_angle_setting);
     }
 
@@ -418,13 +409,15 @@ static void DJIMotor_Calculate(DJIMotorInstance *inst)
     // 反馈方向处理 (直接乘)
     output *= setting->feedback_direction;
 
-    // 输出限幅 (PID内置，此处仅做最终保护，单位: 安培)
+    // 扭矩 -> CAN 原始值: I_raw = T / K_t * current_max / current_max_a
+    // 简化: I_raw = T / (K_t * current_max_a / current_max) = T / torque_to_current_ratio
+    float torque_coeff = dji_motor_params[model].torque_coeff;
+    float current_max = (float)dji_motor_params[model].current_max;
     float current_max_a = dji_motor_params[model].current_max_a;
-    output = BSP_Math_Clamp(output, -current_max_a, current_max_a);
 
-    // 转换为 CAN 发送原始值 (安培 -> 原始值)
-    uint16_t current_max = dji_motor_params[model].current_max;
-    ctrl->output = output / current_max_a * (float)current_max;
+    // 扭矩转电流原始值, 并限幅到 ±current_max
+    float current_raw = (output / torque_coeff) * (current_max / current_max_a);
+    ctrl->output = BSP_Math_Clamp(current_raw, -current_max, current_max);
 }
 
 /*============================================
@@ -446,6 +439,20 @@ void DJIMotor_Disable(void *inst)
     motor->base.enable = MOTOR_DISABLE;
 }
 
+/**
+ * @brief 设置电机控制参考值
+ * @param inst DJIMotorInstance 指针
+ * @param ref 参考值
+ *
+ * 控制模式说明:
+ *   - MOTOR_LOOP_OPEN (力矩开环): ref = 扭矩(Nm) → 扭矩/系数 → 电流 → CAN发送
+ *   - MOTOR_LOOP_SPEED (速度环): ref = 速度(rad/s) → PID(扭矩) → 扭矩/系数 → 电流 → CAN发送
+ *   - MOTOR_LOOP_ANGLE (位置环): ref = 位置(rad) → PID(扭矩) → 扭矩/系数 → 电流 → CAN发送
+ *   - MOTOR_LOOP_ANGLE | MOTOR_LOOP_SPEED (位置-速度双环):
+ *       ref = 位置(rad) → PID(速度) → PID(扭矩) → 扭矩/系数 → 电流 → CAN发送
+ *
+ * 最终电流统一限幅到 ±current_max (CAN原始值范围)
+ */
 void DJIMotor_SetRef(void *inst, float ref)
 {
     if (!inst)
