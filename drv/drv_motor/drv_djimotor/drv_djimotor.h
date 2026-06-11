@@ -11,13 +11,6 @@
 #include "bsp_math.h"
 
 /*============================================
- *              电机参数表（外部声明）
- *============================================*/
-extern const MotorParams_s dji_motor_params[DJI_MODEL_NUM];
-extern const uint16_t can_tx_id[DJI_MODEL_NUM][2];
-extern const uint16_t can_rx_id_base[DJI_MODEL_NUM];
-
-/*============================================
  *              前向声明
  *============================================*/
 typedef struct DJIMotorInstance DJIMotorInstance;
@@ -30,6 +23,19 @@ typedef struct
     DJIMotorInstance *motors[4]; // 组内4个电机指针
     uint8_t motor_init_flag[4];  // 电机是否初始化标志
 } DJIMotorSendGroup_s;
+
+/*============================================
+ *              电机参数结构体
+ *============================================*/
+typedef struct
+{
+    uint16_t current_max;        // 电流最大值 (原始值)
+    float current_max_a;         // 电流最大值 (安培)
+    uint16_t encoder_resolution; // 编码器分辨率
+    float torque_coeff;          // 扭矩系数 (Nm/A)
+    float torque_max_nm;         // 最大扭矩 (Nm)
+    // torque_max_nm = torque_coeff * current_max_a
+} DJIMotorParams_s;
 
 typedef struct
 {
