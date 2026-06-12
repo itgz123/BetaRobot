@@ -101,6 +101,9 @@ endif()
 # 读取是否生成反汇编文件（GENERATE_DISASSEMBLY，开关型宏）
 check_define(GENERATE_DISASSEMBLY "${APP_DIR}/app_cfg.h" GENERATE_DISASSEMBLY)
 
+# 读取是否生成readelf输出文件（GENERATE_READELF，开关型宏）
+check_define(GENERATE_READELF "${APP_DIR}/app_cfg.h" GENERATE_READELF)
+
 if(NOT EXISTS "${HAL_DIR}")
     message(FATAL_ERROR
         "HAL_CONFIG_NAME '${HAL_CONFIG_NAME}' → directory not found:\n"
@@ -345,6 +348,37 @@ if(GENERATE_DISASSEMBLY)
     )
 endif()
 
+# 根据 GENERATE_READELF 决定是否生成readelf输出文件
+if(GENERATE_READELF)
+    set(READELF_OUTPUT_DIR "${CMAKE_BINARY_DIR}/elf")
+    add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${READELF_OUTPUT_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E echo "Generating readelf output files..."
+        COMMAND ${CMAKE_READELF} -aW $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_all.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=abbrev $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_abbrev.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=addr $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_addr.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=aranges $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_aranges.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=cu_index $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_cu_index.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=decodedline $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_decodedline.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=frames $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_frames.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=frames-interp $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_frames-interp.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=gdb_index $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_gdb_index.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=info $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_info.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=loc $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_loc.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=macro $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_macro.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=pubnames $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_pubnames.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=pubtypes $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_pubtypes.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=Ranges $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_Ranges.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=rawline $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_rawline.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=str $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_str.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=str-offsets $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_str-offsets.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=trace_abbrev $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_trace_abbrev.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=trace_aranges $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_trace_aranges.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMAND ${CMAKE_READELF} --debug-dump=trace_info $<TARGET_FILE:${TARGET_NAME}> > "${READELF_OUTPUT_DIR}/${TARGET_NAME}.elf_trace_info.txt" 2>${CMAKE_BINARY_DIR}/readelf_err.txt || ${CMAKE_COMMAND} -E true
+        COMMENT "Generating readelf output files in build/elf/..."
+    )
+endif()
+
 ######################################
 # 平台检测和工具适配
 ######################################
@@ -422,4 +456,5 @@ message(STATUS "DEVELOPMENT_BOARD: ${DEVELOPMENT_BOARD}")
 message(STATUS "HAL_CONFIG_NAME: ${HAL_CONFIG_NAME}")
 message(STATUS "BUILD_TYPE: ${BUILD_TYPE_NAME}")
 message(STATUS "GENERATE_DISASSEMBLY: ${GENERATE_DISASSEMBLY}")
+message(STATUS "GENERATE_READELF: ${GENERATE_READELF}")
 message(STATUS "HAL_DIR: ${HAL_DIR}")
