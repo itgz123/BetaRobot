@@ -89,9 +89,12 @@ static void f_Integral_Limit(PIDInstance *pid)
     // 输出超限时，如果积分还在累积，则停止当前积分增量
     if (pid->config_mask & PID_ENABLE_OUTPUT_LIMIT)
     {
-        if (FABS(temp_output) > pid->out_max)
+        if (temp_output > pid->out_max || temp_output < pid->out_min)
         {
-            if (pid->error * pid->i_out > 0)
+            // 使用符号宏判断积分累积方向
+            int8_t i_sign = MATH_SIGN(pid->i_out);
+            int8_t term_sign = MATH_SIGN(pid->i_term);
+            if (i_sign == 0 || i_sign == term_sign)
             {
                 pid->i_term = 0;
             }
@@ -239,12 +242,6 @@ void PIDInit(PIDInstance *instance, const PID_Init_Config_s *config)
 
     // 功能掩码
     instance->config_mask = config->config_mask;
-
-    // 变速积分 coef_b 默认值保护
-    if (instance->coef_b < 0.0001f)
-    {
-        instance->coef_b = 1.0f;
-    }
 }
 
 void PIDReset(PIDInstance *instance)

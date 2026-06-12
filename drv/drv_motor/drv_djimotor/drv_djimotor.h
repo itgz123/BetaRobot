@@ -32,9 +32,7 @@ typedef struct
     uint16_t current_max;        // 电流最大值 (原始值)
     float current_max_a;         // 电流最大值 (安培)
     uint16_t encoder_resolution; // 编码器分辨率
-    float torque_coeff;          // 扭矩系数 (Nm/A)
-    float torque_max_nm;         // 最大扭矩 (Nm)
-    // torque_max_nm = torque_coeff * current_max_a
+    float no_load_speed;         // 空载转速 (rad/s)
 } DJIMotorParams_s;
 
 typedef struct
