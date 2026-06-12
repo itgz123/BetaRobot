@@ -271,10 +271,17 @@ typedef struct
 static inline float BSP_Math_AngleDiff(float from, float to)
 {
     float diff = to - from;
-    while (diff > M_PI)
-        diff -= M_2PI;
-    while (diff <= -M_PI)
-        diff += M_2PI;
+    // 使用整除计算需要加减的圈数，避免循环
+    if (diff > M_PI)
+    {
+        int32_t n = (int32_t)((diff + M_PI) / M_2PI);
+        diff -= n * M_2PI;
+    }
+    else if (diff <= -M_PI)
+    {
+        int32_t n = (int32_t)((-diff + M_PI) / M_2PI);
+        diff += n * M_2PI;
+    }
     return diff;
 }
 

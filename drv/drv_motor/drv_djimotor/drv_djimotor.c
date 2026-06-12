@@ -61,23 +61,18 @@
 #define C620_CURRENT_MAX_A 20.0f  // C620 (M3508) 最大电流 20A
 #define GM6020_CURRENT_MAX_A 3.0f // GM6020 最大电流 3A
 
-// 扭矩系数 (Nm/A)
-#define M3508_TORQUE_COEFF 0.02f
-#define M2006_TORQUE_COEFF 0.005f
-#define GM6020_TORQUE_COEFF 0.741f
-
-// 扭矩范围
-#define M3508_TORQUE_MAX_NM 0.4f
-#define M2006_TORQUE_MAX_NM 0.05f
-#define GM6020_TORQUE_MAX_NM 2.223f
+// 空载转速 (rad/s), rpm * 2π / 60
+#define M3508_NO_LOAD_SPEED (9400.0f * M_2PI / 60.0f)  // ≈983.7 rad/s
+#define M2006_NO_LOAD_SPEED (18000.0f * M_2PI / 60.0f) // ≈1884.0 rad/s
+#define GM6020_NO_LOAD_SPEED (320.0f * M_2PI / 60.0f)  // ≈33.5 rad/s
 
 /*============================================
  *              电机参数表定义
  *============================================*/
 const DJIMotorParams_s dji_motor_params[DJI_MODEL_NUM] = {
-    [DJI_MODEL_M3508] = {C620_CURRENT_MAX, C620_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, M3508_TORQUE_COEFF, M3508_TORQUE_MAX_NM},
-    [DJI_MODEL_M2006] = {C610_CURRENT_MAX, C610_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, M2006_TORQUE_COEFF, M2006_TORQUE_MAX_NM},
-    [DJI_MODEL_GM6020] = {GM6020_CURRENT_MAX, GM6020_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, GM6020_TORQUE_COEFF, GM6020_TORQUE_MAX_NM},
+    [DJI_MODEL_M3508] = {C620_CURRENT_MAX, C620_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, M3508_NO_LOAD_SPEED},
+    [DJI_MODEL_M2006] = {C610_CURRENT_MAX, C610_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, M2006_NO_LOAD_SPEED},
+    [DJI_MODEL_GM6020] = {GM6020_CURRENT_MAX, GM6020_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, GM6020_NO_LOAD_SPEED},
 };
 
 const uint16_t can_tx_id[DJI_MODEL_NUM][2] = {
@@ -142,7 +137,7 @@ static void DJIMotorRxCallback(CANInstance *can)
     motor->data_raw.error_code = data[7];
 
     // 获取电机参数
-    uint8_t model = motor->base.model;
+    DJIModel_e model = motor->base.model;
     if (model >= DJI_MODEL_NUM)
         return;
 
@@ -166,7 +161,11 @@ static void DJIMotorRxCallback(CANInstance *can)
     // 记录时间戳
     uint64_t now_time_us = DWT_GetTimeUs();
     motor->data.last_time_stamp = now_time_us;
-    float dt = (now_time_us - last_time_stamp) * 1e-6f; // us -> s
+    float dt = 0.0f;
+    if (last_time_stamp > 0)
+    {
+        dt = (now_time_us - last_time_stamp) * 1e-6f; // us -> s
+    }
 
     // 计算速度 (rad/s) - 转子速度
     float raw_speed;
@@ -184,16 +183,17 @@ static void DJIMotorRxCallback(CANInstance *can)
         }
         else
         {
-            raw_speed = 0.0f;
+            // dt<=0 时使用上次速度，避免速度跳变或除零
+            raw_speed = motor->data.last_speed;
         }
     }
 
-    // 速度低通滤波: speed = (1-alpha) * raw + alpha * last, alpha = RC / (RC + dt)
-    // alpha 越大，滤波越强（响应越慢）
+    // 速度低通滤波: speed = raw * alpha + last * (1-alpha), alpha = dt / (RC + dt)
+    // RC 越大，滤波越强（响应越慢）
     if (motor->base.speed_lpf_enable == MOTOR_SPEED_LPF_ENABLE && dt > 0.0f)
     {
-        float alpha = motor->base.speed_lpf_rc / (motor->base.speed_lpf_rc + dt);
-        motor->data.speed = (1.0f - alpha) * raw_speed + alpha * motor->data.last_speed;
+        float alpha = dt / (motor->base.speed_lpf_rc + dt);
+        motor->data.speed = raw_speed * alpha + motor->data.last_speed * (1.0f - alpha);
     }
     else
     {
@@ -274,6 +274,15 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
     if (!inst || !cfg)
         return -1;
 
+    // 检查参数有效性
+    if (cfg->motor_id < 1 || cfg->motor_id > 8)
+        return -1;
+    if (cfg->model >= DJI_MODEL_NUM)
+        return -1;
+    // GM6020 只有 ID 1-7
+    if (cfg->model == DJI_MODEL_GM6020 && cfg->motor_id > 7)
+        return -1;
+
     // 计算发送ID和接收ID
     uint16_t tx_id = can_tx_id[cfg->model][(cfg->motor_id - 1) / 4];
     uint16_t rx_id = can_rx_id_base[cfg->model] + cfg->motor_id;
@@ -303,17 +312,40 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
     inst->base.controller.ref = 0.0f;
     inst->base.controller.output = 0.0f;
 
-    // 初始化速度环 PID
+    // 获取输出限幅
+    float current_max_a = dji_motor_params[cfg->model].current_max_a;
+    float speed_max = dji_motor_params[cfg->model].no_load_speed;
+
+    // 初始化速度环 PID (输出限幅: 电流安培值)
     if (cfg->controller_setting.loop_type & MOTOR_LOOP_SPEED)
     {
-        cfg->pid_speed_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL;
+        // 添加固定掩码
+        cfg->pid_speed_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL | PID_ENABLE_OUTPUT_LIMIT;
+        // 设置输出限幅
+        cfg->pid_speed_setting.out_max = current_max_a;
+        cfg->pid_speed_setting.out_min = -current_max_a;
+
         PIDInit(&inst->base.controller.pid_speed, &cfg->pid_speed_setting);
     }
 
-    // 初始化位置环 PID
+    // 初始化位置环 PID (输出限幅: 空载速度 rad/s)。这里限幅是速度，不要直接把位置环输出给电流
     if (cfg->controller_setting.loop_type & MOTOR_LOOP_ANGLE)
     {
-        cfg->pid_angle_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL;
+        // 添加固定掩码
+        cfg->pid_angle_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL | PID_ENABLE_OUTPUT_LIMIT;
+
+        // 仅位置环模式：输出限幅为电流；位置-速度双环模式：输出限幅为速度
+        if (!(cfg->controller_setting.loop_type & MOTOR_LOOP_SPEED))
+        {
+            cfg->pid_angle_setting.out_max = current_max_a;
+            cfg->pid_angle_setting.out_min = -current_max_a;
+        }
+        else
+        {
+            cfg->pid_angle_setting.out_max = speed_max;
+            cfg->pid_angle_setting.out_min = -speed_max;
+        }
+
         PIDInit(&inst->base.controller.pid_angle, &cfg->pid_angle_setting);
     }
 
@@ -374,7 +406,7 @@ static void DJIMotor_Calculate(DJIMotorInstance *inst)
     float measure;
     float output = 0.0f;
 
-    uint8_t model = inst->base.model;
+    DJIModel_e model = inst->base.model;
     if (model >= DJI_MODEL_NUM)
         return;
 
@@ -411,22 +443,21 @@ static void DJIMotor_Calculate(DJIMotorInstance *inst)
     }
     else
     {
-        // 无速度环时，直接输出
+        // 开环模式 (MOTOR_LOOP_OPEN): setpoint 直接作为电流输出，依赖下方电流限幅保护
+        // 仅位置环模式 (MOTOR_LOOP_ANGLE): setpoint 是位置环 PID 输出，已在 PID 初始化时限幅为电流范围
         output = setpoint;
     }
 
     // 电机方向修正: motor_direction修正电机安装方向, feedback_direction已在反馈端修正
     output *= setting->motor_direction;
 
-    // 扭矩 -> CAN 原始值: I_raw = T / K_t * current_max / current_max_a
-    // 简化: I_raw = T / (K_t * current_max_a / current_max) = T / torque_to_current_ratio
-    float torque_coeff = dji_motor_params[model].torque_coeff;
-    float current_max = (float)dji_motor_params[model].current_max;
+    // 电流限幅 (安培) - 开环模式必须限幅，其他模式作为保险
     float current_max_a = dji_motor_params[model].current_max_a;
+    output = BSP_Math_Clamp(output, -current_max_a, current_max_a);
 
-    // 扭矩转电流原始值, 并限幅到 ±current_max
-    float current_raw = (output / torque_coeff) * (current_max / current_max_a);
-    ctrl->output = BSP_Math_Clamp(current_raw, -current_max, current_max);
+    // 转换为 CAN 发送原始值 (安培 -> 原始值)
+    uint16_t current_max = dji_motor_params[model].current_max;
+    ctrl->output = output / current_max_a * (float)current_max;
 }
 
 /*============================================
@@ -455,23 +486,23 @@ void DJIMotor_Disable(void *inst)
  *
  * 方向标定流程:
  *   1. 人为设定正方向（顺时针或逆时针）
- *   2. 开环控制，发送正的较小力矩值，观察实际旋转方向和反馈方向
+ *   2. 开环控制，发送正的较小电流值，观察实际旋转方向和反馈方向
  *   3. 如果实际旋转方向与正方向相反，设置 motor_direction = MOTOR_DIRECTION_REVERSE
  *   4. 如果反馈正负与实际旋转方向相反，设置 feedback_direction = MOTOR_DIRECTION_REVERSE
  *
  * 方向处理逻辑:
- *   - motor_direction: 修正电机安装方向，在输出端翻转扭矩方向
+ *   - motor_direction: 修正电机安装方向，在输出端翻转电流方向
  *   - feedback_direction: 修正反馈极性，在反馈获取函数中翻转反馈值符号
  *   - PID 计算在统一的坐标系下进行，setpoint 和 measure 都已正确处理方向
  *
  * 控制模式说明:
- *   - MOTOR_LOOP_OPEN (力矩开环): ref = 扭矩(Nm) → 扭矩/系数 → 电流 → CAN发送
- *   - MOTOR_LOOP_SPEED (速度环): ref = 速度(rad/s) → PID(扭矩) → 扭矩/系数 → 电流 → CAN发送
- *   - MOTOR_LOOP_ANGLE (位置环): ref = 位置(rad) → PID(扭矩) → 扭矩/系数 → 电流 → CAN发送
+ *   - MOTOR_LOOP_OPEN (电流开环): ref = 电流(A) → 原始值 → CAN发送
+ *   - MOTOR_LOOP_SPEED (速度环): ref = 速度(rad/s) → PID(电流) → 原始值 → CAN发送
+ *   - MOTOR_LOOP_ANGLE (位置环): ref = 位置(rad) → PID(电流) → 原始值 → CAN发送
  *   - MOTOR_LOOP_ANGLE | MOTOR_LOOP_SPEED (位置-速度双环):
- *       ref = 位置(rad) → PID(速度) → PID(扭矩) → 扭矩/系数 → 电流 → CAN发送
+ *       ref = 位置(rad) → PID(速度) → PID(电流) → 原始值 → CAN发送
  *
- * 最终电流统一限幅到 ±current_max (CAN原始值范围)
+ * 最终电流统一限幅到 ±current_max_a (安培) 再转换为 CAN 原始值
  */
 void DJIMotor_SetRef(void *inst, float ref)
 {
@@ -491,7 +522,6 @@ void DJIMotor_Send(void *inst)
         return;
 
     DJIMotorSendGroup_s *group = motor->sender_group;
-    CANInstance *can = motor->base.can;
 
     // ===== 控制计算：组内所有已初始化电机 =====
     for (int i = 0; i < 4; i++)
@@ -508,9 +538,11 @@ void DJIMotor_Send(void *inst)
     //   - M3508/M2006 ID 5-8 (tx_id=0x1FF)
     //   - GM6020 ID 1-4 (tx_id=0x1FE)
     // 因此需要收集组内所有不同的 tx_id，分别打包发送
+    // 发送时使用组内对应 tx_id 的电机的 CAN 实例，避免修改 tx_id
 
-    // Step 1: 收集组内不同的 tx_id
+    // Step 1: 收集组内不同的 tx_id 及对应的 CAN 实例
     uint16_t tx_ids[4] = {0};
+    CANInstance *tx_cans[4] = {NULL};
     uint8_t tx_id_count = 0;
 
     for (int i = 0; i < 4; i++)
@@ -529,7 +561,9 @@ void DJIMotor_Send(void *inst)
             }
             if (!found)
             {
-                tx_ids[tx_id_count++] = id;
+                tx_ids[tx_id_count] = id;
+                tx_cans[tx_id_count] = group->motors[i]->base.can;
+                tx_id_count++;
             }
         }
     }
@@ -539,7 +573,7 @@ void DJIMotor_Send(void *inst)
     for (int t = 0; t < tx_id_count; t++)
     {
         uint16_t current_tx_id = tx_ids[t];
-        can->tx_id = current_tx_id;
+        CANInstance *tx_can = tx_cans[t];
 
         for (int i = 0; i < 4; i++)
         {
@@ -549,13 +583,16 @@ void DJIMotor_Send(void *inst)
             if (group->motor_init_flag[i] && m && m->base.enable &&
                 m->base.can && m->base.can->tx_id == current_tx_id)
             {
-                cur = (int16_t)m->base.controller.output;
+                // 根据电机型号限幅到电流原始值范围
+                uint16_t current_max = dji_motor_params[m->base.model].current_max;
+                float out = BSP_Math_Clamp(m->base.controller.output, -(float)current_max, (float)current_max);
+                cur = (int16_t)out;
             }
-            can->tx_buff[i * 2] = (uint8_t)(cur >> 8);
-            can->tx_buff[i * 2 + 1] = (uint8_t)(cur & 0xFF);
+            tx_can->tx_buff[i * 2] = (uint8_t)(cur >> 8);
+            tx_can->tx_buff[i * 2 + 1] = (uint8_t)(cur & 0xFF);
         }
 
-        CANTransmit(can, CAN_TRANSMIT_TIMEOUT);
+        CANTransmit(tx_can, CAN_TRANSMIT_TIMEOUT);
     }
 }
 
