@@ -222,11 +222,17 @@ float DJIMotor_GetAngle(void *inst)
         return 0.0f;
     DJIMotorInstance *motor = (DJIMotorInstance *)inst;
     MotorControllerSetting_s *setting = &motor->base.setting;
+    float angle;
     if (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr)
     {
-        return *setting->angle_external_ptr;
+        angle = *setting->angle_external_ptr;
     }
-    return motor->data.position_multi;
+    else
+    {
+        angle = motor->data.position_multi;
+    }
+    // 反馈方向修正
+    return angle * setting->feedback_direction;
 }
 
 float DJIMotor_GetSpeed(void *inst)
@@ -235,11 +241,17 @@ float DJIMotor_GetSpeed(void *inst)
         return 0.0f;
     DJIMotorInstance *motor = (DJIMotorInstance *)inst;
     MotorControllerSetting_s *setting = &motor->base.setting;
+    float speed;
     if (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr)
     {
-        return *setting->speed_external_ptr;
+        speed = *setting->speed_external_ptr;
     }
-    return motor->data.speed;
+    else
+    {
+        speed = motor->data.speed;
+    }
+    // 反馈方向修正
+    return speed * setting->feedback_direction;
 }
 
 /**
@@ -366,9 +378,6 @@ static void DJIMotor_Calculate(DJIMotorInstance *inst)
     if (model >= DJI_MODEL_NUM)
         return;
 
-    // 电机方向处理 (直接乘)
-    setpoint *= setting->motor_direction;
-
     // 位置环 (最外环)
     if (setting->loop_type & MOTOR_LOOP_ANGLE)
     {
@@ -406,8 +415,8 @@ static void DJIMotor_Calculate(DJIMotorInstance *inst)
         output = setpoint;
     }
 
-    // 反馈方向处理 (直接乘)
-    output *= setting->feedback_direction;
+    // 电机方向修正: motor_direction修正电机安装方向, feedback_direction已在反馈端修正
+    output *= setting->motor_direction;
 
     // 扭矩 -> CAN 原始值: I_raw = T / K_t * current_max / current_max_a
     // 简化: I_raw = T / (K_t * current_max_a / current_max) = T / torque_to_current_ratio
@@ -443,6 +452,17 @@ void DJIMotor_Disable(void *inst)
  * @brief 设置电机控制参考值
  * @param inst DJIMotorInstance 指针
  * @param ref 参考值
+ *
+ * 方向标定流程:
+ *   1. 人为设定正方向（顺时针或逆时针）
+ *   2. 开环控制，发送正的较小力矩值，观察实际旋转方向和反馈方向
+ *   3. 如果实际旋转方向与正方向相反，设置 motor_direction = MOTOR_DIRECTION_REVERSE
+ *   4. 如果反馈正负与实际旋转方向相反，设置 feedback_direction = MOTOR_DIRECTION_REVERSE
+ *
+ * 方向处理逻辑:
+ *   - motor_direction: 修正电机安装方向，在输出端翻转扭矩方向
+ *   - feedback_direction: 修正反馈极性，在反馈获取函数中翻转反馈值符号
+ *   - PID 计算在统一的坐标系下进行，setpoint 和 measure 都已正确处理方向
  *
  * 控制模式说明:
  *   - MOTOR_LOOP_OPEN (力矩开环): ref = 扭矩(Nm) → 扭矩/系数 → 电流 → CAN发送
