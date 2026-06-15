@@ -91,13 +91,32 @@ typedef enum : uint8_t
 } MotorEnable_e;
 
 /*============================================
- *              位置限位使能枚举
+ *              位置模式枚举
+ *
+ * 三种位置模式的行为说明：
+ *
+ * ┌────────────┬─────────────────────┬─────────────────────┬─────────────────────┬─────────────────────┐
+ * │    模式    │       应用场景      │    setref处理       │  PID位置反馈来源    │   get_angle返回    │
+ * ├────────────┼─────────────────────┼─────────────────────┼─────────────────────┼─────────────────────┤
+ * │  LIMITED   │ pitch轴等有机械限位 │ 多圈位置限幅到      │ multi+offset        │ multi+offset        │
+ * │  (限幅)    │ 的关节电机          │ [min, max]          │                     │                     │
+ * ├────────────┼─────────────────────┼─────────────────────┼─────────────────────┼─────────────────────┤
+ * │  WRAP      │ yaw轴等无限旋转但   │ 多圈位置归一化到    │ multi+offset        │ multi+offset        │
+ * │  (环绕)    │ 需归一化处理的电机  │ [min, max]          │ 归一化到[min,max]   │ 归一化到[min,max]   │
+ * ├────────────┼─────────────────────┼─────────────────────┼─────────────────────┼─────────────────────┤
+ * │ CONTINUOUS │ 轮子电机等需要多圈  │ 不限幅              │ multi+offset        │ multi+offset        │
+ * │  (连续)    │ 累积位置的电机      │                     │                     │                     │
+ * └────────────┴─────────────────────┴─────────────────────┴─────────────────────┴─────────────────────┘
+ *
+ * 注：multi = 多圈位置 = cnt*2π + single，offset = 位置偏置
+ *     angle_limit_min/max: LIMITED模式作为限幅范围，WRAP模式作为归一化范围
  *============================================*/
 typedef enum : uint8_t
 {
-    MOTOR_ANGLE_LIMIT_DISABLE = 0, // 禁用位置限位
-    MOTOR_ANGLE_LIMIT_ENABLE = 1,  // 启用位置限位
-} MotorAngleLimit_e;
+    MOTOR_POSITION_LIMITED = 0,    // 限幅模式
+    MOTOR_POSITION_WRAP = 1,       // 环绕模式
+    MOTOR_POSITION_CONTINUOUS = 2, // 连续模式
+} MotorPositionMode_e;
 
 /*============================================
  *              速度滤波使能枚举
@@ -145,10 +164,10 @@ typedef struct
     MotorDirection_e motor_direction;    // 电机方向
     MotorDirection_e feedback_direction; // 反馈方向
 
-    /* 位置限位 */
-    MotorAngleLimit_e angle_limit_enable; // 位置限位使能
-    float angle_limit_min;                // 位置下限
-    float angle_limit_max;                // 位置上限
+    /* 位置模式 */
+    MotorPositionMode_e position_mode; // 位置模式
+    float angle_limit_min;             // LIMITED: 限幅下限, WRAP: 归一化下限
+    float angle_limit_max;             // LIMITED: 限幅上限, WRAP: 归一化上限
 
     /* 前馈来源 */
     MotorFeedforwardSrc_e speed_feedforward_src;    // 速度前馈来源

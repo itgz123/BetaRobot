@@ -46,10 +46,13 @@ typedef struct
 
 typedef struct
 {
-    float position_single;    // 单圈位置 (rad) [0, 2π)
+    float position_single; // 单圈位置 (rad) [0, 2π)
+    int64_t position_cnt;  // 圈数（支持负数）
+    float position_multi;  // 多圈位置 (rad)
+    // 如果增量式 (3508,2006) 使用光电门校准；如果绝对式 (6020) 安装后调零一次即可。
+    float position_offset;    // 位置偏置 (rad) 。反馈的是加上偏置的位置
     float speed;              // 速度 (rad/s)
     float last_speed;         // 上次速度 (rad/s)
-    float position_multi;     // 多圈位置 (rad)
     float current;            // 电流 (A)
     float temperature;        // 线圈温度 (°C)
     uint64_t last_time_stamp; // 上次接收时间戳

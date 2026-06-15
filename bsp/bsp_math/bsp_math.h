@@ -285,6 +285,65 @@ static inline float BSP_Math_AngleDiff(float from, float to)
     return diff;
 }
 
+/**
+ * @brief 将角度归一化到 [0, 2π) 范围
+ * @param angle 输入角度（弧度），支持多圈
+ * @return 归一化后的角度（弧度），范围 [0, 2π)
+ * @note 例：3.4π → 1.4π，-0.3π → 1.7π
+ */
+static inline float BSP_Math_WrapAngle0To2PI(float angle)
+{
+    angle = fmodf(angle, M_2PI);
+    if (angle < 0.0f)
+    {
+        angle += M_2PI;
+    }
+    return angle;
+}
+
+/**
+ * @brief 将角度归一化到 (-π, π] 范围
+ * @param angle 输入角度（弧度），支持多圈
+ * @return 归一化后的角度（弧度），范围 (-π, π]
+ * @note 例：3.4π → -0.6π，-2.3π → -0.3π，π → -π，-π → π
+ */
+static inline float BSP_Math_WrapAngleNegPIToPI(float angle)
+{
+    angle = fmodf(angle, M_2PI);
+    if (angle >= M_PI)
+    {
+        angle -= M_2PI;
+    }
+    else if (angle < -M_PI)
+    {
+        angle += M_2PI;
+    }
+    return angle;
+}
+
+/**
+ * @brief 将角度归一化到指定范围 [min_val, max_val)
+ * @param angle 输入角度（弧度），支持多圈
+ * @param min_val 范围下限
+ * @param max_val 范围上限
+ * @return 归一化后的角度（弧度），范围 [min_val, max_val)
+ * @note 例：WrapAngle(3.4π, 0, π) → 0.4π，WrapAngle(-2.3π, 0, π) → 0.7π
+ */
+static inline float BSP_Math_WrapAngle(float angle, float min_val, float max_val)
+{
+    float range = max_val - min_val;
+    if (range <= 0.0f)
+    {
+        return angle;
+    }
+    angle = fmodf(angle - min_val, range);
+    if (angle < 0.0f)
+    {
+        angle += range;
+    }
+    return angle + min_val;
+}
+
 /*============================================
  *              Vector2 运算函数
  *============================================*/

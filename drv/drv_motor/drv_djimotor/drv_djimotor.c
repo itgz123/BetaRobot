@@ -147,7 +147,7 @@ static void DJIMotorRxCallback(CANInstance *can)
 
     // 保存上次数据
     float last_position_single = motor->data.position_single;
-    float last_position_multi = motor->data.position_multi;
+    float last_position_multi = motor->data.position_multi; // 用于速度计算
     motor->data.last_speed = motor->data.speed;
     uint64_t last_time_stamp = motor->data.last_time_stamp;
 
@@ -155,8 +155,19 @@ static void DJIMotorRxCallback(CANInstance *can)
     motor->data.position_single = (float)motor->data_raw.raw_encoder * M_2PI / encoder_resolution;
 
     // 计算多圈位置 (rad)
-    // BSP_Math_AngleDiff 返回最短角度差，正确处理边界穿越
-    motor->data.position_multi = last_position_multi + BSP_Math_AngleDiff(last_position_single, motor->data.position_single);
+    // 通过角度差检测穿越
+    float angle_diff = motor->data.position_single - last_position_single;
+    if (angle_diff > M_PI)
+    {
+        // 从接近2π跳到接近0（反向穿越）
+        motor->data.position_cnt--;
+    }
+    else if (angle_diff < -M_PI)
+    {
+        // 从接近0跳到接近2π（正向穿越）
+        motor->data.position_cnt++;
+    }
+    motor->data.position_multi = (float)motor->data.position_cnt * M_2PI + motor->data.position_single;
 
     // 记录时间戳
     uint64_t now_time_us = DWT_GetTimeUs();
@@ -229,7 +240,13 @@ float DJIMotor_GetAngle(void *inst)
     }
     else
     {
-        angle = motor->data.position_multi;
+        // 所有模式都使用多圈位置 + 偏置
+        angle = motor->data.position_multi + motor->data.position_offset;
+        // WRAP 模式归一化到 [min, max)
+        if (setting->position_mode == MOTOR_POSITION_WRAP)
+        {
+            angle = BSP_Math_WrapAngle(angle, setting->angle_limit_min, setting->angle_limit_max);
+        }
     }
     // 反馈方向修正
     return angle * setting->feedback_direction;
@@ -413,10 +430,24 @@ static void DJIMotor_Calculate(DJIMotorInstance *inst)
     // 位置环 (最外环)
     if (setting->loop_type & MOTOR_LOOP_ANGLE)
     {
-        // 位置输入限位
-        if ((setting->angle_limit_enable == MOTOR_ANGLE_LIMIT_ENABLE) && (setting->angle_limit_min < setting->angle_limit_max))
+        // 根据 position_mode 处理 setpoint
+        switch (setting->position_mode)
         {
-            setpoint = BSP_Math_Clamp(setpoint, setting->angle_limit_min, setting->angle_limit_max);
+        case MOTOR_POSITION_LIMITED:
+            // 限幅模式：setpoint 限幅到 [min, max]
+            if (setting->angle_limit_min < setting->angle_limit_max)
+            {
+                setpoint = BSP_Math_Clamp(setpoint, setting->angle_limit_min, setting->angle_limit_max);
+            }
+            break;
+        case MOTOR_POSITION_WRAP:
+            // 环绕模式：setpoint 归一化到 [min, max)
+            setpoint = BSP_Math_WrapAngle(setpoint, setting->angle_limit_min, setting->angle_limit_max);
+            break;
+        case MOTOR_POSITION_CONTINUOUS:
+        default:
+            // 连续模式：不限幅
+            break;
         }
 
         float position_feedforward = 0.0f;
