@@ -17,7 +17,7 @@
 
 // 用户通道数量（不含时间戳，编译时固定）
 #ifndef VOFA_LITE_CHANNELS
-#define VOFA_LITE_CHANNELS 9
+#define VOFA_LITE_CHANNELS 15
 #endif
 
 // UART 选择（独立于 drv_vofa.c）
