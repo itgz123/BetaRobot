@@ -42,6 +42,7 @@ typedef struct
     float *ref_acceleration;   // 外部加速度设定 (rad/s²)
     uint32_t delay_ms;         // 延时时间 (ms)
     uint64_t init_time_us;     // 初始化时间戳 (us)
+    uint8_t init_flag;         // init_time_us 初始化标志，0=未初始化
     MITInstance mit;           // MIT控制器实例
 } AxisMitLiteInstance;
 
