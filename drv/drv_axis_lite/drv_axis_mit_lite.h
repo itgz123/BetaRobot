@@ -77,20 +77,26 @@ int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, AxisMitLite_Init_Config_s *cfg
 /**
  * @brief 计算控制输出并调用MotorSetRef
  * @param inst 实例指针
- * @note 启用 AxisMitVofaLiteSetChannelUsed 时，自动设定 13 个 VOFA 调试通道：
- *       ch1:  position (反馈位置 rad)
- *       ch2:  speed (反馈速度 rad/s)
- *       ch3:  ref_position (位置设定值 rad)
- *       ch4:  ref_speed (速度设定值 rad/s)
- *       ch5:  gravity_ff (重力前馈 Nm)
- *       ch6:  inertia_ff (惯量前馈 Nm)
- *       ch7:  friction_ff (摩擦前馈 Nm)
- *       ch8:  total_ff (总前馈 Nm)
- *       ch9:  pos_error (MIT位置误差 rad)
- *       ch10: speed_error (MIT速度误差 rad/s)
- *       ch11: pos_output (MIT位置输出 Nm)
- *       ch12: speed_output (MIT速度输出 Nm)
- *       ch13: MIT output (MIT控制器总输出 Nm)
+ * @note 启用 AxisMitVofaLiteSetChannelUsed 时，自动设定 11 个 VOFA 调试通道：
+ *
+ *       CH1-CH3: 传感器测量 (独立物理量)
+ *       ch1:  position       — 反馈位置 (rad)
+ *       ch2:  speed          — 反馈速度 (rad/s)
+ *       ch3:  MotorGetCurrent — 电机实际电流
+ *
+ *       CH4-CH6: 设定值
+ *       ch4:  ref_pos        — 位置设定值 (rad)
+ *       ch5:  ref_vel        — 速度设定值 (rad/s)
+ *       ch6:  ref_acc        — 加速度设定值 (rad/s^2)
+ *
+ *       CH7-CH9: 前馈分量
+ *       ch7:  gravity_ff     — 重力前馈 (Nm)
+ *       ch8:  inertia_ff     — 惯量前馈 (Nm)
+ *       ch9:  friction_ff    — 摩擦前馈 / chirp (Nm)
+ *
+ *       CH10-CH11: MIT 控制器 PD 输出
+ *       ch10: pos_output     — 位置环输出 (Nm)
+ *       ch11: speed_output   — 速度环输出 (Nm)
  */
 void AxisMitLiteCalculate(AxisMitLiteInstance *inst);
 

@@ -124,6 +124,7 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
     // ======== 延时处理（NORMAL 无延时）========
     float ref_pos = 0.0f;
     float ref_vel = 0.0f;
+    float ref_acc = 0.0f;
     float output = 0.0f;
 
     if (inst->stage != AXIS_LITE_STAGE_NORMAL)
@@ -167,8 +168,15 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
         float T = inst->chirp_params.duration;       // s
         float k = (T > 0.0f) ? (f1 - f0) / T : 0.0f; // Hz/s
 
-        float phase = M_2PI * (f0 * t + 0.5f * k * t * t);                // rad
-        float chirp = inst->chirp_params.amplitude * BSP_Math_Sin(phase); // Nm
+        float phase = M_2PI * (f0 * t + 0.5f * k * t * t); // rad
+
+        // 力矩幅值线性递增：A(t) = A_start + (A_end - A_start) * t/T
+        // amplitude_end <= 0 时退化为恒幅，兼容旧配置
+        float A_start = inst->chirp_params.amplitude_start;
+        float A_end = inst->chirp_params.amplitude_end;
+        float amp_t = (A_end > 0.0f) ? A_start + (A_end - A_start) * t / T : A_start;
+
+        float chirp = amp_t * BSP_Math_Sin(phase); // Nm
 
         inst->params.friction_ff = chirp;
         inst->params.total_ff = inst->params.gravity_ff + chirp;
@@ -182,9 +190,9 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
         float A = inst->sine_params.amplitude;      // rad
         float w = M_2PI * inst->sine_params.freq;   // rad/s
 
-        ref_pos = A * BSP_Math_Sin(w * t);                // rad
-        ref_vel = A * w * BSP_Math_Cos(w * t);            // rad/s
-        float ref_acc = -A * w * w * BSP_Math_Sin(w * t); // rad/s²
+        ref_pos = A * BSP_Math_Sin(w * t);          // rad
+        ref_vel = A * w * BSP_Math_Cos(w * t);      // rad/s
+        ref_acc = -A * w * w * BSP_Math_Sin(w * t); // rad/s²
 
         CalcFeedforward(inst, ref_acc, speed);
 
@@ -198,9 +206,9 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
 
     case AXIS_LITE_STAGE_NORMAL:
     {
-        ref_pos = SafeGetRef(inst->ref_position, angle);          // rad
-        ref_vel = SafeGetRef(inst->ref_speed, 0.0f);              // rad/s
-        float ref_acc = SafeGetRef(inst->ref_acceleration, 0.0f); // rad/s²
+        ref_pos = SafeGetRef(inst->ref_position, angle);    // rad
+        ref_vel = SafeGetRef(inst->ref_speed, 0.0f);        // rad/s
+        ref_acc = SafeGetRef(inst->ref_acceleration, 0.0f); // rad/s²
 
         CalcFeedforward(inst, ref_acc, speed);
 
@@ -221,20 +229,21 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
 
 vofa_output:
 #ifdef AxisMitVofaLiteSetChannelUsed
-    // 设定 VOFA 调试通道（13个）
-    VofaLiteSetChannel(1, angle);
-    VofaLiteSetChannel(2, speed);
-    VofaLiteSetChannel(3, ref_pos);
-    VofaLiteSetChannel(4, ref_vel);
-    VofaLiteSetChannel(5, inst->params.gravity_ff);
-    VofaLiteSetChannel(6, inst->params.inertia_ff);
-    VofaLiteSetChannel(7, inst->params.friction_ff);
-    VofaLiteSetChannel(8, inst->params.total_ff);
-    VofaLiteSetChannel(9, inst->mit.pos_error);
-    VofaLiteSetChannel(10, inst->mit.speed_error);
-    VofaLiteSetChannel(11, inst->mit.pos_output);
-    VofaLiteSetChannel(12, inst->mit.speed_output);
-    VofaLiteSetChannel(13, inst->mit.output);
+    /* CH1-CH3: 传感器测量 (电气物理量, 独立) */
+    VofaLiteSetChannel(1, angle);                        // CH1: 反馈位置 (rad)
+    VofaLiteSetChannel(2, speed);                        // CH2: 反馈速度 (rad/s)
+    VofaLiteSetChannel(3, MotorGetCurrent(inst->motor)); // CH3: 电机实际电流
+    /* CH4-CH6: 设定值 (TUNE/NORMAL 阶段) */
+    VofaLiteSetChannel(4, ref_pos); // CH4: 位置设定值 (rad)
+    VofaLiteSetChannel(5, ref_vel); // CH5: 速度设定值 (rad/s)
+    VofaLiteSetChannel(6, ref_acc); // CH6: 加速度设定值 (rad/s^2)
+    /* CH7-CH9: 前馈分量 */
+    VofaLiteSetChannel(7, inst->params.gravity_ff);  // CH7: 重力前馈 (Nm)
+    VofaLiteSetChannel(8, inst->params.inertia_ff);  // CH8: 惯量前馈 (Nm)
+    VofaLiteSetChannel(9, inst->params.friction_ff); // CH9: 摩擦前馈 / chirp (Nm)
+    /* CH10-CH11: MIT PD 分量 */
+    VofaLiteSetChannel(10, inst->mit.pos_output);   // CH10: MIT 位置环输出 (Nm)
+    VofaLiteSetChannel(11, inst->mit.speed_output); // CH11: MIT 速度环输出 (Nm)
 #endif
 }
 
