@@ -46,10 +46,11 @@ typedef struct
  *============================================*/
 typedef struct
 {
-    float start_freq; // 起始频率 (Hz)
-    float end_freq;   // 结束频率 (Hz)
-    float amplitude;  // 力矩振幅 (Nm)
-    float duration;   // 扫频时长 (s)
+    float start_freq;      // 起始频率 (Hz)
+    float end_freq;        // 结束频率 (Hz)
+    float amplitude_start; // 起始力矩振幅 (Nm)
+    float amplitude_end;   // 终止力矩振幅 (Nm)
+    float duration;        // 扫频时长 (s)
 } ChirpParam_s;
 
 /*============================================
