@@ -117,6 +117,7 @@ void DJIMotorDisable(void *inst);
 void DJIMotorSetRef(void *inst, float ref);
 float DJIMotor_GetAngle(void *inst);
 float DJIMotor_GetSpeed(void *inst);
+float DJIMotor_GetCurrent(void *inst);
 void DJIMotorSend(void *inst); // 按照can的接收id分组，只要调用同1组的任意一个电机的发送函数，即可发送整组电机
 
 #endif // BSP_CAN_MODULE_ENABLED

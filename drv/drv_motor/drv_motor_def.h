@@ -13,6 +13,7 @@
 #define MotorSend(inst) (((MotorBase_s *)(inst))->vtable->send(inst))
 #define MotorGetAngle(inst) (((MotorBase_s *)(inst))->vtable->get_angle(inst))
 #define MotorGetSpeed(inst) (((MotorBase_s *)(inst))->vtable->get_speed(inst))
+#define MotorGetCurrent(inst) (((MotorBase_s *)(inst))->vtable->get_current(inst))
 
 /*============================================
  *              电机品牌枚举
@@ -136,8 +137,11 @@ typedef struct MotorVTable_s
     void (*disable)(void *inst);            // 禁用电机
     void (*set_ref)(void *inst, float ref); // 设置参考值
     void (*send)(void *inst);               // 发送控制数据
-    float (*get_angle)(void *inst);         // 获取多圈位置
-    float (*get_speed)(void *inst);         // 获取速度
+    float (*get_angle)(void *inst);         // 获取位置
+    float (*get_speed)(void *inst);         // 获取速度 (rad/s)
+    float (*get_current)(void *inst);       // 获取电流/力矩
+    // dji电机开环setref电流，get_current返回电流
+    // dm电机开环setref力矩，get_current返回力矩
 } MotorVTable_s;
 
 /*============================================
