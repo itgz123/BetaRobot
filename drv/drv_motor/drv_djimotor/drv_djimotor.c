@@ -101,6 +101,7 @@ void DJIMotor_SetRef(void *inst, float ref);
 void DJIMotor_Send(void *inst);
 float DJIMotor_GetAngle(void *inst);
 float DJIMotor_GetSpeed(void *inst);
+float DJIMotor_GetCurrent(void *inst);
 
 const static MotorVTable_s s_dji_motor_vtable = {
     .enable = DJIMotor_Enable,
@@ -109,6 +110,7 @@ const static MotorVTable_s s_dji_motor_vtable = {
     .send = DJIMotor_Send,
     .get_angle = DJIMotor_GetAngle,
     .get_speed = DJIMotor_GetSpeed,
+    .get_current = DJIMotor_GetCurrent,
 };
 
 /**
@@ -269,6 +271,16 @@ float DJIMotor_GetSpeed(void *inst)
     }
     // 反馈方向修正
     return speed * setting->feedback_direction;
+}
+
+float DJIMotor_GetCurrent(void *inst)
+{
+    if (!inst)
+        return 0.0f;
+    DJIMotorInstance *motor = (DJIMotorInstance *)inst;
+    MotorControllerSetting_s *setting = &motor->base.setting;
+    // 电流反馈方向修正
+    return motor->data.current * setting->feedback_direction;
 }
 
 /**
