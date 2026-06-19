@@ -1,3 +1,11 @@
+/**
+ * @file drv_axis_mit_lite.h
+ * @brief 轻量级单轴关节控制驱动模块实现
+ * @author TRW
+ * @date 2026-06-07
+ *
+ * @note 考虑：重力(实际位置)；惯量(参考加速度)；双向库伦摩擦(实际速度)；双向粘性摩擦(实际速度)。
+ */
 #ifndef DRV_AXIS_LITE_DEF_H
 #define DRV_AXIS_LITE_DEF_H
 
@@ -19,12 +27,13 @@ typedef enum : uint8_t
  *============================================*/
 typedef struct
 {
-    // lite版本不考虑轴间耦合，所有参数等效到转子侧
-    float torque_coeff;     // 有的电机setref是电流，有的是扭矩，有的有减速箱。这个参数自己看着填。
-    float gravity;          // 等效重力矩 (Nm)
-    float inertia;          // 等效转动惯量 (kg·m²)
-    float friction_coulomb; // 库仑摩擦力矩 (Nm)
-    float friction_viscous; // 粘性摩擦系数 (Nm·s/rad)
+    float torque_coeff;         // 有的电机setref是电流，有的是扭矩，有的有减速箱。这个参数自己看着填。
+    float gravity;              // 重力矩 (Nm)
+    float inertia;              // 转动惯量 (kg·m²)
+    float friction_coulomb_pos; // 正向库仑摩擦 (Nm)
+    float friction_coulomb_neg; // 负向库仑摩擦 (Nm)
+    float friction_viscous_pos; // 正向粘性摩擦系数 (Nm·s/rad)
+    float friction_viscous_neg; // 负向粘性摩擦系数 (Nm·s/rad)
     // 调试参数
     float gravity_ff;  // 重力前馈
     float inertia_ff;  // 惯量前馈

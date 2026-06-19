@@ -73,7 +73,18 @@ static inline float SafeGetRef(float *ptr, float default_val)
 static inline void CalcFeedforward(AxisMitLiteInstance *inst, float ref_acc, float speed)
 {
     inst->params.inertia_ff = inst->params.inertia * ref_acc;
-    inst->params.friction_ff = inst->params.friction_viscous * speed + inst->params.friction_coulomb * MATH_SIGN(speed);
+    if (speed > 0.0f)
+    {
+        inst->params.friction_ff = inst->params.friction_viscous_pos * speed + inst->params.friction_coulomb_pos;
+    }
+    else if (speed < 0.0f)
+    {
+        inst->params.friction_ff = inst->params.friction_viscous_neg * speed - inst->params.friction_coulomb_neg;
+    }
+    else
+    {
+        inst->params.friction_ff = 0.0f;
+    }
     inst->params.total_ff = inst->params.gravity_ff + inst->params.inertia_ff + inst->params.friction_ff;
     if (!isfinite(inst->params.total_ff))
     {
