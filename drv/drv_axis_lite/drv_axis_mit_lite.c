@@ -33,6 +33,9 @@ int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, AxisMitLite_Init_Config_s *cfg
     // 初始化正弦参数
     inst->sine_params = cfg->sine_params;
 
+    // 初始化多正弦叠加参数
+    inst->multi_sine_params = cfg->multi_sine_params;
+
     // 初始化MIT控制器
     MIT_Init_Config_s mit_cfg = {
         .kp = cfg->kp,
@@ -92,6 +95,29 @@ static inline void CalcFeedforward(AxisMitLiteInstance *inst, float ref_acc, flo
     }
 }
 
+/**
+ * @brief 生成多正弦叠加力矩设定值
+ * @param params 多正弦参数结构体指针
+ * @param t 当前时间 (s)
+ * @return 叠加力矩 (Nm)
+ * @note 多正弦信号: τ(t) = Σ A_i * sin(2π * f_i * t)
+ *       用于时域正交可分离最小二乘法辨识，频率需满足正交性条件
+ */
+static inline float GenerateMultiSineTorque(MultiSineParam_s *params, float t)
+{
+    float torque = 0.0f;
+    float w, phase;
+
+    for (uint8_t i = 0; i < params->num_freqs && i < AXIS_LITE_MULTI_SINE_MAX_FREQS; i++)
+    {
+        w = M_2PI * params->freqs[i]; // rad/s
+        phase = w * t;                // rad
+        torque += params->amplitudes[i] * BSP_Math_Sin(phase);
+    }
+
+    return torque;
+}
+
 void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
 {
     if (inst == NULL || inst->motor == NULL)
@@ -126,6 +152,7 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
     float ref_vel = 0.0f;
     float ref_acc = 0.0f;
     float output = 0.0f;
+    float setref = 0.0f;
 
     if (inst->stage != AXIS_LITE_STAGE_NORMAL)
     {
@@ -184,6 +211,26 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
         break;
     }
 
+    case AXIS_LITE_STAGE_IDENTIFY_OLS:
+    {
+        float t = CalcTimeSinceDelay(inst, now_us); // s
+        float T = inst->multi_sine_params.duration; // s
+
+        // 循环播放：t 超过时长时重置
+        if (T > 0.0f && t > T)
+        {
+            t = fmodf(t, T);
+        }
+
+        // 生成多正弦叠加力矩
+        float multi_sine = GenerateMultiSineTorque(&inst->multi_sine_params, t);
+
+        inst->params.friction_ff = multi_sine;
+        inst->params.total_ff = inst->params.gravity_ff + multi_sine;
+        output = inst->params.total_ff;
+        break;
+    }
+
     case AXIS_LITE_STAGE_TUNE:
     {
         float t = CalcTimeSinceDelay(inst, now_us); // s
@@ -225,15 +272,16 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
         break;
     }
 
-    MotorSetRef(inst->motor, inst->params.torque_coeff * output);
+    setref = inst->params.torque_coeff * output;
+    MotorSetRef(inst->motor, setref);
 
 vofa_output:
 #ifdef AxisMitVofaLiteSetChannelUsed
-    /* CH1-CH3: 传感器测量 (电气物理量, 独立) */
+    /* CH1-CH3: 测量值 */
     VofaLiteSetChannel(1, angle);                        // CH1: 反馈位置 (rad)
     VofaLiteSetChannel(2, speed);                        // CH2: 反馈速度 (rad/s)
     VofaLiteSetChannel(3, MotorGetCurrent(inst->motor)); // CH3: 电机实际电流
-    /* CH4-CH6: 设定值 (TUNE/NORMAL 阶段) */
+    /* CH4-CH6: 设定值 */
     VofaLiteSetChannel(4, ref_pos); // CH4: 位置设定值 (rad)
     VofaLiteSetChannel(5, ref_vel); // CH5: 速度设定值 (rad/s)
     VofaLiteSetChannel(6, ref_acc); // CH6: 加速度设定值 (rad/s^2)
@@ -241,9 +289,11 @@ vofa_output:
     VofaLiteSetChannel(7, inst->params.gravity_ff);  // CH7: 重力前馈 (Nm)
     VofaLiteSetChannel(8, inst->params.inertia_ff);  // CH8: 惯量前馈 (Nm)
     VofaLiteSetChannel(9, inst->params.friction_ff); // CH9: 摩擦前馈 / chirp (Nm)
-    /* CH10-CH11: MIT PD 分量 */
+    /* CH10-CH11: MIT 输出 */
     VofaLiteSetChannel(10, inst->mit.pos_output);   // CH10: MIT 位置环输出 (Nm)
     VofaLiteSetChannel(11, inst->mit.speed_output); // CH11: MIT 速度环输出 (Nm)
+    /* CH12: setref值，最终发送给电机的电流/力矩值 */
+    VofaLiteSetChannel(12, setref);
 #endif
 }
 
