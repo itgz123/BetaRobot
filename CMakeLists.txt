@@ -232,7 +232,6 @@ endforeach()
 # MCU 配置（数据驱动）
 ######################################
 # 开发板配置表: CPU;FPU;链接脚本
-set(BOARD_CFG_STM32F407VET6 "cortex-m4;fpv4-sp-d16;STM32F407XX_FLASH.ld")
 set(BOARD_CFG_DM_MC02      "cortex-m7;fpv5-d16;STM32H723XG_FLASH.ld")
 set(BOARD_CFG_DJI_A        "cortex-m4;fpv4-sp-d16;STM32F427XX_FLASH.ld")
 set(BOARD_CFG_DJI_C        "cortex-m4;fpv4-sp-d16;STM32F407XX_FLASH.ld")

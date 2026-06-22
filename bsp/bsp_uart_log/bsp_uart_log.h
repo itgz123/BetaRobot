@@ -28,8 +28,6 @@
 #error "Please define UART_LOG_UART for this board"
 #elif DEVELOPMENT_BOARD == DJI_A
 #error "Please define UART_LOG_UART for this board"
-#elif DEVELOPMENT_BOARD == STM32F407VET6
-#error "Please define UART_LOG_UART for this board"
 #else
 #error "Please define UART_LOG_UART for this board"
 #endif
