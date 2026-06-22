@@ -4,5 +4,4 @@
     "betaRobot.cmakeCommand": "cmake",
     "betaRobot.ninjaCommand": "ninja",
     "betaRobot.buildJobs": 24,
-    "cortex-debug.variableUseNaturalFormat": false
 }

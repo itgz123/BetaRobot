@@ -6,10 +6,14 @@
 #include "drv_daemon.h"
 #include "drv_pid.h"
 
-#define MotorEnable(inst) ((inst)->base.vtable->enable(inst))
-#define MotorDisable(inst) ((inst)->base.vtable->disable(inst))
-#define MotorSetRef(inst, ref) ((inst)->base.vtable->set_ref(inst, ref))
-#define MotorSend(inst) ((inst)->base.vtable->send(inst))
+// 使用下面的宏必须确保所有电机派生类的 base 成员都是结构体的第一个成员
+#define MotorEnable(inst) (((MotorBase_s *)(inst))->vtable->enable(inst))
+#define MotorDisable(inst) (((MotorBase_s *)(inst))->vtable->disable(inst))
+#define MotorSetRef(inst, ref) (((MotorBase_s *)(inst))->vtable->set_ref(inst, ref))
+#define MotorSend(inst) (((MotorBase_s *)(inst))->vtable->send(inst))
+#define MotorGetAngle(inst) (((MotorBase_s *)(inst))->vtable->get_angle(inst))
+#define MotorGetSpeed(inst) (((MotorBase_s *)(inst))->vtable->get_speed(inst))
+#define MotorGetCurrent(inst) (((MotorBase_s *)(inst))->vtable->get_current(inst))
 
 /*============================================
  *              电机品牌枚举
@@ -88,24 +92,41 @@ typedef enum : uint8_t
 } MotorEnable_e;
 
 /*============================================
- *              位置限位使能枚举
+ *              位置模式枚举
+ *
+ * 三种位置模式的行为说明：
+ *
+ * ┌────────────┬─────────────────────┬─────────────────────┬─────────────────────┬─────────────────────┐
+ * │    模式    │       应用场景      │    setref处理       │  PID位置反馈来源    │   get_angle返回    │
+ * ├────────────┼─────────────────────┼─────────────────────┼─────────────────────┼─────────────────────┤
+ * │  LIMITED   │ pitch轴等有机械限位 │ 多圈位置限幅到      │ multi+offset        │ multi+offset        │
+ * │  (限幅)    │ 的关节电机          │ [min, max]          │                     │                     │
+ * ├────────────┼─────────────────────┼─────────────────────┼─────────────────────┼─────────────────────┤
+ * │  WRAP      │ yaw轴等无限旋转但   │ 多圈位置归一化到    │ multi+offset        │ multi+offset        │
+ * │  (环绕)    │ 需归一化处理的电机  │ [min, max]          │ 归一化到[min,max]   │ 归一化到[min,max]   │
+ * ├────────────┼─────────────────────┼─────────────────────┼─────────────────────┼─────────────────────┤
+ * │ CONTINUOUS │ 轮子电机等需要多圈  │ 不限幅              │ multi+offset        │ multi+offset        │
+ * │  (连续)    │ 累积位置的电机      │                     │                     │                     │
+ * └────────────┴─────────────────────┴─────────────────────┴─────────────────────┴─────────────────────┘
+ *
+ * 注：multi = 多圈位置 = cnt*2π + single，offset = 位置偏置
+ *     angle_limit_min/max: LIMITED模式作为限幅范围，WRAP模式作为归一化范围
  *============================================*/
 typedef enum : uint8_t
 {
-    MOTOR_ANGLE_LIMIT_DISABLE = 0, // 禁用位置限位
-    MOTOR_ANGLE_LIMIT_ENABLE = 1,  // 启用位置限位
-} MotorAngleLimit_e;
+    MOTOR_POSITION_LIMITED = 0,    // 限幅模式
+    MOTOR_POSITION_WRAP = 1,       // 环绕模式
+    MOTOR_POSITION_CONTINUOUS = 2, // 连续模式
+} MotorPositionMode_e;
 
 /*============================================
- *              电机参数结构体
+ *              速度滤波使能枚举
  *============================================*/
-typedef struct
+typedef enum : uint8_t
 {
-    uint16_t current_max;        // 电流最大值 (原始值)
-    float current_max_a;         // 电流最大值 (安培)
-    uint16_t encoder_resolution; // 编码器分辨率
-    float no_load_speed;         // 空载转速 (rad/s)
-} MotorParams_s;
+    MOTOR_SPEED_LPF_DISABLE = 0, // 禁用速度低通滤波
+    MOTOR_SPEED_LPF_ENABLE = 1,  // 启用速度低通滤波
+} MotorSpeedLpf_e;
 
 /*============================================
  *              电机数据
@@ -127,6 +148,11 @@ typedef struct MotorVTable_s
     void (*disable)(void *inst);            // 禁用电机
     void (*set_ref)(void *inst, float ref); // 设置参考值
     void (*send)(void *inst);               // 发送控制数据
+    float (*get_angle)(void *inst);         // 获取位置
+    float (*get_speed)(void *inst);         // 获取速度 (rad/s)
+    float (*get_current)(void *inst);       // 获取电流/力矩
+    // dji电机开环setref电流，get_current返回电流
+    // dm电机开环setref力矩，get_current返回力矩
 } MotorVTable_s;
 
 /*============================================
@@ -153,10 +179,10 @@ typedef struct
     MotorDirection_e motor_direction;    // 电机方向
     MotorDirection_e feedback_direction; // 反馈方向
 
-    /* 位置限位 */
-    MotorAngleLimit_e angle_limit_enable; // 位置限位使能
-    float angle_limit_min;                // 位置下限
-    float angle_limit_max;                // 位置上限
+    /* 位置模式 */
+    MotorPositionMode_e position_mode; // 位置模式
+    float angle_limit_min;             // LIMITED: 限幅下限, WRAP: 归一化下限
+    float angle_limit_max;             // LIMITED: 限幅上限, WRAP: 归一化上限
 
     /* 前馈来源 */
     MotorFeedforwardSrc_e speed_feedforward_src;    // 速度前馈来源
@@ -197,8 +223,9 @@ typedef struct
     uint8_t data_now_idx;
 
     /* 速度计算 */
-    MotorSpeedSrc_e speed_src; // 速度来源选择
-    float speed_lpf_rc;        // 速度低通滤波时间常数 RC (0=禁用)
+    MotorSpeedSrc_e speed_src;        // 速度来源选择
+    MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
+    float speed_lpf_rc;               // 速度低通滤波时间常数 RC
 
     /* 统一接口 */
     CANInstance *can;       // CAN 实例指针

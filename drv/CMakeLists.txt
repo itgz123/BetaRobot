@@ -8,6 +8,8 @@ set(MODULE_SOURCES
     drv_vofa/drv_vofa.c
     drv_vofa/drv_vofa_lite.c
     drv_motor/drv_djimotor/drv_djimotor.c
+    drv_axis_lite/drv_axis_mit_lite.c
+    drv_mit/drv_mit.c
 )
 
 # drv 层头文件路径
@@ -20,4 +22,6 @@ set(MODULE_INCLUDE_DIRS
     drv_vofa
     drv_motor
     drv_motor/drv_djimotor
+    drv_axis_lite
+    drv_mit
 )

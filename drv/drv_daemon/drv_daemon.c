@@ -13,10 +13,14 @@ static uint8_t s_idx = 0;
 
 // 蜂鸣器鸣叫声音表格
 const uint8_t voice_map[DAEMON_FAULT_NUM][12] = {0};
-static uint8_t buzzer_flag = 0;
+static uint8_t buzzer_flag = 0; // 这个拓展为static uint8_t buzzer_flag[DAEMON_FAULT_NUM] = {0};
 
+#if DEVELOPMENT_BOARD == DM_MC02
 // 蜂鸣器pwm
 PWM_INSTANCE_DEF(buzzer_pwm);
+#else
+#error "without config buzzer"
+#endif // #if DEVELOPMENT_BOARD
 
 // Daemon 任务实例
 TASK_INSTANCE_DEF(daemon_task, DAEMON_STACK_SIZE);
@@ -114,7 +118,12 @@ void DaemonTask(void)
         }
     }
 
+#if DEVELOPMENT_BOARD == DM_MC02
     PWMSetDutyRatio(&buzzer_pwm, (buzzer_flag / 2.0f));
+#else
+#error "without config buzzer"
+#endif // #if DEVELOPMENT_BOARD
+
     buzzer_flag = 0;
 }
 
@@ -144,8 +153,12 @@ void DaemonInit(void)
     };
     TaskRegister(&daemon_task, &task_cfg);
 
+#if DEVELOPMENT_BOARD == DM_MC02
     PWM_Init_Config_s pwm_cfg = {.tim_e = TIM_BUZZER};
     PWMRegister(&buzzer_pwm, &pwm_cfg);
+#else
+#error "without config buzzer"
+#endif // #if DEVELOPMENT_BOARD
 }
 
 #else

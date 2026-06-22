@@ -11,13 +11,6 @@
 #include "bsp_math.h"
 
 /*============================================
- *              电机参数表（外部声明）
- *============================================*/
-extern const MotorParams_s dji_motor_params[DJI_MODEL_NUM];
-extern const uint16_t can_tx_id[DJI_MODEL_NUM][2];
-extern const uint16_t can_rx_id_base[DJI_MODEL_NUM];
-
-/*============================================
  *              前向声明
  *============================================*/
 typedef struct DJIMotorInstance DJIMotorInstance;
@@ -31,6 +24,17 @@ typedef struct
     uint8_t motor_init_flag[4];  // 电机是否初始化标志
 } DJIMotorSendGroup_s;
 
+/*============================================
+ *              电机参数结构体
+ *============================================*/
+typedef struct
+{
+    uint16_t current_max;        // 电流最大值 (原始值)
+    float current_max_a;         // 电流最大值 (安培)
+    uint16_t encoder_resolution; // 编码器分辨率
+    float no_load_speed;         // 空载转速 (rad/s)
+} DJIMotorParams_s;
+
 typedef struct
 {
     uint16_t raw_encoder;         // 编码器原始值 (0-8191)
@@ -39,6 +43,20 @@ typedef struct
     int8_t raw_temperature_motor; // 线圈温度 (°C)
     uint8_t error_code;           // 错误码
 } DJIMotorRawData_s;
+
+typedef struct
+{
+    float position_single; // 单圈位置 (rad) [0, 2π)
+    int64_t position_cnt;  // 圈数（支持负数）
+    float position_multi;  // 多圈位置 (rad)
+    // 如果增量式 (3508,2006) 使用光电门校准；如果绝对式 (6020) 安装后调零一次即可。
+    float position_offset;    // 位置偏置 (rad) 。反馈的是加上偏置的位置
+    float speed;              // 速度 (rad/s)
+    float last_speed;         // 上次速度 (rad/s)
+    float current;            // 电流 (A)
+    float temperature;        // 线圈温度 (°C)
+    uint64_t last_time_stamp; // 上次接收时间戳
+} DJIMotorData_s;             // 速度和位置是转子的速度和位置，不是减速箱输出轴速度和位置
 
 /*============================================
  *              DJI 电机实例结构体
@@ -52,8 +70,7 @@ struct DJIMotorInstance
 
     /* 数据缓冲 (DJI 特有) */
     DJIMotorRawData_s data_raw;
-    float current;     // 电流 (A)
-    float temperature; // 线圈温度 (°C)
+    DJIMotorData_s data;
 
     /* 分组发送 (DJI 特有) */
     DJIMotorSendGroup_s *sender_group;
@@ -71,7 +88,8 @@ typedef struct
     DaemonFaultAction_e fault_action; // 离线故障动作
     uint8_t motor_id;                 // 电机 ID (1-8)
     MotorSpeedSrc_e speed_src;        // 速度来源：反馈速度/位置微分
-    float speed_lpf_rc;               // 速度低通滤波时间常数 RC (0=禁用)
+    MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
+    float speed_lpf_rc;               // 速度低通滤波时间常数 RC
 
     /* 控制器设置 */
     MotorControllerSetting_s controller_setting; // 控制器设置
@@ -97,6 +115,9 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg);
 void DJIMotorEnable(void *inst);
 void DJIMotorDisable(void *inst);
 void DJIMotorSetRef(void *inst, float ref);
+float DJIMotor_GetAngle(void *inst);
+float DJIMotor_GetSpeed(void *inst);
+float DJIMotor_GetCurrent(void *inst);
 void DJIMotorSend(void *inst); // 按照can的接收id分组，只要调用同1组的任意一个电机的发送函数，即可发送整组电机
 
 #endif // BSP_CAN_MODULE_ENABLED
