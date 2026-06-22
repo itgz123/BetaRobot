@@ -32,18 +32,19 @@ typedef struct
     // 电机基类要求：
     // 1. MotorLoopType_e=loop_type
     // 2. position_mode = MOTOR_POSITION_WRAP/MOTOR_POSITION_LIMITED
-    MotorBase_s *motor;        // 电机基类
-    AxisLiteStage_e stage;     // 控制阶段
-    AxisLiteParams_s params;   // 轴参数
-    ChirpParam_s chirp_params; // 扫频参数
-    SineParam_s sine_params;   // 正弦参数
-    float *ref_position;       // 外部位置设定 (rad)
-    float *ref_speed;          // 外部速度设定 (rad/s)
-    float *ref_acceleration;   // 外部加速度设定 (rad/s²)
-    uint32_t delay_ms;         // 延时时间 (ms)
-    uint64_t init_time_us;     // 初始化时间戳 (us)
-    uint8_t init_flag;         // init_time_us 初始化标志，0=未初始化
-    MITInstance mit;           // MIT控制器实例
+    MotorBase_s *motor;                 // 电机基类
+    AxisLiteStage_e stage;              // 控制阶段
+    AxisLiteParams_s params;            // 轴参数
+    ChirpParam_s chirp_params;          // 扫频参数
+    SineParam_s sine_params;            // 正弦参数
+    MultiSineParam_s multi_sine_params; // 多正弦叠加参数
+    MITInstance mit;                    // MIT控制器实例
+    float *ref_position;                // 外部位置设定 (rad)
+    float *ref_speed;                   // 外部速度设定 (rad/s)
+    float *ref_acceleration;            // 外部加速度设定 (rad/s²)
+    uint32_t delay_ms;                  // 延时时间 (ms)
+    uint64_t init_time_us;              // 初始化时间戳 (us)
+    uint8_t init_flag;                  // init_time_us 初始化标志，0=未初始化
 } AxisMitLiteInstance;
 
 /*============================================
@@ -51,12 +52,13 @@ typedef struct
  *============================================*/
 typedef struct
 {
-    MotorBase_s *motor;        // 电机基类
-    AxisLiteStage_e stage;     // 控制阶段
-    uint32_t delay_ms;         // 延时时间 (ms)
-    AxisLiteParams_s params;   // 轴参数
-    SineParam_s sine_params;   // 正弦参数
-    ChirpParam_s chirp_params; // 扫频参数
+    MotorBase_s *motor;                 // 电机基类
+    AxisLiteStage_e stage;              // 控制阶段
+    uint32_t delay_ms;                  // 延时时间 (ms)
+    AxisLiteParams_s params;            // 轴参数
+    SineParam_s sine_params;            // 正弦参数
+    ChirpParam_s chirp_params;          // 扫频参数
+    MultiSineParam_s multi_sine_params; // 多正弦叠加参数
     // MIT控制器参数
     float kp; // 位置增益 (Nm/rad)
     float kd; // 速度增益
@@ -77,8 +79,8 @@ int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, AxisMitLite_Init_Config_s *cfg
 /**
  * @brief 计算控制输出并调用MotorSetRef
  * @param inst 实例指针
- * @note 启用 AxisMitVofaLiteSetChannelUsed 时，自动设定 11 个 VOFA 调试通道：
- *
+ * @note setref =（重力前馈 + 惯量前馈 + 摩擦前馈） + （kp * 位置误差 + kd * 速度误差）
+ * @note 启用 AxisMitVofaLiteSetChannelUsed 时，自动设定 12 个 VOFA 调试通道：
  *       CH1-CH3: 传感器测量 (独立物理量)
  *       ch1:  position       — 反馈位置 (rad)
  *       ch2:  speed          — 反馈速度 (rad/s)
@@ -97,6 +99,8 @@ int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, AxisMitLite_Init_Config_s *cfg
  *       CH10-CH11: MIT 控制器 PD 输出
  *       ch10: pos_output     — 位置环输出 (Nm)
  *       ch11: speed_output   — 速度环输出 (Nm)
+ *
+ *       ch12: setref值，最终发送给电机的电流/力矩值
  */
 void AxisMitLiteCalculate(AxisMitLiteInstance *inst);
 

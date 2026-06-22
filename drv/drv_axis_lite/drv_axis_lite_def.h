@@ -16,10 +16,12 @@
  *============================================*/
 typedef enum : uint8_t
 {
-    AXIS_LITE_STAGE_FIXED_TORQUE = 0, // step1: 固定力矩，计算重力矩，确定控制和反馈方向
-    AXIS_LITE_STAGE_IDENTIFY,         // step2: 重力基础上添加多频率正弦波（变频），辨识惯量、摩擦，校准重力
-    AXIS_LITE_STAGE_TUNE,             // step3,4: 固定频率或多频率正弦波设定值
-    AXIS_LITE_STAGE_NORMAL,           // step5: 正常控制
+    AXIS_LITE_STAGE_FIXED_TORQUE = 0, // step1: 给定重力矩（计算重力矩，确定控制和反馈方向）
+    AXIS_LITE_STAGE_IDENTIFY,         // step2: 给定重力矩+变频正弦力矩（频域法辨识惯量、双向摩擦）
+    AXIS_LITE_STAGE_IDENTIFY_OLS,     // step3: 给定重力矩+多正弦力矩（时域正交可分离最小二乘法辨识惯量、双向摩擦）
+    // step4的闭环设定值给正弦加速度和微分速度和位置；step5的闭环设定值给实际设定值。
+    AXIS_LITE_STAGE_TUNE,   // step4: 给定重力矩+惯量力矩+摩擦力矩+闭环力矩（调闭环参数）
+    AXIS_LITE_STAGE_NORMAL, // step5: 给定重力矩+惯量力矩+摩擦力矩+闭环力矩（正常控制）
 } AxisLiteStage_e;
 
 /*============================================
@@ -61,5 +63,18 @@ typedef struct
     float freq;      // 频率 (Hz)
     float amplitude; // 位置振幅 (rad)
 } SineParam_s;
+
+/*============================================
+ *              多正弦叠加参数结构体
+ *============================================*/
+#define AXIS_LITE_MULTI_SINE_MAX_FREQS 8 // 最大正弦频率数量
+
+typedef struct
+{
+    float freqs[AXIS_LITE_MULTI_SINE_MAX_FREQS];      // 频率数组 (Hz)
+    float amplitudes[AXIS_LITE_MULTI_SINE_MAX_FREQS]; // 振幅数组 (Nm)
+    uint8_t num_freqs;                                // 正弦波数量
+    float duration;                                   // 总时长 (s)
+} MultiSineParam_s;
 
 #endif // !DRV_AXIS_LITE_DEF_H
