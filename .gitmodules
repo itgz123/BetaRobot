@@ -7,3 +7,6 @@
 [submodule "cubemx/DJI_C_Assess"]
 	path = cubemx/DJI_C_Assess
 	url = git@gitee.com:trwwrt/BetaRobot-CubeMX-DJI_C_Assess.git
+[submodule "app/target_car"]
+	path = app/target_car
+	url = git@gitee.com:trwwrt/target_car.git
