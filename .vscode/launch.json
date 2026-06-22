@@ -11,12 +11,11 @@
             "type": "pickString",
             "description": "选择开发板（需与 app_cfg.h 中的 DEVELOPMENT_BOARD 对应）",
             "options": [
-                "STM32F407VET6",
                 "DM_MC02",
                 "DJI_A",
                 "DJI_C"
             ],
-            "default": "STM32F407VET6"
+            "default": "DM_MC02"
         },
         {
             "id": "jlinkDevice",
@@ -24,7 +23,7 @@
             "description": "J-Link 目标设备（根据开发板选择）",
             "options": [
                 {
-                    "label": "STM32F407VET6 / DJI_A / DJI_C",
+                    "label": "DJI_A / DJI_C",
                     "value": "Cortex-M4"
                 },
                 {
@@ -32,7 +31,7 @@
                     "value": "Cortex-M7"
                 }
             ],
-            "default": "Cortex-M4"
+            "default": "Cortex-M7"
         }
     ],
     "configurations": [

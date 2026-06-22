@@ -704,7 +704,7 @@ extern const UART_Map_t uart_map[];
 
 /*------------- 实例数量配置（根据开发板自动适配）-------------*/
 
-#if DEVELOPMENT_BOARD == STM32F407VET6
+#if DEVELOPMENT_BOARD == DM_MC02
 #define GPIO_NUM  10
 #define UART_NUM  1
 #endif
@@ -1385,7 +1385,7 @@ void CAN_Transmit(CANInstance *instance, uint8_t *data, uint16_t len)
 ```c
 /* bsp/inc/bsp_cfg.h */
 
-#if DEVELOPMENT_BOARD == STM32F407VET6
+#if DEVELOPMENT_BOARD == DM_MC02
 
 /*---------- 逻辑实例数量（APP/DRV 层可注册的最大实例数）----------*/
 /* 总线类外设：多个逻辑实例可共用同一物理硬件 */

@@ -6,12 +6,11 @@
             "type": "pickString",
             "description": "选择开发板",
             "options": [
-                "STM32F407VET6",
                 "DM_MC02",
                 "DJI_A",
                 "DJI_C"
             ],
-            "default": "STM32F407VET6"
+            "default": "DM_MC02"
         }
     ],
     "tasks": [

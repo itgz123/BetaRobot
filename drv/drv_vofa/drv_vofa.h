@@ -44,7 +44,7 @@
 #error "Please define VOFA_LITE_UART for this board"
 #elif DEVELOPMENT_BOARD == DJI_A
 #error "Please define VOFA_LITE_UART for this board"
-#elif DEVELOPMENT_BOARD == STM32F407VET6
+#else
 #error "Please define VOFA_LITE_UART for this board"
 #endif
 #endif // !VOFA_UART
