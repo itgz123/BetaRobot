@@ -491,7 +491,8 @@ int8_t CANRegister(CANInstance *instance, const CAN_Init_Config_s *config)
     instance->map = can_map[instance->can_e];
     BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, -1, LOGERROR("[bsp_can] CAN handle is NULL, check bsp_cfg mapping!"));
 
-    // 检查 tx_id 冲突（同一CAN句柄上不能有重复的发送ID）
+    // 检查 tx_id 重复（同一CAN句柄上重复的发送ID是允许的，如DJI电机ID1-4共用tx_id=0x200）
+    // 但重复意味着多个实例使用同一个tx_id发送，需确认是设计意图
     if (instance->tx_id != CAN_ID_UNUSED)
     {
         for (uint8_t i = 0; i < s_idx; i++)
@@ -501,8 +502,8 @@ int8_t CANRegister(CANInstance *instance, const CAN_Init_Config_s *config)
             {
                 if (existing->tx_id != CAN_ID_UNUSED && existing->tx_id == instance->tx_id)
                 {
-                    LOGERROR("[bsp_can] Duplicate tx_id=0x%lX on same CAN handle!", instance->tx_id);
-                    return -1;
+                    LOGWARNING("[bsp_can] Duplicate tx_id=0x%lX on same CAN handle!", instance->tx_id);
+                    break;
                 }
             }
         }
