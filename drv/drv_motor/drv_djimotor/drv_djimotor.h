@@ -83,7 +83,7 @@ struct DJIMotorInstance
 typedef struct
 {
     BoardCAN_e can_e;                 // 板载CAN枚举
-    uint8_t model;                    // 型号
+    DJIModel_e model;                 // 型号
     uint16_t reload_count;            // 重载值（喂狗超时阈值）
     DaemonFaultAction_e fault_action; // 离线故障动作
     uint8_t motor_id;                 // 电机 ID (1-8)
