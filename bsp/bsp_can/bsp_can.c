@@ -774,6 +774,9 @@ void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
             LOGWARNING("[bsp_can] CAN Error: 0x%08lX, TEC=%d, REC=%d", error, tec, rec);
         }
 
+        (void)tec;
+        (void)rec;
+
         // 清除软件错误标志
         HAL_CAN_ResetError(hcan);
     }
