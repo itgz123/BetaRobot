@@ -129,17 +129,6 @@ typedef enum : uint8_t
 } MotorSpeedLpf_e;
 
 /*============================================
- *              电机数据
- *============================================*/
-typedef struct
-{
-    float position_single; // 转子单圈位置 (rad) [0, 2π)
-    float position_multi;  // 转子多圈位置 (rad)
-    float speed;           // 转子速度 (rad/s)
-    uint64_t time_stamp;   // 接收时间戳
-} MotorData_s;
-
-/*============================================
  *              虚函数表
  *============================================*/
 typedef struct MotorVTable_s
@@ -217,10 +206,6 @@ typedef struct
     /* 控制器 */
     MotorControllerSetting_s setting; // 控制器设置
     MotorController_s controller;     // 控制器
-
-    /* 数据 */
-    MotorData_s data[2];
-    uint8_t data_now_idx;
 
     /* 速度计算 */
     MotorSpeedSrc_e speed_src;        // 速度来源选择
