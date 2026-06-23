@@ -65,7 +65,7 @@ static volatile uint8_t s_active_buff = 0;
  * @brief DMA 发送完成回调
  * @param instance USART 实例
  */
-static void VofaLiteTxCpltCallback(USARTInstance *instance)
+static void VofaTxCpltCallback(USARTInstance *instance)
 {
     // 当前 active 缓冲区变为空闲
     s_buff_state[s_active_buff] = BUFF_IDLE;
@@ -85,14 +85,14 @@ static void VofaLiteTxCpltCallback(USARTInstance *instance)
 
 /*------------- 实现函数 --------------*/
 
-void VofaLiteInit(void)
+void VofaInit(void)
 {
     // 注册 USART（使用 DMA 模式 + 发送完成回调）
     USART_Init_Config_s usart_cfg = {
         .uart_e = VOFA_LITE_UART,
         .tx_mode = USART_DMA_MODE,
         .rx_callback = NULL,
-        .tx_callback = VofaLiteTxCpltCallback,
+        .tx_callback = VofaTxCpltCallback,
     };
     USARTRegister(&s_vofa_lite_uart, &usart_cfg);
 
@@ -100,7 +100,7 @@ void VofaLiteInit(void)
             VOFA_LITE_UART, VOFA_LITE_CHANNELS, VOFA_LITE_CHANNELS);
 }
 
-void VofaLiteSetChannel(uint8_t ch, float value)
+void VofaSetChannel(uint8_t ch, float value)
 {
     // ch=0 为时间戳通道，用户不能设置
     if (ch == 0 || ch > VOFA_LITE_CHANNELS)
@@ -122,7 +122,7 @@ void VofaLiteSetChannel(uint8_t ch, float value)
     p[3] = fb.b[3];
 }
 
-void VofaLiteSend(void)
+void VofaSend(void)
 {
     // 1. 填充时间戳到写入缓冲区（使用联合体避免 memcpy）
     FloatBytes_u ts = {.f = (float)DWT_GetTimeUs()};
@@ -168,17 +168,17 @@ void VofaLiteSend(void)
 
 #else // !VOFA_LITE_USED
 
-void VofaLiteInit(void)
+void VofaInit(void)
 {
 }
 
-void VofaLiteSetChannel(uint8_t ch, float value)
+void VofaSetChannel(uint8_t ch, float value)
 {
     (void)ch;
     (void)value;
 }
 
-void VofaLiteSend(void)
+void VofaSend(void)
 {
 }
 
