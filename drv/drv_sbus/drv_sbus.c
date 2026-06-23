@@ -13,6 +13,19 @@
 
 #include "bsp_uart_log.h"
 
+// 函数声明
+static void SBUSUARTRxCallback(USARTInstance *usart_inst);
+
+/*------------- daemon回调函数实现 --------------*/
+static void SBUSDaemonCallback(void *owner)
+{
+    if (!owner)
+        return;
+
+    SBUSInstance *sbus_inst = (SBUSInstance *)owner;
+    sbus_inst->sbus_data.frame_lost = 1;
+}
+
 /*------------- 外部接口实现 --------------*/
 
 int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Init_Config_s *config)
@@ -35,15 +48,6 @@ int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Init_Config_s *config)
         return -1;
     }
 
-    if (config->app_callback == NULL)
-    {
-        LOGERROR("[drv_sbus] app_callback is NULL!");
-        return -1;
-    }
-
-    // 将配置拷贝到实例
-    instance->app_callback = config->app_callback;
-
     // 设置 parent 指针，用于 BSP 回调时获取 DRV 实例
     instance->usart_inst->parent = instance;
 
@@ -65,7 +69,7 @@ int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Init_Config_s *config)
         Daemon_Init_Config_s daemon_cfg = {
             .reload_count = config->daemon_reload,
             .fault_action = config->daemon_fault,
-            .callback = NULL,
+            .callback = SBUSDaemonCallback,
             .owner_id = instance,
         };
         DaemonRegister(instance->daemon, &daemon_cfg);
@@ -75,7 +79,7 @@ int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Init_Config_s *config)
     return 0;
 }
 
-SBUS_Data_t SBUSDecodeFrame(const uint8_t *data, uint16_t len)
+static SBUS_Data_t SBUSDecodeFrame(const uint8_t *data, uint16_t len)
 {
     SBUS_Data_t result = {0};
 
@@ -172,7 +176,7 @@ SBUS_Data_t SBUSDecodeFrame(const uint8_t *data, uint16_t len)
  * @param usart_inst USART 实例指针
  * @note 通过 parent 字段获取 SBUSInstance，调用 APP 回调
  */
-void SBUSUARTRxCallback(USARTInstance *usart_inst)
+static void SBUSUARTRxCallback(USARTInstance *usart_inst)
 {
     // 参数检查
     if (usart_inst == NULL)
@@ -191,11 +195,10 @@ void SBUSUARTRxCallback(USARTInstance *usart_inst)
     SBUSInstance *sbus_inst = (SBUSInstance *)usart_inst->parent;
 
     // 调用 APP 层回调（传递解析后的数据）
-    if (sbus_inst != NULL && sbus_inst->app_callback != NULL)
+    if (sbus_inst != NULL)
     {
         // 在中断上下文中解析原始数据为通道数据
         sbus_inst->sbus_data = SBUSDecodeFrame(usart_inst->rx_buff, usart_inst->rx_len);
-        sbus_inst->app_callback(sbus_inst);
         DaemonReload(sbus_inst->daemon);
     }
 }

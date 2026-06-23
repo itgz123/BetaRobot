@@ -39,7 +39,7 @@
  * @brief 初始化 VOFA Lite 驱动
  * @note 注册串口实例，初始化数据缓冲区
  */
-void VofaLiteInit(void);
+void VofaInit(void);
 
 /**
  * @brief 设置单个通道数据
@@ -47,13 +47,13 @@ void VofaLiteInit(void);
  *              ch=0 为时间戳通道，自动填充，用户无需设置
  * @param value 数据值
  */
-void VofaLiteSetChannel(uint8_t ch, float value);
+void VofaSetChannel(uint8_t ch, float value);
 
 /**
  * @brief 发送一帧数据
  * @note 在控制任务中调用，发送前检查串口状态，忙则跳过
  *       ch=0 自动填充 DWT 时间戳，用户数据从 ch=1 开始
  */
-void VofaLiteSend(void);
+void VofaSend(void);
 
 #endif // __DRV_VOFA_H

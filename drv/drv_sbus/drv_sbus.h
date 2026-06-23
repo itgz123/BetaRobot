@@ -55,23 +55,18 @@ typedef struct
  */
 typedef struct SBUSInstance
 {
-    USARTInstance *usart_inst;                   // BSP 实例指针
-    void (*app_callback)(struct SBUSInstance *); // APP 层回调
-    SBUS_Data_t sbus_data;                       // 解析后的通道数据（在中断回调中填充）
-    DaemonInstance *daemon;                      // 看门狗监控实例指针
+    USARTInstance *usart_inst; // BSP 实例指针
+    SBUS_Data_t sbus_data;     // 解析后的通道数据（在中断回调中填充）
+    DaemonInstance *daemon;    // 看门狗监控实例指针
 } SBUSInstance;
-
-/*------------- 外部函数声明（供 DEF 宏使用）--------------*/
-void SBUSUARTRxCallback(USARTInstance *usart_inst);
 
 /*------------- 配置结构体 --------------*/
 
 typedef struct
 {
-    BoardUART_e uart_e;                         // 板载UART枚举（注册时用于查找映射）
-    void (*app_callback)(struct SBUSInstance *); // APP 层回调函数
-    uint16_t daemon_reload;                      // daemon 喂狗重载值
-    uint8_t daemon_fault;                        // daemon 离线故障动作
+    BoardUART_e uart_e;     // 板载UART枚举（注册时用于查找映射）
+    uint16_t daemon_reload; // daemon 喂狗重载值
+    uint8_t daemon_fault;   // daemon 离线故障动作
 } SBUS_Init_Config_s;
 
 /*------------- 实例定义宏 --------------*/
@@ -90,7 +85,6 @@ typedef struct
     DAEMON_INSTANCE_DEF(name##_daemon);               \
     static SBUSInstance name = {                      \
         .usart_inst = &name##_uart,                   \
-        .app_callback = NULL,                         \
         .daemon = &name##_daemon,                     \
     }
 
@@ -104,14 +98,6 @@ typedef struct
  * @retval -1 失败
  */
 int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Init_Config_s *config);
-
-/**
- * @brief 解析 SBUS 数据帧
- * @param data 原始数据指针（25字节）
- * @return 解析后的 SBUS 数据
- * @note 在中断上下文中调用（由 SBUSUARTRxCallback 触发）
- */
-SBUS_Data_t SBUSDecodeFrame(const uint8_t *data, uint16_t len);
 
 #endif /* BSP_UART_MODULE_ENABLED */
 

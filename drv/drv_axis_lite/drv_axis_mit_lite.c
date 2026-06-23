@@ -278,22 +278,22 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
 vofa_output:
 #ifdef AxisMitVofaLiteSetChannelUsed
     /* CH1-CH3: 测量值 */
-    VofaLiteSetChannel(1, angle);                        // CH1: 反馈位置 (rad)
-    VofaLiteSetChannel(2, speed);                        // CH2: 反馈速度 (rad/s)
-    VofaLiteSetChannel(3, MotorGetCurrent(inst->motor)); // CH3: 电机实际电流
+    VofaSetChannel(1, angle);                        // CH1: 反馈位置 (rad)
+    VofaSetChannel(2, speed);                        // CH2: 反馈速度 (rad/s)
+    VofaSetChannel(3, MotorGetCurrent(inst->motor)); // CH3: 电机实际电流
     /* CH4-CH6: 设定值 */
-    VofaLiteSetChannel(4, ref_pos); // CH4: 位置设定值 (rad)
-    VofaLiteSetChannel(5, ref_vel); // CH5: 速度设定值 (rad/s)
-    VofaLiteSetChannel(6, ref_acc); // CH6: 加速度设定值 (rad/s^2)
+    VofaSetChannel(4, ref_pos); // CH4: 位置设定值 (rad)
+    VofaSetChannel(5, ref_vel); // CH5: 速度设定值 (rad/s)
+    VofaSetChannel(6, ref_acc); // CH6: 加速度设定值 (rad/s^2)
     /* CH7-CH9: 前馈分量 */
-    VofaLiteSetChannel(7, inst->params.gravity_ff);  // CH7: 重力前馈 (Nm)
-    VofaLiteSetChannel(8, inst->params.inertia_ff);  // CH8: 惯量前馈 (Nm)
-    VofaLiteSetChannel(9, inst->params.friction_ff); // CH9: 摩擦前馈 / chirp (Nm)
+    VofaSetChannel(7, inst->params.gravity_ff);  // CH7: 重力前馈 (Nm)
+    VofaSetChannel(8, inst->params.inertia_ff);  // CH8: 惯量前馈 (Nm)
+    VofaSetChannel(9, inst->params.friction_ff); // CH9: 摩擦前馈 / chirp (Nm)
     /* CH10-CH11: MIT 输出 */
-    VofaLiteSetChannel(10, inst->mit.pos_output);   // CH10: MIT 位置环输出 (Nm)
-    VofaLiteSetChannel(11, inst->mit.speed_output); // CH11: MIT 速度环输出 (Nm)
+    VofaSetChannel(10, inst->mit.pos_output);   // CH10: MIT 位置环输出 (Nm)
+    VofaSetChannel(11, inst->mit.speed_output); // CH11: MIT 速度环输出 (Nm)
     /* CH12: setref值，最终发送给电机的电流/力矩值 */
-    VofaLiteSetChannel(12, setref);
+    VofaSetChannel(12, setref);
 #endif
 }
 
