@@ -20,9 +20,8 @@
  *============================================*/
 typedef enum : uint8_t
 {
-    MOTOR_BRAND_DJI = 0, // DJI电机
-    MOTOR_BRAND_OTHER,   // 预留其他电机
-    MOTOR_BRAND_NUM,     // 电机型号数量
+    MOTOR_BRAND_OTHER = 0, // 其他电机
+    MOTOR_BRAND_DJI,       // DJI电机
 } MotorBrand_e;
 
 /*============================================
@@ -35,6 +34,17 @@ typedef enum : uint8_t
     DJI_MODEL_GM6020,    // GM6020 电机
     DJI_MODEL_NUM,       // DJI电机型号数量
 } DJIModel_e;
+
+/*============================================
+ *              DJI电机型号枚举
+ *============================================*/
+typedef enum : uint8_t
+{
+    DM_MODEL_DM4310 = 0, // DM4310电机
+    DM_MODEL_DM4310P,    // DM4310P电机
+    DM_MODEL_DM8009P,    // DM8009P电机
+    DM_MODEL_NUM,        // DM电机型号数量
+} DMModel_e;
 
 /*============================================
  *              控制模式枚举 (位掩码)
@@ -200,7 +210,7 @@ typedef struct
 
     /* 基本属性 */
     MotorBrand_e brand;   // 电机品牌
-    DJIModel_e model;     // 电机型号
+    uint8_t model;        // 电机型号
     MotorEnable_e enable; // 使能标志
 
     /* 控制器 */
