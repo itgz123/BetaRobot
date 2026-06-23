@@ -1,7 +1,7 @@
 # drv 层源文件
 set(MODULE_SOURCES
     drv_pid/drv_pid.c
-    drv_chassis/drv_chassis.c
+    drv_chassis/drv_chassis_position_lite.c
     drv_sbus/drv_sbus.c
     drv_bmi088/drv_bmi088.c
     drv_daemon/drv_daemon.c
