@@ -55,18 +55,22 @@ typedef struct
  */
 typedef struct SBUSInstance
 {
-    USARTInstance *usart_inst; // BSP 实例指针
-    SBUS_Data_t sbus_data;     // 解析后的通道数据（在中断回调中填充）
-    DaemonInstance *daemon;    // 看门狗监控实例指针
+    USARTInstance *usart_inst;   // BSP 实例指针
+    SBUS_Data_t sbus_data;       // 解析后的通道数据（在中断回调中填充）
+    DaemonInstance *daemon;      // 看门狗监控实例指针
+    uint64_t lost_start_time_us; // 丢帧/失控开始时间戳 (us)，0 表示正常
+    uint8_t signal_lost;         // 信号丢失确认标志（超过 lost_timeout_us 仍未恢复） (0: 正常, 1: 失控)
+    uint64_t lost_timeout_us;    // 丢帧/失控确认超时 (us)，0=立即标志
 } SBUSInstance;
 
 /*------------- 配置结构体 --------------*/
 
 typedef struct
 {
-    BoardUART_e uart_e;     // 板载UART枚举（注册时用于查找映射）
-    uint16_t daemon_reload; // daemon 喂狗重载值
-    uint8_t daemon_fault;   // daemon 离线故障动作
+    BoardUART_e uart_e;       // 板载UART枚举（注册时用于查找映射）
+    uint16_t daemon_reload;   // daemon 喂狗重载值
+    uint8_t daemon_fault;     // daemon 离线故障动作
+    uint32_t lost_timeout_ms; // 丢帧/失控确认超时 (ms)，0=立即标志
 } SBUS_Init_Config_s;
 
 /*------------- 实例定义宏 --------------*/

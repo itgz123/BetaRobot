@@ -12,6 +12,7 @@
 #ifdef HAL_UART_MODULE_ENABLED
 
 #include "bsp_uart_log.h"
+#include "bsp_dwt.h"
 
 // 函数声明
 static void SBUSUARTRxCallback(USARTInstance *usart_inst);
@@ -23,7 +24,8 @@ static void SBUSDaemonCallback(void *owner)
         return;
 
     SBUSInstance *sbus_inst = (SBUSInstance *)owner;
-    sbus_inst->sbus_data.frame_lost = 1;
+    // daemon 超时说明连续收不到数据，直接标志信号丢失
+    sbus_inst->signal_lost = 1;
 }
 
 /*------------- 外部接口实现 --------------*/
@@ -75,7 +77,14 @@ int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Init_Config_s *config)
         DaemonRegister(instance->daemon, &daemon_cfg);
     }
 
-    LOGINFO("[drv_sbus] SBUS instance registered");
+    // 初始化信号丢失超时
+    instance->lost_timeout_us = (uint64_t)config->lost_timeout_ms * 1000;
+
+    instance->lost_start_time_us = 0;
+    instance->signal_lost = 0;
+
+    LOGINFO("[drv_sbus] SBUS instance registered, lost_timeout=%dms",
+            (int)(instance->lost_timeout_us / 1000));
     return 0;
 }
 
@@ -200,6 +209,28 @@ static void SBUSUARTRxCallback(USARTInstance *usart_inst)
         // 在中断上下文中解析原始数据为通道数据
         sbus_inst->sbus_data = SBUSDecodeFrame(usart_inst->rx_buff, usart_inst->rx_len);
         DaemonReload(sbus_inst->daemon);
+
+        // ---- 信号丢失超时检测 ----
+        if (sbus_inst->sbus_data.frame_lost || sbus_inst->sbus_data.failsafe)
+        {
+            // 丢帧/失控状态：如果尚未计时则记录时间戳
+            if (sbus_inst->lost_start_time_us == 0)
+            {
+                sbus_inst->lost_start_time_us = DWT_GetTimeUs();
+            }
+
+            // 检查是否超过超时时间
+            if ((DWT_GetTimeUs() - sbus_inst->lost_start_time_us) >= sbus_inst->lost_timeout_us)
+            {
+                sbus_inst->signal_lost = 1;
+            }
+        }
+        else
+        {
+            // 信号恢复正常：清除计时和丢失标志
+            sbus_inst->lost_start_time_us = 0;
+            sbus_inst->signal_lost = 0;
+        }
     }
 }
 
