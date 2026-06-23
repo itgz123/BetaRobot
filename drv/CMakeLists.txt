@@ -6,7 +6,6 @@ set(MODULE_SOURCES
     drv_bmi088/drv_bmi088.c
     drv_daemon/drv_daemon.c
     drv_vofa/drv_vofa.c
-    drv_vofa/drv_vofa_lite.c
     drv_motor/drv_djimotor/drv_djimotor.c
     drv_axis_lite/drv_axis_mit_lite.c
     drv_mit/drv_mit.c

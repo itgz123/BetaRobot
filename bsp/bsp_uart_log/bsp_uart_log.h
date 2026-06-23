@@ -15,24 +15,6 @@
 
 #ifdef HAL_UART_MODULE_ENABLED
 
-/*============= 配置宏（可被 app_cfg.h 覆盖）==============*/
-
-/**
- * @brief 日志输出 UART 选择
- * @note 不同开发板使用不同的调试串口
- */
-#ifndef UART_LOG_UART
-#if DEVELOPMENT_BOARD == DM_MC02
-#define UART_LOG_UART UART_10
-#elif DEVELOPMENT_BOARD == DJI_C
-#error "Please define UART_LOG_UART for this board"
-#elif DEVELOPMENT_BOARD == DJI_A
-#error "Please define UART_LOG_UART for this board"
-#else
-#error "Please define UART_LOG_UART for this board"
-#endif
-#endif // !UART_LOG_UART
-
 /**
  * @brief 发送环形缓冲区大小
  */
@@ -113,6 +95,22 @@ void BSPLogOutput(LogLevel_e level, const char *format, ...);
 /*============= 日志宏定义 =============*/
 
 #ifdef UART_LOG_USED
+
+/**
+ * @brief 日志输出 UART 选择
+ * @note 不同开发板使用不同的调试串口
+ */
+#ifndef UART_LOG_UART // 可被 app_cfg.h 覆盖
+#if DEVELOPMENT_BOARD == DM_MC02
+#define UART_LOG_UART UART_10
+#elif DEVELOPMENT_BOARD == DJI_C
+#error "Please define UART_LOG_UART for this board"
+#elif DEVELOPMENT_BOARD == DJI_A
+#define UART_LOG_UART UART_2
+#else
+#error "Please define UART_LOG_UART for this board"
+#endif
+#endif // !UART_LOG_UART
 
 // 日志级别过滤
 #if UART_LOG_LEVEL <= LOG_LEVEL_DEBUG

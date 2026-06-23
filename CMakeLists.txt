@@ -299,6 +299,7 @@ target_include_directories(${TARGET_NAME} PRIVATE
     # CMSIS-DSP 头文件
     ${HAL_DIR}/Drivers/CMSIS/DSP/Include
     ${HAL_DIR}/Drivers/CMSIS/DSP/PrivateInclude
+    .
 )
 
 ######################################
