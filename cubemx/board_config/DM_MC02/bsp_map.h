@@ -145,7 +145,7 @@ typedef enum
 /*============================================
  *              逻辑实例数量配置
  *============================================*/
-#define CAN_INSTANCE_NUM 3
+#define CAN_INSTANCE_NUM 24
 #define I2C_INSTANCE_NUM 1
 #define SPI_INSTANCE_NUM 2
 #define GPIO_INSTANCE_NUM 11
