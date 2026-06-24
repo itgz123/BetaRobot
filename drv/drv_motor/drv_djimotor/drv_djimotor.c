@@ -156,29 +156,39 @@ static void DJIMotorRxCallback(CANInstance *can)
     // 计算单圈位置 (rad) [0, 2π)
     motor->data.position_single = (float)motor->data_raw.raw_encoder * M_2PI / encoder_resolution;
 
-    // 计算多圈位置 (rad)
-    // 通过角度差检测穿越
-    float angle_diff = motor->data.position_single - last_position_single;
-    if (angle_diff > M_PI)
-    {
-        // 从接近2π跳到接近0（反向穿越）
-        motor->data.position_cnt--;
-    }
-    else if (angle_diff < -M_PI)
-    {
-        // 从接近0跳到接近2π（正向穿越）
-        motor->data.position_cnt++;
-    }
-    motor->data.position_multi = (float)motor->data.position_cnt * M_2PI + motor->data.position_single;
-
-    // 记录时间戳
+    // 计算帧间隔 dt（先于多圈位置计算，因为需要 dt 做校验）
     uint64_t now_time_us = DWT_GetTimeUs();
-    motor->data.last_time_stamp = now_time_us;
     float dt = 0.0f;
     if (last_time_stamp > 0)
     {
         dt = (now_time_us - last_time_stamp) * 1e-6f; // us -> s
     }
+    motor->data.last_time_stamp = now_time_us;
+
+    // 计算多圈位置 (rad)
+    // FEEDBACK模式：用CAN反馈速度(raw_velocity)校验穿越，解决掉包问题
+    // DIFF模式：用角度差阈值判断，位置独立于速度
+    float angle_diff = motor->data.position_single - last_position_single;
+    int8_t wraps = 0;
+    if (motor->base.speed_src == MOTOR_SPEED_SRC_FEEDBACK && dt > 0.0f)
+    {
+        // 期望角度变化 = raw_velocity(RPM) * 2π/60 * dt
+        float expected_change = (float)motor->data_raw.raw_velocity * M_2PI / 60.0f * dt;
+        // 补偿整圈数 = round((expected - angle_diff) / 2π)
+        // 使 angle_diff + wraps*2π 尽可能接近 expected_change
+        float wrap_float = (expected_change - angle_diff) * (1.0f / M_2PI);
+        wraps = (int8_t)(wrap_float > 0.0f ? wrap_float + 0.5f : wrap_float - 0.5f);
+    }
+    else
+    {
+        // dt=0或DIFF模式：用原逻辑（角度差阈值判断穿越）
+        if (angle_diff > M_PI)
+            wraps = -1;
+        else if (angle_diff < -M_PI)
+            wraps = 1;
+    }
+    motor->data.position_cnt += wraps;
+    motor->data.position_multi = (float)motor->data.position_cnt * M_2PI + motor->data.position_single;
 
     // 计算速度 (rad/s) - 转子速度
     float raw_speed;
