@@ -24,14 +24,14 @@ typedef enum : uint8_t
     WHEEL_NUM,    // 轮子数量
 } ChassisWheelSequence_e;
 
-// 轮子逆时针为正
+// 电机轴指向眼睛逆时针为电机正方向
 // x+向前，y+向左，w+逆时针
 typedef struct
 {
     float vx;
     float vy;
     float w;
-    uint8_t enable; //???????????????????
+    uint8_t enable; // 先留着，可以用来disable电机
 } ChassisCmd_t;
 
 #endif // __DRV_CHASSIS_DEF_H
