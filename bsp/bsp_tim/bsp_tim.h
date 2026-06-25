@@ -8,7 +8,7 @@
 #ifndef __BSP_TIM_H
 #define __BSP_TIM_H
 
-#include "bsp.h"
+#include "bsp_map.h"
 
 #ifdef HAL_TIM_MODULE_ENABLED
 

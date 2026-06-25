@@ -15,6 +15,7 @@
 #define BMI088_SPI_READ_CMD 0x80   // R/W位=1（读）
 #define BMI088_SPI_WRITE_CMD 0x7F  // R/W位=0（写）
 #define BMI088_SPI_DUMMY_BYTE 0x55 // 哑指令（用于发送时填充）
+#define SPI_BLOCK_TIMEOUT_MS 100
 
 /*============================ 延时时间宏定义 ============================*/
 

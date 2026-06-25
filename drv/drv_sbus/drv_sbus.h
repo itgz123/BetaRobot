@@ -12,7 +12,7 @@
 #define __DRV_SBUS_H
 
 #include "main.h"
-#include "bsp.h"
+#include "bsp_map.h"
 #include "drv_daemon.h"
 
 #ifdef HAL_UART_MODULE_ENABLED

@@ -9,7 +9,10 @@
 #ifndef __BSP_H
 #define __BSP_H
 
-#include "app_cfg.h"
+// 开发板类型
+#define DM_MC02 0
+#define DJI_A 1
+#define DJI_C 2
 
 /*============================================
  *              内核类型常量
@@ -22,12 +25,6 @@
  *============================================*/
 #define BSP_CAN_IP_BXCAN 0
 #define BSP_CAN_IP_FDCAN 1
-
-/*============================================
- *              通用超时宏
- *============================================*/
-#define USART_BLOCK_TIMEOUT_MS 100
-#define SPI_BLOCK_TIMEOUT_MS 100
 
 /*============================================
  *              通用断言宏
@@ -53,18 +50,5 @@
             return (ret);                           \
         }                                           \
     } while (0)
-
-/*============================================
- *              板级映射（根据开发板选择）
- *============================================*/
-#if DEVELOPMENT_BOARD == DM_MC02
-#include "cubemx/board_config/DM_MC02/bsp_map.h"
-#elif DEVELOPMENT_BOARD == DJI_A
-#include "cubemx/board_config/DJI_A/bsp_map.h"
-#elif DEVELOPMENT_BOARD == DJI_C
-#include "cubemx/board_config/DJI_C/bsp_map.h"
-#else
-#error "Unsupported DEVELOPMENT_BOARD"
-#endif
 
 #endif /* __BSP_H */

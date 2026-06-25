@@ -1,4 +1,4 @@
-#include "bsp.h"
+#include "bsp_map.h"
 
 const GPIO_Map_t gpio_map[GPIO_NUM_MAX] = {
     [GPIO_BMI088_CS_ACCEL] = {GPIOC, GPIO_PIN_0},

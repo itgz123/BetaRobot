@@ -9,7 +9,7 @@
 #ifndef __BSP_UART_LOG_H
 #define __BSP_UART_LOG_H
 
-#include "bsp.h"
+#include "bsp_map.h"
 #include <stdio.h>
 #include <stdarg.h>
 

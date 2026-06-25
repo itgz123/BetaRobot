@@ -8,7 +8,7 @@
 #ifndef __BSP_USART_H
 #define __BSP_USART_H
 
-#include "bsp.h"
+#include "bsp_map.h"
 
 #ifdef HAL_UART_MODULE_ENABLED
 

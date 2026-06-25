@@ -1,37 +1,29 @@
-#ifndef __DJI_C_BSP_MAP_H
-#define __DJI_C_BSP_MAP_H
+#ifndef __DM_MC02_BSP_MAP_H
+#define __DM_MC02_BSP_MAP_H
 
-#include "app_cfg.h"
 #include "tim.h"
 #include "usart.h"
-#include "can.h"
 #include "spi.h"
 #include "i2c.h"
 #include "adc.h"
-
-/*============================================
- *              内核与 CAN 类型常量
- *============================================*/
-#define CORTEX_M4 0
-#define CORTEX_M7 1
-#define BSP_CAN_IP_BXCAN 0
-#define BSP_CAN_IP_FDCAN 1
+#include "fdcan.h"
+#include "bsp.h"
 
 /*============================================
  *              硬件特性配置
  *============================================*/
-#define CPU_CORE CORTEX_M4
-#define BSP_CAN_IP BSP_CAN_IP_BXCAN
+#define CPU_CORE CORTEX_M7
+#define BSP_CAN_IP BSP_CAN_IP_FDCAN
 #define HAS_FPU 1
 #define HAS_DSP 1
-#define HAS_CORDIC 0
+#define HAS_CORDIC 1
 #define HAS_CRC 1
-#define HAS_FMAC 0
+#define HAS_FMAC 1
 #define HAS_MPU 1
-#define HAS_RAMECC 0
+#define HAS_RAMECC 1
 
-#define DMA_RAM
-#define ITCM_RAM
+#define DMA_RAM __attribute__((section(".ram_d1")))
+#define ITCM_RAM __attribute__((section(".itcmram")))
 
 /*============================================
  *              映射结构体类型
@@ -52,7 +44,7 @@ typedef struct
 } UART_Map_t;
 typedef struct
 {
-    CAN_HandleTypeDef *handle;
+    FDCAN_HandleTypeDef *handle;
 } CAN_Map_t;
 typedef struct
 {
@@ -73,13 +65,17 @@ typedef struct
  *============================================*/
 typedef enum
 {
-    GPIO_USER_KEY = 0,
-    GPIO_BMI088_CS_ACCEL,
+    GPIO_BMI088_CS_ACCEL = 0,
     GPIO_BMI088_CS_GYRO,
     GPIO_BMI088_INT_ACCEL,
     GPIO_BMI088_INT_GYRO,
-    GPIO_IST8310_DRDY,
-    GPIO_IST8310_RSTN,
+    GPIO_POWER_24V_EN1,
+    GPIO_POWER_24V_EN2,
+    GPIO_POWER_5V_EN,
+    GPIO_LCD_KEY1,
+    GPIO_LCD_KEY2,
+    GPIO_EX_KEY,
+    GPIO_USER_KEY,
     GPIO_NUM_MAX
 } BoardGPIO_e;
 
@@ -89,41 +85,40 @@ typedef enum
     TIM_PWM_2,
     TIM_PWM_3,
     TIM_PWM_4,
-    TIM_LED_B,
-    TIM_LED_G,
-    TIM_LED_R,
-    TIM_PWM_5,
-    TIM_PWM_6,
-    TIM_PWM_7,
-    TIM_LASER,
-    TIM_BUZZER,
     TIM_HEATER,
+    TIM_BUZZER,
     TIM_NUM_MAX
 } BoardTIM_e;
 
 typedef enum
 {
-    UART_SBUS = 0,
-    UART_1,
-    UART_6,
+    UART_1 = 0,
+    UART_SBUS,
+    UART_RS485_2,
+    UART_RS485_3,
+    UART_7,
+    UART_EX_8,
+    UART_EX_9,
+    UART_10,
     UART_NUM_MAX
 } BoardUART_e;
+
 typedef enum
 {
     CAN_1 = 0,
     CAN_2,
+    CAN_3,
     CAN_NUM_MAX
 } BoardCAN_e;
 typedef enum
 {
-    SPI_BMI088 = 0,
-    SPI_EX_2,
+    SPI_LCD_1 = 0,
+    SPI_BMI088,
     SPI_NUM_MAX
 } BoardSPI_e;
 typedef enum
 {
-    I2C_EX_2 = 0,
-    I2C_IST8310,
+    I2C_LCD_2 = 0,
     I2C_NUM_MAX
 } BoardI2C_e;
 typedef enum
@@ -132,15 +127,17 @@ typedef enum
     ADC_NUM_MAX
 } BoardADC_e;
 
+#define VOLTAGE_TRANFER 0.00055389404296875f
+
 /*============================================
  *              逻辑实例数量配置
  *============================================*/
-#define CAN_INSTANCE_NUM 16
-#define I2C_INSTANCE_NUM 3
+#define CAN_INSTANCE_NUM 24
+#define I2C_INSTANCE_NUM 1
 #define SPI_INSTANCE_NUM 2
-#define GPIO_INSTANCE_NUM 7
-#define UART_INSTANCE_NUM 3
-#define PWM_INSTANCE_NUM 13
+#define GPIO_INSTANCE_NUM 11
+#define UART_INSTANCE_NUM 8
+#define PWM_INSTANCE_NUM 6
 #define ENCODER_INSTANCE_NUM 0
 #define ADC_INSTANCE_NUM 1
 
@@ -155,4 +152,4 @@ extern const SPI_Map_t spi_map[];
 extern const I2C_Map_t i2c_map[];
 extern const ADC_Map_t adc_map[];
 
-#endif /* __DJI_C_BSP_MAP_H */
+#endif /* __DM_MC02_BSP_MAP_H */
