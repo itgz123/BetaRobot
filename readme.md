@@ -10,4 +10,6 @@
 
 ### 使用方法（架构说明）：
 
+复制`user_cfg.h.example`为`user_cfg.h`
+
 ### 文档：
