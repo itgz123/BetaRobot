@@ -1,5 +1,13 @@
 #include "bsp_map.h"
 
+void BSPInit()
+{
+    HAL_GPIO_WritePin(GPIOH, GPIO_PIN_2, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOH, GPIO_PIN_3, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOH, GPIO_PIN_4, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOH, GPIO_PIN_5, GPIO_PIN_SET);
+}
+
 const GPIO_Map_t gpio_map[GPIO_NUM_MAX] = {
     [GPIO_OLED_KEY] = {GPIOA, GPIO_PIN_6},
     [GPIO_OLED_DC] = {GPIOB, GPIO_PIN_9},

@@ -1,5 +1,9 @@
 #include "bsp_map.h"
 
+void BSPInit()
+{
+}
+
 const GPIO_Map_t gpio_map[GPIO_NUM_MAX] = {
     [GPIO_USER_KEY] = {GPIOA, GPIO_PIN_0},
     [GPIO_BMI088_CS_ACCEL] = {GPIOA, GPIO_PIN_4},
