@@ -129,14 +129,14 @@ static void DJIMotorRxCallback(CANInstance *can)
         return;
 
     DJIMotorInstance *motor = (DJIMotorInstance *)can->parent;
-    uint8_t *data = can->rx_buff;
+    DJIMotorCanFrame_u *frame = (DJIMotorCanFrame_u *)can->rx_buff;
 
-    // 解析原始数据
-    motor->data_raw.raw_encoder = ((uint16_t)data[0] << 8) | data[1];
-    motor->data_raw.raw_velocity = ((int16_t)data[2] << 8) | data[3];
-    motor->data_raw.raw_current = ((int16_t)data[4] << 8) | data[5];
-    motor->data_raw.raw_temperature_motor = (int8_t)data[6];
-    motor->data_raw.error_code = data[7];
+    // 解析原始数据（CAN 总线大端 → 小端 CPU）
+    motor->data_raw.raw_encoder = ((uint16_t)frame->rx.encoder_h << 8) | frame->rx.encoder_l;
+    motor->data_raw.raw_velocity = ((int16_t)frame->rx.velocity_h << 8) | frame->rx.velocity_l;
+    motor->data_raw.raw_current = ((int16_t)frame->rx.current_h << 8) | frame->rx.current_l;
+    motor->data_raw.raw_temperature_motor = frame->rx.temperature;
+    motor->data_raw.error_code = frame->rx.error_code;
 
     // 获取电机参数
     DJIModel_e model = motor->base.model;
@@ -627,6 +627,7 @@ void DJIMotor_Send(void *inst)
     {
         uint16_t current_tx_id = tx_ids[t];
         CANInstance *tx_can = tx_cans[t];
+        DJIMotorCanFrame_u *frame = (DJIMotorCanFrame_u *)tx_can->tx_buff;
 
         for (int i = 0; i < 4; i++)
         {
@@ -641,8 +642,9 @@ void DJIMotor_Send(void *inst)
                 float out = BSP_Math_Clamp(m->base.controller.output, -(float)current_max, (float)current_max);
                 cur = (int16_t)out;
             }
-            tx_can->tx_buff[i * 2] = (uint8_t)(cur >> 8);
-            tx_can->tx_buff[i * 2 + 1] = (uint8_t)(cur & 0xFF);
+            // CAN 总线需要大端字节序（MSB first）
+            frame->raw[i * 2] = (uint8_t)(cur >> 8);
+            frame->raw[i * 2 + 1] = (uint8_t)(cur & 0xFF);
         }
 
         CANTransmit(tx_can, CAN_TRANSMIT_TIMEOUT);

@@ -24,6 +24,32 @@ typedef struct
     uint8_t motor_init_flag[4];  // 电机是否初始化标志
 } DJIMotorSendGroup_s;
 
+/**
+ * @brief DJI 电机 CAN 帧联合体
+ * @note CAN 总线为大端字节序（MSB first）
+ *       发送帧：4 通道 × int16_t 电流原始值（大端）
+ *       接收帧：角度/速度/电流/温度/错误码（大端 int16/int8）
+ */
+typedef union
+{
+    uint8_t raw[8]; // 原始字节
+    struct          // 发送帧：4通道电流（大端 int16）
+    {
+        uint8_t ch1_h, ch1_l; // 通道1电流 MSB, LSB
+        uint8_t ch2_h, ch2_l; // 通道2电流 MSB, LSB
+        uint8_t ch3_h, ch3_l; // 通道3电流 MSB, LSB
+        uint8_t ch4_h, ch4_l; // 通道4电流 MSB, LSB
+    } tx;                     // 发送布局
+    struct                    // 接收帧：DJI 电机反馈（大端 int16）
+    {
+        uint8_t encoder_h, encoder_l;   // 编码器 (uint16)
+        uint8_t velocity_h, velocity_l; // 转速 (int16)
+        uint8_t current_h, current_l;   // 电流 (int16)
+        int8_t temperature;             // 温度
+        uint8_t error_code;             // 错误码
+    } rx;                               // 接收布局
+} DJIMotorCanFrame_u;
+
 /*============================================
  *              电机参数结构体
  *============================================*/
