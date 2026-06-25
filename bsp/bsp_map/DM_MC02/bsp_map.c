@@ -1,5 +1,12 @@
 #include "bsp_map.h"
 
+void BSPInit()
+{
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_14, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOC, GPIO_PIN_15, GPIO_PIN_SET);
+}
+
 const GPIO_Map_t gpio_map[GPIO_NUM_MAX] = {
     [GPIO_BMI088_CS_ACCEL] = {GPIOC, GPIO_PIN_0},
     [GPIO_BMI088_CS_GYRO] = {GPIOC, GPIO_PIN_3},
