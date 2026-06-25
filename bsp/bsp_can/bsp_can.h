@@ -8,7 +8,7 @@
 #ifndef __BSP_CAN_H
 #define __BSP_CAN_H
 
-#include "bsp.h"
+#include "bsp_map.h"
 
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 

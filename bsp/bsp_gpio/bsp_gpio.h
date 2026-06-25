@@ -8,7 +8,7 @@
 #ifndef __BSP_GPIO_H
 #define __BSP_GPIO_H
 
-#include "bsp.h"
+#include "bsp_map.h"
 
 #ifdef HAL_GPIO_MODULE_ENABLED
 

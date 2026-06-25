@@ -13,7 +13,7 @@
 #ifndef __BSP_MATH_TRIG_H
 #define __BSP_MATH_TRIG_H
 
-#include "bsp.h"
+#include "bsp_map.h"
 #include <stdint.h>
 
 #if HAS_DSP

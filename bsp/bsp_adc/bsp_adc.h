@@ -16,7 +16,7 @@
 #ifndef __BSP_ADC_H
 #define __BSP_ADC_H
 
-#include "bsp.h"
+#include "bsp_map.h"
 
 #ifdef HAL_ADC_MODULE_ENABLED
 

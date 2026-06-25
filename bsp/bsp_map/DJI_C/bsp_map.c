@@ -1,4 +1,4 @@
-#include "bsp.h"
+#include "bsp_map.h"
 
 const GPIO_Map_t gpio_map[GPIO_NUM_MAX] = {
     [GPIO_USER_KEY] = {GPIOA, GPIO_PIN_0},

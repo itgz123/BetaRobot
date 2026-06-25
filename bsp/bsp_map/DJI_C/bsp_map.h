@@ -1,22 +1,13 @@
-#ifndef __DJI_A_BSP_MAP_H
-#define __DJI_A_BSP_MAP_H
+#ifndef __DJI_C_BSP_MAP_H
+#define __DJI_C_BSP_MAP_H
 
-#include "app_cfg.h"
 #include "tim.h"
 #include "usart.h"
 #include "can.h"
 #include "spi.h"
 #include "i2c.h"
 #include "adc.h"
-#include "dac.h"
-
-/*============================================
- *              内核与 CAN 类型常量
- *============================================*/
-#define CORTEX_M4 0
-#define CORTEX_M7 1
-#define BSP_CAN_IP_BXCAN 0
-#define BSP_CAN_IP_FDCAN 1
+#include "bsp.h"
 
 /*============================================
  *              硬件特性配置
@@ -68,74 +59,47 @@ typedef struct
     ADC_HandleTypeDef *handle;
     uint32_t channel;
 } ADC_Map_t;
-typedef struct
-{
-    DAC_HandleTypeDef *handle;
-    uint32_t channel;
-} DAC_Map_t;
 
 /*============================================
  *              板载资源枚举
  *============================================*/
 typedef enum
 {
-    GPIO_OLED_KEY = 0,
-    GPIO_OLED_DC,
-    GPIO_OLED_RST,
-    GPIO_USER_KEY,
-    GPIO_MPU6500_INT,
-    GPIO_IST8310_RSTN,
+    GPIO_USER_KEY = 0,
+    GPIO_BMI088_CS_ACCEL,
+    GPIO_BMI088_CS_GYRO,
+    GPIO_BMI088_INT_ACCEL,
+    GPIO_BMI088_INT_GYRO,
     GPIO_IST8310_DRDY,
-    GPIO_LED_R,
-    GPIO_LED_G,
-    GPIO_SD_EXTI,
-    GPIO_LASER,
-    GPIO_POWER_EN1,
-    GPIO_POWER_EN2,
-    GPIO_POWER_EN3,
-    GPIO_POWER_EN4,
-    GPIO_DAC_EXTI,
+    GPIO_IST8310_RSTN,
     GPIO_NUM_MAX
 } BoardGPIO_e;
 
 typedef enum
 {
-    TIM_HEATER = 0,
-    TIM_BUZZER,
-    TIM_PWM_3Pin1,
-    TIM_PWM_3Pin2,
-    TIM_PWM_3Pin3,
-    TIM_PWM_3Pin4,
-    TIM_PWM_1,
+    TIM_PWM_1 = 0,
     TIM_PWM_2,
     TIM_PWM_3,
     TIM_PWM_4,
+    TIM_LED_B,
+    TIM_LED_G,
+    TIM_LED_R,
     TIM_PWM_5,
     TIM_PWM_6,
     TIM_PWM_7,
-    TIM_PWM_8,
-    TIM_PWM_9,
-    TIM_PWM_10,
-    TIM_PWM_11,
-    TIM_PWM_12,
-    TIM_PWM_13,
-    TIM_PWM_14,
-    TIM_PWM_15,
-    TIM_PWM_16,
+    TIM_LASER,
+    TIM_BUZZER,
+    TIM_HEATER,
     TIM_NUM_MAX
 } BoardTIM_e;
 
 typedef enum
 {
     UART_SBUS = 0,
-    UART_2,
-    UART_3,
-    UART_7,
-    UART_8,
-    UART_4Pin_6,
+    UART_1,
+    UART_6,
     UART_NUM_MAX
 } BoardUART_e;
-
 typedef enum
 {
     CAN_1 = 0,
@@ -144,52 +108,33 @@ typedef enum
 } BoardCAN_e;
 typedef enum
 {
-    SPI_OLED = 0,
-    SPI_EX_4,
-    SPI_MPU6500,
+    SPI_BMI088 = 0,
+    SPI_EX_2,
     SPI_NUM_MAX
 } BoardSPI_e;
 typedef enum
 {
     I2C_EX_2 = 0,
+    I2C_IST8310,
     I2C_NUM_MAX
 } BoardI2C_e;
-
 typedef enum
 {
-    ADC1_EX_8 = 0,
-    ADC1_EX_9,
-    ADC1_EX_10,
-    ADC1_EX_11,
-    ADC1_EX_12,
-    ADC1_EX_13,
-    ADC1_EX_14,
-    ADC1_EX_15,
-    ADC3_4,
-    ADC3_5,
-    ADC3_EX_8,
+    ADC_BAT = 0,
     ADC_NUM_MAX
 } BoardADC_e;
-
-typedef enum
-{
-    DAC_1 = 0,
-    DAC_2,
-    DAC_NUM_MAX
-} BoardDAC_e;
 
 /*============================================
  *              逻辑实例数量配置
  *============================================*/
 #define CAN_INSTANCE_NUM 16
-#define I2C_INSTANCE_NUM 1
-#define SPI_INSTANCE_NUM 3
-#define GPIO_INSTANCE_NUM 16
-#define UART_INSTANCE_NUM 6
-#define PWM_INSTANCE_NUM 22
+#define I2C_INSTANCE_NUM 3
+#define SPI_INSTANCE_NUM 2
+#define GPIO_INSTANCE_NUM 7
+#define UART_INSTANCE_NUM 3
+#define PWM_INSTANCE_NUM 13
 #define ENCODER_INSTANCE_NUM 0
-#define ADC_INSTANCE_NUM 11
-#define DAC_INSTANCE_NUM 2
+#define ADC_INSTANCE_NUM 1
 
 /*============================================
  *              extern 声明
@@ -201,6 +146,5 @@ extern const CAN_Map_t can_map[];
 extern const SPI_Map_t spi_map[];
 extern const I2C_Map_t i2c_map[];
 extern const ADC_Map_t adc_map[];
-extern const DAC_Map_t dac_map[];
 
-#endif /* __DJI_A_BSP_MAP_H */
+#endif /* __DJI_C_BSP_MAP_H */

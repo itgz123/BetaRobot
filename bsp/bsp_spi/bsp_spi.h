@@ -9,7 +9,7 @@
 #ifndef __BSP_SPI_H
 #define __BSP_SPI_H
 
-#include "bsp.h"
+#include "bsp_map.h"
 
 #ifdef HAL_SPI_MODULE_ENABLED
 

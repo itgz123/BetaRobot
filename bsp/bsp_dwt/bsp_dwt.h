@@ -9,7 +9,7 @@
 #define __BSP_DWT_H
 
 #include "main.h"
-#include "bsp.h"
+#include "bsp_map.h"
 #include "stdint.h"
 
 /*------------- 外部接口声明 --------------*/

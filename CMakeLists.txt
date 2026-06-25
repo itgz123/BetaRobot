@@ -90,7 +90,7 @@ read_define(DEVELOPMENT_BOARD "${APP_DIR}/app_cfg.h" DEVELOPMENT_BOARD)
 set(BOARD "${DEVELOPMENT_BOARD}")
 
 # 从 bsp_map.h 读取 CPU 内核类型，用于 ARM_MATH_CM4/CM7 定义
-read_define(CPU_CORE "${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/bsp_map.h" CPU_CORE)
+read_define(CPU_CORE "${CMAKE_SOURCE_DIR}/bsp/bsp_map/${BOARD}/bsp_map.h" CPU_CORE)
 # CPU_CORE 定义为 CORTEX_M4 或 CORTEX_M7，CMSIS-DSP 需要 ARM_MATH_CM4 或 ARM_MATH_CM7
 if(CPU_CORE STREQUAL "CORTEX_M7")
     set(ARM_MATH_DEFINE "ARM_MATH_CM7")
@@ -231,7 +231,7 @@ endforeach()
 ######################################
 # MCU 配置（数据驱动）
 ######################################
-# 开发板配置表: CPU;FPU;链接脚本
+# 开发板配置表: CPU;FPU;链接脚本（使用`cubemx\board_config`）
 set(BOARD_CFG_DM_MC02      "cortex-m7;fpv5-d16;STM32H723XG_FLASH.ld")
 set(BOARD_CFG_DJI_A        "cortex-m4;fpv4-sp-d16;STM32F427XX_FLASH.ld")
 set(BOARD_CFG_DJI_C        "cortex-m4;fpv4-sp-d16;STM32F407XX_FLASH.ld")
@@ -254,7 +254,7 @@ set(PROJECT_SOURCES
     ${APP_SOURCE_FILES}
     ${BSP_SOURCE_FILES}
     ${DRV_SOURCE_FILES}
-    ${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/bsp_map.c
+    ${CMAKE_SOURCE_DIR}/bsp/bsp_map/${BOARD}/bsp_map.c
     # CMSIS-DSP 源文件
     ${HAL_DIR}/Drivers/CMSIS/DSP/Source/CommonTables/arm_common_tables.c
     ${HAL_DIR}/Drivers/CMSIS/DSP/Source/CommonTables/arm_const_structs.c
@@ -299,7 +299,8 @@ target_include_directories(${TARGET_NAME} PRIVATE
     # CMSIS-DSP 头文件
     ${HAL_DIR}/Drivers/CMSIS/DSP/Include
     ${HAL_DIR}/Drivers/CMSIS/DSP/PrivateInclude
-    .
+    # bsp_map 路径（各模块通过 #include "bsp_map.h" 引用）
+    ${CMAKE_SOURCE_DIR}/bsp/bsp_map/${BOARD}
 )
 
 ######################################
