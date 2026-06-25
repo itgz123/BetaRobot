@@ -6,7 +6,14 @@
 #include "drv_daemon.h"
 #include "drv_pid.h"
 
-// 使用下面的宏必须确保所有电机派生类的 base 成员都是结构体的第一个成员
+/**
+ * @brief 电机需要实现的函数
+ * @param inst 电机实例，可以是基类或者派生类
+ * @param ref 设置的参考值
+ * @note 使用下面的宏必须确保所有电机派生类的 base 成员都是结构体的第一个成员
+ * @note MotorDisable需要调用PIDReset
+ * @note DaemonCallback需要重新给电机发送使能
+ */
 #define MotorEnable(inst) (((MotorBase_s *)(inst))->vtable->enable(inst))
 #define MotorDisable(inst) (((MotorBase_s *)(inst))->vtable->disable(inst))
 #define MotorSetRef(inst, ref) (((MotorBase_s *)(inst))->vtable->set_ref(inst, ref))
