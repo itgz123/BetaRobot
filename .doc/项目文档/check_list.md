@@ -1,3 +1,9 @@
 1. 读取直接读结构体，写参数必须用函数
 2. 配置宏，参数宏，共用结构体，枚举放到哪里
 3. 检查所有回调函数签名void？有说法
+4. drv/bsp所有功能都要可以通过宏开启或者关闭，减少flash/ram占用
+5. drv/bsp所有实例用`*_INSTANCE_DEF`宏来定义
+6. `*_INSTANCE_DEF`内部自带`static`；协议缓冲区加`const`；要用dma加`DMA_RAM`
+7. 实例结构体set封装函数，get直接通过结构体获取
+8. 注册，初始化函数需要检查cfg结构体参数
+9. itcm放置：；freertos内核代码；创建的freertos任务代码；Kalman等高算力代码；中断代码

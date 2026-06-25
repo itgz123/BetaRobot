@@ -177,13 +177,12 @@ static void Mahony_UpdateInternal(MahonyInstance *inst, vector3_t gyro, vector3_
     if (use_mag)
     {
         /* 归一化磁力计 */
-        recip_norm = mag.x * mag.x + mag.y * mag.y + mag.z * mag.z;
-        if (recip_norm < 1e-6f)
+        float mag_len = BSP_Math_Vec3Length(mag);
+        if (mag_len < 1e-3f)
         {
             return;
         }
-        recip_norm = 1.0f / BSP_Math_Sqrt(recip_norm);
-        mag = BSP_Math_Vec3Scale(mag, recip_norm);
+        mag = BSP_Math_Vec3Scale(mag, 1.0f / mag_len);
 
         /* 旋转磁力计到世界坐标系，得到水平磁场分量 */
         hx = (q0q0 + q1q1 - q2q2 - q3q3) * mag.x + 2.0f * (q1q2 - q0q3) * mag.y + 2.0f * (q1q3 + q0q2) * mag.z;
