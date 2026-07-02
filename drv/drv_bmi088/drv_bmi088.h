@@ -65,8 +65,7 @@ typedef struct
     uint8_t acc_bwp;               // 加速度计低通滤波器带宽
     uint8_t acc_odr;               // 加速度计输出数据速率
     BMI088_GyroRange_e gyro_range; // 陀螺仪量程
-    uint8_t gyro_odr;              // 陀螺仪输出数据速率
-    uint8_t gyro_bw;               // 陀螺仪滤波器带宽
+    BMI088_GyroConf_e gyro_conf;   // 陀螺仪 ODR+BW 组合配置（见 BMI088_GyroConf_e）
     BMI088_WorkMode_e work_mode;   // 工作模式（轮询/中断）
 } BMI088_Init_Config_s;
 /**
@@ -115,8 +114,7 @@ typedef struct BMI088Instance
 
     /* 陀螺仪配置 */
     BMI088_GyroRange_e gyro_range; // 量程
-    uint8_t gyro_odr;              // 输出数据速率
-    uint8_t gyro_bw;               // 滤波器带宽
+    BMI088_GyroConf_e gyro_conf;   // 陀螺仪 ODR+BW 组合配置（见 BMI088_GyroConf_e）
 
     /* 工作模式 */
     BMI088_WorkMode_e work_mode; // 工作模式
@@ -129,8 +127,8 @@ typedef struct BMI088Instance
 
     /* --- EXTI/SPI 同步 --- */
     volatile uint8_t transfer_busy;  // SPI IT 传输进行中
-    volatile uint8_t current_sensor; // 当前 SPI 读取的传感器 (0=acc, 1=gyro)
-    uint8_t pending_mask;            // 待读取传感器掩码 (bit0=acc, bit1=gyro)
+    volatile uint8_t current_sensor; // 当前 SPI 读取的传感器 (BMI088_Sensor_e)
+    uint8_t pending_mask;            // 待读取传感器掩码 (BMI088_Pending_e)
 
     /* --- 中断时间戳缓存 --- */
     uint64_t int_timestamp;  // 当前 SPI 读取对应的 INT 触发时间
@@ -146,7 +144,8 @@ typedef struct BMI088Instance
     volatile uint16_t gyro_wr_idx;             // 陀螺仪写入索引（永远递增）
     volatile uint8_t acc_cnt;                  // 已收到的 acc 样本数
     volatile uint8_t gyro_cnt;                 // 已收到的 gyro 样本数
-    volatile int16_t gyro_temp_raw;            // 陀螺仪侧原始温度值（SPI扩展读出）
+    volatile int16_t gyro_temp_raw;            // Acc侧温度 11-bit 值（×0.125+23=℃）
+    uint64_t last_temp_us;                     // 上次温度读取时间戳 (us)，用于限速
 } BMI088Instance;
 
 /*============================ 实例定义宏 ============================*/
