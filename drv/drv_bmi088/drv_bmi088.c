@@ -119,6 +119,7 @@ static void BMI088_InterpRaw(const uint8_t *raw_old, const uint8_t *raw_new, uin
 static uint8_t BMI088_FindBracket(const uint64_t *t_buf, uint16_t newest, uint16_t n, uint64_t target, uint16_t *out_older, uint16_t *out_newer);
 static void BMI088_RawToAcc(const uint8_t *raw, float *out, BMI088_AccRange_e range, const float *offset);
 static void BMI088_RawToGyro(const uint8_t *raw, float *out, BMI088_GyroRange_e range, const float *offset);
+static float BMI088_ParseTempCelsius(const uint8_t *rx_buff);
 static BMI088_Data_t BMI088_PackData(BMI088Instance *inst, const uint8_t acc_raw[BMI088_RAW_DATA_SIZE], const uint8_t gyro_raw[BMI088_RAW_DATA_SIZE], uint64_t timestamp_us);
 
 /*============================ 私有函数实现 ============================*/
@@ -194,6 +195,10 @@ static void BMI088_IntCallback(GPIOInstance *gpio_inst)
 {
     BMI088Instance *inst = (BMI088Instance *)gpio_inst->parent;
     uint64_t t_now = DWT_GetTimeUs();
+
+    // 喂狗
+    DaemonReload(inst->daemon);
+
     uint8_t is_acc = (gpio_inst == inst->int_acc);
 
     if (!inst->transfer_busy)
@@ -311,9 +316,7 @@ static void BMI088_SPICpltCallback(SPIInstance *spi_inst)
         GPIOSet(inst->cs_acc);
 
         /* 提取 11-bit 温度值（§5.3.7: Temp_uint11 = (TEMP_MSB*8) + (TEMP_LSB/32)） */
-        uint16_t temp_raw = ((uint16_t)spi_inst->rx_buff[BMI088_ACC_RX_TEMP_H] << 8) | spi_inst->rx_buff[BMI088_ACC_RX_TEMP_L];
-        uint16_t temp_u11 = temp_raw >> 5;
-        inst->gyro_temp_raw = (int16_t)(temp_u11 > 1023 ? temp_u11 - 2048 : temp_u11);
+        inst->temperature = BMI088_ParseTempCelsius(spi_inst->rx_buff);
 
         inst->transfer_busy = 0;
         BMI088_CheckPendingIT(inst);
@@ -438,6 +441,14 @@ static void BMI088_RawToGyro(const uint8_t *raw, float *out, BMI088_GyroRange_e 
 }
 
 /*============================ 数据打包辅助函数 ============================*/
+
+static float BMI088_ParseTempCelsius(const uint8_t *rx_buff)
+{
+    uint16_t temp_raw = ((uint16_t)rx_buff[BMI088_ACC_RX_TEMP_H] << 8) | rx_buff[BMI088_ACC_RX_TEMP_L];
+    uint16_t temp_u11 = temp_raw >> 5;
+    int16_t temp_signed = (int16_t)(temp_u11 > 1023 ? temp_u11 - 2048 : temp_u11);
+    return (float)temp_signed * BMI088_TEMP_SENS + BMI088_TEMP_OFFSET;
+}
 
 static BMI088_Data_t BMI088_PackData(BMI088Instance *inst, const uint8_t acc_raw[BMI088_RAW_DATA_SIZE], const uint8_t gyro_raw[BMI088_RAW_DATA_SIZE], uint64_t timestamp_us)
 {
@@ -681,6 +692,17 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
     if (BMI088_GyroInit(inst) != 0)
         return -1;
 
+    if (inst->daemon != NULL && config->daemon_reload > 0)
+    {
+        Daemon_Init_Config_s daemon_cfg = {
+            .reload_count = config->daemon_reload,
+            .fault_action = config->daemon_fault,
+            .callback = NULL,
+            .owner_id = inst,
+        };
+        DaemonRegister(inst->daemon, &daemon_cfg);
+    }
+
     // 中断模式
     if (inst->work_mode == BMI088_MODE_INT)
     {
@@ -711,7 +733,7 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
         inst->gyro_wr_idx = 0;
         inst->acc_cnt = 0;
         inst->gyro_cnt = 0;
-        inst->gyro_temp_raw = 0;
+        inst->temperature = 0.0f;
         inst->last_temp_us = 0;
         memset(inst->acc_raw, 0, sizeof(inst->acc_raw));
         memset(inst->gyro_raw, 0, sizeof(inst->gyro_raw));
@@ -780,11 +802,10 @@ BMI088_Data_t BMI088ReadBlocking(BMI088Instance *inst)
     BMI088_ReadReg(inst, inst->cs_acc, BMI088_TEMP_M, 2, BMI088_ACC_DUMMY_BYTES);
     /* 提取 11-bit 温度值（数据手册 §5.3.7: Temp_uint11 = (TEMP_MSB*8) + (TEMP_LSB/32)） */
     {
-        uint16_t temp_raw = ((uint16_t)inst->spi_inst->rx_buff[BMI088_ACC_RX_TEMP_H] << 8) | inst->spi_inst->rx_buff[BMI088_ACC_RX_TEMP_L];
-        uint16_t temp_u11 = temp_raw >> 5;
-        inst->gyro_temp_raw = (int16_t)(temp_u11 > 1023 ? temp_u11 - 2048 : temp_u11);
+        inst->temperature = BMI088_ParseTempCelsius(inst->spi_inst->rx_buff);
     }
 
+    DaemonReload(inst->daemon);
     return BMI088_PackData(inst, acc_buf, gyro_buf, DWT_GetTimeUs());
 }
 
