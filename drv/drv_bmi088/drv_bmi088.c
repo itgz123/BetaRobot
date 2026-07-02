@@ -15,24 +15,34 @@
 /*============================ SPI通信宏定义 ============================*/
 
 #define BMI088_SPI_READ_CMD 0x80   // R/W位=1（读）
-#define BMI088_SPI_WRITE_CMD 0x7F  // R/W位=0（写）
+#define BMI088_SPI_WRITE_MASK 0x7F // 写掩码：清除 bit7（R/W位）
 #define BMI088_SPI_DUMMY_BYTE 0x55 // 哑指令（用于发送时填充）
 #define SPI_BLOCK_TIMEOUT_MS 100
 
 /* 基于数据手册的专用延时宏 */
-#define BMI088_SPI_SWITCH_DELAY_S 0.002f // SPI模式切换延时  (2ms)
-#define BMI088_ACC_RESET_DELAY_S 0.002f  // 加速度计软复位延时 (2ms，数据手册1ms+余量)
-#define BMI088_GYRO_RESET_DELAY_S 0.035f // 陀螺仪软复位延时   (35ms，数据手册30ms+余量)
+#define BMI088_SPI_SWITCH_DELAY_S 0.002f   // SPI模式切换延时  (2ms)
+#define BMI088_ACC_RESET_DELAY_S 0.002f    // 加速度计软复位延时 (2ms，数据手册1ms+余量)
+#define BMI088_ACC_PWR_UP_DELAY_S 0.00045f // 加速度计上电等待 (450µs，数据手册§3)
+#define BMI088_GYRO_RESET_DELAY_S 0.035f   // 陀螺仪软复位延时   (35ms，数据手册30ms+余量)
 
 #define BMI088_WRITE_CHECK_INIT_S 0.001f    // 写验证初始等待    (1ms, DWT_Delay微秒)
 #define BMI088_WRITE_CHECK_TIMEOUT_US 10000 // 写验证超时时间   (10ms, DWT_GetTimeUs微秒比较)
 
 /*============================ 内部传感器类型定义 ============================*/
 
-#define BMI088_SENSOR_ACC 0
-#define BMI088_SENSOR_GYRO 1
-#define BMI088_PENDING_ACC (1 << BMI088_SENSOR_ACC)
-#define BMI088_PENDING_GYRO (1 << BMI088_SENSOR_GYRO)
+typedef enum : uint8_t
+{
+    BMI088_SENSOR_ACC = 0,
+    BMI088_SENSOR_GYRO,
+    BMI088_SENSOR_TEMP,
+} BMI088_Sensor_e;
+
+typedef enum : uint8_t
+{
+    BMI088_PENDING_ACC = 1 << BMI088_SENSOR_ACC,
+    BMI088_PENDING_GYRO = 1 << BMI088_SENSOR_GYRO,
+    BMI088_PENDING_TEMP = 1 << BMI088_SENSOR_TEMP,
+} BMI088_Pending_e;
 
 /*============================ 温度转换参数 ============================*/
 
@@ -43,7 +53,7 @@
 
 #define BMI088_SPI_WRITE_LEN 2      // SPI写传输长度：1地址 + 1数据
 #define BMI088_ACC_SPI_READ_LEN 8   // Acc读传输长度：1地址 + 1dummy + 6数据
-#define BMI088_GYRO_SPI_READ_LEN 9  // Gyro读传输长度：1地址 + 8数据(6gyro+2temp)
+#define BMI088_GYRO_SPI_READ_LEN 7  // Gyro读传输长度：1地址 + 6数据
 #define BMI088_SPI_IT_TIMEOUT_MS 10 // SPI IT传输超时(ms)
 
 /*============================ RX 缓冲偏移 ============================*/
@@ -52,15 +62,18 @@
 #define BMI088_GYRO_RX_DATA_OFF 1 // Gyro数据在rx_buff中的起始偏移(1addr)
 #define BMI088_ACC_DUMMY_BYTES 1  // Acc SPI读需要1个dummy字节
 #define BMI088_GYRO_DUMMY_BYTES 0 // Gyro SPI读不需要dummy字节
-#define BMI088_GYRO_RX_TEMP_L 7   // 陀螺仪温度低字节在rx_buff中的偏移
-#define BMI088_GYRO_RX_TEMP_H 8   // 陀螺仪温度高字节在rx_buff中的偏移
-#define BMI088_ACC_RX_TEMP_L 2    // Acc阻塞模式温度低字节在rx_buff中的偏移
-#define BMI088_ACC_RX_TEMP_H 3    // Acc阻塞模式温度高字节在rx_buff中的偏移
+/* 温度在Acc rx_buff中的偏移（从TEMP_M(0x22)开始读：rx[2]=TEMP_MSB, rx[3]=TEMP_LSB） */
+#define BMI088_ACC_RX_TEMP_L 3 // 温度低字节(TEMP_LSB)在rx_buff中的偏移
+#define BMI088_ACC_RX_TEMP_H 2 // 温度高字节(TEMP_MSB)在rx_buff中的偏移
 
 /*============================ 插值阈值 ============================*/
 
 #define BMI088_MIN_SAMPLE_COUNT 2 // 插值所需最小样本数
 #define BMI088_INTERP_ROUND 0.5f  // 插值四舍五入
+
+/*============================ 温度读取间隔 ============================*/
+
+#define BMI088_TEMP_UPDATE_INTERVAL_US 1280000 // 温度更新间隔 (1.28s，数据手册§5.3.7)
 
 /*============================ 延时常量 ============================*/
 
@@ -72,12 +85,13 @@
 
 /*============================ 灵敏度查找表 ============================*/
 
-/* 加速度计灵敏度查找表：将原始值转换为 g，单位 (m/s²)/LSB */
+/* 加速度计灵敏度查找表：将原始值转换为 m/s²，单位 (m/s²)/LSB */
+/* 计算：range(g) × BMI088_GRAVITY / 32768 */
 const float BMI088_AccSenTable[BMI088_ACC_RANGE_NUM] = {
-    0.0008974358974f,  // ±3g 量程灵敏度
-    0.00179443359375f, // ±6g 量程灵敏度
-    0.0035888671875f,  // ±12g 量程灵敏度
-    0.007177734375f,   // ±24g 量程灵敏度
+    0.0008980417f, // ±3g:  3 × 9.80665 / 32768
+    0.0017960835f, // ±6g:  6 × 9.80665 / 32768
+    0.0035921669f, // ±12g: 12 × 9.80665 / 32768
+    0.0071843337f, // ±24g: 24 × 9.80665 / 32768
 };
 
 /* 陀螺仪灵敏度查找表：将原始值转换为 rad/s，单位 (rad/s)/LSB */
@@ -97,7 +111,7 @@ static uint8_t BMI088_WriteRegWithCheck(BMI088Instance *inst, GPIOInstance *cs, 
 
 /* 中断模式私有函数 */
 static void BMI088_IntCallback(GPIOInstance *gpio_inst);
-static void BMI088_StartSensorIT(BMI088Instance *inst, uint8_t sensor_type);
+static void BMI088_StartSensorDMA(BMI088Instance *inst, uint8_t sensor_type);
 static void BMI088_SPICpltCallback(SPIInstance *spi_inst);
 static void BMI088_CheckPendingIT(BMI088Instance *inst);
 /* 插值辅助函数声明 */
@@ -121,6 +135,7 @@ static void BMI088_ReadReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, 
         return;
     }
 
+    memset(inst->tx_buff, BMI088_SPI_DUMMY_BYTE, BMI088_BUFF_SIZE);
     inst->tx_buff[0] = reg | BMI088_SPI_READ_CMD;
     inst->tx_len = 1 + dummy + len;
 
@@ -134,7 +149,8 @@ static void BMI088_ReadReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, 
  */
 static void BMI088_WriteReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint8_t data)
 {
-    inst->tx_buff[0] = reg & BMI088_SPI_WRITE_CMD;
+    memset(inst->tx_buff, BMI088_SPI_DUMMY_BYTE, BMI088_BUFF_SIZE);
+    inst->tx_buff[0] = reg & BMI088_SPI_WRITE_MASK;
     inst->tx_buff[1] = data;
     inst->tx_len = BMI088_SPI_WRITE_LEN;
 
@@ -183,7 +199,7 @@ static void BMI088_IntCallback(GPIOInstance *gpio_inst)
     if (!inst->transfer_busy)
     {
         inst->int_timestamp = t_now;
-        BMI088_StartSensorIT(inst, is_acc ? BMI088_SENSOR_ACC : BMI088_SENSOR_GYRO);
+        BMI088_StartSensorDMA(inst, is_acc ? BMI088_SENSOR_ACC : BMI088_SENSOR_GYRO);
         inst->pending_mask &= (uint8_t)~(is_acc ? BMI088_PENDING_ACC : BMI088_PENDING_GYRO);
     }
     else
@@ -199,11 +215,13 @@ static void BMI088_IntCallback(GPIOInstance *gpio_inst)
 /**
  * @brief 启动传感器 SPI IT 读取
  */
-static void BMI088_StartSensorIT(BMI088Instance *inst, uint8_t sensor_type)
+static void BMI088_StartSensorDMA(BMI088Instance *inst, uint8_t sensor_type)
 {
     inst->transfer_busy = 1;
     inst->current_sensor = sensor_type;
     GPIOInstance *cs;
+
+    memset(inst->tx_buff, BMI088_SPI_DUMMY_BYTE, BMI088_BUFF_SIZE);
 
     if (sensor_type == BMI088_SENSOR_ACC)
     {
@@ -211,7 +229,13 @@ static void BMI088_StartSensorIT(BMI088Instance *inst, uint8_t sensor_type)
         inst->tx_len = BMI088_ACC_SPI_READ_LEN;
         cs = inst->cs_acc;
     }
-    else
+    else if (sensor_type == BMI088_SENSOR_TEMP)
+    {
+        inst->tx_buff[0] = BMI088_TEMP_M | BMI088_SPI_READ_CMD;
+        inst->tx_len = 1 + BMI088_ACC_DUMMY_BYTES + 2;
+        cs = inst->cs_acc;
+    }
+    else /* BMI088_SENSOR_GYRO */
     {
         inst->tx_buff[0] = BMI088_GYRO_X_L | BMI088_SPI_READ_CMD;
         inst->tx_len = BMI088_GYRO_SPI_READ_LEN;
@@ -224,21 +248,17 @@ static void BMI088_StartSensorIT(BMI088Instance *inst, uint8_t sensor_type)
 
 /**
  * @brief SPI IT传输完成回调（SPI中断上下文）
+ * @note Acc完成后再链式读取温度（限速1.28s），Gyro完成后直接释放总线
  */
 static void BMI088_SPICpltCallback(SPIInstance *spi_inst)
 {
     BMI088Instance *inst = (BMI088Instance *)spi_inst->parent;
-    uint8_t is_acc = (inst->current_sensor == BMI088_SENSOR_ACC);
 
-    /* 步骤1：拉高片选 */
-    if (is_acc)
-        GPIOSet(inst->cs_acc);
-    else
-        GPIOSet(inst->cs_gyro);
-
-    /* 步骤2：写入循环缓冲 */
-    if (is_acc)
+    if (inst->current_sensor == BMI088_SENSOR_ACC)
     {
+        /* === Acc SPI IT 完成 === */
+        GPIOSet(inst->cs_acc);
+
         uint16_t i = inst->acc_wr_idx % BMI088_ACC_BUF_SIZE;
         uint8_t off = BMI088_ACC_RX_DATA_OFF;
         inst->acc_raw[i][0] = spi_inst->rx_buff[off + 0];
@@ -251,9 +271,24 @@ static void BMI088_SPICpltCallback(SPIInstance *spi_inst)
         inst->acc_wr_idx++;
         if (inst->acc_cnt < UINT8_MAX)
             inst->acc_cnt++;
+
+        /* 温度每 1.28s 更新一次（§5.3.7），通过 pending 机制调度 */
+        uint64_t now = DWT_GetTimeUs();
+        if (now - inst->last_temp_us >= BMI088_TEMP_UPDATE_INTERVAL_US)
+        {
+            inst->last_temp_us = now;
+            inst->pending_mask |= BMI088_PENDING_TEMP;
+        }
+
+        /* 释放总线，由 CheckPendingIT 决定下一个传输 */
+        inst->transfer_busy = 0;
+        BMI088_CheckPendingIT(inst);
     }
-    else
+    else if (inst->current_sensor == BMI088_SENSOR_GYRO)
     {
+        /* === Gyro SPI IT 完成 === */
+        GPIOSet(inst->cs_gyro);
+
         uint16_t i = inst->gyro_wr_idx % BMI088_GYRO_BUF_SIZE;
         uint8_t off = BMI088_GYRO_RX_DATA_OFF;
         inst->gyro_raw[i][0] = spi_inst->rx_buff[off + 0];
@@ -262,16 +297,27 @@ static void BMI088_SPICpltCallback(SPIInstance *spi_inst)
         inst->gyro_raw[i][3] = spi_inst->rx_buff[off + 3];
         inst->gyro_raw[i][4] = spi_inst->rx_buff[off + 4];
         inst->gyro_raw[i][5] = spi_inst->rx_buff[off + 5];
-        inst->gyro_temp_raw = (int16_t)((spi_inst->rx_buff[BMI088_GYRO_RX_TEMP_H] << 8) | spi_inst->rx_buff[BMI088_GYRO_RX_TEMP_L]);
         inst->t_gyro[i] = inst->int_timestamp;
         inst->gyro_wr_idx++;
         if (inst->gyro_cnt < UINT8_MAX)
             inst->gyro_cnt++;
-    }
 
-    /* 步骤3：清除传输忙 + 检查待处理 */
-    inst->transfer_busy = 0;
-    BMI088_CheckPendingIT(inst);
+        inst->transfer_busy = 0;
+        BMI088_CheckPendingIT(inst);
+    }
+    else /* BMI088_SENSOR_TEMP */
+    {
+        /* === 温度 SPI IT 完成 === */
+        GPIOSet(inst->cs_acc);
+
+        /* 提取 11-bit 温度值（§5.3.7: Temp_uint11 = (TEMP_MSB*8) + (TEMP_LSB/32)） */
+        uint16_t temp_raw = ((uint16_t)spi_inst->rx_buff[BMI088_ACC_RX_TEMP_H] << 8) | spi_inst->rx_buff[BMI088_ACC_RX_TEMP_L];
+        uint16_t temp_u11 = temp_raw >> 5;
+        inst->gyro_temp_raw = (int16_t)(temp_u11 > 1023 ? temp_u11 - 2048 : temp_u11);
+
+        inst->transfer_busy = 0;
+        BMI088_CheckPendingIT(inst);
+    }
 }
 
 /**
@@ -285,13 +331,18 @@ static void BMI088_CheckPendingIT(BMI088Instance *inst)
         {
             inst->pending_mask &= (uint8_t)~BMI088_PENDING_ACC;
             inst->int_timestamp = inst->pending_t_acc;
-            BMI088_StartSensorIT(inst, BMI088_SENSOR_ACC);
+            BMI088_StartSensorDMA(inst, BMI088_SENSOR_ACC);
         }
         else if (inst->pending_mask & BMI088_PENDING_GYRO)
         {
             inst->pending_mask &= (uint8_t)~BMI088_PENDING_GYRO;
             inst->int_timestamp = inst->pending_t_gyro;
-            BMI088_StartSensorIT(inst, BMI088_SENSOR_GYRO);
+            BMI088_StartSensorDMA(inst, BMI088_SENSOR_GYRO);
+        }
+        else if (inst->pending_mask & BMI088_PENDING_TEMP)
+        {
+            inst->pending_mask &= (uint8_t)~BMI088_PENDING_TEMP;
+            BMI088_StartSensorDMA(inst, BMI088_SENSOR_TEMP);
         }
     }
 }
@@ -427,6 +478,7 @@ static uint8_t BMI088_AccInit(BMI088Instance *inst)
         LOGERROR("[drv_bmi088] acc_pwr_ctrl write failed");
         return 1;
     }
+    DWT_Delay(BMI088_ACC_PWR_UP_DELAY_S); // 数据手册§3: 写 ACC_PWR_CTRL 后等 450µs
 
     // 6. 退出挂起模式
     if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_ACC_PWR_CONF_REG, BMI088_ACC_PWR_SAVE_ACTIVE) != 0)
@@ -486,8 +538,8 @@ static uint8_t BMI088_GyroInit(BMI088Instance *inst)
         return 1;
     }
 
-    // 4. 写入带宽配置
-    if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_BANDWIDTH_REG, inst->gyro_odr | inst->gyro_bw | BMI088_GYRO_BW_MUST_SET) != 0)
+    // 4. 写入带宽配置（使用组合值 OR BMI088_GYRO_BW_MUST_SET）
+    if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_BANDWIDTH_REG, inst->gyro_conf | BMI088_GYRO_BW_MUST_SET) != 0)
     {
         LOGERROR("[drv_bmi088] gyro_bandwidth write failed");
         return 1;
@@ -507,8 +559,8 @@ static uint8_t BMI088_GyroInit(BMI088Instance *inst)
         return 1;
     }
 
-    // 7. 配置 INT3 引脚
-    if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_INT3_INT4_IO_CONF_REG, BMI088_INT3_LVL_HIGH) != 0)
+    // 7. 配置 INT3 引脚（推挽输出 + 高电平有效，INT4 保持复位默认）
+    if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_INT3_INT4_IO_CONF_REG, BMI088_INT4_OD_OPEN_DRAIN | BMI088_INT4_LVL_HIGH | BMI088_INT3_LVL_HIGH) != 0)
     {
         LOGERROR("[drv_bmi088] int3_int4_io_conf write failed");
         return 1;
@@ -616,8 +668,7 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
     inst->acc_bwp = config->acc_bwp;
     inst->acc_odr = config->acc_odr;
     inst->gyro_range = config->gyro_range;
-    inst->gyro_odr = config->gyro_odr;
-    inst->gyro_bw = config->gyro_bw;
+    inst->gyro_conf = config->gyro_conf;
     inst->work_mode = config->work_mode;
 
     /*============================ 加速度计初始化 ============================*/
@@ -645,7 +696,7 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
             LOGERROR("[drv_bmi088] int_gyro register failed");
             return -1;
         }
-        // 挂接SPI IT传输完成回调，切换为IT模式
+        // 挂接 SPI DMA 传输完成回调，切换为 DMA 模式
         inst->spi_inst->rx_callback = BMI088_SPICpltCallback;
         inst->spi_inst->work_mode = SPI_DMA_MODE;
 
@@ -661,6 +712,7 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
         inst->acc_cnt = 0;
         inst->gyro_cnt = 0;
         inst->gyro_temp_raw = 0;
+        inst->last_temp_us = 0;
         memset(inst->acc_raw, 0, sizeof(inst->acc_raw));
         memset(inst->gyro_raw, 0, sizeof(inst->gyro_raw));
         memset(inst->t_acc, 0, sizeof(inst->t_acc));
@@ -692,10 +744,11 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
 /*============================ 数据读取接口 ============================*/
 
 /**
- * @brief 阻塞读取BMI088数据
+ * @brief 阻塞读取BMI088数据（轮询模式专用）
  * @param inst BMI088实例指针
  * @return BMI088_Data_t 结构体，包含加速度、陀螺仪、温度和时间戳
- * @note 此函数会阻塞等待数据读取完成
+ * @note 此函数会阻塞等待数据读取完成，按 Acc→Gyro→Temp 顺序串行读取
+ * @note 时间戳为 MCU 读取完成时的 DWT 时钟值，非传感器采样时刻（近似值）
  */
 BMI088_Data_t BMI088ReadBlocking(BMI088Instance *inst)
 {
@@ -724,8 +777,13 @@ BMI088_Data_t BMI088ReadBlocking(BMI088Instance *inst)
         gyro_buf[i] = inst->spi_inst->rx_buff[BMI088_GYRO_RX_DATA_OFF + i];
 
     /* 读取温度原始数据（2 字节），存入实例供 heater 控制使用 */
-    BMI088_ReadReg(inst, inst->cs_acc, BMI088_TEMP_L, 2, BMI088_ACC_DUMMY_BYTES);
-    inst->gyro_temp_raw = (int16_t)((inst->spi_inst->rx_buff[BMI088_ACC_RX_TEMP_H] << 8) | inst->spi_inst->rx_buff[BMI088_ACC_RX_TEMP_L]);
+    BMI088_ReadReg(inst, inst->cs_acc, BMI088_TEMP_M, 2, BMI088_ACC_DUMMY_BYTES);
+    /* 提取 11-bit 温度值（数据手册 §5.3.7: Temp_uint11 = (TEMP_MSB*8) + (TEMP_LSB/32)） */
+    {
+        uint16_t temp_raw = ((uint16_t)inst->spi_inst->rx_buff[BMI088_ACC_RX_TEMP_H] << 8) | inst->spi_inst->rx_buff[BMI088_ACC_RX_TEMP_L];
+        uint16_t temp_u11 = temp_raw >> 5;
+        inst->gyro_temp_raw = (int16_t)(temp_u11 > 1023 ? temp_u11 - 2048 : temp_u11);
+    }
 
     return BMI088_PackData(inst, acc_buf, gyro_buf, DWT_GetTimeUs());
 }

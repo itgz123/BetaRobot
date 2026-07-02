@@ -268,31 +268,29 @@ typedef enum : uint8_t
 
 /**
  * @brief GYRO_BANDWIDTH (0x10) 陀螺仪带宽配置寄存器
- * @note bit[7] - must_set: 保留位，必须写入1
- * @note bit[6:4] - gyro_odr: 输出数据速率标识
- * @note bit[3:0] - gyro_bw: 滤波器带宽
- * @note ODR与BW绑定，需选择兼容组合
+ * @note bit[7] - must_set: 写入时必须置1（只读位，但必须写1）
+ * @note bit[2:0] - 直接编码 ODR+BW 组合（数据手册 §5.5.6 表）
+ * @note ODR与BW绑定，使用组合枚举值选择
+ * @note WRITE: reg_val = BMI088_GYRO_CONF_xxx | BMI088_GYRO_BW_MUST_SET
  * @note 访问: RW
  */
 typedef enum : uint8_t
 {
-    BMI088_GYRO_BW_MUST_SET = 0x80,
-
-    BMI088_GYRO_ODR_2000 = 0x00 << 4, // 2000 Hz
-    BMI088_GYRO_ODR_1000 = 0x01 << 4, // 1000 Hz
-    BMI088_GYRO_ODR_400 = 0x02 << 4,  // 400 Hz
-    BMI088_GYRO_ODR_200 = 0x03 << 4,  // 200 Hz
-    BMI088_GYRO_ODR_100 = 0x04 << 4,  // 100 Hz
-
-    BMI088_GYRO_BW_532 = 0x00, // 532 Hz (ODR=2000)
-    BMI088_GYRO_BW_230 = 0x01, // 230 Hz (ODR=2000)
-    BMI088_GYRO_BW_116 = 0x02, // 116 Hz (ODR=1000)
-    BMI088_GYRO_BW_47 = 0x03,  // 47 Hz (ODR=400)
-    BMI088_GYRO_BW_23 = 0x04,  // 23 Hz (ODR=200)
-    BMI088_GYRO_BW_12 = 0x05,  // 12 Hz (ODR=100)
-    BMI088_GYRO_BW_64 = 0x06,  // 64 Hz (ODR=200)
-    BMI088_GYRO_BW_32 = 0x07,  // 32 Hz (ODR=100)
+    /* 必须先写 BMI088_GYRO_BW_MUST_SET (=0x80) 再 OR 下列值：
+     * BMI088_GYRO_BANDWIDTH_REG = BMI088_GYRO_CONF_xxx | BMI088_GYRO_BW_MUST_SET
+     */
+    BMI088_GYRO_CONF_2000_532 = 0x00, // ODR=2000Hz, BW=532Hz
+    BMI088_GYRO_CONF_2000_230 = 0x01, // ODR=2000Hz, BW=230Hz
+    BMI088_GYRO_CONF_1000_116 = 0x02, // ODR=1000Hz, BW=116Hz
+    BMI088_GYRO_CONF_400_47 = 0x03,   // ODR=400Hz,   BW=47Hz
+    BMI088_GYRO_CONF_200_23 = 0x04,   // ODR=200Hz,   BW=23Hz
+    BMI088_GYRO_CONF_100_12 = 0x05,   // ODR=100Hz,   BW=12Hz
+    BMI088_GYRO_CONF_200_64 = 0x06,   // ODR=200Hz,   BW=64Hz
+    BMI088_GYRO_CONF_100_32 = 0x07,   // ODR=100Hz,   BW=32Hz
 } BMI088_GyroConf_e;
+
+/* bit[7] 必须写入 1（只读位，无功能，但必须保持写入） */
+#define BMI088_GYRO_BW_MUST_SET 0x80
 
 /**
  * @brief GYRO_LPM1 (0x11) 低功耗模式配置寄存器
@@ -331,14 +329,15 @@ typedef enum : uint8_t
  * @note bit[2] - int4_lvl: INT4 有效状态 (0=低电平有效, 1=高电平有效)
  * @note bit[1] - int3_od: INT3 引脚行为 (0=推挽, 1=开漏)
  * @note bit[0] - int3_lvl: INT3 有效状态 (0=低电平有效, 1=高电平有效)
+ * @note 复位值 0x0F: INT3/INT4 均默认开漏输出、高电平有效
  * @note 访问: RW
  */
 typedef enum : uint8_t
 {
-    BMI088_INT4_OD_OPEN_DRAIN = 1 << 3, // INT4 开漏输出 (默认推挽)
-    BMI088_INT4_LVL_HIGH = 1 << 2,      // INT4 高电平有效 (默认低电平)
-    BMI088_INT3_OD_OPEN_DRAIN = 1 << 1, // INT3 开漏输出 (默认推挽)
-    BMI088_INT3_LVL_HIGH = 1 << 0,      // INT3 高电平有效 (默认低电平)
+    BMI088_INT4_OD_OPEN_DRAIN = 1 << 3, // INT4 开漏输出 (复位值: 开漏)
+    BMI088_INT4_LVL_HIGH = 1 << 2,      // INT4 高电平有效 (复位值: 高电平)
+    BMI088_INT3_OD_OPEN_DRAIN = 1 << 1, // INT3 开漏输出 (复位值: 开漏)
+    BMI088_INT3_LVL_HIGH = 1 << 0,      // INT3 高电平有效 (复位值: 高电平)
 } BMI088_Int3Int4IoConf_e;
 
 /**
