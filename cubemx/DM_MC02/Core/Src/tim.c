@@ -28,6 +28,7 @@ TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim12;
+DMA_HandleTypeDef hdma_tim3_ch4;
 
 /* TIM1 init function */
 void MX_TIM1_Init(void)
@@ -200,6 +201,10 @@ void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
+  if (HAL_TIM_OnePulse_Init(&htim3, TIM_OPMODE_SINGLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
   sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
   sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
   if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
@@ -215,7 +220,9 @@ void MX_TIM3_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM3_Init 2 */
-
+  /* HAL_PWM_ConfigChannel 强制设置了 OC4PE=1（预装载使能），
+     但 DMA 写入 CCR 需要立即生效（不受 RCR 门控），必须关闭预装载 */
+  TIM3->CCMR2 &= ~TIM_CCMR2_OC4PE;
   /* USER CODE END TIM3_Init 2 */
   HAL_TIM_MspPostInit(&htim3);
 
@@ -307,6 +314,26 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
   /* USER CODE END TIM3_MspInit 0 */
     /* TIM3 clock enable */
     __HAL_RCC_TIM3_CLK_ENABLE();
+
+    /* TIM3 DMA Init */
+    /* TIM3_CH4 Init */
+    hdma_tim3_ch4.Instance = DMA2_Stream1;
+    hdma_tim3_ch4.Init.Request = DMA_REQUEST_TIM3_CH4;
+    hdma_tim3_ch4.Init.Direction = DMA_MEMORY_TO_PERIPH;
+    hdma_tim3_ch4.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_tim3_ch4.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_tim3_ch4.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
+    hdma_tim3_ch4.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
+    hdma_tim3_ch4.Init.Mode = DMA_NORMAL;
+    hdma_tim3_ch4.Init.Priority = DMA_PRIORITY_LOW;
+    hdma_tim3_ch4.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+    if (HAL_DMA_Init(&hdma_tim3_ch4) != HAL_OK)
+    {
+      Error_Handler();
+    }
+
+    __HAL_LINKDMA(tim_baseHandle,hdma[TIM_DMA_ID_CC4],hdma_tim3_ch4);
+
   /* USER CODE BEGIN TIM3_MspInit 1 */
 
   /* USER CODE END TIM3_MspInit 1 */
@@ -447,6 +474,9 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
   /* USER CODE END TIM3_MspDeInit 0 */
     /* Peripheral clock disable */
     __HAL_RCC_TIM3_CLK_DISABLE();
+
+    /* TIM3 DMA DeInit */
+    HAL_DMA_DeInit(tim_baseHandle->hdma[TIM_DMA_ID_CC4]);
   /* USER CODE BEGIN TIM3_MspDeInit 1 */
 
   /* USER CODE END TIM3_MspDeInit 1 */
