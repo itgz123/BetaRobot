@@ -18,6 +18,7 @@
 #include "bsp_spi.h"
 #include "bsp_gpio.h"
 #include "bsp_tim.h"
+#include "drv_daemon.h"
 #include "bmi088_reg_def.h"
 
 /**
@@ -48,6 +49,12 @@ typedef enum : uint8_t
 #define BMI088_AXIS_NUM 3      // 轴数
 #define BMI088_RAW_DATA_SIZE 6 // 原始数据字节数 (3轴 × 2字节)
 
+/*============================ 温度目标（可覆盖宏） ============================*/
+
+#ifndef BMI088_TEMP_TARGET
+#define BMI088_TEMP_TARGET 50 // 加热目标温度 (℃)
+#endif
+
 /*============================ 配置结构体 ============================*/
 
 /**
@@ -55,18 +62,20 @@ typedef enum : uint8_t
  */
 typedef struct
 {
-    BoardSPI_e spi_e;              // 板载SPI枚举
-    BoardGPIO_e cs_acc_e;          // 加速度计片选GPIO枚举
-    BoardGPIO_e cs_gyro_e;         // 陀螺仪片选GPIO枚举
-    BoardGPIO_e int_acc_e;         // 加速度计中断GPIO枚举
-    BoardGPIO_e int_gyro_e;        // 陀螺仪中断GPIO枚举
-    BoardTIM_e heater_e;           // 加热PWM枚举
-    BMI088_AccRange_e acc_range;   // 加速度计量程
-    uint8_t acc_bwp;               // 加速度计低通滤波器带宽
-    uint8_t acc_odr;               // 加速度计输出数据速率
-    BMI088_GyroRange_e gyro_range; // 陀螺仪量程
-    BMI088_GyroConf_e gyro_conf;   // 陀螺仪 ODR+BW 组合配置（见 BMI088_GyroConf_e）
-    BMI088_WorkMode_e work_mode;   // 工作模式（轮询/中断）
+    BoardSPI_e spi_e;                 // 板载SPI枚举
+    BoardGPIO_e cs_acc_e;             // 加速度计片选GPIO枚举
+    BoardGPIO_e cs_gyro_e;            // 陀螺仪片选GPIO枚举
+    BoardGPIO_e int_acc_e;            // 加速度计中断GPIO枚举
+    BoardGPIO_e int_gyro_e;           // 陀螺仪中断GPIO枚举
+    BoardTIM_e heater_e;              // 加热PWM枚举
+    BMI088_AccRange_e acc_range;      // 加速度计量程
+    uint8_t acc_bwp;                  // 加速度计低通滤波器带宽
+    uint8_t acc_odr;                  // 加速度计输出数据速率
+    BMI088_GyroRange_e gyro_range;    // 陀螺仪量程
+    BMI088_GyroConf_e gyro_conf;      // 陀螺仪 ODR+BW 组合配置（见 BMI088_GyroConf_e）
+    uint16_t daemon_reload;           // daemon 喂狗重载值，0 表示禁用
+    DaemonFaultAction_e daemon_fault; // daemon 离线故障动作
+    BMI088_WorkMode_e work_mode;      // 工作模式（轮询/中断）
 } BMI088_Init_Config_s;
 /**
  * @brief IMU 数据结构体
@@ -102,6 +111,7 @@ typedef struct BMI088Instance
     GPIOInstance *int_acc;   // 加速度计中断
     GPIOInstance *int_gyro;  // 陀螺仪中断（可选）
     PWMInstance *heater_pwm; // 加热 PWM（可选）
+    DaemonInstance *daemon;  // 守护进程实例
 
     /* 发送缓冲区 */
     uint8_t *tx_buff; // 发送缓冲区指针
@@ -144,7 +154,7 @@ typedef struct BMI088Instance
     volatile uint16_t gyro_wr_idx;             // 陀螺仪写入索引（永远递增）
     volatile uint8_t acc_cnt;                  // 已收到的 acc 样本数
     volatile uint8_t gyro_cnt;                 // 已收到的 gyro 样本数
-    volatile int16_t gyro_temp_raw;            // Acc侧温度 11-bit 值（×0.125+23=℃）
+    volatile float temperature;                // 实际温度（℃）
     uint64_t last_temp_us;                     // 上次温度读取时间戳 (us)，用于限速
 } BMI088Instance;
 
@@ -167,6 +177,7 @@ typedef struct BMI088Instance
     GPIO_INSTANCE_DEF(name##_cs_gyro);                             \
     GPIO_INSTANCE_DEF(name##_int_acc);                             \
     GPIO_INSTANCE_DEF(name##_int_gyro);                            \
+    DAEMON_INSTANCE_DEF(name##_daemon);                            \
     PWM_INSTANCE_DEF(name##_heater);                               \
     static BMI088Instance name = {                                 \
         .spi_inst = &name##_spi,                                   \
@@ -174,6 +185,7 @@ typedef struct BMI088Instance
         .cs_gyro = &name##_cs_gyro,                                \
         .int_acc = &name##_int_acc,                                \
         .int_gyro = &name##_int_gyro,                              \
+        .daemon = &name##_daemon,                                  \
         .heater_pwm = &name##_heater,                              \
         .tx_buff = name##_tx_buff}
 
