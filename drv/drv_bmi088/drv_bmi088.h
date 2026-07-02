@@ -2,8 +2,8 @@
  * @file drv_bmi088.h
  * @brief BMI088 六轴 IMU 驱动（加速度计 + 陀螺仪）
  *
- * @note 使用 DMA 非阻塞模式进行 SPI 数据读取
  * @note 片选由 DRV 层通过 GPIO 接口控制
+ * @note 中断模式使用循环缓冲 + 线性插值对齐 acc/gyro 时间戳
  *
  */
 
@@ -18,22 +18,35 @@
 #include "bsp_spi.h"
 #include "bsp_gpio.h"
 #include "bsp_tim.h"
-#include "bsp_dwt.h"
-#include "bsp_uart_log.h"
 #include "bmi088_reg_def.h"
 
 /**
  * @brief BMI088 工作模式枚举
+ * @note 中断模式如下优点：
+ * @note 1. 精确时间戳
+ * @note 2. 避免数据覆盖
+ * @note 3. BMI088ReadInt比BMI088ReadBlocking少了spi时间
  */
 typedef enum : uint8_t
 {
     BMI088_MODE_POLLING = 0, // 阻塞模式：主动轮询读取6轴数据
-    BMI088_MODE_INT,         // 中断模式：数据就绪后中断通知主控
+    BMI088_MODE_INT,         // 中断模式：数据就绪后实例自动读取
 } BMI088_WorkMode_e;
 
 /*============================ 缓冲区大小定义 ============================*/
 
-#define BMI088_BUFF_SIZE 8 // SPI缓冲区大小：1地址 + 1虚拟 + 6数据（最大）
+#define BMI088_BUFF_SIZE 10 // SPI缓冲区大小：1地址 + 1虚拟 + 6数据 + 2温度（最大）
+
+/*============================ 循环缓冲大小 ============================*/
+// 用复杂状态机可以用3+3实现
+// f_acc=12.5-1600hz
+// f_gyro=100-2000hz
+#define BMI088_ACC_BUF_SIZE 17
+#define BMI088_GYRO_BUF_SIZE 17
+
+/*============================ 数据尺寸常量 ============================*/
+#define BMI088_AXIS_NUM 3      // 轴数
+#define BMI088_RAW_DATA_SIZE 6 // 原始数据字节数 (3轴 × 2字节)
 
 /*============================ 配置结构体 ============================*/
 
@@ -56,17 +69,26 @@ typedef struct
     uint8_t gyro_bw;               // 陀螺仪滤波器带宽
     BMI088_WorkMode_e work_mode;   // 工作模式（轮询/中断）
 } BMI088_Init_Config_s;
-
 /**
  * @brief IMU 数据结构体
  */
 typedef struct
 {
-    float gyro[3];    // 陀螺仪数据 (rad/s)
-    float acc[3];     // 加速度计数据 (m/s²)
-    float temp;       // 温度 (°C)
-    float time_stamp; // 时间戳 (ms)
+    float gyro[BMI088_AXIS_NUM]; // 陀螺仪数据 (rad/s)
+    float acc[BMI088_AXIS_NUM];  // 加速度计数据 (m/s²)
+    uint64_t time_stamp;         // 时间戳 (μs)
 } BMI088_Data_t;
+
+/**
+ * @brief IMU 多速率数据结构体（用于 Kalman 等需要独立时间戳的融合算法）
+ */
+typedef struct
+{
+    float gyro[BMI088_AXIS_NUM]; // 陀螺仪数据 (rad/s)
+    float acc[BMI088_AXIS_NUM];  // 加速度计数据 (m/s²)
+    uint64_t time_stamp_a;       // 加速度计时间戳 (μs)
+    uint64_t time_stamp_g;       // 陀螺仪时间戳 (μs)
+} BMI088_MultiRateData_t;
 
 /**
  * @brief BMI088 实例结构体
@@ -100,9 +122,31 @@ typedef struct BMI088Instance
     BMI088_WorkMode_e work_mode; // 工作模式
 
     /* 标定偏移量 */
-    float acc_offset[3];  // 加速度计零偏 (m/s²)
-    float gyro_offset[3]; // 陀螺仪零偏 (rad/s)
+    float acc_offset[BMI088_AXIS_NUM];  // 加速度计零偏 (m/s²)
+    float gyro_offset[BMI088_AXIS_NUM]; // 陀螺仪零偏 (rad/s)
 
+    /*============================ 中断模式字段 ============================*/
+
+    /* --- EXTI/SPI 同步 --- */
+    volatile uint8_t transfer_busy;  // SPI IT 传输进行中
+    volatile uint8_t current_sensor; // 当前 SPI 读取的传感器 (0=acc, 1=gyro)
+    uint8_t pending_mask;            // 待读取传感器掩码 (bit0=acc, bit1=gyro)
+
+    /* --- 中断时间戳缓存 --- */
+    uint64_t int_timestamp;  // 当前 SPI 读取对应的 INT 触发时间
+    uint64_t pending_t_acc;  // 暂存的 acc INT 时间（pending 用）
+    uint64_t pending_t_gyro; // 暂存的 gyro INT 时间（pending 用）
+
+    /* --- 循环缓冲（写入 ISR，读出配对） --- */
+    uint8_t acc_raw[BMI088_ACC_BUF_SIZE][6];   // 加速度计原始环形缓冲
+    uint8_t gyro_raw[BMI088_GYRO_BUF_SIZE][6]; // 陀螺仪原始环形缓冲
+    uint64_t t_acc[BMI088_ACC_BUF_SIZE];       // 加速度计时间戳 (us)
+    uint64_t t_gyro[BMI088_GYRO_BUF_SIZE];     // 陀螺仪时间戳 (us)
+    volatile uint16_t acc_wr_idx;              // 加速度计写入索引（永远递增）
+    volatile uint16_t gyro_wr_idx;             // 陀螺仪写入索引（永远递增）
+    volatile uint8_t acc_cnt;                  // 已收到的 acc 样本数
+    volatile uint8_t gyro_cnt;                 // 已收到的 gyro 样本数
+    volatile int16_t gyro_temp_raw;            // 陀螺仪侧原始温度值（SPI扩展读出）
 } BMI088Instance;
 
 /*============================ 实例定义宏 ============================*/
@@ -112,7 +156,7 @@ typedef struct BMI088Instance
  * @param name 实例名称
  *
  * @note 使用 BSP 层的实例定义宏，parent 在注册时设置
- *       初始化时默认使用阻塞模式，初始化完成后可切换到DMA模式
+ *       中断模式字段由 BMI088Register 初始化
  *
  * @example
  *   BMI088_INSTANCE_DEF(bmi088);
@@ -145,29 +189,32 @@ typedef struct BMI088Instance
 int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config);
 
 /**
- * @brief 阻塞读取BMI088数据
+ * @brief 阻塞读取BMI088数据（轮询模式专用）
  * @param inst BMI088实例指针
  * @return BMI088_Data_t 结构体，包含加速度、陀螺仪、温度和时间戳
  * @note 此函数会阻塞等待数据读取完成
+ * @note 中断模式下调用会返回空数据并记录警告
  */
 BMI088_Data_t BMI088ReadBlocking(BMI088Instance *inst);
 
 /**
- * @brief 标定BMI088零偏
- * @param inst    BMI088实例指针
- * @param samples 采样次数（建议100~200）
- * @return 0成功，-1失败
- * @note 调用时传感器应处于静止状态
+ * @brief 非阻塞读取中断模式下对齐后的 IMU 数据
+ * @param inst BMI088实例指针
+ * @return BMI088_Data_t
+ * @note 内部使用 16+16 循环缓冲 + 线性插值将 acc 和 gyro 对齐到最新数据的时间戳
+ * @retval 数据成员全 0 表示尚无可用配对（启动瞬态）
+ * @retval 数据有效则 time_stamp > 0
  */
-int8_t BMI088Calibrate(BMI088Instance *inst, uint16_t samples);
+BMI088_Data_t BMI088ReadInt(BMI088Instance *inst);
 
 /**
- * @brief 设置加热PWM占空比
- * @param inst        BMI088实例指针
- * @param duty_ratio  占空比（0~1）
- * @note 阻塞模式直接设置，中断模式预留PID控制接口
+ * @brief 读取最新一帧 Acc 和 Gyro（各自带独立时间戳，无插值对齐）
+ * @param inst BMI088实例指针
+ * @return BMI088_MultiRateData_t
+ * @note 专为 Kalman 等需要多速率融合的算法设计，保留各自的原始时间戳
+ * @retval time_stamp_a / time_stamp_g 为 0 表示数据尚未就绪
  */
-void BMI088SetHeater(BMI088Instance *inst, float duty_ratio);
+BMI088_MultiRateData_t BMI088ReadLatest(BMI088Instance *inst);
 
 #endif /* defined(BSP_SPI_MODULE_ENABLED) && defined(BSP_GPIO_MODULE_ENABLED) */
 

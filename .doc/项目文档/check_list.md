@@ -7,3 +7,6 @@
 7. 实例结构体set封装函数，get直接通过结构体获取
 8. 注册，初始化函数需要检查cfg结构体参数
 9. itcm放置：；freertos内核代码；创建的freertos任务代码；Kalman等高算力代码；中断代码
+10. 检查const,extern,register,static,volatile
+11. 函数签名：bsp用register，drv用init
+12. 检查每个drv/bsp的所有static函数，不要每个drv自己定义一个clamp限幅函数

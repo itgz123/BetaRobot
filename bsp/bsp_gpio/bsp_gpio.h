@@ -36,8 +36,8 @@ typedef struct GPIOInstance
  */
 typedef struct
 {
-    BoardGPIO_e gpio_e;                         // 板载GPIO枚举（注册时用于查找映射）
-    void (*callback)(struct GPIOInstance *);    // EXTI中断回调函数（可为NULL）
+    BoardGPIO_e gpio_e;                      // 板载GPIO枚举（注册时用于查找映射）
+    void (*callback)(struct GPIOInstance *); // EXTI中断回调函数（可为NULL）
 } GPIO_Init_Config_s;
 
 /*------------- 实例定义宏 --------------*/

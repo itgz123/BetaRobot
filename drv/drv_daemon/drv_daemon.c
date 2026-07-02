@@ -69,6 +69,8 @@ uint8_t DaemonIsOnline(DaemonInstance *instance)
 void DaemonTask(void)
 {
     DaemonInstance *dins;
+    buzzer_flag = 0; // 刷新，避免上一轮循环影响
+
     for (size_t i = 0; i < s_idx; ++i)
     {
         dins = s_daemon_instances[i];
