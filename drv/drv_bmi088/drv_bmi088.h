@@ -49,12 +49,6 @@ typedef enum : uint8_t
 #define BMI088_AXIS_NUM 3      // 轴数
 #define BMI088_RAW_DATA_SIZE 6 // 原始数据字节数 (3轴 × 2字节)
 
-/*============================ 温度目标（可覆盖宏） ============================*/
-
-#ifndef BMI088_TEMP_TARGET
-#define BMI088_TEMP_TARGET 50 // 加热目标温度 (℃)
-#endif
-
 /*============================ 配置结构体 ============================*/
 
 /**
@@ -67,7 +61,6 @@ typedef struct
     BoardGPIO_e cs_gyro_e;            // 陀螺仪片选GPIO枚举
     BoardGPIO_e int_acc_e;            // 加速度计中断GPIO枚举
     BoardGPIO_e int_gyro_e;           // 陀螺仪中断GPIO枚举
-    BoardTIM_e heater_e;              // 加热PWM枚举
     BMI088_AccRange_e acc_range;      // 加速度计量程
     uint8_t acc_bwp;                  // 加速度计低通滤波器带宽
     uint8_t acc_odr;                  // 加速度计输出数据速率
@@ -109,8 +102,8 @@ typedef struct BMI088Instance
     GPIOInstance *cs_acc;    // 加速度计片选
     GPIOInstance *cs_gyro;   // 陀螺仪片选
     GPIOInstance *int_acc;   // 加速度计中断
-    GPIOInstance *int_gyro;  // 陀螺仪中断（可选）
-    PWMInstance *heater_pwm; // 加热 PWM（可选）
+    GPIOInstance *int_gyro;  // 陀螺仪中断
+    PWMInstance *heater_pwm; // 加热 PWM
     DaemonInstance *daemon;  // 守护进程实例
 
     /* 发送缓冲区 */
