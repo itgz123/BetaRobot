@@ -17,7 +17,7 @@
 
 /* 公共宏定义（所有开发板通用） */
 #ifndef BMI088_HEAT_PULSE_NUM
-#define BMI088_HEAT_PULSE_NUM 50 /* 每次加热脉冲数 */
+#define BMI088_HEAT_PULSE_NUM 500 /* 每次加热脉冲数 */
 #endif
 #ifndef BMI088_HEAT_DUTY_PERCENT
 #define BMI088_HEAT_DUTY_PERCENT 0 /* 加热占空比百分比 (0-100) */
@@ -62,10 +62,13 @@
 /* 定时器配置：PSC=79, ARR=60000 → 480MHz/2/80/60000=50Hz */
 #define BMI088_HEAT_TIM_PRC (80 - 1)
 #define BMI088_HEAT_TIM_PRD 60000
-#define BMI088_HEAT_DUTY_CCR 1 // 先用1测试 //((uint32_t)((uint32_t)BMI088_HEAT_DUTY_PERCENT * BMI088_HEAT_TIM_PRD / 100))
+#define BMI088_HEAT_ACTIVE_TICKS 1U
+#define BMI088_HEAT_OFF_CCR (BMI088_HEAT_TIM_PRD + 1U)
+#define BMI088_HEAT_DUTY_CCR (BMI088_HEAT_OFF_CCR - BMI088_HEAT_ACTIVE_TICKS)
 
 static TIM_HandleTypeDef s_htim3 = {0};
 static TIM_HandleTypeDef s_htim4 = {0};
+uint32_t test = 0;
 
 /* 无 DMA，无中断，纯硬件链路 */
 
@@ -73,25 +76,31 @@ static TIM_HandleTypeDef s_htim4 = {0};
 void BMI088_HeaterFaultCallback(void *owner)
 {
     (void)owner;
-    __HAL_TIM_DISABLE(&s_htim4);                       /* 停 TIM4，门控信号变低 */
-    __HAL_TIM_DISABLE(&s_htim3);                       /* 停 TIM3 */
-    __HAL_TIM_SET_COMPARE(&s_htim3, TIM_CHANNEL_4, 0); /* 强制 CCR4=0 */
+    __HAL_TIM_DISABLE(&s_htim4);                                         /* 停 TIM4，门控信号变低 */
+    __HAL_TIM_DISABLE(&s_htim3);                                         /* 停 TIM3 */
+    __HAL_TIM_SET_COMPARE(&s_htim3, TIM_CHANNEL_4, BMI088_HEAT_OFF_CCR); /* 强制输出低电平 */
 }
 
 int8_t BMI088_HeaterInit(BMI088Instance *inst)
 {
     // /*覆盖调试器可能设置的 DBG_TIMx_STOP 冻结位，确保硬件自停链路
     //     在 CPU halt 时仍能跑完剩余脉冲并自动关闭 */
+    test = DBGMCU->APB1LFZ1;
     __HAL_DBGMCU_UnFreeze_TIM3();
+    test = DBGMCU->APB1LFZ1;
     __HAL_DBGMCU_UnFreeze_TIM4();
+    test = DBGMCU->APB1LFZ1;
 
     /* ── DBGMCU：调试暂停时 TIM3/TIM4 继续运行 ──
        1. 清除 APB1LFZ1 中 TIM3(bit1)/TIM4(bit2) 冻结位
        2. 使能 DBGMCU_CR 中 D1/D3 域调试时钟 (CKD1EN=bit21, CKD3EN=bit22)
           防止 CPU halt 时域时钟被切断导致 D2 外设停摆 */
     CLEAR_BIT(DBGMCU->APB1LFZ1, DBGMCU_APB1LFZ1_DBG_TIM3 | DBGMCU_APB1LFZ1_DBG_TIM4);
+    test = DBGMCU->APB1LFZ1;
     SET_BIT(DBGMCU->CR, DBGMCU_CR_DBG_CKD1EN | DBGMCU_CR_DBG_CKD3EN);
+    test = DBGMCU->APB1LFZ1;
     __DSB();
+    test = DBGMCU->APB1LFZ1;
 
     /* ── 时钟使能（相当于 CubeMX HAL_TIM_Base_MspInit 中完成）─── */
     __HAL_RCC_TIM3_CLK_ENABLE();
@@ -149,9 +158,9 @@ int8_t BMI088_HeaterInit(BMI088Instance *inst)
         if (HAL_TIM_SlaveConfigSynchro(&s_htim3, &sSlaveConfig) != HAL_OK)
             return -1;
 
-        /* 步骤 6：PWM 通道 4 配置 */
-        sConfigOC.OCMode = TIM_OCMODE_PWM1;
-        sConfigOC.Pulse = 0; /* 初始占空比 0，加热时再设置 */
+        /* 使用 PWM2，确保停止在 CNT=0 时输出为低电平。 */
+        sConfigOC.OCMode = TIM_OCMODE_PWM2;
+        sConfigOC.Pulse = BMI088_HEAT_OFF_CCR;
         sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
         sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
         if (HAL_TIM_PWM_ConfigChannel(&s_htim3, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
@@ -163,7 +172,6 @@ int8_t BMI088_HeaterInit(BMI088Instance *inst)
         TIM_ClockConfigTypeDef sClockSourceConfig = {0};
         TIM_MasterConfigTypeDef sMasterConfig = {0};
         TIM_SlaveConfigTypeDef sSlaveConfig = {0};
-        TIM_OC_InitTypeDef sConfigOC = {0};
 
         /* 步骤 1：基础初始化 */
         s_htim4.Instance = TIM4;
@@ -180,11 +188,7 @@ int8_t BMI088_HeaterInit(BMI088Instance *inst)
         if (HAL_TIM_ConfigClockSource(&s_htim4, &sClockSourceConfig) != HAL_OK)
             return -1;
 
-        /* 步骤 3：OC 初始化（设置通道状态为 READY） */
-        if (HAL_TIM_OC_Init(&s_htim4) != HAL_OK)
-            return -1;
-
-        /* 步骤 4：从模式 — 外部时钟模式 1，时钟源 = ITR2（TIM3 的 TRGO=UEV） */
+        /* 步骤 3：从模式 — 外部时钟模式 1，时钟源 = ITR2（TIM3 的 TRGO=UEV） */
         sSlaveConfig.SlaveMode = TIM_SLAVEMODE_EXTERNAL1;
         sSlaveConfig.InputTrigger = TIM_TS_ITR2;
         sSlaveConfig.TriggerPolarity = TIM_TRIGGERPOLARITY_NONINVERTED;
@@ -193,22 +197,14 @@ int8_t BMI088_HeaterInit(BMI088Instance *inst)
         if (HAL_TIM_SlaveConfigSynchro(&s_htim4, &sSlaveConfig) != HAL_OK)
             return -1;
 
-        /* 步骤 5：主模式 — OC1REF 作为 TRGO → 门控 TIM3
-           注意：不用 MMS=001（使能信号），因为外部时钟模式无内部时钟时
-           CEN 使能信号为 LOW，无法打开 TIM3 门控。
-           改用 OC1M=强制高 → OC1REF=HIGH → TRGO=HIGH */
-        sMasterConfig.MasterOutputTrigger = TIM_TRGO_OC1REF;
+        /* 步骤 4：主模式 — 使能信号作为 TRGO → 门控 TIM3
+           TIM4 在 OPM 自动清 CEN 后，TRGO 也会随之拉低，硬件关闭 TIM3 门控。 */
+        sMasterConfig.MasterOutputTrigger = TIM_TRGO_ENABLE;
         sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
         if (HAL_TIMEx_MasterConfigSynchronization(&s_htim4, &sMasterConfig) != HAL_OK)
             return -1;
 
-        /* 步骤 6：OC1 强制高电平 — 保证 CEN=1 时 TRGO 恒 HIGH */
-        sConfigOC.OCMode = TIM_OCMODE_FORCED_ACTIVE;
-        sConfigOC.Pulse = 0; /* 强制模式不使用 Pulse */
-        if (HAL_TIM_OC_ConfigChannel(&s_htim4, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
-            return -1;
-
-        /* 步骤 7：单脉冲模式 — 50 个脉冲后硬件自动清 CEN（无 HAL 封装） */
+        /* 步骤 5：单脉冲模式 — N 个脉冲后硬件自动清 CEN（无 HAL 封装） */
         TIM4->CR1 |= TIM_CR1_OPM;
     }
 
