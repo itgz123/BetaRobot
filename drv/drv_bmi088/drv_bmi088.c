@@ -11,13 +11,7 @@
 #include <string.h>
 #include "bsp_dwt.h"
 #include "bsp_uart_log.h"
-
-/*============================ SPI通信宏定义 ============================*/
-
-#define BMI088_SPI_READ_CMD 0x80   // R/W位=1（读）
-#define BMI088_SPI_WRITE_MASK 0x7F // 写掩码：清除 bit7（R/W位）
-#define BMI088_SPI_DUMMY_BYTE 0x55 // 哑指令（用于发送时填充）
-#define SPI_BLOCK_TIMEOUT_MS 100
+#include "drv_bmi088_heater.h"
 
 /* 基于数据手册的专用延时宏 */
 #define BMI088_SPI_SWITCH_DELAY_S 0.002f   // SPI模式切换延时  (2ms)
@@ -25,11 +19,44 @@
 #define BMI088_ACC_PWR_UP_DELAY_S 0.00045f // 加速度计上电等待 (450µs，数据手册§3)
 #define BMI088_GYRO_RESET_DELAY_S 0.035f   // 陀螺仪软复位延时   (35ms，数据手册30ms+余量)
 
-#define BMI088_WRITE_CHECK_INIT_S 0.001f    // 写验证初始等待    (1ms, DWT_Delay微秒)
-#define BMI088_WRITE_CHECK_TIMEOUT_US 10000 // 写验证超时时间   (10ms, DWT_GetTimeUs微秒比较)
+#define BMI088_WRITE_CHECK_INIT_S 0.001f       // 写验证初始等待    (1ms, DWT_Delay微秒)
+#define BMI088_WRITE_CHECK_TIMEOUT_US 10000    // 写验证超时时间   (10ms, DWT_GetTimeUs微秒比较)
+#define BMI088_CS_RELEASE_DELAY_S 0.08f        // CS释放后等待时间(s)
+#define BMI088_SPI_IT_TIMEOUT_MS 10            // SPI IT传输超时(ms)
+#define SPI_BLOCK_TIMEOUT_MS 100               // SPI BLOCK传输超时(ms)
+#define BMI088_TEMP_UPDATE_INTERVAL_US 1280000 // 温度读取间隔 (1.28s，数据手册§5.3.7)
+
+/*============================ SPI通信宏定义 ============================*/
+#define BMI088_SPI_READ_CMD 0x80   // R/W位=1（读）
+#define BMI088_SPI_WRITE_MASK 0x7F // 写掩码：清除 bit7（R/W位）
+#define BMI088_SPI_DUMMY_BYTE 0x55 // 哑指令（用于发送时填充）
+
+/*============================ SPI 传输长度 ============================*/
+#define BMI088_SPI_WRITE_LEN 2     // SPI写传输长度：1地址 + 1数据
+#define BMI088_ACC_SPI_READ_LEN 8  // Acc读传输长度：1地址 + 1dummy + 6数据
+#define BMI088_GYRO_SPI_READ_LEN 7 // Gyro读传输长度：1地址 + 6数据
+
+/*============================ RX 缓冲偏移 ============================*/
+#define BMI088_ACC_RX_DATA_OFF 2  // Acc数据在rx_buff中的起始偏移(1addr+1dummy)
+#define BMI088_GYRO_RX_DATA_OFF 1 // Gyro数据在rx_buff中的起始偏移(1addr)
+#define BMI088_ACC_DUMMY_BYTES 1  // Acc SPI读需要1个dummy字节
+#define BMI088_GYRO_DUMMY_BYTES 0 // Gyro SPI读不需要dummy字节
+/* 温度在Acc rx_buff中的偏移（从TEMP_M(0x22)开始读：rx[2]=TEMP_MSB, rx[3]=TEMP_LSB） */
+#define BMI088_ACC_RX_TEMP_L 3 // 温度低字节(TEMP_LSB)在rx_buff中的偏移
+#define BMI088_ACC_RX_TEMP_H 2 // 温度高字节(TEMP_MSB)在rx_buff中的偏移
+
+/*============================ 插值阈值 ============================*/
+#define BMI088_MIN_SAMPLE_COUNT 2 // 插值所需最小样本数
+#define BMI088_INTERP_ROUND 0.5f  // 插值四舍五入
+
+/*============================ 物理常量 ============================*/
+#define BMI088_GRAVITY 9.80665f // 重力加速度 (m/s²)
+
+/*============================ 温度转换参数 ============================*/
+#define BMI088_TEMP_SENS 0.125f  // 温度灵敏度 (°C/LSB)
+#define BMI088_TEMP_OFFSET 23.0f // 温度偏移 (°C)
 
 /*============================ 内部传感器类型定义 ============================*/
-
 typedef enum : uint8_t
 {
     BMI088_SENSOR_ACC = 0,
@@ -43,45 +70,6 @@ typedef enum : uint8_t
     BMI088_PENDING_GYRO = 1 << BMI088_SENSOR_GYRO,
     BMI088_PENDING_TEMP = 1 << BMI088_SENSOR_TEMP,
 } BMI088_Pending_e;
-
-/*============================ 温度转换参数 ============================*/
-
-#define BMI088_TEMP_SENS 0.125f  // 温度灵敏度 (°C/LSB)
-#define BMI088_TEMP_OFFSET 23.0f // 温度偏移 (°C)
-
-/*============================ SPI 传输长度 ============================*/
-
-#define BMI088_SPI_WRITE_LEN 2      // SPI写传输长度：1地址 + 1数据
-#define BMI088_ACC_SPI_READ_LEN 8   // Acc读传输长度：1地址 + 1dummy + 6数据
-#define BMI088_GYRO_SPI_READ_LEN 7  // Gyro读传输长度：1地址 + 6数据
-#define BMI088_SPI_IT_TIMEOUT_MS 10 // SPI IT传输超时(ms)
-
-/*============================ RX 缓冲偏移 ============================*/
-
-#define BMI088_ACC_RX_DATA_OFF 2  // Acc数据在rx_buff中的起始偏移(1addr+1dummy)
-#define BMI088_GYRO_RX_DATA_OFF 1 // Gyro数据在rx_buff中的起始偏移(1addr)
-#define BMI088_ACC_DUMMY_BYTES 1  // Acc SPI读需要1个dummy字节
-#define BMI088_GYRO_DUMMY_BYTES 0 // Gyro SPI读不需要dummy字节
-/* 温度在Acc rx_buff中的偏移（从TEMP_M(0x22)开始读：rx[2]=TEMP_MSB, rx[3]=TEMP_LSB） */
-#define BMI088_ACC_RX_TEMP_L 3 // 温度低字节(TEMP_LSB)在rx_buff中的偏移
-#define BMI088_ACC_RX_TEMP_H 2 // 温度高字节(TEMP_MSB)在rx_buff中的偏移
-
-/*============================ 插值阈值 ============================*/
-
-#define BMI088_MIN_SAMPLE_COUNT 2 // 插值所需最小样本数
-#define BMI088_INTERP_ROUND 0.5f  // 插值四舍五入
-
-/*============================ 温度读取间隔 ============================*/
-
-#define BMI088_TEMP_UPDATE_INTERVAL_US 1280000 // 温度更新间隔 (1.28s，数据手册§5.3.7)
-
-/*============================ 延时常量 ============================*/
-
-#define BMI088_CS_RELEASE_DELAY_S 0.08f // CS释放后等待时间(s)
-
-/*============================ 物理常量 ============================*/
-
-#define BMI088_GRAVITY 9.80665f // 重力加速度 (m/s²)
 
 /*============================ 灵敏度查找表 ============================*/
 
@@ -104,11 +92,10 @@ const float BMI088_GyroSenTable[BMI088_GYRO_RANGE_NUM] = {
 };
 
 /*============================ 私有函数声明 ============================*/
-
+// 读写操作
 static void BMI088_ReadReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint16_t len, uint8_t dummy);
 static void BMI088_WriteReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint8_t data);
 static uint8_t BMI088_WriteRegWithCheck(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint8_t data);
-
 /* 中断模式私有函数 */
 static void BMI088_IntCallback(GPIOInstance *gpio_inst);
 static void BMI088_StartSensorDMA(BMI088Instance *inst, uint8_t sensor_type);
@@ -123,7 +110,6 @@ static float BMI088_ParseTempCelsius(const uint8_t *rx_buff);
 static BMI088_Data_t BMI088_PackData(BMI088Instance *inst, const uint8_t acc_raw[BMI088_RAW_DATA_SIZE], const uint8_t gyro_raw[BMI088_RAW_DATA_SIZE], uint64_t timestamp_us);
 
 /*============================ 私有函数实现 ============================*/
-
 /**
  * @brief 加速度计读取寄存器
  * @note 数据存入 inst->spi_inst.rx_buff，从 rx_buff[2] 开始为有效数据
@@ -198,6 +184,8 @@ static void BMI088_IntCallback(GPIOInstance *gpio_inst)
 
     // 喂狗
     DaemonReload(inst->daemon);
+    // 加热
+    BMI088HeaterStart(inst);
 
     uint8_t is_acc = (gpio_inst == inst->int_acc);
 
@@ -667,10 +655,10 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
     GPIOSet(inst->cs_gyro);
     DWT_Delay(BMI088_CS_RELEASE_DELAY_S); // 修改为合适时间，使用宏定义
 
-    PWM_Init_Config_s pwm_heater = {.tim_e = config->heater_e};
-    if (PWMRegister(inst->heater_pwm, &pwm_heater) != 0)
+    // 初始化加热tim_pwm
+    if (BMI088_HeaterInit(inst) != 0)
     {
-        LOGERROR("[drv_bmi088] heater_pwm register failed");
+        LOGERROR("[drv_bmi088] heater_pwm init failed");
         return -1;
     }
 
@@ -697,7 +685,7 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
         Daemon_Init_Config_s daemon_cfg = {
             .reload_count = config->daemon_reload,
             .fault_action = config->daemon_fault,
-            .callback = NULL,
+            .callback = BMI088_HeaterFaultCallback,
             .owner_id = inst,
         };
         DaemonRegister(inst->daemon, &daemon_cfg);
@@ -805,7 +793,11 @@ BMI088_Data_t BMI088ReadBlocking(BMI088Instance *inst)
         inst->temperature = BMI088_ParseTempCelsius(inst->spi_inst->rx_buff);
     }
 
+    // 喂狗
     DaemonReload(inst->daemon);
+    // 加热
+    BMI088HeaterStart(inst);
+
     return BMI088_PackData(inst, acc_buf, gyro_buf, DWT_GetTimeUs());
 }
 

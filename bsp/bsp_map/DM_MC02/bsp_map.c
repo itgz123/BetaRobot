@@ -26,7 +26,7 @@ const TIM_Map_t tim_map[TIM_NUM_MAX] = {
     [TIM_PWM_2] = {&htim2, TIM_CHANNEL_3},
     [TIM_PWM_3] = {&htim1, TIM_CHANNEL_1},
     [TIM_PWM_4] = {&htim1, TIM_CHANNEL_3},
-    [TIM_HEATER] = {&htim3, TIM_CHANNEL_4},
+    [TIM_HEATER] = {NULL, 0}, /* 由 drv_bmi088 内部直接配置 */
     [TIM_BUZZER] = {&htim12, TIM_CHANNEL_2},
 };
 
