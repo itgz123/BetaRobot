@@ -1,51 +1,60 @@
 /**
  * @file drv_bmi088_heater.c
- * @brief BMI088 加热器驱动 — 双定时器硬件安全方案
+ * @brief BMI088 加热器驱动 — TIM8 OPM+RCR 硬件安全方案
  *
  * ── 设计目标 ──
  * DM-MC02 开发板的 BMI088 加热 PWM 控制 24V 加热电路（三极管驱动）。
- * 加热引脚（PB1, TIM3_CH4）高电平时开启加热，持续加热会损坏电路。
+ * 加热引脚（PB1, TIM8_CH3N）高电平时开启加热，持续加热会损坏电路。
  *
- * 断点调试或 CPU 崩溃时，PWM 引脚可能锁死在高电平导致持续加热。
- * 本方案用 TIM3+TIM4 组成纯硬件自停链路，即使 CPU halt 也能在
- * 预设时间内自动关闭加热，无需软件干预。
+ * CPU 崩溃（HardFault 等）或调试断点（CPU halt）时，本方案用 TIM8 的
+ * OPM 单脉冲模式 + RCR 重复计数器，输出固定数量脉冲后硬件自动关闭，
+ * 无需软件干预。
  *
- * ── 方案：TIM3(PWM+门控) + TIM4(超时+OPM) ──
+ * ── 方案：TIM8 OPM + RCR ──
  *
- * 内部链路（STM32H723, RM0468 Table 317）：
- *   TIM3(从:门控,ITR3) ←── TIM4(主:TRGO=ENABLE)
- *
- * TIM3：PWM 主定时器，CH4→PB1 输出加热 PWM
- *   - PWM2 模式，门控从模式（ITR3 = TIM4 的 TRGO）
- *   - 门控高 → 计数/PWM输出；门控低 → 暂停
- * TIM4：超时定时器，OPM 单脉冲模式
- *   - 内部时钟，TRGO=ENABLE (CNT_EN 信号)
- *   - CEN=1 → CNT_EN=1 → TRGO=高 → TIM3 门控开
- *   - 超时后 OPM 自动清 CEN → TRGO=低 → TIM3 门控关
+ * TIM8：APB2 高级定时器，CH3N→PB1 输出加热 PWM
+ *   - PWM2 模式，OPM 单脉冲模式
+ *   - RCR 重复计数器：RCR=N 意味着 N+1 次计数器溢出后产生 UEV
+ *   - OPM=1：UEV 发生时硬件自动清零 CEN，定时器停止
+ *   - 组合：OPM=1 + RCR=N → 产生 N+1 个 PWM 脉冲后自动停止
  *
  * 流程：
- *   软件启 TIM3(CEN=1, 门控低暂不计数) → 启 TIM4(CEN=1, 门控开)
- *   → TIM3 输出 PWM → 超时 → TIM4 OPM 自动清 CEN → 门控关 → 停止
- *   = 硬件完成固定时长加热后自停
+ *   软件设 CCR3(占空比) → UG 重载 RCR → CEN=1 启动
+ *   → TIM8 输出 PWM → RCR+1 次溢出后 UEV → OPM 硬件清零 CEN → 停止
+ *   = 硬件完成固定数量脉冲后自停
  *
- * ── 安全性（CPU halt 或 crash 场景）───
- *   - CPU halt 不会影响 D2 域外设运行
- *   - TIM4 内部时钟继续跑，超时自动关闭门控
- *   - 不需要中断、DMA、软件参与
- *   - 预热建议：CubeMX/IDE 调试配置中确保不冻结 TIM3/TIM4
+ * ── 安全性分析 ──
  *
- * ── 为什么不用外部时钟（脉冲计数）方案 ──
- *   原方案：TIM4 用外部时钟模式 1（ITR2=TIM3_UEV），对 PWM 脉冲计数，
- *   N 个脉冲后 OPM 自动关门。存在"鸡生蛋"死锁：
- *   - TIM4 需要 TIM3 的 UEV 才能计数 → TIM3 需要门控开才能输出 UEV
- *   - 门控需要 TIM4 CEN=1 才能开 → 但 TIM4 的 CNT_EN 在外时钟模式下
- *     可能不会立即变高（需等待第一个外部时钟脉冲）
- *   本方案改用内部时钟超时，完全消除此死锁。
+ * 【场景 1：正常运行 + 软件崩溃（HardFault/NMI）】
+ *   ✓ 受保护。CPU 崩溃不影响 D2 域外设（TIM8 在 D2 域 APB2）。
+ *     TIM8 内部时钟继续跑，OPM+RCR 保证固定脉冲数后自动停止。
+ *     STM32H7 的 D2 域独立于 CPU(D1) 域运行。
  *
- * ── TIM4 超时计算 ──
- *   APB1 定时器时钟 ≈ 240MHz（STM32H723, 480MHz SYSCLK）
- *   f_cnt = 240MHz / (BMI088_HEAT_TIM4_PSC + 1)
- *   timeout = (BMI088_HEAT_TIM4_ARR + 1) / f_cnt
+ * 【场景 2：调试断点（CPU halt via debugger）】
+ *   ✓ 受保护。DBGMCU UnFreeze TIM8 让定时器在 CPU halt 期间继续运行：
+ *     TIM8 继续计数输出 PWM → 剩余脉冲完成后 OPM 硬件清零 CEN → 停止
+ *     → CH3N 进入空闲状态 OIS3N=0（低电平）→ MOSFET 关闭。
+ *     关键：UnFreeze 让 OPM+RCR 自然完成，停在低电平；若 Freeze 则输出
+ *           锁死在暂停时刻的电平（可能恰为 HIGH → 持续加热烧毁）。
+ *
+ * 【场景 3：IWDG 看门狗（最终安全网）】
+ *   ✓ IWDG 运行在 LSI（独立于系统时钟），CPU halt 不影响 IWDG。
+ *     配置适当超时（如 1s）可在 CPU 长时间 halt 时复位 MCU，
+ *     复位后所有外设回到初始状态，加热关闭。
+ *
+ * ── 为什么 TIM8 而不是 TIM3 ──
+ *   TIM3 挂载在 APB1(D2域)，STM32H723 value line 芯片在 CPU halt 时
+ *   APB1 时钟会被硬件门控停止，TIM3 计数器冻结，PWM 输出锁死（即使
+ *   DBGMCU UnFreeze 也无效，因为时钟源本身被切断）。
+ *   TIM8 挂载在 APB2，DBGMCU UnFreeze 后可在 CPU halt 期间继续运行，
+ *   OPM+RCR 保证剩余脉冲完成后硬件自停，输出停在低电平。
+ *
+ * ── TIM8 参数计算 ──
+ *   APB2 定时器时钟 ≈ 240MHz（STM32H723, D2PPRE2=DIV2）
+ *   f_cnt = 240MHz / (PSC + 1) = 240MHz / 80 = 3MHz
+ *   f_pwm = 3MHz / (ARR + 1) = 3MHz / 60001 ≈ 50Hz (20ms 周期)
+ *   脉冲数 = RCR + 1，每脉冲 20ms
+ *   加热时长 = (RCR + 1) × 20ms
  */
 
 #include "drv_bmi088.h"
@@ -64,7 +73,7 @@
 #define BMI088_HEAT_PULSE_NUM 50 /* 每次加热脉冲数（仅供参考，实际用超时控制） */
 #endif
 #ifndef BMI088_HEAT_DUTY_PERCENT
-#define BMI088_HEAT_DUTY_PERCENT 0 /* 加热占空比百分比 (0-100) */
+#define BMI088_HEAT_DUTY_PERCENT 1 /* 加热占空比百分比 (0-100) */
 #endif
 #ifndef BMI088_HEAT_DUTY
 #define BMI088_HEAT_DUTY (BMI088_HEAT_DUTY_PERCENT / 100.0f) /* 加热占空比 (0-1) */
@@ -83,185 +92,164 @@
 
 #if DEVELOPMENT_BOARD == DM_MC02
 
-#include "tim.h"
-
-/* ═══════════════════ TIM3 PWM 参数 ═══════════════════ */
-/* PSC=79, ARR=60000 → 50Hz (20ms 周期) */
-#define BMI088_HEAT_TIM3_PSC (80 - 1)
-#define BMI088_HEAT_TIM3_ARR 60000
-/* PWM2 模式：CNT<CCR→无效(LOW), CNT>=CCR→有效(HIGH) */
-/* OFF: CCR=ARR+1 → CNT 永远 < CCR → 永远 LOW */
-/* HEAT: CCR 根据占空比计算 */
-#define BMI088_HEAT_TIM3_CCR_OFF (BMI088_HEAT_TIM3_ARR + 1U)
-
-/* ═══════════════════ TIM4 超时参数 ═══════════════════ */
+/* ═══════════════════ TIM8 OPM+RCR 参数 ═══════════════════ */
 /*
- * APB1 定时器时钟 ≈ 240MHz（STM32H723）
+ * APB2 定时器时钟 ≈ 240MHz（STM32H723, D2PPRE2=DIV2）
+ * PSC=79, f_cnt=240MHz/80=3MHz
+ * ARR=60000, f_pwm=3MHz/60001≈50Hz (20ms 周期)
  *
- * 超时公式：timeout_ms = (PSC+1)*(ARR+1) / 240000
- *
- * 选择 PSC=23999 → f_cnt = 240MHz / 24000 = 10kHz
- * ARR = timeout_ms * 10 - 1
- *
- * 示例：timeout=1000ms → ARR=9999 → 范围 0-65535 ✓
- *       timeout=5000ms → ARR=49999 → 范围 0-65535 ✓
+ * OPM + RCR:
+ *   RCR=N, OPM=1 → N+1 次计数器溢出后 UEV → 硬件自动清零 CEN → 停止
+ *   脉冲数 = RCR + 1, 每脉冲 20ms
+ *   加热时长 = (RCR + 1) × 20ms
  */
-#define BMI088_HEAT_TIM4_PSC 23999U
-#define BMI088_HEAT_TIM4_ARR ((BMI088_HEAT_TIMEOUT_MS) * 10U - 1U)
+#define BMI088_HEAT_TIM8_PSC 79U    /* PSC = 80 - 1 */
+#define BMI088_HEAT_TIM8_ARR 60000U /* 50Hz PWM */
+/* PWM2: CNT<CCR→LOW, CNT>=CCR→HIGH; CH3N OC3N=OC3REF */
+#define BMI088_HEAT_TIM8_CCR_OFF (BMI088_HEAT_TIM8_ARR + 1U) /* 恒为 LOW */
 
-static TIM_HandleTypeDef s_htim3 = {0};
-static TIM_HandleTypeDef s_htim4 = {0};
+/* 脉冲数：超时时间 / 每脉冲周期，向上取整 */
+#define BMI088_HEAT_TIM8_PULSE_NUM \
+    (((BMI088_HEAT_TIMEOUT_MS) + 20U - 1U) / 20U)
+#define BMI088_HEAT_TIM8_RCR (BMI088_HEAT_TIM8_PULSE_NUM - 1U)
+
+static TIM_HandleTypeDef s_htim8 = {0};
 
 /* 无 DMA，无中断，纯硬件链路 */
 
-/* daemon 离线回调：确保加热关闭 */
+/* daemon 离线回调：确保加热关闭（软件安全网） */
 void BMI088_HeaterFaultCallback(void *owner)
 {
     (void)owner;
     /*
-     * 先强制 CCR = OFF（输出立即变低，PWM2 模式下 CCR > ARR 恒为低电平）
-     * 再关闭定时器
+     * 无条件禁用主输出 → CH3N 进入高阻态
+     * 板级外部下拉 → 低电平 → MOSFET 关闭
+     * 同时停止计数器，阻止下次意外启动
      */
-    __HAL_TIM_SET_COMPARE(&s_htim3, TIM_CHANNEL_4, BMI088_HEAT_TIM3_CCR_OFF);
-    __HAL_TIM_DISABLE(&s_htim4);
-    __HAL_TIM_DISABLE(&s_htim3);
+    __HAL_TIM_MOE_DISABLE_UNCONDITIONALLY(&s_htim8);
+    TIM8->CR1 &= ~TIM_CR1_CEN;
 }
 
 int8_t BMI088_HeaterInit(BMI088Instance *inst)
 {
+    /* ── DBGMCU 配置：CPU halt 时保持 TIM8 运行，让 OPM+RCR 自然完成 ── */
     /*
-     * ── DBGMCU 配置：解除 TIM3/TIM4 的调试冻结 ──
-     *
-     * 调试器（CubeIDE/Keil）默认在 CPU halt 时冻结所有定时器。
-     * 清除 APB1LFZ1 中的 TIM3/TIM4 冻结位，使这些定时器在调试暂停时继续运行。
-     * 注意：某些调试器可能在下一次 halt 时重新设置这些位。
-     * 如果发现调试暂停后加热不停，请在 IDE 的 Debug Configuration 中设置
-     * "Timer3/4: NOT stopped during halt"。
+     * 当 CPU halt（调试断点）时：
+     *   UnFreeze → TIM8 继续计数输出 PWM，OPM+RCR 保证剩余脉冲后自停
+     *   → CEN 硬件清零 → OSSI=1 + OIS3N=0 → CH3N 强制低电平
+     *   ⚠ 切勿 Freeze：Freeze 会让输出锁死在暂停时刻的电平，
+     *     若恰为 HIGH → MOSFET 持续导通 → 24V 持续加热 → 损坏。
      */
-    __HAL_DBGMCU_UnFreeze_TIM3();
-    __HAL_DBGMCU_UnFreeze_TIM4();
-    /*
-     * 使能 D1/D3 域调试时钟。TIM3/TIM4 在 D2 域，D2 域时钟本身在 debug halt
-     * 时不会停止，但 D1/D3 的时钟可能影响总线矩阵的互联信号传输。
-     */
-    SET_BIT(DBGMCU->CR, DBGMCU_CR_DBG_CKD1EN | DBGMCU_CR_DBG_CKD3EN);
+    __HAL_DBGMCU_UnFreeze_TIM8();
     __DSB();
 
     /* ── 时钟使能 ── */
-    __HAL_RCC_TIM3_CLK_ENABLE();
-    __HAL_RCC_TIM4_CLK_ENABLE();
+    __HAL_RCC_TIM8_CLK_ENABLE();
 
-    /* ── GPIO PB1 → TIM3_CH4 (AF2) ── */
+    /* ── GPIO PB1 → TIM8_CH3N (AF3) ── */
     __HAL_RCC_GPIOB_CLK_ENABLE();
     GPIO_InitTypeDef GPIO_InitStruct = {0};
     GPIO_InitStruct.Pin = GPIO_PIN_1;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-    GPIO_InitStruct.Alternate = GPIO_AF2_TIM3;
+    GPIO_InitStruct.Alternate = GPIO_AF3_TIM8;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     /*
-     * ═══════════════════ TIM3：PWM 主定时器 + 门控从模式 ═══════════════════
+     * ═══════════════════ TIM8：OPM+RCR 单定时器方案 ═══════════════════
      *
-     *   - 基础：PSC=79, ARR=60000 → 50Hz (20ms 周期)
-     *   - 从模式：门控模式，门控源 = ITR3 (TIM4 的 TRGO)
-     *     TIM3 ITR3 → 连接 TIM4（RM0468 Table 317）
-     *     门控高电平 → 计数器运行；低电平 → 暂停
-     *   - 通道 4：PWM2 模式，OCPolarity=HIGH
-     *     PWM2：CNT <  CCR → inactive (LOW)
-     *           CNT >= CCR → active   (HIGH)
-     *     CCR=ARR+1 (60001)：CNT 永远 < CCR → 永远 LOW（安全关断）
-     *     加热时根据占空比设置 CCR
+     *   - 时基：PSC=79, ARR=60000 → 50Hz (20ms 周期)
+     *   - RCR：重复计数器，RCR 次溢出后产生 UEV
+     *   - OPM：单脉冲模式，UEV 发生后硬件自动清零 CEN
+     *   - CH3N：PWM2 模式，CC3NP=0 → OC3N = OC3REF
+     *     PWM2 OC3REF：CNT <  CCR → LOW
+     *                  CNT >= CCR → HIGH
+     *   - 安全关断：CCR=ARR+1 → CNT 永远 < CCR → 恒 LOW
+     *   - 空闲状态：OSSI=1, OIS3N=0 → CEN=0 后 CH3N 强制 LOW
+     *   - DBGMCU UnFreeze：CPU halt 时定时器继续运行，OPM+RCR 自然完成
      */
     {
         TIM_ClockConfigTypeDef sClockSourceConfig = {0};
         TIM_MasterConfigTypeDef sMasterConfig = {0};
-        TIM_SlaveConfigTypeDef sSlaveConfig = {0};
         TIM_OC_InitTypeDef sConfigOC = {0};
+        TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
 
-        s_htim3.Instance = TIM3;
-        s_htim3.Init.Prescaler = BMI088_HEAT_TIM3_PSC;
-        s_htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-        s_htim3.Init.Period = BMI088_HEAT_TIM3_ARR;
-        s_htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-        s_htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-        if (HAL_TIM_Base_Init(&s_htim3) != HAL_OK)
+        /* --- 时基 --- */
+        s_htim8.Instance = TIM8;
+        s_htim8.Init.Prescaler = BMI088_HEAT_TIM8_PSC;
+        s_htim8.Init.CounterMode = TIM_COUNTERMODE_UP;
+        s_htim8.Init.Period = BMI088_HEAT_TIM8_ARR;
+        s_htim8.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+        s_htim8.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+        s_htim8.Init.RepetitionCounter = BMI088_HEAT_TIM8_RCR;
+        if (HAL_TIM_Base_Init(&s_htim8) != HAL_OK)
             return -1;
 
         sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-        if (HAL_TIM_ConfigClockSource(&s_htim3, &sClockSourceConfig) != HAL_OK)
+        if (HAL_TIM_ConfigClockSource(&s_htim8, &sClockSourceConfig) != HAL_OK)
             return -1;
 
-        if (HAL_TIM_PWM_Init(&s_htim3) != HAL_OK)
+        /* PWM 初始化（高级定时器通道配置需要先调用 PWM_Init） */
+        if (HAL_TIM_PWM_Init(&s_htim8) != HAL_OK)
             return -1;
 
-        /* 主模式：TRGO = 更新事件（保留，供将来脉冲计数扩展使用） */
-        sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+        /* 主模式：不使用 */
+        sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
         sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-        if (HAL_TIMEx_MasterConfigSynchronization(&s_htim3, &sMasterConfig) != HAL_OK)
+        if (HAL_TIMEx_MasterConfigSynchronization(&s_htim8, &sMasterConfig) != HAL_OK)
             return -1;
 
-        /* 从模式：门控，ITR3 = TIM4 的 TRGO */
-        sSlaveConfig.SlaveMode = TIM_SLAVEMODE_GATED;
-        sSlaveConfig.InputTrigger = TIM_TS_ITR3;
-        sSlaveConfig.TriggerPolarity = TIM_TRIGGERPOLARITY_NONINVERTED;
-        sSlaveConfig.TriggerPrescaler = TIM_TRIGGERPRESCALER_DIV1;
-        sSlaveConfig.TriggerFilter = 0;
-        if (HAL_TIM_SlaveConfigSynchro(&s_htim3, &sSlaveConfig) != HAL_OK)
-            return -1;
-
-        /* 通道 4：PWM2 模式，初始占空比 = OFF（CCR > ARR → 永远 LOW） */
+        /* --- 通道 3 (CH3N) PWM 配置 --- */
         sConfigOC.OCMode = TIM_OCMODE_PWM2;
-        sConfigOC.Pulse = BMI088_HEAT_TIM3_CCR_OFF;
+        sConfigOC.Pulse = BMI088_HEAT_TIM8_CCR_OFF; /* 初始 = 关闭 */
         sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+        sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH; /* CC3NP=0 → OC3N=OC3REF */
         sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-        if (HAL_TIM_PWM_ConfigChannel(&s_htim3, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
-            return -1;
-    }
-
-    /*
-     * ═══════════════════ TIM4：超时门控发生器 ═══════════════════
-     *
-     *   - 内部时钟 + OPM 单脉冲模式
-     *   - TRGO = ENABLE（CNT_EN 信号）
-     *   - CEN=1 → CNT_EN=1 → TRGO=高 → 打开 TIM3 门控
-     *   - 超时后 OPM 自动清零 CEN → TRGO=低 → 关闭 TIM3 门控
-     *   - 不使用从模式（不需要外部时钟，纯内部时钟跑超时）
-     */
-    {
-        TIM_ClockConfigTypeDef sClockSourceConfig = {0};
-        TIM_MasterConfigTypeDef sMasterConfig = {0};
-
-        s_htim4.Instance = TIM4;
-        s_htim4.Init.Prescaler = BMI088_HEAT_TIM4_PSC;
-        s_htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
-        s_htim4.Init.Period = BMI088_HEAT_TIM4_ARR;
-        s_htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-        s_htim4.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-        if (HAL_TIM_Base_Init(&s_htim4) != HAL_OK)
+        sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;   /* OIS3 = 0 */
+        sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET; /* OIS3N = 0（空闲=低电平） */
+        if (HAL_TIM_PWM_ConfigChannel(&s_htim8, &sConfigOC, TIM_CHANNEL_3) != HAL_OK)
             return -1;
 
-        sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-        if (HAL_TIM_ConfigClockSource(&s_htim4, &sClockSourceConfig) != HAL_OK)
+        /* --- BDTR：死区/刹车配置 --- */
+        sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+        sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_ENABLE; /* CEN=0 时强制空闲状态 */
+        sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+        sBreakDeadTimeConfig.DeadTime = 0;
+        sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+        sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_LOW;
+        sBreakDeadTimeConfig.BreakFilter = 0;
+        sBreakDeadTimeConfig.Break2State = TIM_BREAK_DISABLE;
+        sBreakDeadTimeConfig.Break2Polarity = TIM_BREAKPOLARITY_LOW;
+        sBreakDeadTimeConfig.Break2Filter = 0;
+        sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+        if (HAL_TIMEx_ConfigBreakDeadTime(&s_htim8, &sBreakDeadTimeConfig) != HAL_OK)
             return -1;
 
-        /* 主模式：TRGO = CNT_EN（计数器使能信号）
-           CEN=1 → CNT_EN=1 → TRGO=高 → TIM3 门控开
-           CEN=0 → CNT_EN=0 → TRGO=低 → TIM3 门控关 */
-        sMasterConfig.MasterOutputTrigger = TIM_TRGO_ENABLE;
-        sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-        if (HAL_TIMEx_MasterConfigSynchronization(&s_htim4, &sMasterConfig) != HAL_OK)
-            return -1;
+        /*
+         * ══ 手动寄存器操作（HAL API 限制，需要直接操作寄存器）══
+         */
 
-        /* OPM：单脉冲模式，超时后硬件自动清零 CEN
-           HAL 不封装此设置，直接写寄存器 */
-        TIM4->CR1 |= TIM_CR1_OPM;
+        /* 1. HAL TIM_OC3_SetConfig 会清零 CC3NE，手动恢复 */
+        TIM8->CCER |= TIM_CCER_CC3NE;
+
+        /* 2. OPM：单脉冲模式（HAL OPM API 仅支持 CH1/CH2） */
+        TIM8->CR1 |= TIM_CR1_OPM;
+
+        /* 3. UG 生成软件更新事件：加载 RCR→REP_CNT 影子寄存器，清零 CNT
+         *    不设 URS，因为 BMI088HeaterStart 中也需要 UG 来重载 RCR */
+        TIM8->EGR = TIM_EGR_UG;
+        TIM8->SR = ~TIM_SR_UIF; /* 清除 UG 产生的 UIF 标志 */
+
+        /* 4. MOE：主输出使能。HAL_TIMEx_ConfigBreakDeadTime 全写 BDTR
+         *    会清零 MOE，必须在 BDTR 配置后手动恢复。
+         *    OSSI=1 + OIS3N=0 保证空闲时 CH3N = LOW（安全）。 */
+        TIM8->BDTR |= TIM_BDTR_MOE;
     }
 
     /* ── 保存映射 ── */
-    inst->heater_pwm->map.htim = &s_htim3;
-    inst->heater_pwm->map.channel = TIM_CHANNEL_4;
+    inst->heater_pwm->map.htim = &s_htim8;
+    inst->heater_pwm->map.channel = TIM_CHANNEL_3;
 
     return 0;
 }
@@ -272,48 +260,51 @@ void BMI088HeaterStart(BMI088Instance *inst)
     if (inst->temperature >= BMI088_TEMP_TARGET + BMI088_HEAT_TEMP_HYST)
         return;
 
-    /* TIM4 还在运行 → 上次加热未完成，跳过本次 */
-    if (TIM4->CR1 & TIM_CR1_CEN)
+    /* TIM8 还在计数 → 上次加热脉冲串未完成，跳过本次 */
+    if (TIM8->CR1 & TIM_CR1_CEN)
         return;
 
     /*
-     * 启动顺序（遵循参考手册"门控模式"要求：先 CEN=1 再开门）：
-     *   1. 重置 CNT
-     *   2. 设置加热占空比
-     *   3. 先启动 TIM3（CEN=1，门控此时为低，不计数）
-     *   4. 再启动 TIM4（CEN=1 → TRGO=高 → 门控开 → TIM3 开始输出 PWM）
+     * 启动序列：
+     *   1. 设置加热占空比
+     *   2. UG 重载 RCR→REP_CNT，清零 CNT
+     *   3. 清零 UIF 标志
+     *   4. 启动计数器
      */
-    __HAL_TIM_SET_COUNTER(&s_htim3, 0);
-    __HAL_TIM_SET_COUNTER(&s_htim4, 0);
-    __HAL_TIM_CLEAR_FLAG(&s_htim4, TIM_FLAG_UPDATE);
-
-    /* 计算加热 CCR：PWM2 模式下有效时间 = (ARR+1-CCR) 个 tick */
     {
         uint32_t heat_ccr;
         if (BMI088_HEAT_DUTY_PERCENT >= 100)
             heat_ccr = 0; /* 100% 占空比：CNT>=0 永远成立 → 永远 HIGH */
         else if (BMI088_HEAT_DUTY_PERCENT == 0)
-            heat_ccr = BMI088_HEAT_TIM3_CCR_OFF; /* 0% 占空比 → 永远 LOW */
+            heat_ccr = BMI088_HEAT_TIM8_CCR_OFF; /* 0% 占空比 → 永远 LOW */
         else
             /*
              * PWM2: duty = (ARR+1-CCR) / (ARR+1)
              * CCR = (ARR+1) * (1 - duty/100)
              *     = (ARR+1) * (100 - duty_percent) / 100
              */
-            heat_ccr = (uint32_t)((uint64_t)(BMI088_HEAT_TIM3_ARR + 1U) * (100U - (uint32_t)BMI088_HEAT_DUTY_PERCENT) / 100U);
-        __HAL_TIM_SET_COMPARE(&s_htim3, TIM_CHANNEL_4, heat_ccr);
+            heat_ccr = (uint32_t)((uint64_t)(BMI088_HEAT_TIM8_ARR + 1U) *
+                                  (100U - (uint32_t)BMI088_HEAT_DUTY_PERCENT) / 100U);
+        TIM8->CCR3 = heat_ccr;
     }
 
+    /* UG 生成软件更新事件：重载 RCR→REP_CNT，清零 CNT=0
+     * CEN=0 时 UG 产生 UEV 不会触发 OPM 停止 */
+    TIM8->EGR = TIM_EGR_UG;
+    TIM8->SR = ~TIM_SR_UIF;
+
     /*
-     * 启动：先武装 TIM3（门控模式要求 CEN=1 先于门控开），再启动 TIM4
-     * 不能用 HAL_TIM_Base_Start()，其内部状态校验会干扰 CEN 时序
+     * 启动计数器，MOE 已在初始化时设置
+     * 不能用 HAL 函数（HAL 状态机不支持 OPM 自动停止）
+     * OPM=1 + RCR=N → N+1 次溢出后 UEV → 硬件自动清零 CEN → 停止
      */
-    TIM3->CR1 |= TIM_CR1_CEN;
-    TIM4->CR1 |= TIM_CR1_CEN;
+    TIM8->CR1 |= TIM_CR1_CEN;
     /*
      * 此后完全由硬件控制：
-     *   TIM4 内部计数 → 超时 → OPM 自动清零 CEN
-     *   → TRGO(ENABLE)→低 → TIM3 门控关 → PWM 停止
+     *   TIM8 计数器从 0 计数到 ARR，输出 PWM2 波形到 CH3N(PB1)
+     *   每次溢出 → REP_CNT 递减
+     *   REP_CNT 递减至 0 → UEV 发生 → OPM 硬件清零 CEN → 停止
+     *   CH3N 进入空闲状态（OSSI=1, OIS3N=0）→ LOW → MOSFET 关闭
      *   软件无需干预，CPU halt 后也会自动完成
      */
 }
