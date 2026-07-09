@@ -182,11 +182,6 @@ static void BMI088_IntCallback(GPIOInstance *gpio_inst)
     BMI088Instance *inst = (BMI088Instance *)gpio_inst->parent;
     uint64_t t_now = DWT_GetTimeUs();
 
-    // 喂狗
-    DaemonReload(inst->daemon);
-    // 加热
-    BMI088HeaterStart(inst);
-
     uint8_t is_acc = (gpio_inst == inst->int_acc);
 
     if (!inst->transfer_busy)
@@ -203,6 +198,11 @@ static void BMI088_IntCallback(GPIOInstance *gpio_inst)
             inst->pending_t_gyro = t_now;
         inst->pending_mask |= (is_acc ? BMI088_PENDING_ACC : BMI088_PENDING_GYRO);
     }
+
+    // 喂狗
+    DaemonReload(inst->daemon);
+    // 加热
+    BMI088HeaterStart(inst);
 }
 
 /**
