@@ -102,6 +102,7 @@ void DJIMotor_Send(void *inst);
 float DJIMotor_GetAngle(void *inst);
 float DJIMotor_GetSpeed(void *inst);
 float DJIMotor_GetCurrent(void *inst);
+void DJIMotor_SetOffset(void *inst, float offset);
 
 const static MotorVTable_s s_dji_motor_vtable = {
     .enable = DJIMotor_Enable,
@@ -111,6 +112,7 @@ const static MotorVTable_s s_dji_motor_vtable = {
     .get_angle = DJIMotor_GetAngle,
     .get_speed = DJIMotor_GetSpeed,
     .get_current = DJIMotor_GetCurrent,
+    .set_offset = DJIMotor_SetOffset,
 };
 
 /**
@@ -563,6 +565,21 @@ void DJIMotor_SetRef(void *inst, float ref)
         return;
     DJIMotorInstance *motor = (DJIMotorInstance *)inst;
     motor->base.controller.ref = ref;
+}
+
+/**
+ * @brief 设置电机位置偏置
+ * @param inst DJIMotorInstance 指针
+ * @param offset 位置偏置值 (rad)
+ * @note 增量编码器置零：MotorSetOffset(&motor, -motor.data.position_multi)
+ *       绝对式编码器设偏置：MotorSetOffset(&motor, fixed_offset)
+ */
+void DJIMotor_SetOffset(void *inst, float offset)
+{
+    if (!inst)
+        return;
+    DJIMotorInstance *motor = (DJIMotorInstance *)inst;
+    motor->data.position_offset = offset;
 }
 
 void DJIMotor_Send(void *inst)
