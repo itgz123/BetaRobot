@@ -16,10 +16,11 @@
  *     };
  *     MahonyInit(&mahony, &cfg);
  *
- *     // 六轴更新：陀螺仪 (rad/s) + 加速度计 (m/s²)
+ *     // 六轴更新：陀螺仪 (rad/s) + 加速度计 (m/s²) + dt (s)
  *     vector3_t gyro = {gx, gy, gz};
  *     vector3_t acc  = {ax, ay, az};
- *     MahonyUpdate(&mahony, gyro, acc);
+ *     float dt = 0.001f; // dt 由 APP 层根据 IMU 插值时间戳计算传入
+ *     MahonyUpdate(&mahony, gyro, acc, dt);
  *
  *     // 获取姿态
  *     Mahony_Data_t data = MahonyGetData(&mahony);
@@ -69,14 +70,12 @@ typedef struct MahonyInstance
     /* 状态 */
     quaternion_t quat;     /* 姿态四元数                   */
     vector3_t integral_fb; /* 积分误差累积 (rad/s)         */
-    /* 时间戳 */
-    uint64_t last_time_us; /* 上次更新时戳 (us)            */
 } MahonyInstance;
 
 /*============================ 公开接口声明 ============================*/
 #define MAHONY_INSTANCE_DEF(name) \
     static MahonyInstance name = {0}
-    
+
 /**
  * @brief 初始化 Mahony 滤波器
  * @param inst   Mahony 实例指针
@@ -93,12 +92,12 @@ void MahonyInit(MahonyInstance *inst, const Mahony_Init_Config_s *config);
  * @param inst Mahony 实例指针
  * @param gyro 陀螺仪数据 (rad/s)
  * @param acc  加速度计数据 (m/s²)
+ * @param dt   距上次更新的时间间隔 (s)，由调用方（APP层）根据 BMI088 插值时间戳计算传入
  *
  * @note 加速度计校正横滚角和俯仰角，偏航角会随时间漂移
  * @note 当合加速度远离 1g 时跳过加速度计校正
- * @note dt 由内部时戳自动计算
  */
-void MahonyUpdate(MahonyInstance *inst, vector3_t gyro, vector3_t acc);
+void MahonyUpdate(MahonyInstance *inst, vector3_t gyro, vector3_t acc, float dt);
 
 /**
  * @brief Mahony 滤波器更新（九轴：陀螺仪 + 加速度计 + 磁力计）
@@ -106,10 +105,11 @@ void MahonyUpdate(MahonyInstance *inst, vector3_t gyro, vector3_t acc);
  * @param gyro 陀螺仪数据 (rad/s)
  * @param acc  加速度计数据 (m/s²)
  * @param mag  磁力计数据（需要已完成硬铁/软铁校正）
+ * @param dt   距上次更新的时间间隔 (s)，由调用方传入
  *
  * @note 磁力计校正偏航角漂移
  */
-void MahonyUpdateMag(MahonyInstance *inst, vector3_t gyro, vector3_t acc, vector3_t mag);
+void MahonyUpdateMag(MahonyInstance *inst, vector3_t gyro, vector3_t acc, vector3_t mag, float dt);
 
 /**
  * @brief 重置 Mahony 滤波器状态
