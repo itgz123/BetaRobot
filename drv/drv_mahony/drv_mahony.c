@@ -17,7 +17,6 @@
  */
 
 #include "drv_mahony.h"
-#include "bsp_dwt.h"
 
 /*============================ 默认参数 ============================*/
 
@@ -35,7 +34,7 @@
  * @param mag     磁力计数据（未使用时传 {0,0,0}）
  * @param use_mag 是否融合磁力计
  */
-static void Mahony_UpdateInternal(MahonyInstance *inst, vector3_t gyro, vector3_t acc, vector3_t mag, uint8_t use_mag);
+static void Mahony_UpdateInternal(MahonyInstance *inst, vector3_t gyro, vector3_t acc, vector3_t mag, uint8_t use_mag, float dt);
 
 /*============================ 公开接口实现 ============================*/
 
@@ -56,11 +55,9 @@ void MahonyInit(MahonyInstance *inst, const Mahony_Init_Config_s *config)
     inst->integral_fb.x = 0.0f;
     inst->integral_fb.y = 0.0f;
     inst->integral_fb.z = 0.0f;
-
-    inst->last_time_us = DWT_GetTimeUs();
 }
 
-void MahonyUpdate(MahonyInstance *inst, vector3_t gyro, vector3_t acc)
+void MahonyUpdate(MahonyInstance *inst, vector3_t gyro, vector3_t acc, float dt)
 {
     if (inst == NULL)
     {
@@ -68,18 +65,18 @@ void MahonyUpdate(MahonyInstance *inst, vector3_t gyro, vector3_t acc)
     }
 
     vector3_t mag = {0.0f, 0.0f, 0.0f};
-    Mahony_UpdateInternal(inst, gyro, acc, mag, 0);
+    Mahony_UpdateInternal(inst, gyro, acc, mag, 0, dt);
 }
 
 void MahonyUpdateMag(MahonyInstance *inst, vector3_t gyro, vector3_t acc,
-                     vector3_t mag)
+                     vector3_t mag, float dt)
 {
     if (inst == NULL)
     {
         return;
     }
 
-    Mahony_UpdateInternal(inst, gyro, acc, mag, 1);
+    Mahony_UpdateInternal(inst, gyro, acc, mag, 1, dt);
 }
 
 void MahonyReset(MahonyInstance *inst)
@@ -94,13 +91,11 @@ void MahonyReset(MahonyInstance *inst)
     inst->integral_fb.x = 0.0f;
     inst->integral_fb.y = 0.0f;
     inst->integral_fb.z = 0.0f;
-
-    inst->last_time_us = DWT_GetTimeUs();
 }
 
 /*============================ 私有函数实现 ============================*/
 
-static void Mahony_UpdateInternal(MahonyInstance *inst, vector3_t gyro, vector3_t acc, vector3_t mag, uint8_t use_mag)
+static void Mahony_UpdateInternal(MahonyInstance *inst, vector3_t gyro, vector3_t acc, vector3_t mag, uint8_t use_mag, float dt)
 {
     float recip_norm;
     float q0, q1, q2, q3;
@@ -112,14 +107,8 @@ static void Mahony_UpdateInternal(MahonyInstance *inst, vector3_t gyro, vector3_
     float halfwx, halfwy, halfwz;
     float halfex, halfey, halfez;
     float qa, qb, qc;
-    uint64_t now_us;
-    float dt;
 
-    /* ======================== 1. 计算 dt ======================== */
-
-    now_us = DWT_GetTimeUs();
-    dt = (float)(now_us - inst->last_time_us) * 1e-6f;
-    inst->last_time_us = now_us;
+    /* ======================== 1. 校验 dt ======================== */
 
     if (dt < MAHONY_DT_MIN)
     {
