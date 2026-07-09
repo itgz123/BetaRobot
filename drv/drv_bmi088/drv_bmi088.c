@@ -656,6 +656,7 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
     DWT_Delay(BMI088_CS_RELEASE_DELAY_S); // 修改为合适时间，使用宏定义
 
     // 初始化加热tim_pwm
+    inst->heater_pwm->tim_e = config->heater_e;
     if (BMI088_HeaterInit(inst) != 0)
     {
         LOGERROR("[drv_bmi088] heater_pwm init failed");

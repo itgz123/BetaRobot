@@ -1,10 +1,15 @@
 /**
  * @file drv_bmi088_heater.c
- * @brief BMI088 加热器驱动 — TIM8 OPM+RCR 硬件安全方案
+ * @brief BMI088 加热器驱动
  *
- * ── 设计目标 ──
- * DM-MC02 开发板的 BMI088 加热 PWM 控制 24V 加热电路（三极管驱动）。
- * 加热引脚（PB1, TIM8_CH3N）高电平时开启加热，持续加热会损坏电路。
+ * ── 加热模式（运行时根据 heater_pwm->tim_e 分发）──
+ * - TIM_HEATER (DM_MC02)：TIM8 OPM+RCR 硬件安全方案（24V 加热）
+ * - 其他有效定时器：5V 简单 PWM 加热（PWMSetDutyRatio）
+ * - BMI088_HEATER_NONE (-1)：不使用加热
+ *
+ * ═══════════════════ TIM8 OPM+RCR 方案（仅 DM_MC02 + TIM_HEATER）═══════════════════
+ *
+ * 加热引脚（PB1, TIM8_CH3N）高电平时开启 24V 加热。持续加热会损坏电路。
  * 板级外部下拉电阻确保引脚在 Hi-Z 状态时被动拉低。
  *
  * CPU 崩溃（HardFault 等）或调试断点（CPU halt）时，本方案通过多层
@@ -19,7 +24,7 @@
  *   注：OPM 只清零 CEN，不清零 MOE！需第2层软件同步
  *
  * 第2层 — Post-OPM MOE 软件同步
- *   条件：BMI088HeaterStart 检测到 CEN=0 但 MOE=1
+ *   条件：BMI088HeaterStart_TIM8 检测到 CEN=0 但 MOE=1
  *   行为：清零 MOE → OSSI=1 空闲状态激活 → OIS3N=0 → CH3N 主动 LOW
  *
  * 第3层 — DBGMCU Freeze 硬件保护
@@ -103,7 +108,7 @@
 #define BMI088_TEMP_TARGET 50.0f /* 加热目标温度 (℃) */
 #endif
 /*
- * BMI088_HEAT_TIMEOUT_MS：单次加热超时 (ms)，DM_MC02 用于计算 TIM8 RCR 脉冲数。
+ * BMI088_HEAT_TIMEOUT_MS：单次加热超时 (ms)，用于计算 TIM8 RCR 脉冲数。
  * TIM8 PWM 周期 20ms（50Hz），脉冲数 = timeout / 20（向上取整）。
  * 例：10000ms → 500 脉冲 × 20ms = 10 秒连续加热后 OPM 硬件自动停止。
  *     60000ms → 3000 脉冲 × 20ms = 60 秒。
@@ -116,8 +121,12 @@
 #error "BMI088_HEAT_TIMEOUT_MS must be > 0: RCR would underflow to 65535 pulses (~1310s)"
 #endif
 
-#define BMI088_HEAT_CLOSE_DUTY 0 /* 关闭占空比 (0-1) */
+#define BMI088_HEAT_CLOSE_DUTY 0              /* 关闭占空比 (0-1) */
+#define BMI088_HEATER_NONE ((BoardTIM_e)(-1)) /* 不使用加热的标记值 */
 
+/* ════════════════════════════════════════════════════════════════
+ *  DM_MC02：支持三模加热（TIM8 OPM+RCR / 5V 简单 PWM / 无加热）
+ * ════════════════════════════════════════════════════════════════ */
 #if DEVELOPMENT_BOARD == DM_MC02
 
 /* ═══════════════════ TIM8 OPM+RCR 参数 ═══════════════════ */
@@ -145,21 +154,11 @@ static TIM_HandleTypeDef s_htim8 = {0};
 
 /* 无 DMA，无中断，纯硬件链路 */
 
-/* daemon 离线回调：确保加热关闭（软件安全网） */
-void BMI088_HeaterFaultCallback(void *owner)
+/* ══════════════════ TIM8 OPM+RCR 硬件安全初始化 ══════════════════ */
+static int8_t BMI088_HeaterInit_TIM8(BMI088Instance *inst)
 {
-    (void)owner;
-    /*
-     * 无条件禁用主输出 → MOE=0 → OSSI=1 激活空闲状态
-     * → OIS3N=0 → CH3N 主动驱动 LOW → MOSFET 关闭
-     */
-    __HAL_TIM_MOE_DISABLE_UNCONDITIONALLY(&s_htim8);
-    __DSB(); /* 确保 BDTR 写入完成，MOE 清零先于 CEN 清零生效 */
-    TIM8->CR1 &= ~TIM_CR1_CEN;
-}
+    (void)inst;
 
-int8_t BMI088_HeaterInit(BMI088Instance *inst)
-{
     /* ── DBGMCU 配置：CPU halt 时立即冻结 TIM8，MOE 硬件复位 → 输出强制 LOW ── */
     /*
      * Freeze TIM8（DBGMCU_APB2FZ1 bit1 = 1）：
@@ -301,7 +300,7 @@ int8_t BMI088_HeaterInit(BMI088Instance *inst)
         TIM8->CR1 |= TIM_CR1_OPM;
 
         /* 3. UG 生成软件更新事件：加载 RCR→REP_CNT 影子寄存器，清零 CNT
-         *    不设 URS，因为 BMI088HeaterStart 中也需要 UG 来重载 RCR */
+         *    不设 URS，因为 BMI088HeaterStart_TIM8 中也需要 UG 来重载 RCR */
         TIM8->EGR = TIM_EGR_UG;
         TIM8->SR = ~(uint32_t)TIM_SR_UIF; /* 写 0 到 bit0 清除 UIF */
 
@@ -339,7 +338,49 @@ int8_t BMI088_HeaterInit(BMI088Instance *inst)
     return 0;
 }
 
-void BMI088HeaterStart(BMI088Instance *inst)
+int8_t BMI088_HeaterInit(BMI088Instance *inst)
+{
+    if (inst->heater_pwm->tim_e == BMI088_HEATER_NONE)
+        return 0;
+
+    if (inst->heater_pwm->tim_e == TIM_HEATER)
+        return BMI088_HeaterInit_TIM8(inst);
+
+    /* 其他定时器：和 DJI_C 一样用 BSP PWMRegister */
+    {
+        PWM_Init_Config_s cfg = {.tim_e = inst->heater_pwm->tim_e};
+        return PWMRegister(inst->heater_pwm, &cfg);
+    }
+}
+
+/* ══════════════════ daemon 离线回调（分发）══════════════════ */
+void BMI088_HeaterFaultCallback(void *owner)
+{
+    BMI088Instance *inst = (BMI088Instance *)owner;
+
+    if (inst->heater_pwm->tim_e == BMI088_HEATER_NONE)
+        return;
+
+    if (inst->heater_pwm->tim_e == TIM_HEATER)
+    {
+        /*
+         * TIM8 硬件安全关断：
+         * 无条件禁用主输出 → MOE=0 → OSSI=1 激活空闲状态
+         * → OIS3N=0 → CH3N 主动驱动 LOW → MOSFET 关闭
+         */
+        __HAL_TIM_MOE_DISABLE_UNCONDITIONALLY(&s_htim8);
+        __DSB(); /* 确保 BDTR 写入完成，MOE 清零先于 CEN 清零生效 */
+        TIM8->CR1 &= ~TIM_CR1_CEN;
+    }
+    else
+    {
+        /* 5V 简单 PWM 关断 */
+        PWMSetDutyRatio(inst->heater_pwm, BMI088_HEAT_CLOSE_DUTY);
+    }
+}
+
+/* ══════════════════ TIM8 OPM+RCR 控温启动 ══════════════════ */
+static void BMI088HeaterStart_TIM8(BMI088Instance *inst)
 {
     float target = BMI088_TEMP_TARGET;
     float hyst = BMI088_HEAT_TEMP_HYST;
@@ -349,9 +390,8 @@ void BMI088HeaterStart(BMI088Instance *inst)
      * ── Post-OPM MOE 同步：修复 OPM 自停后 MOE 残留问题 ──
      *
      * OPM 硬件自停只清零 CEN，不清零 MOE。当 CEN=0 且 MOE=1 时：
-     * - OSSI=1 的空闲状态不激活（O SSI 仅在 MOE=0 时生效）
+     * - OSSI=1 的空闲状态不激活（OSSI 仅在 MOE=0 时生效）
      * - PWM 比较器仍根据冻结的 CNT 和加热 CCR 驱动输出
-     * - 若 CCR=0（100% 占空比），CNT >= 0 始终为真 → 输出永久 HIGH！
      *
      * 必须在任何温度判断之前同步 MOE，确保空闲状态激活。
      */
@@ -409,7 +449,7 @@ void BMI088HeaterStart(BMI088Instance *inst)
      * 启动后由硬件控制：
      *   每次溢出 → REP_CNT 递减
      *   REP_CNT → 0 → UEV → OPM 硬件清零 CEN → 停止
-     *   （OPM 不清零 MOE，由下次 BMI088HeaterStart 调用时同步）
+     *   （OPM 不清零 MOE，由下次 BMI088HeaterStart_TIM8 调用时同步）
      */
     {
         uint32_t heat_ccr;
@@ -448,24 +488,55 @@ void BMI088HeaterStart(BMI088Instance *inst)
     TIM8->CR1 |= TIM_CR1_CEN;
 }
 
+void BMI088HeaterStart(BMI088Instance *inst)
+{
+    if (inst->heater_pwm->tim_e == BMI088_HEATER_NONE)
+        return;
+
+    if (inst->heater_pwm->tim_e == TIM_HEATER)
+    {
+        BMI088HeaterStart_TIM8(inst);
+        return;
+    }
+
+    /* 其他定时器：和 DJI_C 一样用 PWMSetDutyRatio 控温 */
+    if (inst->temperature >= BMI088_TEMP_TARGET + BMI088_HEAT_TEMP_HYST)
+    {
+        PWMSetDutyRatio(inst->heater_pwm, BMI088_HEAT_CLOSE_DUTY);
+    }
+    else if (inst->temperature < BMI088_TEMP_TARGET - BMI088_HEAT_TEMP_HYST)
+    {
+        PWMSetDutyRatio(inst->heater_pwm, BMI088_HEAT_DUTY);
+    }
+}
+
+/* ════════════════════════════════════════════════════════════════
+ *  DJI_C：5V 简单 PWM 加热（始终安全，不会烧毁电路）
+ * ════════════════════════════════════════════════════════════════ */
 #elif DEVELOPMENT_BOARD == DJI_C
+
 /* daemon 离线回调：确保加热关闭 */
 void BMI088_HeaterFaultCallback(void *owner)
 {
     BMI088Instance *inst = (BMI088Instance *)owner;
+    if (inst->heater_pwm->tim_e == BMI088_HEATER_NONE)
+        return;
     PWMSetDutyRatio(inst->heater_pwm, BMI088_HEAT_CLOSE_DUTY);
 }
-/*
- * ── DJI-C：5V 加热，不会烧，持续 PWM ──
- */
+
 int8_t BMI088_HeaterInit(BMI088Instance *inst)
 {
+    if (inst->heater_pwm->tim_e == BMI088_HEATER_NONE)
+        return 0;
     PWM_Init_Config_s cfg = {.tim_e = inst->heater_pwm->tim_e};
     return PWMRegister(inst->heater_pwm, &cfg);
 }
 
 void BMI088HeaterStart(BMI088Instance *inst)
 {
+    if (inst->heater_pwm->tim_e == BMI088_HEATER_NONE)
+        return;
+
     if (inst->temperature >= BMI088_TEMP_TARGET + BMI088_HEAT_TEMP_HYST)
     {
         PWMSetDutyRatio(inst->heater_pwm, BMI088_HEAT_CLOSE_DUTY);
@@ -477,7 +548,7 @@ void BMI088HeaterStart(BMI088Instance *inst)
 }
 
 #else  /* DEVELOPMENT_BOARD 不是DM_MC02|DJI_C → 空桩 */
-/* daemon 离线回调：确保加热关闭 */
+
 void BMI088_HeaterFaultCallback(void *owner)
 {
     (void)owner;
@@ -494,7 +565,7 @@ void BMI088HeaterStart(BMI088Instance *inst)
 #endif /* DEVELOPMENT_BOARD */
 
 #else  /* BMI088_HEAT_USED 未定义 → 空桩 */
-/* daemon 离线回调：确保加热关闭 */
+
 void BMI088_HeaterFaultCallback(void *owner)
 {
     (void)owner;

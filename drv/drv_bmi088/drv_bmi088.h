@@ -61,6 +61,7 @@ typedef struct
     BoardGPIO_e cs_gyro_e;            // 陀螺仪片选GPIO枚举
     BoardGPIO_e int_acc_e;            // 加速度计中断GPIO枚举
     BoardGPIO_e int_gyro_e;           // 陀螺仪中断GPIO枚举
+    BoardTIM_e heater_e;              // 加热PWM枚举
     BMI088_AccRange_e acc_range;      // 加速度计量程
     uint8_t acc_bwp;                  // 加速度计低通滤波器带宽
     uint8_t acc_odr;                  // 加速度计输出数据速率
