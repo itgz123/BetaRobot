@@ -13,6 +13,8 @@
  * @note 使用下面的宏必须确保所有电机派生类的 base 成员都是结构体的第一个成员
  * @note MotorDisable需要调用PIDReset
  * @note DaemonCallback需要重新给电机发送使能
+ * @note MotorSetZero对于增量编码器，在初始化时候保持静止或者用光电门的gpio回调中调用MotorSetOffset(inst, -MotorGetAngle(inst))
+ * @note MotorSetZero对于绝对式编码器，只要机械安装后读取零点时偏置，然后在初始化MotorSetOffset(inst, offset)固定偏置即可
  */
 #define MotorEnable(inst) (((MotorBase_s *)(inst))->vtable->enable(inst))
 #define MotorDisable(inst) (((MotorBase_s *)(inst))->vtable->disable(inst))
@@ -21,6 +23,7 @@
 #define MotorGetAngle(inst) (((MotorBase_s *)(inst))->vtable->get_angle(inst))
 #define MotorGetSpeed(inst) (((MotorBase_s *)(inst))->vtable->get_speed(inst))
 #define MotorGetCurrent(inst) (((MotorBase_s *)(inst))->vtable->get_current(inst))
+#define MotorSetOffset(inst, offset) (((MotorBase_s *)(inst))->vtable->set_offset(inst, offset))
 
 /*============================================
  *              电机品牌枚举
@@ -159,6 +162,7 @@ typedef struct MotorVTable_s
     float (*get_current)(void *inst);       // 获取电流/力矩
     // dji电机开环setref电流，get_current返回电流
     // dm电机开环setref力矩，get_current返回力矩
+    void (*set_offset)(void *inst, float offset); // 设置位置偏置
 } MotorVTable_s;
 
 /*============================================
