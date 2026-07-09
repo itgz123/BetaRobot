@@ -5,58 +5,77 @@
  * ── 设计目标 ──
  * DM-MC02 开发板的 BMI088 加热 PWM 控制 24V 加热电路（三极管驱动）。
  * 加热引脚（PB1, TIM8_CH3N）高电平时开启加热，持续加热会损坏电路。
+ * 板级外部下拉电阻确保引脚在 Hi-Z 状态时被动拉低。
  *
- * CPU 崩溃（HardFault 等）或调试断点（CPU halt）时，本方案用 TIM8 的
- * OPM 单脉冲模式 + RCR 重复计数器，输出固定数量脉冲后硬件自动关闭，
- * 无需软件干预。
+ * CPU 崩溃（HardFault 等）或调试断点（CPU halt）时，本方案通过多层
+ * 递进防护确保输出最终变为安全状态（LOW）。
  *
- * ── 方案：TIM8 OPM + RCR ──
+ * ═══════════════════ 安全层级总览（从硬到软）═══════════════════
  *
- * TIM8：APB2 高级定时器，CH3N→PB1 输出加热 PWM
- *   - PWM2 模式，OPM 单脉冲模式
- *   - RCR 重复计数器：RCR=N 意味着 N+1 次计数器溢出后产生 UEV
+ * 第1层 — OPM+RCR 硬件自停
+ *   条件：脉冲计数完成（RCR+1 次溢出）
+ *   行为：UEV → OPM 硬件清零 CEN，CNT 冻结在 0（溢出回绕）
+ *   增强：100% 占空比用 CCR=1 而非 CCR=0，确保 CNT(0)<CCR(1) → LOW
+ *   注：OPM 只清零 CEN，不清零 MOE！需第2层软件同步
+ *
+ * 第2层 — Post-OPM MOE 软件同步
+ *   条件：BMI088HeaterStart 检测到 CEN=0 但 MOE=1
+ *   行为：清零 MOE → OSSI=1 空闲状态激活 → OIS3N=0 → CH3N 主动 LOW
+ *
+ * 第3层 — DBGMCU Freeze 硬件保护
+ *   条件：CPU 进入调试 halt 状态
+ *   行为：计数器冻结 + MOE 硬件复位 → OSSI=1 空闲 → OIS3N=0 → 主动 LOW
+ *   时序：Freeze 在 CPU halt 瞬间（APB2 时钟仍有效时）完成，不依赖时钟持续
+ *
+ * 第4层 — BDTR 空闲状态
+ *   条件：任何原因导致 MOE=0
+ *   行为：OSSI=1 → OC/OCN 输出强制进入 OISx/OISxN 空闲状态（LOW）
+ *
+ * 第5层 — 软件超温停止
+ *   条件：温度超过目标+滞回
+ *   行为：CEN=0 + MOE=0 + CCR=ARR+1（恒 LOW）
+ *
+ * 第6层 — Daemon 离线回调
+ *   条件：Daemon 超时未喂狗
+ *   行为：无条件 MOE_DISABLE_UNCONDITIONALLY + CEN=0
+ *
+ * 第7层 — IWDG 看门狗
+ *   条件：系统死锁/CPU 长时间 halt
+ *   行为：LSI 独立于系统时钟，MCU 复位后所有外设回到初始状态
+ *
+ * 第8层 — 板级外部下拉
+ *   条件：芯片未上电/复位/Hi-Z
+ *   行为：被动拉低 PB1，作为最后一层保险
+ *
+ * ═══════════════════ 方案：TIM8 OPM + RCR ═══════════════════
+ *
+ * TIM8：APB2 高级定时器，CH3N→PB1（AF3）输出加热 PWM
+ *   - PWM2 模式：CNT <  CCR → OC3REF = LOW
+ *                CNT >= CCR → OC3REF = HIGH
+ *   - CC3NP=0 → OC3N = OC3REF
  *   - OPM=1：UEV 发生时硬件自动清零 CEN，定时器停止
- *   - 组合：OPM=1 + RCR=N → 产生 N+1 个 PWM 脉冲后自动停止
+ *   - RCR 重复计数器：RCR=N 意味着 N+1 次计数器溢出后产生 UEV
+ *   - 组合：OPM=1 + RCR=N → 产生 N+1 个 PWM 脉冲后硬件自动停止
  *
- * 流程：
- *   软件设 CCR3(占空比) → UG 重载 RCR → CEN=1 启动
- *   → TIM8 输出 PWM → RCR+1 次溢出后 UEV → OPM 硬件清零 CEN → 停止
- *   = 硬件完成固定数量脉冲后自停
+ * 关键硬件行为（参考 RM0433）：
+ *   - OPM 自停只清零 CEN，不清零 MOE。CEN=0 且 MOE=1 时 PWM 比较器
+ *     仍根据冻结的 CNT 和 CCR 驱动输出！OSS I 空闲状态仅在 MOE=0 时激活。
+ *     因此 OPM 自停后必须由软件检测并同步清零 MOE。
+ *   - DBGMCU Freeze（DBG_TIM8_STOP=1）在 CPU halt 瞬间：计数器冻结 +
+ *     BDTR.MOE 硬件复位。MOE 复位触发 OSSI 空闲状态 → 输出驱动到 OIS3N=0。
+ *   - STM32H723 单核没有 DBGSTOP_D2 位（该位仅双核 H7 有），
+ *     D2 域 APB2 时钟在 CPU halt 后会被硬件门控。但 Freeze 的 MOE 复位
+ *     在时钟门控前的 APB2 周期内完成，不依赖时钟持续运行。
  *
- * ── 安全性分析 ──
+ * ═══════════════════ 为什么 TIM8 而不是 TIM3 ═══════════════════
+ *   TIM8 是高级定时器，具有 OPM+RCR 硬件自停功能。TIM3 是通用定时器，没有 RCR 寄存器，无法实现硬件自停。
  *
- * 【场景 1：正常运行 + 软件崩溃（HardFault/NMI）】
- *   ✓ 受保护。CPU 崩溃不影响 D2 域外设（TIM8 在 D2 域 APB2）。
- *     TIM8 内部时钟继续跑，OPM+RCR 保证固定脉冲数后自动停止。
- *     STM32H7 的 D2 域独立于 CPU(D1) 域运行。
- *
- * 【场景 2：调试断点（CPU halt via debugger）】
- *   ✓ 受保护。DBGMCU Freeze TIM8 在 CPU halt 瞬间：
- *     1. 计数器立即冻结
- *     2. MOE 硬件复位（等同于 MOE=0）
- *     3. OSSI=1 → 输出强制进入空闲状态
- *     4. OIS3N=0 → CH3N 强制 LOW → MOSFET 关闭
- *     关键：Freeze 复位 MOE 是硬件行为，不依赖时钟持续运行。
- *           后续 IWDG 复位 MCU 清理剩余状态。
- *
- * 【场景 3：IWDG 看门狗（最终安全网）】
- *   ✓ IWDG 运行在 LSI（独立于系统时钟），CPU halt 不影响 IWDG。
- *     配置适当超时（如 1s）可在 CPU 长时间 halt 时复位 MCU，
- *     复位后所有外设回到初始状态，加热关闭。
- *
- * ── 为什么 TIM8 而不是 TIM3 ──
- *   TIM3 挂载在 APB1(D2域)，STM32H723 value line 芯片在 CPU halt 时
- *   APB1 时钟会被硬件门控停止。当 DBGMCU Freeze 触发时，若时钟已停，
- *   BDTR/MOE 的硬件操作可能无法完成，输出状态不确定。
- *   TIM8 挂载在 APB2，时钟门控延迟更长（实测约1s），DBGMCU Freeze 在
- *   CPU halt 瞬间立即触发，此时 APB2 时钟仍有效，MOE 可被安全复位。
- *
- * ── TIM8 参数计算 ──
+ * ═══════════════════ TIM8 参数计算 ═══════════════════
  *   APB2 定时器时钟 ≈ 240MHz（STM32H723, D2PPRE2=DIV2）
- *   f_cnt = 240MHz / (PSC + 1) = 240MHz / 80 = 3MHz
- *   f_pwm = 3MHz / (ARR + 1) = 3MHz / 60001 ≈ 50Hz (20ms 周期)
+ *   f_cnt = 240MHz / (PSC+1) = 240MHz / 80 = 3MHz
+ *   f_pwm = 3MHz / (ARR+1) = 3MHz / 60001 ≈ 50Hz (20ms 周期)
  *   脉冲数 = RCR + 1，每脉冲 20ms
- *   加热时长 = (RCR + 1) × 20ms
+ *   加热时长 = (RCR+1) × 20ms
  */
 
 #include "drv_bmi088.h"
@@ -70,10 +89,7 @@
 /* 加热控制 */
 #ifdef BMI088_HEAT_USED
 
-/* 公共宏定义（所有开发板通用） */
-#ifndef BMI088_HEAT_PULSE_NUM
-#define BMI088_HEAT_PULSE_NUM 50 /* 每次加热脉冲数（仅供参考，实际用超时控制） */
-#endif
+/* ═══════════════════ 公共宏定义（所有开发板通用）═══════════════════ */
 #ifndef BMI088_HEAT_DUTY_PERCENT
 #define BMI088_HEAT_DUTY_PERCENT 100 /* 加热占空比百分比 (0-100) */
 #endif
@@ -81,13 +97,23 @@
 #define BMI088_HEAT_DUTY (BMI088_HEAT_DUTY_PERCENT / 100.0f) /* 加热占空比 (0-1) */
 #endif
 #ifndef BMI088_HEAT_TEMP_HYST
-#define BMI088_HEAT_TEMP_HYST 1.0f /* 温度回滞 (℃) */
+#define BMI088_HEAT_TEMP_HYST 0.1f /* 温度回滞 (℃)，控制加热启停阈值区间 */
 #endif
 #ifndef BMI088_TEMP_TARGET
 #define BMI088_TEMP_TARGET 50.0f /* 加热目标温度 (℃) */
 #endif
+/*
+ * BMI088_HEAT_TIMEOUT_MS：单次加热超时 (ms)，DM_MC02 用于计算 TIM8 RCR 脉冲数。
+ * TIM8 PWM 周期 20ms（50Hz），脉冲数 = timeout / 20（向上取整）。
+ * 例：10000ms → 500 脉冲 × 20ms = 10 秒连续加热后 OPM 硬件自动停止。
+ *     60000ms → 3000 脉冲 × 20ms = 60 秒。
+ */
 #ifndef BMI088_HEAT_TIMEOUT_MS
-#define BMI088_HEAT_TIMEOUT_MS 10000U /* 单次加热超时 (ms)，默认 1s */
+#define BMI088_HEAT_TIMEOUT_MS 100U /* 单次加热超时 (ms)，默认 0.1 秒 */
+#endif
+/* 编译期检查：超时为 0 会导致 RCR 下溢（0-1=65535→65536 脉冲≈1310 秒），引发严重安全隐患 */
+#if BMI088_HEAT_TIMEOUT_MS == 0
+#error "BMI088_HEAT_TIMEOUT_MS must be > 0: RCR would underflow to 65535 pulses (~1310s)"
 #endif
 
 #define BMI088_HEAT_CLOSE_DUTY 0 /* 关闭占空比 (0-1) */
@@ -124,11 +150,11 @@ void BMI088_HeaterFaultCallback(void *owner)
 {
     (void)owner;
     /*
-     * 无条件禁用主输出 → CH3N 进入高阻态
-     * 板级外部下拉 → 低电平 → MOSFET 关闭
-     * 同时停止计数器，阻止下次意外启动
+     * 无条件禁用主输出 → MOE=0 → OSSI=1 激活空闲状态
+     * → OIS3N=0 → CH3N 主动驱动 LOW → MOSFET 关闭
      */
     __HAL_TIM_MOE_DISABLE_UNCONDITIONALLY(&s_htim8);
+    __DSB(); /* 确保 BDTR 写入完成，MOE 清零先于 CEN 清零生效 */
     TIM8->CR1 &= ~TIM_CR1_CEN;
 }
 
@@ -277,12 +303,33 @@ int8_t BMI088_HeaterInit(BMI088Instance *inst)
         /* 3. UG 生成软件更新事件：加载 RCR→REP_CNT 影子寄存器，清零 CNT
          *    不设 URS，因为 BMI088HeaterStart 中也需要 UG 来重载 RCR */
         TIM8->EGR = TIM_EGR_UG;
-        TIM8->SR = ~TIM_SR_UIF; /* 清除 UG 产生的 UIF 标志 */
+        TIM8->SR = ~(uint32_t)TIM_SR_UIF; /* 写 0 到 bit0 清除 UIF */
 
         /* 4. MOE：主输出使能。HAL_TIMEx_ConfigBreakDeadTime 全写 BDTR
          *    会清零 MOE，必须在 BDTR 配置后手动恢复。
          *    OSSI=1 + OIS3N=0 保证空闲时 CH3N = LOW（安全）。 */
         TIM8->BDTR |= TIM_BDTR_MOE;
+        __DSB();
+
+        /*
+         * ── 寄存器回读验证：确保 HAL 没破坏关键设置 ──
+         * HAL 版本升级可能改变内部实现，回读确认关键的位确实被正确设置。
+         */
+        if (!(TIM8->CCER & TIM_CCER_CC3NE))
+        {
+            LOGERROR("Htr CC3NE");
+            return -1;
+        }
+        if (!(TIM8->BDTR & TIM_BDTR_MOE))
+        {
+            LOGERROR("Htr MOE");
+            return -1;
+        }
+        if (!(TIM8->CR1 & TIM_CR1_OPM))
+        {
+            LOGERROR("Htr OPM");
+            return -1;
+        }
     }
 
     /* ── 保存映射 ── */
@@ -299,16 +346,33 @@ void BMI088HeaterStart(BMI088Instance *inst)
     uint8_t is_running = (TIM8->CR1 & TIM_CR1_CEN) ? 1 : 0;
 
     /*
+     * ── Post-OPM MOE 同步：修复 OPM 自停后 MOE 残留问题 ──
+     *
+     * OPM 硬件自停只清零 CEN，不清零 MOE。当 CEN=0 且 MOE=1 时：
+     * - OSSI=1 的空闲状态不激活（O SSI 仅在 MOE=0 时生效）
+     * - PWM 比较器仍根据冻结的 CNT 和加热 CCR 驱动输出
+     * - 若 CCR=0（100% 占空比），CNT >= 0 始终为真 → 输出永久 HIGH！
+     *
+     * 必须在任何温度判断之前同步 MOE，确保空闲状态激活。
+     */
+    if (!is_running && (TIM8->BDTR & TIM_BDTR_MOE))
+    {
+        TIM8->BDTR &= ~TIM_BDTR_MOE; /* MOE=0 → OSSI=1 激活 → OIS3N=0 → CH3N 主动 LOW */
+        __DSB();
+        TIM8->CCR3 = BMI088_HEAT_TIM8_CCR_OFF; /* 恢复安全 CCR，为下次启动做准备 */
+    }
+
+    /*
      * ── 滞回控温逻辑 ──
      *
      *    temp < target - hyst  → 启动加热（开启脉冲串）
      *    temp > target + hyst  → 停止加热（立即关断，不等 OPM 完成）
      *    死区 [target-hyst, target+hyst] → 维持当前状态
      *
-     *  例：target=38, hyst=1:
-     *    < 37.0℃ → 开始加热
-     *     37.0~39.0℃ → 不操作（正在加热则等 OPM 自己停）
-     *    > 39.0℃ → 立即关断
+     *  例：target=50, hyst=1:
+     *    < 49.0℃ → 开始加热
+     *     49.0~51.0℃ → 不操作（正在加热则等 OPM 自己停）
+     *    > 51.0℃ → 立即关断
      */
     if (inst->temperature < target - hyst)
     {
@@ -322,7 +386,9 @@ void BMI088HeaterStart(BMI088Instance *inst)
         if (is_running)
         {
             TIM8->CR1 &= ~TIM_CR1_CEN;   /* 停止计数器 */
-            TIM8->BDTR &= ~TIM_BDTR_MOE; /* 禁用主输出 → CH3N 强制空闲 */
+            TIM8->BDTR &= ~TIM_BDTR_MOE; /* MOE=0 → OSSI=1 → OIS3N=0 → 主动 LOW */
+            __DSB();
+            TIM8->CCR3 = BMI088_HEAT_TIM8_CCR_OFF; /* 恢复安全 CCR */
         }
         return;
     }
@@ -343,12 +409,19 @@ void BMI088HeaterStart(BMI088Instance *inst)
      * 启动后由硬件控制：
      *   每次溢出 → REP_CNT 递减
      *   REP_CNT → 0 → UEV → OPM 硬件清零 CEN → 停止
-     *   OSSI=1, OIS3N=0 → CH3N 强制 LOW → MOSFET 关闭
+     *   （OPM 不清零 MOE，由下次 BMI088HeaterStart 调用时同步）
      */
     {
         uint32_t heat_ccr;
         if (BMI088_HEAT_DUTY_PERCENT >= 100)
-            heat_ccr = 0; /* 100% 占空比：CNT>=0 永远成立 → 永远 HIGH */
+            /*
+             * 100% 占空比用 CCR=1 而非 CCR=0：
+             * OPM 自停后 CNT 冻结在 0（溢出回绕）。
+             * CCR=0 → CNT(0)>=CCR(0) → 输出永久 HIGH → 安全隐患
+             * CCR=1 → CNT(0)<CCR(1)  → 输出 LOW → 安全
+             * 占空比 60000/60001=99.998%，加热效果无差别。
+             */
+            heat_ccr = 1;
         else if (BMI088_HEAT_DUTY_PERCENT == 0)
             heat_ccr = BMI088_HEAT_TIM8_CCR_OFF; /* 0% 占空比 → 永远 LOW */
         else
@@ -365,11 +438,13 @@ void BMI088HeaterStart(BMI088Instance *inst)
     /* UG 生成软件更新事件：重载 RCR→REP_CNT，清零 CNT=0
      * CEN=0 时 UG 产生 UEV 不会触发 OPM 停止 */
     TIM8->EGR = TIM_EGR_UG;
-    TIM8->SR = ~TIM_SR_UIF;
+    TIM8->SR = ~(uint32_t)TIM_SR_UIF; /* 写 0 到 bit0 清除 UIF */
 
     /* 恢复 MOE 后启动计数器。Freeze 可能在 CPU halt 时复位了 MOE，
-     * 每次启动都必须确保 MOE=1。HAL 函数不能用（状态机不兼容 OPM） */
+     * 每次启动都必须确保 MOE=1。HAL 函数不能用（状态机不兼容 OPM）。
+     * DSB 确保 MOE 写入完成后再置 CEN，避免竞争。 */
     TIM8->BDTR |= TIM_BDTR_MOE;
+    __DSB();
     TIM8->CR1 |= TIM_CR1_CEN;
 }
 
