@@ -7,6 +7,7 @@
  */
 
 #include "bsp_uart_log.h"
+#include "app_cfg.h"
 
 #ifdef UART_LOG_USED
 

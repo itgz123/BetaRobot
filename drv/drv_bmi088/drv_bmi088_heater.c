@@ -84,6 +84,7 @@
  */
 
 #include "drv_bmi088.h"
+#include "app_cfg.h"
 
 #if defined(HAL_SPI_MODULE_ENABLED) && defined(HAL_GPIO_MODULE_ENABLED)
 

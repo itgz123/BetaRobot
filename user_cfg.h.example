@@ -1,12 +1,17 @@
 #ifndef __USER_CFG_H
 #define __USER_CFG_H
 
-// 选择应用目录
-#define APP_NAME Assess
+/*============================================
+ *           选择编译哪个应用
+ *    对应 app/<APP_NAME>/ 目录
+ *============================================*/
+#define APP_NAME target_car
 
-// 选择构建类型
+/*============================================
+ *           选择构建类型
+ *============================================*/
 #define Debug 0
 #define Release 1
 #define BUILD_TYPE Debug
 
-#endif
+#endif // __USER_CFG_H
