@@ -5,6 +5,9 @@
 
 #include "main.h" // 确保 HAL 宏已定义
 #include "bsp_adc.h"
+#include "app_cfg.h"
+
+#ifdef BSP_ADC_USED
 
 #ifdef HAL_ADC_MODULE_ENABLED
 #if ADC_INSTANCE_NUM > 0
@@ -123,5 +126,7 @@ uint16_t ADCGetValue(ADCInstance *instance)
     return value;
 }
 
-#endif
-#endif // HAL_ADC_MODULE_ENABLED
+#endif /* ADC_INSTANCE_NUM > 0 */
+#endif /* HAL_ADC_MODULE_ENABLED */
+
+#endif /* BSP_ADC_USED */

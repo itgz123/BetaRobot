@@ -5,6 +5,9 @@
  */
 
 #include "drv_bmi088.h"
+#include "app_cfg.h"
+
+#ifdef DRV_BMI088_USED
 
 #if defined(HAL_SPI_MODULE_ENABLED) && defined(HAL_GPIO_MODULE_ENABLED)
 
@@ -902,3 +905,5 @@ BMI088_MultiRateData_t BMI088ReadLatest(BMI088Instance *inst)
 }
 
 #endif /* defined(HAL_SPI_MODULE_ENABLED) && defined(HAL_GPIO_MODULE_ENABLED) */
+
+#endif /* DRV_BMI088_USED */

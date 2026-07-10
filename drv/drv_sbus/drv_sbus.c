@@ -8,6 +8,9 @@
  */
 
 #include "drv_sbus.h"
+#include "app_cfg.h"
+
+#ifdef DRV_SBUS_USED
 
 #ifdef HAL_UART_MODULE_ENABLED
 
@@ -235,3 +238,5 @@ static void SBUSUARTRxCallback(USARTInstance *usart_inst)
 }
 
 #endif /* HAL_UART_MODULE_ENABLED */
+
+#endif /* DRV_SBUS_USED */

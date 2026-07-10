@@ -7,3 +7,7 @@
  */
 
 #include "bsp_math.h"
+
+#ifdef BSP_MATH_USED
+// 所有数学函数均为 header-only inline 实现，本文件无额外代码
+#endif /* BSP_MATH_USED */

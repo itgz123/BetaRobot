@@ -1,4 +1,8 @@
 #include "drv_chassis_position_lite.h"
+#include "app_cfg.h"
+
+#ifdef DRV_CHASSIS_USED
+
 #include "bsp_math.h"
 
 /*
@@ -305,3 +309,5 @@ ChassisCmd_t ChassisPositionLite_Forward(ChassisPositionLiteInstance_t *inst)
 
     return cmd;
 }
+
+#endif /* DRV_CHASSIS_USED */

@@ -4,6 +4,10 @@
  */
 
 #include "bsp_crc.h"
+#include "app_cfg.h"
+
+#ifdef BSP_CRC_USED
+
 #include <string.h>
 
 /*============================================
@@ -200,3 +204,5 @@ uint32_t BSP_CRC_Custom(const BSP_CRC_Config_t *config, const uint8_t *data, uin
 
     return crc;
 }
+
+#endif /* BSP_CRC_USED */

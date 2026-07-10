@@ -6,6 +6,9 @@
  */
 
 #include "bsp_gpio.h"
+#include "app_cfg.h"
+
+#ifdef BSP_GPIO_USED
 
 #if GPIO_INSTANCE_NUM > 0
 
@@ -170,4 +173,6 @@ void GPIOWrite(GPIOInstance *instance, GPIO_PinState state)
     HAL_GPIO_WritePin(instance->map.port, instance->map.pin, state);
 }
 
-#endif
+#endif /* GPIO_INSTANCE_NUM > 0 */
+
+#endif /* BSP_GPIO_USED */

@@ -6,6 +6,9 @@
  */
 
 #include "bsp_spi.h"
+#include "app_cfg.h"
+
+#ifdef BSP_SPI_USED
 
 #if SPI_INSTANCE_NUM > 0
 
@@ -298,4 +301,6 @@ void SPITransmitReceive(SPIInstance *instance, uint8_t *tx_data, uint16_t len, u
     transmit_receive_funcs[instance->work_mode](instance->handle, tx_data, instance->rx_buff, len, timeout_ms);
 }
 
-#endif
+#endif /* SPI_INSTANCE_NUM > 0 */
+
+#endif /* BSP_SPI_USED */

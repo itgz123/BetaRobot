@@ -1,4 +1,7 @@
 #include "drv_djimotor.h"
+#include "app_cfg.h"
+
+#ifdef DRV_DJIMOTOR_USED
 
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
@@ -668,4 +671,6 @@ void DJIMotor_Send(void *inst)
     }
 }
 
-#endif // HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED
+#endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */
+
+#endif /* DRV_DJIMOTOR_USED */

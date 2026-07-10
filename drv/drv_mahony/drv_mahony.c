@@ -17,6 +17,9 @@
  */
 
 #include "drv_mahony.h"
+#include "app_cfg.h"
+
+#ifdef DRV_MAHONY_USED
 
 /*============================ 默认参数 ============================*/
 
@@ -230,3 +233,5 @@ static void Mahony_UpdateInternal(MahonyInstance *inst, vector3_t gyro, vector3_
     quaternion_t q_new = {q0, q1, q2, q3};
     inst->quat = BSP_Math_QuatNormalize(q_new);
 }
+
+#endif /* DRV_MAHONY_USED */

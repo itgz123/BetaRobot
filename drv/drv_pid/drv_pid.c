@@ -20,6 +20,10 @@
  */
 
 #include "drv_pid.h"
+#include "app_cfg.h"
+
+#ifdef DRV_PID_USED
+
 #include "bsp_math.h"
 #include <string.h>
 
@@ -380,3 +384,5 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float f
 
     return instance->output;
 }
+
+#endif /* DRV_PID_USED */
