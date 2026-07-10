@@ -138,6 +138,6 @@ export default defineConfig({
   // 忽略外部文件死链接（.doc 目录等）
   ignoreDeadLinks: true,
 
-  // 构建输出目录
-  outDir: '../.vitepress/dist',
+  // 构建输出目录（默认 .vitepress/dist，相对项目根目录 docs/）
+  // outDir: '.vitepress/dist',
 })
