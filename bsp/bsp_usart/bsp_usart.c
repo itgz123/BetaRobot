@@ -6,6 +6,9 @@
  */
 
 #include "bsp_usart.h"
+#include "app_cfg.h"
+
+#ifdef BSP_USART_USED
 
 #if UART_INSTANCE_NUM > 0
 
@@ -222,4 +225,6 @@ uint8_t USARTIsReady(USARTInstance *instance)
     return (instance->handle->gState == HAL_UART_STATE_READY) ? 1 : 0;
 }
 
-#endif
+#endif /* UART_INSTANCE_NUM > 0 */
+
+#endif /* BSP_USART_USED */

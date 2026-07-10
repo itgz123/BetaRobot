@@ -6,6 +6,9 @@
  */
 
 #include "bsp_dwt.h"
+#include "app_cfg.h"
+
+#ifdef BSP_DWT_USED
 
 /*------------- 私有变量 --------------*/
 static uint32_t s_cyccnt_round_count;
@@ -65,3 +68,5 @@ void DWT_Delay(float delay)
     while ((DWT->CYCCNT - tickstart) < delay * (float)SystemCoreClock)
         ;
 }
+
+#endif /* BSP_DWT_USED */

@@ -6,6 +6,9 @@
  */
 
 #include "bsp_tim.h"
+#include "app_cfg.h"
+
+#ifdef BSP_TIM_USED
 
 #if (ENCODER_INSTANCE_NUM > 0) || (PWM_INSTANCE_NUM > 0)
 
@@ -204,4 +207,6 @@ void BSPTim_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
     (void)htim;
 }
 
-#endif
+#endif /* (ENCODER_INSTANCE_NUM > 0) */
+
+#endif /* BSP_TIM_USED */

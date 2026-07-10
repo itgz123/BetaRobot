@@ -6,6 +6,9 @@
  */
 
 #include "bsp_can.h"
+#include "app_cfg.h"
+
+#ifdef BSP_CAN_USED
 
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 #if CAN_INSTANCE_NUM > 0
@@ -783,7 +786,9 @@ void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
     }
 }
 
-#endif
+#endif /* BSP_CAN_IP */
 
-#endif
-#endif
+#endif /* CAN_INSTANCE_NUM > 0 */
+#endif /* HAL_CAN/FDCAN_MODULE_ENABLED */
+
+#endif /* BSP_CAN_USED */

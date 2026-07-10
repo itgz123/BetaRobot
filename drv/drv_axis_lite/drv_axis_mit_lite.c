@@ -6,6 +6,9 @@
  */
 
 #include "drv_axis_mit_lite.h"
+#include "app_cfg.h"
+
+#ifdef DRV_AXIS_MIT_LITE_USED
 
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
@@ -297,4 +300,6 @@ vofa_output:
 #endif
 }
 
-#endif // HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED
+#endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */
+
+#endif /* DRV_AXIS_MIT_LITE_USED */

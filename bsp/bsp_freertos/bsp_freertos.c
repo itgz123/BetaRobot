@@ -4,6 +4,9 @@
  */
 
 #include "bsp_freertos.h"
+#include "app_cfg.h"
+
+#ifdef BSP_FREERTOS_USED
 
 TaskHandle_t TaskRegister(TaskInstance *inst, const Task_Init_Config_s *config)
 {
@@ -35,3 +38,5 @@ QueueHandle_t QueueRegister(QueueInstance *inst)
 
     return inst->handle;
 }
+
+#endif /* BSP_FREERTOS_USED */

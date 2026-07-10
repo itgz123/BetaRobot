@@ -9,6 +9,10 @@
  */
 
 #include "drv_mit.h"
+#include "app_cfg.h"
+
+#ifdef DRV_MIT_USED
+
 #include <string.h>
 #include "bsp_math.h"
 
@@ -51,3 +55,5 @@ float MITCalculate(MITInstance *instance, float speed_set, float speed_measure, 
 
     return instance->output;
 }
+
+#endif /* DRV_MIT_USED */
