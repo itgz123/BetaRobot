@@ -4,3 +4,9 @@ user_cfg.h
 drv/drv_vofa/vofa_user.py
 __pycache__/
 betawave_user.py
+
+# VitePress 文档站点
+docs/node_modules/
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+*.vitepress/temp/

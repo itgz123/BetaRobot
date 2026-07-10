@@ -1,0 +1,71 @@
+# 构建并部署 VitePress 文档到 GitHub Pages
+#
+# 当推送到 main 分支且 docs/ 目录有变更时触发，
+# 或手动触发 workflow_dispatch
+#
+# 部署到 https://itgz123.github.io/BetaRobot/
+
+name: Deploy VitePress Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/deploy-docs.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'docs/**'
+  # 允许手动触发
+  workflow_dispatch:
+
+# GitHub Pages 部署权限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 只保留一个部署任务，防止并发冲突
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: docs
+
+      - name: Build VitePress site
+        run: npm run docs:build
+        working-directory: docs
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

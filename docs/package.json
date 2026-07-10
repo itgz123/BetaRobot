@@ -1,0 +1,14 @@
+{
+  "name": "betarobot-docs",
+  "version": "1.0.0",
+  "description": "BetaRobot 项目文档站点",
+  "type": "commonjs",
+  "scripts": {
+    "docs:dev": "vitepress dev",
+    "docs:build": "vitepress build",
+    "docs:preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4"
+  }
+}
