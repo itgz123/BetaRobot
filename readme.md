@@ -13,3 +13,4 @@
 复制`user_cfg.h.example`为`user_cfg.h`
 
 ### 文档：
+[GitHub Pages](https://itgz123.github.io/BetaRobot/)
