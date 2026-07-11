@@ -19,7 +19,7 @@
 
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
-#include "drv_motor_def.h"
+#include "drv_motor_base.h"
 #include "drv_daemon.h"
 #include "drv_pid.h"
 #include "bsp_math.h"
@@ -201,7 +201,7 @@ float DMMotor_GetCurrent(void *inst);
 void DMMotor_SetOffset(void *inst, float offset);
 
 /* 模式命令（调试用） */
-void DMMotor_SendModeCmd(DMMotorInstance *inst, DMMotorModeCmd_e cmd);
+void DMMotor_SendModeCmd(void *inst, uint8_t cmd);
 
 #endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */
 

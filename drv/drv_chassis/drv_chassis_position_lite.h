@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include "drv_chassis_def.h"
-#include "drv_motor_def.h"
+#include "drv_motor_base.h"
 
 /*============================================
  *              配置结构体
