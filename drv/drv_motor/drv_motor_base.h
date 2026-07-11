@@ -1,5 +1,12 @@
-#ifndef DRV_MOTOR_DEF_H
-#define DRV_MOTOR_DEF_H
+/**
+ * @file drv_motor_base.h
+ * @brief 电机驱动基类：虚函数表、统一接口宏、通用枚举/结构体
+ *
+ * @note MotorBase_s 必须是所有电机派生类结构体的第一个成员，VTable 依赖此约定。
+ */
+
+#ifndef DRV_MOTOR_BASE_H
+#define DRV_MOTOR_BASE_H
 
 #include "stdint.h"
 #include "bsp_can.h"
@@ -7,7 +14,7 @@
 #include "drv_pid.h"
 
 /**
- * @brief 电机需要实现的函数
+ * @brief 电机统一接口宏
  * @param inst 电机实例，可以是基类或者派生类
  * @param ref 设置的参考值
  * @note 使用下面的宏必须确保所有电机派生类的 base 成员都是结构体的第一个成员
@@ -15,6 +22,8 @@
  * @note DaemonCallback需要重新给电机发送使能
  * @note MotorSetZero对于增量编码器，在初始化时候保持静止或者用光电门的gpio回调中调用MotorSetOffset(inst, -MotorGetAngle(inst))
  * @note MotorSetZero对于绝对式编码器，只要机械安装后读取零点时偏置，然后在初始化MotorSetOffset(inst, offset)固定偏置即可
+ * @note MotorSendCmd 用于发送模式命令（使能/失能/归零/清除错误等），
+ *       命令码由各电机品牌定义。DJI 电机可将 send_cmd 设为 NULL，宏会判空。
  */
 #define MotorEnable(inst) (((MotorBase_s *)(inst))->vtable->enable(inst))
 #define MotorDisable(inst) (((MotorBase_s *)(inst))->vtable->disable(inst))
@@ -24,6 +33,12 @@
 #define MotorGetSpeed(inst) (((MotorBase_s *)(inst))->vtable->get_speed(inst))
 #define MotorGetCurrent(inst) (((MotorBase_s *)(inst))->vtable->get_current(inst))
 #define MotorSetOffset(inst, offset) (((MotorBase_s *)(inst))->vtable->set_offset(inst, offset))
+#define MotorSendCmd(inst, cmd)                                                                    \
+    do                                                                                             \
+    {                                                                                              \
+        if (((MotorBase_s *)(inst))->vtable->send_cmd)                                             \
+            ((MotorBase_s *)(inst))->vtable->send_cmd(inst, cmd);                                  \
+    } while (0)
 
 /*============================================
  *              电机品牌枚举
@@ -47,7 +62,7 @@ typedef enum : uint8_t
 } DJIModel_e;
 
 /*============================================
- *              DJI电机型号枚举
+ *              DM电机型号枚举
  *============================================*/
 typedef enum : uint8_t
 {
@@ -149,6 +164,10 @@ typedef enum : uint8_t
 
 /*============================================
  *              虚函数表
+ *
+ * @note send_cmd: 发送模式命令（使能/失能/归零/清除错误等）。
+ *       命令码由各电机品牌定义（如 DM: 0xFC=使能, 0xFD=停止）。
+ *       DJI 电机无需此接口，可设为 NULL（MotorSendCmd 宏会判空）。
  *============================================*/
 typedef struct MotorVTable_s
 {
@@ -162,6 +181,7 @@ typedef struct MotorVTable_s
     // dji电机开环setref电流，get_current返回电流
     // dm电机开环setref力矩，get_current返回力矩
     void (*set_offset)(void *inst, float offset); // 设置位置偏置
+    void (*send_cmd)(void *inst, uint8_t cmd);    // 发送模式命令（可为 NULL）
 } MotorVTable_s;
 
 /*============================================
@@ -237,4 +257,4 @@ typedef struct
     DaemonInstance *daemon; // 守护进程实例
 } MotorBase_s;
 
-#endif // !DRV_MOTOR_DEF_H
+#endif // DRV_MOTOR_BASE_H

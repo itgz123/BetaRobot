@@ -64,6 +64,7 @@ const static MotorVTable_s s_dm_motor_vtable = {
     .get_speed = DMMotor_GetSpeed,
     .get_current = DMMotor_GetCurrent,
     .set_offset = DMMotor_SetOffset,
+    .send_cmd = DMMotor_SendModeCmd,
 };
 
 /*============================================
@@ -111,14 +112,18 @@ static inline uint16_t dm_float_to_uint(float float_val, float inv_scale, float 
  * @param cmd  命令码
  * @note  帧格式：前7字节 = 0xFF，第8字节 = 命令码
  */
-void DMMotor_SendModeCmd(DMMotorInstance *inst, DMMotorModeCmd_e cmd)
+void DMMotor_SendModeCmd(void *inst, uint8_t cmd)
 {
-    if (!inst || !inst->base.can)
+    if (!inst)
+        return;
+    DMMotorInstance *motor = (DMMotorInstance *)inst;
+
+    if (!motor->base.can)
         return;
 
-    CANInstance *can = inst->base.can;
+    CANInstance *can = motor->base.can;
     memset(can->tx_buff, 0xFF, 7);
-    can->tx_buff[7] = (uint8_t)cmd;
+    can->tx_buff[7] = cmd;
     CANTransmit(can, CAN_TRANSMIT_TIMEOUT);
 }
 
@@ -637,8 +642,8 @@ void DMMotor_Send(void *inst)
     uint16_t kp = 0;    /* 不使用板载 PD */
     uint16_t kd = 0;    /* 不使用板载 PD */
     uint16_t t_ff = dm_float_to_uint(motor->base.controller.output,
-                                      motor->proto_map.t_to_uint_scale,
-                                      motor->proto_map.t_range);
+                                     motor->proto_map.t_to_uint_scale,
+                                     motor->proto_map.t_range);
 
     /* 打包控制帧 */
     uint8_t *buf = can->tx_buff;

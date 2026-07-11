@@ -5,7 +5,7 @@
 
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
-#include "drv_motor_def.h"
+#include "drv_motor_base.h"
 #include "drv_daemon.h"
 #include "drv_pid.h"
 #include "bsp_math.h"

@@ -116,6 +116,7 @@ const static MotorVTable_s s_dji_motor_vtable = {
     .get_speed = DJIMotor_GetSpeed,
     .get_current = DJIMotor_GetCurrent,
     .set_offset = DJIMotor_SetOffset,
+    .send_cmd = NULL, /* DJI 电机无需模式命令 */
 };
 
 /**
