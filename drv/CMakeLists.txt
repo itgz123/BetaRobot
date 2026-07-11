@@ -9,6 +9,7 @@ set(MODULE_SOURCES
     drv_mahony/drv_mahony.c
     drv_vofa/drv_vofa.c
     drv_motor/drv_djimotor/drv_djimotor.c
+    drv_motor/drv_dmmotor/drv_dmmotor.c
     drv_axis_lite/drv_axis_mit_lite.c
     drv_mit/drv_mit.c
 )
@@ -23,6 +24,7 @@ set(MODULE_INCLUDE_DIRS
     drv_vofa
     drv_motor
     drv_motor/drv_djimotor
+    drv_motor/drv_dmmotor
     drv_axis_lite
     drv_mahony
     drv_mit
