@@ -31,7 +31,8 @@
 typedef enum : uint8_t
 {
     MOTOR_BRAND_OTHER = 0, // 其他电机
-    MOTOR_BRAND_DJI,       // DJI电机
+    MOTOR_BRAND_DJI,       // DJI电机（大疆）
+    MOTOR_BRAND_DM,        // DM电机（达妙）
 } MotorBrand_e;
 
 /*============================================
@@ -50,9 +51,7 @@ typedef enum : uint8_t
  *============================================*/
 typedef enum : uint8_t
 {
-    DM_MODEL_DM4310 = 0, // DM4310电机
-    DM_MODEL_DM4310P,    // DM4310P电机
-    DM_MODEL_DM8009P,    // DM8009P电机
+    DM_MODEL_DM4310 = 0, // DM4310电机（4310/4310P仅轴承不同，驱动层不区分）
     DM_MODEL_NUM,        // DM电机型号数量
 } DMModel_e;
 
