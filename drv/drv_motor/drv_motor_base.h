@@ -13,33 +13,6 @@
 #include "drv_daemon.h"
 #include "drv_pid.h"
 
-/**
- * @brief 电机统一接口宏
- * @param inst 电机实例，可以是基类或者派生类
- * @param ref 设置的参考值
- * @note 使用下面的宏必须确保所有电机派生类的 base 成员都是结构体的第一个成员
- * @note MotorDisable需要调用PIDReset
- * @note DaemonCallback需要重新给电机发送使能
- * @note MotorSetZero对于增量编码器，在初始化时候保持静止或者用光电门的gpio回调中调用MotorSetOffset(inst, -MotorGetAngle(inst))
- * @note MotorSetZero对于绝对式编码器，只要机械安装后读取零点时偏置，然后在初始化MotorSetOffset(inst, offset)固定偏置即可
- * @note MotorSendCmd 用于发送模式命令（使能/失能/归零/清除错误等），
- *       命令码由各电机品牌定义。DJI 电机可将 send_cmd 设为 NULL，宏会判空。
- */
-#define MotorEnable(inst) (((MotorBase_s *)(inst))->vtable->enable(inst))
-#define MotorDisable(inst) (((MotorBase_s *)(inst))->vtable->disable(inst))
-#define MotorSetRef(inst, ref) (((MotorBase_s *)(inst))->vtable->set_ref(inst, ref))
-#define MotorSend(inst) (((MotorBase_s *)(inst))->vtable->send(inst))
-#define MotorGetAngle(inst) (((MotorBase_s *)(inst))->vtable->get_angle(inst))
-#define MotorGetSpeed(inst) (((MotorBase_s *)(inst))->vtable->get_speed(inst))
-#define MotorGetCurrent(inst) (((MotorBase_s *)(inst))->vtable->get_current(inst))
-#define MotorSetOffset(inst, offset) (((MotorBase_s *)(inst))->vtable->set_offset(inst, offset))
-#define MotorSendCmd(inst, cmd)                                                                    \
-    do                                                                                             \
-    {                                                                                              \
-        if (((MotorBase_s *)(inst))->vtable->send_cmd)                                             \
-            ((MotorBase_s *)(inst))->vtable->send_cmd(inst, cmd);                                  \
-    } while (0)
-
 /*============================================
  *              电机品牌枚举
  *============================================*/
@@ -256,5 +229,92 @@ typedef struct
     CANInstance *can;       // CAN 实例指针
     DaemonInstance *daemon; // 守护进程实例
 } MotorBase_s;
+
+/*============================================
+ *              电机统一接口内联函数
+ *
+ * 替代原宏定义，通过 MotorBase_s* 类型提供编译期类型检查，
+ * 并在运行时检查 inst 非空。
+ *
+ * @note 所有电机派生类的第一个成员必须是 MotorBase_s base。
+ * @note MotorDisable 后应调用 PIDReset。
+ * @note DaemonCallback 需重新使能电机。
+ * @note MotorSendCmd 内部判空（DJI 电机 send_cmd 为 NULL）。
+ *============================================*/
+/**
+ * @brief 电机统一接口宏
+ * @param inst 电机实例，可以是基类或者派生类
+ * @param ref 设置的参考值
+ * @note 使用下面的宏必须确保所有电机派生类的 base 成员都是结构体的第一个成员
+ * @note MotorDisable需要调用PIDReset
+ * @note DaemonCallback需要重新给电机发送使能
+ * @note MotorSetZero对于增量编码器，在初始化时候保持静止或者用光电门的gpio回调中调用MotorSetOffset(inst, -MotorGetAngle(inst))
+ * @note MotorSetZero对于绝对式编码器，只要机械安装后读取零点时偏置，然后在初始化MotorSetOffset(inst, offset)固定偏置即可
+ * @note MotorSendCmd 用于发送模式命令（使能/失能/归零/清除错误等），
+ *       命令码由各电机品牌定义。DJI 电机可将 send_cmd 设为 NULL，宏会判空。
+ */
+static inline void MotorEnable(MotorBase_s *inst)
+{
+    if (!inst)
+        return;
+    inst->vtable->enable(inst);
+}
+
+static inline void MotorDisable(MotorBase_s *inst)
+{
+    if (!inst)
+        return;
+    inst->vtable->disable(inst);
+}
+
+static inline void MotorSetRef(MotorBase_s *inst, float ref)
+{
+    if (!inst)
+        return;
+    inst->vtable->set_ref(inst, ref);
+}
+
+static inline void MotorSend(MotorBase_s *inst)
+{
+    if (!inst)
+        return;
+    inst->vtable->send(inst);
+}
+
+static inline float MotorGetAngle(MotorBase_s *inst)
+{
+    if (!inst)
+        return 0.0f;
+    return inst->vtable->get_angle(inst);
+}
+
+static inline float MotorGetSpeed(MotorBase_s *inst)
+{
+    if (!inst)
+        return 0.0f;
+    return inst->vtable->get_speed(inst);
+}
+
+static inline float MotorGetCurrent(MotorBase_s *inst)
+{
+    if (!inst)
+        return 0.0f;
+    return inst->vtable->get_current(inst);
+}
+
+static inline void MotorSetOffset(MotorBase_s *inst, float offset)
+{
+    if (!inst)
+        return;
+    inst->vtable->set_offset(inst, offset);
+}
+
+static inline void MotorSendCmd(MotorBase_s *inst, uint8_t cmd)
+{
+    if (!inst)
+        return;
+    if (inst->vtable->send_cmd)
+        inst->vtable->send_cmd(inst, cmd);
+}
 
 #endif // DRV_MOTOR_BASE_H
