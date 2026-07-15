@@ -51,10 +51,13 @@ static ChassisCmd_t omnit_forward(ChassisPositionLiteInstance_t *inst)
 {
     float R = inst->wheel_radius;
     float inv_reduction_ratio = 1.0f / inst->reduction_ratio;
-    float v_lf = MotorGetSpeed(inst->motor[WHEEL_LF]) * R * inv_reduction_ratio;
-    float v_lb = MotorGetSpeed(inst->motor[WHEEL_LB]) * R * inv_reduction_ratio;
-    float v_rb = MotorGetSpeed(inst->motor[WHEEL_RB]) * R * inv_reduction_ratio;
-    float v_rf = MotorGetSpeed(inst->motor[WHEEL_RF]) * R * inv_reduction_ratio;
+    MotorData_s md[WHEEL_NUM];
+    for (int i = 0; i < WHEEL_NUM; i++)
+        md[i] = MotorGetData(inst->motor[i]);
+    float v_lf = md[WHEEL_LF].speed * R * inv_reduction_ratio;
+    float v_lb = md[WHEEL_LB].speed * R * inv_reduction_ratio;
+    float v_rb = md[WHEEL_RB].speed * R * inv_reduction_ratio;
+    float v_rf = md[WHEEL_RF].speed * R * inv_reduction_ratio;
 
     ChassisCmd_t cmd;
     cmd.vx = (v_lb - v_rf) * 0.5f;
@@ -105,10 +108,13 @@ static ChassisCmd_t omnix_forward(ChassisPositionLiteInstance_t *inst)
 {
     float R = inst->wheel_radius;
     float inv_reduction_ratio = 1.0f / inst->reduction_ratio;
-    float v_lf = MotorGetSpeed(inst->motor[WHEEL_LF]) * R * inv_reduction_ratio;
-    float v_lb = MotorGetSpeed(inst->motor[WHEEL_LB]) * R * inv_reduction_ratio;
-    float v_rb = MotorGetSpeed(inst->motor[WHEEL_RB]) * R * inv_reduction_ratio;
-    float v_rf = MotorGetSpeed(inst->motor[WHEEL_RF]) * R * inv_reduction_ratio;
+    MotorData_s md[WHEEL_NUM];
+    for (int i = 0; i < WHEEL_NUM; i++)
+        md[i] = MotorGetData(inst->motor[i]);
+    float v_lf = md[WHEEL_LF].speed * R * inv_reduction_ratio;
+    float v_lb = md[WHEEL_LB].speed * R * inv_reduction_ratio;
+    float v_rb = md[WHEEL_RB].speed * R * inv_reduction_ratio;
+    float v_rf = md[WHEEL_RF].speed * R * inv_reduction_ratio;
 
     float a = inst->x * 0.5f;
     float b = inst->y * 0.5f;
@@ -155,10 +161,13 @@ static ChassisCmd_t mecanumo_forward(ChassisPositionLiteInstance_t *inst)
 {
     float R = inst->wheel_radius;
     float inv_reduction_ratio = 1.0f / inst->reduction_ratio;
-    float v_lf = MotorGetSpeed(inst->motor[WHEEL_LF]) * R * inv_reduction_ratio;
-    float v_lb = MotorGetSpeed(inst->motor[WHEEL_LB]) * R * inv_reduction_ratio;
-    float v_rb = MotorGetSpeed(inst->motor[WHEEL_RB]) * R * inv_reduction_ratio;
-    float v_rf = MotorGetSpeed(inst->motor[WHEEL_RF]) * R * inv_reduction_ratio;
+    MotorData_s md[WHEEL_NUM];
+    for (int i = 0; i < WHEEL_NUM; i++)
+        md[i] = MotorGetData(inst->motor[i]);
+    float v_lf = md[WHEEL_LF].speed * R * inv_reduction_ratio;
+    float v_lb = md[WHEEL_LB].speed * R * inv_reduction_ratio;
+    float v_rb = md[WHEEL_RB].speed * R * inv_reduction_ratio;
+    float v_rf = md[WHEEL_RF].speed * R * inv_reduction_ratio;
 
     ChassisCmd_t cmd;
     cmd.vx = (v_lf + v_lb - v_rb - v_rf) * 0.25f;
@@ -199,10 +208,13 @@ static ChassisCmd_t mecanumx_forward(ChassisPositionLiteInstance_t *inst)
 {
     float R = inst->wheel_radius;
     float inv_reduction_ratio = 1.0f / inst->reduction_ratio;
-    float v_lf = MotorGetSpeed(inst->motor[WHEEL_LF]) * R * inv_reduction_ratio;
-    float v_lb = MotorGetSpeed(inst->motor[WHEEL_LB]) * R * inv_reduction_ratio;
-    float v_rb = MotorGetSpeed(inst->motor[WHEEL_RB]) * R * inv_reduction_ratio;
-    float v_rf = MotorGetSpeed(inst->motor[WHEEL_RF]) * R * inv_reduction_ratio;
+    MotorData_s md[WHEEL_NUM];
+    for (int i = 0; i < WHEEL_NUM; i++)
+        md[i] = MotorGetData(inst->motor[i]);
+    float v_lf = md[WHEEL_LF].speed * R * inv_reduction_ratio;
+    float v_lb = md[WHEEL_LB].speed * R * inv_reduction_ratio;
+    float v_rb = md[WHEEL_RB].speed * R * inv_reduction_ratio;
+    float v_rf = md[WHEEL_RF].speed * R * inv_reduction_ratio;
 
     ChassisCmd_t cmd;
     cmd.vx = (v_lf + v_lb + v_rb + v_rf) * 0.25f;

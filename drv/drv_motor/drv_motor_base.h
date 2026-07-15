@@ -72,15 +72,6 @@ typedef enum : uint8_t
 } MotorFeedforwardSrc_e;
 
 /*============================================
- *              速度来源枚举
- *============================================*/
-typedef enum : uint8_t
-{
-    MOTOR_SPEED_SRC_FEEDBACK = 0, // 使用电机反馈速度
-    MOTOR_SPEED_SRC_DIFF = 1,     // 使用位置微分计算速度
-} MotorSpeedSrc_e;
-
-/*============================================
  *              电机方向枚举
  *============================================*/
 typedef enum : int8_t
@@ -136,23 +127,52 @@ typedef enum : uint8_t
 } MotorSpeedLpf_e;
 
 /*============================================
+ *              统一电机数据结构体
+ *
+ * MotorGetData() 的返回值类型。
+ * position 已含偏置 + 方向修正 + WRAP 归一化。
+ * position_single 是原始单圈位置（未修正），可用于调试。
+ * torque_current 含义由电机品牌决定（DM: 扭矩Nm, DJI: 电流A）。
+ * timestamp_us 来自 DWT 定时器，标记 CAN 帧到达时刻。
+ *============================================*/
+typedef struct
+{
+    float position_single; // 原始位置 (rad)，无偏置/方向修正（DJI: [0,2π) 单圈; DM: [-p_max,+p_max] 可跨多圈）
+    float position;        // 多圈位置 (rad)，已含偏置 + 方向修正 + WRAP 归一化
+    float speed;           // 速度 (rad/s)，已含方向修正
+    float torque_current;  // 扭矩 (Nm) 或 电流 (A)，已含方向修正
+    uint64_t timestamp_us; // CAN 帧到达时间戳 (us)
+} MotorData_s;
+
+/*============================================
+ *              原始 CAN 帧缓冲区（通用双缓冲）
+ *
+ * 所有电机品牌共用此结构体存储原始 CAN 数据。
+ * RX 回调（ISR）通过 memcpy 写入，GetData（Task）从就绪帧读取。
+ * bytes 的前 8 字节为 CAN 数据帧，具体位域由各品牌驱动解析。
+ *============================================*/
+typedef struct
+{
+    uint8_t bytes[8];      // 原始 CAN 帧 8 字节
+    uint64_t timestamp_us; // DWT 时间戳 (us)
+} MotorRawFrame_s;
+
+/*============================================
  *              虚函数表
  *
  * @note send_cmd: 发送模式命令（使能/失能/归零/清除错误等）。
  *       命令码由各电机品牌定义（如 DM: 0xFC=使能, 0xFD=停止）。
  *       DJI 电机无需此接口，可设为 NULL（MotorSendCmd 宏会判空）。
+ * @note get_data: 统一数据获取接口，替代 get_angle/get_speed/get_current。
+ *       返回 MotorData_s 结构体包含所有反馈数据。
  *============================================*/
 typedef struct MotorVTable_s
 {
-    void (*enable)(void *inst);             // 使能电机
-    void (*disable)(void *inst);            // 禁用电机
-    void (*set_ref)(void *inst, float ref); // 设置参考值
-    void (*send)(void *inst);               // 发送控制数据
-    float (*get_angle)(void *inst);         // 获取位置
-    float (*get_speed)(void *inst);         // 获取速度 (rad/s)
-    float (*get_current)(void *inst);       // 获取电流/力矩
-    // dji电机开环setref电流，get_current返回电流
-    // dm电机开环setref力矩，get_current返回力矩
+    void (*enable)(void *inst);                   // 使能电机
+    void (*disable)(void *inst);                  // 禁用电机
+    void (*set_ref)(void *inst, float ref);       // 设置参考值
+    void (*send)(void *inst);                     // 发送控制数据
+    MotorData_s (*get_data)(void *inst);          // 统一获取所有反馈数据
     void (*set_offset)(void *inst, float offset); // 设置位置偏置
     void (*send_cmd)(void *inst, uint8_t cmd);    // 发送模式命令（可为 NULL）
 } MotorVTable_s;
@@ -220,10 +240,22 @@ typedef struct
     MotorControllerSetting_s setting; // 控制器设置
     MotorController_s controller;     // 控制器
 
-    /* 速度计算 */
-    MotorSpeedSrc_e speed_src;        // 速度来源选择
+    /* 数据 */
+    // 原始数据双缓冲（ISR 写入，GetData 读取）
+    MotorRawFrame_s raw_frames[2];  // 双缓冲：ISR 写一个，GetData 读另一个
+    volatile uint8_t raw_frame_idx; // 当前 ISR 写入的缓冲区索引 (0/1)
+    //
     MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
     float speed_lpf_rc;               // 速度低通滤波时间常数 RC
+    float position_offset;            // 位置偏置 (rad)，由 MotorSetOffset 写入
+    // 解析数据
+    MotorData_s data;
+    // 上次数据
+    float position_single_last; // 上次单圈位置 (rad)，用于 wraps 检测
+    float position_multi_last;  // 上次多圈位置 (rad)，用于微分求速度
+    int64_t position_cnt;       // 边界穿越累加（DJI: 机械圈数; DM: 协议边界数，每跨 ±p_max 一次）
+    float speed_last;           // 上次滤波后速度 (rad/s)
+    uint64_t timestamp_last_us; // 上次处理的时间戳 (us)
 
     /* 统一接口 */
     CANInstance *can;       // CAN 实例指针
@@ -281,25 +313,19 @@ static inline void MotorSend(MotorBase_s *inst)
     inst->vtable->send(inst);
 }
 
-static inline float MotorGetAngle(MotorBase_s *inst)
+/**
+ * @brief 统一获取电机所有反馈数据
+ * @param inst 电机基类指针
+ * @return MotorData_s 结构体，包含所有反馈数据
+ * @note 推荐所有新代码使用此接口，一次调用获取全部数据。
+ *       旧 MotorGetAngle/Speed/Current 已改为调用此函数的包装。
+ */
+static inline MotorData_s MotorGetData(MotorBase_s *inst)
 {
+    MotorData_s zero = {0};
     if (!inst)
-        return 0.0f;
-    return inst->vtable->get_angle(inst);
-}
-
-static inline float MotorGetSpeed(MotorBase_s *inst)
-{
-    if (!inst)
-        return 0.0f;
-    return inst->vtable->get_speed(inst);
-}
-
-static inline float MotorGetCurrent(MotorBase_s *inst)
-{
-    if (!inst)
-        return 0.0f;
-    return inst->vtable->get_current(inst);
+        return zero;
+    return inst->vtable->get_data(inst);
 }
 
 static inline void MotorSetOffset(MotorBase_s *inst, float offset)
