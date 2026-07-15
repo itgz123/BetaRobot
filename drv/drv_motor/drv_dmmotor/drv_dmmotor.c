@@ -50,9 +50,7 @@ void DMMotor_Enable(void *inst);
 void DMMotor_Disable(void *inst);
 void DMMotor_SetRef(void *inst, float ref);
 void DMMotor_Send(void *inst);
-float DMMotor_GetAngle(void *inst);
-float DMMotor_GetSpeed(void *inst);
-float DMMotor_GetCurrent(void *inst);
+MotorData_s DMMotor_GetData(void *inst);
 void DMMotor_SetOffset(void *inst, float offset);
 
 const static MotorVTable_s s_dm_motor_vtable = {
@@ -60,9 +58,7 @@ const static MotorVTable_s s_dm_motor_vtable = {
     .disable = DMMotor_Disable,
     .set_ref = DMMotor_SetRef,
     .send = DMMotor_Send,
-    .get_angle = DMMotor_GetAngle,
-    .get_speed = DMMotor_GetSpeed,
-    .get_current = DMMotor_GetCurrent,
+    .get_data = DMMotor_GetData,
     .set_offset = DMMotor_SetOffset,
     .send_cmd = DMMotor_SendModeCmd,
 };
@@ -128,16 +124,19 @@ void DMMotor_SendModeCmd(void *inst, uint8_t cmd)
 }
 
 /*============================================
- *              CAN 接收回调
+ *              CAN 接收回调（最小化 ISR 工作）
+ *
+ * 仅做：memcpy 原始 8 字节 + 记录时间戳 + flip 双缓冲 + 喂狗。
+ * 所有数据处理（位域解析、SI 转换、多圈累加、速度滤波）移到 DMMotor_GetData。
  *============================================*/
 
 /**
- * @brief DM 电机 CAN 反馈帧回调
+ * @brief DM 电机 CAN 反馈帧回调（ISR 上下文）
  * @param can CAN 实例指针
  *
  * 反馈帧格式（8字节）：
  *   D[0]：bits[3:0]=电机ID, bits[7:4]=错误状态
- *   D[1..2]：位置 16位 无符号 大端 → 映射到 [-p_max, p_max]
+ *   D[1..2]：位置 16位 无符号 大端
  *   D[3]：速度高8位 VEL[11:4]
  *   D[4]：bits[7:4]=速度低4位 VEL[3:0], bits[3:0]=扭矩高4位 T[11:8]
  *   D[5]：扭矩低8位 T[7:0]
@@ -150,108 +149,14 @@ static void DMMotorRxCallback(CANInstance *can)
         return;
 
     DMMotorInstance *motor = (DMMotorInstance *)can->parent;
-    uint8_t *rx_buff = can->rx_buff;
 
-    /* 提取位域 */
-    motor->data_raw.error = rx_buff[0] >> 4;
+    /* 写入当前 ISR 缓冲区 */
+    uint8_t idx = motor->base.raw_frame_idx;
+    memcpy(motor->base.raw_frames[idx].bytes, can->rx_buff, 8);
+    motor->base.raw_frames[idx].timestamp_us = DWT_GetTimeUs();
 
-    /* 位置：16位 大端 无符号 */
-    motor->data_raw.raw_position = ((uint16_t)rx_buff[1] << 8) | rx_buff[2];
-
-    /* 速度：12位，D[3]全部 + D[4]高半字节 */
-    motor->data_raw.raw_velocity = ((uint16_t)rx_buff[3] << 4) | (rx_buff[4] >> 4);
-
-    /* 扭矩：12位，D[4]低半字节 + D[5]全部 */
-    motor->data_raw.raw_torque = ((uint16_t)(rx_buff[4] & 0x0F) << 8) | rx_buff[5];
-
-    /* 温度 */
-    motor->data_raw.raw_temperature_mos = (int8_t)rx_buff[6];
-    motor->data_raw.raw_temperature_coil = (int8_t)rx_buff[7];
-
-    /* 型号校验 */
-    DMModel_e model = motor->base.model;
-    if (model >= DM_MODEL_NUM)
-        return;
-
-    const DMMotorProtocolMap_s *map = &motor->proto_map;
-
-    /* 保存上次数据 */
-    float last_position_single = motor->data.position_single;
-    float last_position_multi = motor->data.position_multi;
-    motor->data.last_speed = motor->data.speed;
-    uint64_t last_time_stamp = motor->data.last_time_stamp;
-
-    /* 转换为 SI 单位（预计算 scale，纯乘法） */
-    motor->data.position_single =
-        dm_uint_to_float(motor->data_raw.raw_position, map->pos_to_float_scale, -map->p_max);
-    float velocity_raw =
-        dm_uint_to_float(motor->data_raw.raw_velocity, map->vel_to_float_scale, -map->v_range);
-    motor->data.torque =
-        dm_uint_to_float(motor->data_raw.raw_torque, map->t_to_float_scale, -map->t_range);
-    motor->data.temperature_mos = (float)motor->data_raw.raw_temperature_mos;
-    motor->data.temperature_coil = (float)motor->data_raw.raw_temperature_coil;
-
-    /* 计算帧间隔 dt */
-    uint64_t now_time_us = DWT_GetTimeUs();
-    float dt = 0.0f;
-    if (last_time_stamp > 0)
-    {
-        dt = (now_time_us - last_time_stamp) * 1e-6f; /* us → s */
-    }
-    motor->data.last_time_stamp = now_time_us;
-
-    /* 多圈位置累加（半圈范围 = p_max） */
-    float angle_diff = motor->data.position_single - last_position_single;
-    int8_t wraps = 0;
-    if (motor->base.speed_src == MOTOR_SPEED_SRC_FEEDBACK && dt > 0.0f)
-    {
-        /* FEEDBACK 模式：用速度反馈校验穿越 */
-        float expected_change = velocity_raw * dt;
-        float wrap_float = (expected_change - angle_diff) * (1.0f / (2.0f * map->p_max));
-        wraps = (int8_t)(wrap_float > 0.0f ? wrap_float + 0.5f : wrap_float - 0.5f);
-    }
-    else
-    {
-        /* DIFF 模式：角度差阈值判断穿越 */
-        if (angle_diff > map->p_max)
-            wraps = -1;
-        else if (angle_diff < -map->p_max)
-            wraps = 1;
-    }
-    motor->data.position_cnt += wraps;
-    motor->data.position_multi =
-        (float)motor->data.position_cnt * (2.0f * map->p_max) + motor->data.position_single;
-
-    /* 速度计算 (rad/s) */
-    float raw_speed;
-    if (motor->base.speed_src == MOTOR_SPEED_SRC_FEEDBACK)
-    {
-        /* 使用反馈速度 */
-        raw_speed = velocity_raw;
-    }
-    else
-    {
-        /* 使用位置差分计算速度 */
-        if (dt > 0.0f)
-        {
-            raw_speed = (motor->data.position_multi - last_position_multi) / dt;
-        }
-        else
-        {
-            raw_speed = motor->data.last_speed;
-        }
-    }
-
-    /* 速度低通滤波 */
-    if (motor->base.speed_lpf_enable == MOTOR_SPEED_LPF_ENABLE && dt > 0.0f)
-    {
-        float alpha = dt / (motor->base.speed_lpf_rc + dt);
-        motor->data.speed = raw_speed * alpha + motor->data.last_speed * (1.0f - alpha);
-    }
-    else
-    {
-        motor->data.speed = raw_speed;
-    }
+    /* flip 双缓冲索引（volatile 保证顺序） */
+    motor->base.raw_frame_idx ^= 1u;
 
     /* 喂狗 */
     if (motor->base.daemon)
@@ -261,61 +166,151 @@ static void DMMotorRxCallback(CANInstance *can)
 }
 
 /*============================================
- *              反馈获取函数 (虚函数实现)
+ *              统一数据获取接口 (DMMotor_GetData)
+ *
+ * 完整处理链：位域解析 → SI 转换 → 多圈累加 → 速度计算 → 滤波 → 偏置/方向
  *============================================*/
 
-float DMMotor_GetAngle(void *inst)
+/**
+ * @brief DM 电机统一数据获取
+ * @param inst DMMotorInstance 指针
+ * @return MotorData_s 包含所有反馈数据
+ *
+ * 处理顺序：
+ *   1. 从双缓冲读取就绪帧
+ *   2. 解析位域 → SI 转换
+ *   3. dt 计算
+ *   4. 多圈位置累加（wraps 检测）
+ *   5. 速度计算（反馈/微分）
+ *   6. 速度低通滤波
+ *   7. 更新处理状态
+ *   8. 应用偏置、方向修正、WRAP 归一化
+ */
+MotorData_s DMMotor_GetData(void *inst)
 {
+    MotorData_s result = {0};
     if (!inst)
-        return 0.0f;
+        return result;
+
     DMMotorInstance *motor = (DMMotorInstance *)inst;
-    MotorControllerSetting_s *setting = &motor->base.setting;
-    float angle;
+    MotorBase_s *base = &motor->base;
+
+    /* ====== Step 1: 从双缓冲读取就绪帧 ====== */
+    uint8_t ready_idx = !base->raw_frame_idx;
+    MotorRawFrame_s frame = base->raw_frames[ready_idx];
+
+    /* ====== Step 2: 解析位域 ====== */
+    uint8_t error = frame.bytes[0] >> 4;
+    uint16_t raw_position = ((uint16_t)frame.bytes[1] << 8) | frame.bytes[2];
+    uint16_t raw_velocity = ((uint16_t)frame.bytes[3] << 4) | (frame.bytes[4] >> 4);
+    uint16_t raw_torque = ((uint16_t)(frame.bytes[4] & 0x0F) << 8) | frame.bytes[5];
+    int8_t raw_temperature_mos = (int8_t)frame.bytes[6];
+    int8_t raw_temperature_coil = (int8_t)frame.bytes[7];
+
+    DMModel_e model = base->model;
+    if (model >= DM_MODEL_NUM)
+        return result;
+
+    const DMMotorProtocolMap_s *map = &motor->proto_map;
+    MotorControllerSetting_s *setting = &base->setting;
+
+    /* SI 转换 */
+    float position_single = dm_uint_to_float(raw_position, map->pos_to_float_scale, -map->p_max);
+    float velocity_raw_val = dm_uint_to_float(raw_velocity, map->vel_to_float_scale, -map->v_range);
+    float torque = dm_uint_to_float(raw_torque, map->t_to_float_scale, -map->t_range);
+
+    /* ====== Step 3: dt 计算 ====== */
+    float dt = 0.0f;
+    if (base->timestamp_last_us > 0 && frame.timestamp_us > base->timestamp_last_us)
+    {
+        dt = (float)(frame.timestamp_us - base->timestamp_last_us) * 1e-6f;
+    }
+
+    /* ====== Step 4: 多圈位置累加 ====== */
+
+    /**
+     * @note 多圈位置由上位机累加，不依赖电机自身。
+     *       DM 电机位置范围由用户配置（p_max，最大 12.5 rad），
+     *       单次"穿越"跨度 = 2 * p_max，最大可达 25 rad（约 4 个机械圈）。
+     *       由于 DM 转速低（DM4310 空载 ~21 rad/s），穿越频率极低，
+     *       连续丢帧导致多圈出错的概率远小于 DJI，几乎不受影响。
+     */
+    int8_t wraps = 0;
+    if (base->timestamp_last_us > 0)
+    {
+        float angle_diff = position_single - base->position_single_last;
+        if (dt > 0.0f)
+        {
+            /* 用速度反馈校验穿越 */
+            float expected_change = velocity_raw_val * dt;
+            float wrap_float = (expected_change - angle_diff) * (1.0f / (2.0f * map->p_max));
+            wraps = (int8_t)(wrap_float > 0.0f ? wrap_float + 0.5f : wrap_float - 0.5f);
+        }
+        else
+        {
+            if (angle_diff > map->p_max)
+                wraps = -1;
+            else if (angle_diff < -map->p_max)
+                wraps = 1;
+        }
+    }
+    base->position_cnt += wraps;
+    float position_multi =
+        (float)base->position_cnt * (2.0f * map->p_max) + position_single;
+
+    /* ====== Step 5: 速度计算（统一使用反馈速度） ====== */
+    float speed;
+    if (base->speed_lpf_enable == MOTOR_SPEED_LPF_ENABLE && dt > 0.0f)
+    {
+        float alpha = dt / (base->speed_lpf_rc + dt);
+        speed = velocity_raw_val * alpha + base->speed_last * (1.0f - alpha);
+    }
+    else
+    {
+        speed = velocity_raw_val;
+    }
+
+    /* ====== Step 6: 更新处理状态 ====== */
+    base->position_single_last = position_single;
+    base->position_multi_last = position_multi;
+    base->speed_last = speed;
+    base->timestamp_last_us = frame.timestamp_us;
+
+    /* ====== Step 7: 存储 DM 特有数据 ====== */
+    motor->error = error;
+    motor->temperature_mos = (float)raw_temperature_mos;
+    motor->temperature_coil = (float)raw_temperature_coil;
+
+    /* ====== Step 8: 构建返回值 ====== */
+    result.position_single = position_single;
+
+    float angle = position_multi + base->position_offset;
     if (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr)
     {
         angle = *setting->angle_external_ptr;
     }
-    else
+    else if (setting->position_mode == MOTOR_POSITION_WRAP)
     {
-        /* 多圈位置 + 偏置 */
-        angle = motor->data.position_multi + motor->data.position_offset;
-        /* WRAP 模式归一化到 [min, max) */
-        if (setting->position_mode == MOTOR_POSITION_WRAP)
-        {
-            angle = BSP_Math_WrapAngle(angle, setting->angle_limit_min, setting->angle_limit_max);
-        }
+        angle = BSP_Math_WrapAngle(angle, setting->angle_limit_min, setting->angle_limit_max);
     }
-    /* 反馈方向修正 */
-    return angle * setting->feedback_direction;
-}
+    result.position = angle * setting->feedback_direction;
 
-float DMMotor_GetSpeed(void *inst)
-{
-    if (!inst)
-        return 0.0f;
-    DMMotorInstance *motor = (DMMotorInstance *)inst;
-    MotorControllerSetting_s *setting = &motor->base.setting;
-    float speed;
     if (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr)
     {
-        speed = *setting->speed_external_ptr;
+        result.speed = *setting->speed_external_ptr * setting->feedback_direction;
     }
     else
     {
-        speed = motor->data.speed;
+        result.speed = speed * setting->feedback_direction;
     }
-    /* 反馈方向修正 */
-    return speed * setting->feedback_direction;
-}
 
-float DMMotor_GetCurrent(void *inst)
-{
-    if (!inst)
-        return 0.0f;
-    DMMotorInstance *motor = (DMMotorInstance *)inst;
-    MotorControllerSetting_s *setting = &motor->base.setting;
-    /* DM 电机返回扭矩 (Nm)，非电流 (A) */
-    return motor->data.torque * setting->feedback_direction;
+    result.torque_current = torque * setting->feedback_direction;
+    result.timestamp_us = frame.timestamp_us;
+
+    /* ====== Step 9: 缓存到 base.data ====== */
+    base->data = result;
+
+    return result;
 }
 
 /*============================================
@@ -419,14 +414,21 @@ int8_t DMMotorRegister(DMMotorInstance *inst, DMMotor_Init_Config_s *cfg)
         PIDInit(&inst->base.controller.pid_angle, &cfg->pid_angle_setting);
     }
 
-    /* 速度来源 */
-    inst->base.speed_src = cfg->speed_src;
     inst->base.speed_lpf_enable = cfg->speed_lpf_enable;
     inst->base.speed_lpf_rc = cfg->speed_lpf_rc;
 
-    /* 数据缓冲清零 */
-    memset(&inst->data_raw, 0, sizeof(DMMotorRawData_s));
-    memset(&inst->data, 0, sizeof(DMMotorData_s));
+    /* 双缓冲清零 */
+    memset(inst->base.raw_frames, 0, sizeof(inst->base.raw_frames));
+    inst->base.raw_frame_idx = 0;
+
+    /* 处理状态清零 */
+    inst->base.position_single_last = 0.0f;
+    inst->base.position_multi_last = 0.0f;
+    inst->base.position_cnt = 0;
+    inst->base.speed_last = 0.0f;
+    inst->base.timestamp_last_us = 0;
+    inst->base.position_offset = 0.0f;
+    memset(&inst->base.data, 0, sizeof(MotorData_s));
 
     /* 注册 CAN 实例 */
     if (inst->base.can)
@@ -513,7 +515,8 @@ static void DMMotor_Calculate(DMMotorInstance *inst)
         {
             position_feedforward = *setting->position_feedforward_ptr;
         }
-        measure = DMMotor_GetAngle(inst);
+        MotorData_s md = DMMotor_GetData(inst);
+        measure = md.position;
         setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, position_feedforward);
     }
 
@@ -526,7 +529,8 @@ static void DMMotor_Calculate(DMMotorInstance *inst)
         {
             speed_feedforward = *setting->speed_feedforward_ptr;
         }
-        measure = DMMotor_GetSpeed(inst);
+        MotorData_s md = DMMotor_GetData(inst);
+        measure = md.speed;
         output = PIDCalculate(&ctrl->pid_speed, setpoint, measure, speed_feedforward);
     }
     else
@@ -597,7 +601,7 @@ void DMMotor_SetOffset(void *inst, float offset)
     if (!inst)
         return;
     DMMotorInstance *motor = (DMMotorInstance *)inst;
-    motor->data.position_offset = offset;
+    motor->base.position_offset = offset;
 }
 
 /**

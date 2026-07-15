@@ -129,13 +129,14 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
     }
 
     // ======== 公共反馈与重力前馈 ========
-    float angle = MotorGetAngle(inst->motor); // rad
+    MotorData_s mdata = MotorGetData(inst->motor);
+    float angle = mdata.position; // rad
     if (!isfinite(angle))
     {
         angle = 0.0f;
     }
 
-    float speed = MotorGetSpeed(inst->motor); // rad/s
+    float speed = mdata.speed; // rad/s
     if (!isfinite(speed))
     {
         speed = 0.0f;
@@ -281,9 +282,9 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
 vofa_output:
 #ifdef AxisMitVofaLiteSetChannelUsed
     /* CH1-CH3: 测量值 */
-    VofaSetChannel(1, angle);                        // CH1: 反馈位置 (rad)
-    VofaSetChannel(2, speed);                        // CH2: 反馈速度 (rad/s)
-    VofaSetChannel(3, MotorGetCurrent(inst->motor)); // CH3: 电机实际电流
+    VofaSetChannel(1, angle);                // CH1: 反馈位置 (rad)
+    VofaSetChannel(2, speed);                // CH2: 反馈速度 (rad/s)
+    VofaSetChannel(3, mdata.torque_current); // CH3: 电机实际电流/力矩
     /* CH4-CH6: 设定值 */
     VofaSetChannel(4, ref_pos); // CH4: 位置设定值 (rad)
     VofaSetChannel(5, ref_vel); // CH5: 速度设定值 (rad/s)

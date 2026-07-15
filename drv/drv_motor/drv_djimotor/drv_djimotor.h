@@ -61,29 +61,6 @@ typedef struct
     float no_load_speed;         // 空载转速 (rad/s)
 } DJIMotorParams_s;
 
-typedef struct
-{
-    uint16_t raw_encoder;         // 编码器原始值 (0-8191)
-    int16_t raw_velocity;         // 速度原始值 (RPM)
-    int16_t raw_current;          // 电流原始值
-    int8_t raw_temperature_motor; // 线圈温度 (°C)
-    uint8_t error_code;           // 错误码
-} DJIMotorRawData_s;
-
-typedef struct
-{
-    float position_single; // 单圈位置 (rad) [0, 2π)
-    int64_t position_cnt;  // 圈数（支持负数）
-    float position_multi;  // 多圈位置 (rad)
-    // 如果增量式 (3508,2006) 使用光电门校准；如果绝对式 (6020) 安装后调零一次即可。
-    float position_offset;    // 位置偏置 (rad) 。反馈的是加上偏置的位置
-    float speed;              // 速度 (rad/s)
-    float last_speed;         // 上次速度 (rad/s)
-    float current;            // 电流 (A)
-    float temperature;        // 线圈温度 (°C)
-    uint64_t last_time_stamp; // 上次接收时间戳
-} DJIMotorData_s;             // 速度和位置是转子的速度和位置，不是减速箱输出轴速度和位置
-
 /*============================================
  *              DJI 电机实例结构体
  *============================================*/
@@ -94,9 +71,9 @@ struct DJIMotorInstance
     /* DJI 基本属性 */
     uint8_t motor_id; // 电机 ID (1-8)
 
-    /* 数据缓冲 (DJI 特有) */
-    DJIMotorRawData_s data_raw;
-    DJIMotorData_s data;
+    /* 特有数据 */
+    float motor_temperature; // 线圈温度 (°C)
+    uint8_t error_code;      // 错误码
 
     /* 分组发送 (DJI 特有) */
     DJIMotorSendGroup_s *sender_group;
@@ -113,7 +90,6 @@ typedef struct
     uint16_t reload_count;            // 重载值（喂狗超时阈值）
     DaemonFaultAction_e fault_action; // 离线故障动作
     uint8_t motor_id;                 // 电机 ID (1-8)
-    MotorSpeedSrc_e speed_src;        // 速度来源：反馈速度/位置微分
     MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
     float speed_lpf_rc;               // 速度低通滤波时间常数 RC
 
@@ -141,9 +117,7 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg);
 void DJIMotorEnable(void *inst);
 void DJIMotorDisable(void *inst);
 void DJIMotorSetRef(void *inst, float ref);
-float DJIMotor_GetAngle(void *inst);
-float DJIMotor_GetSpeed(void *inst);
-float DJIMotor_GetCurrent(void *inst);
+MotorData_s DJIMotor_GetData(void *inst);
 void DJIMotor_SetOffset(void *inst, float offset);
 void DJIMotorSend(void *inst); // 按照can的接收id分组，只要调用同1组的任意一个电机的发送函数，即可发送整组电机
 

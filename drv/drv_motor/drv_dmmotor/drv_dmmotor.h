@@ -100,36 +100,6 @@ typedef struct
 } DMMotorProtocolMap_s;
 
 /*============================================
- *              CAN 原始数据结构体
- *============================================*/
-typedef struct
-{
-    uint16_t raw_position;       // 16位位置原始值（无符号，范围 0~65535）
-    uint16_t raw_velocity;       // 12位速度原始值（无符号，范围 0~4095）
-    uint16_t raw_torque;         // 12位扭矩原始值（无符号，范围 0~4095）
-    uint8_t error;               // 错误状态码 (D[0] 高4位)
-    int8_t raw_temperature_mos;  // MOS 温度 (°C)
-    int8_t raw_temperature_coil; // 线圈温度 (°C)
-} DMMotorRawData_s;
-
-/*============================================
- *              转换后数据结构体
- *============================================*/
-typedef struct
-{
-    float position_single;    // 单圈位置 (rad)，范围 [-p_max, p_max]
-    int64_t position_cnt;     // 多圈计数（支持负数）
-    float position_multi;     // 多圈位置 (rad) = cnt * 2*p_max + single
-    float position_offset;    // 位置偏置 (rad)
-    float speed;              // 速度 (rad/s)
-    float last_speed;         // 上次速度 (rad/s)，用于低通滤波
-    float torque;             // 扭矩 (Nm)
-    float temperature_mos;    // MOS 温度 (°C)
-    float temperature_coil;   // 线圈温度 (°C)
-    uint64_t last_time_stamp; // 上次接收时间戳 (us)
-} DMMotorData_s;
-
-/*============================================
  *              DM 电机实例结构体
  *============================================*/
 struct DMMotorInstance
@@ -143,9 +113,10 @@ struct DMMotorInstance
     /* 协议映射配置 */
     DMMotorProtocolMap_s proto_map; // 用户配置范围 + 预计算 scale（初始化时计算）
 
-    /* 数据缓冲 */
-    DMMotorRawData_s data_raw;
-    DMMotorData_s data;
+    /* 特有数据 */
+    float temperature_mos;  // MOS 温度 (°C)
+    float temperature_coil; // 线圈温度 (°C)
+    uint8_t error;          // 错误状态码
 };
 
 /*============================================
@@ -159,7 +130,6 @@ typedef struct
     uint16_t master_id;               // Master ID（反馈帧接收ID）
     uint16_t reload_count;            // 重载值（喂狗超时阈值）
     DaemonFaultAction_e fault_action; // 离线故障动作
-    MotorSpeedSrc_e speed_src;        // 速度来源：反馈速度/位置微分
     MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
     float speed_lpf_rc;               // 速度低通滤波时间常数 RC
 
@@ -195,9 +165,7 @@ void DMMotor_Enable(void *inst);
 void DMMotor_Disable(void *inst);
 void DMMotor_SetRef(void *inst, float ref);
 void DMMotor_Send(void *inst);
-float DMMotor_GetAngle(void *inst);
-float DMMotor_GetSpeed(void *inst);
-float DMMotor_GetCurrent(void *inst);
+MotorData_s DMMotor_GetData(void *inst);
 void DMMotor_SetOffset(void *inst, float offset);
 
 /* 模式命令（调试用） */
