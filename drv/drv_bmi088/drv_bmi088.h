@@ -95,6 +95,23 @@ typedef struct
 } BMI088_Data_t;
 
 /**
+ * @brief BMI088 三轴原始数据联合体
+ * @note 加速度计/陀螺仪各 3 轴 × int16 = 6 字节
+ *       小端字节序（与 Cortex-M 一致），可直接作为 int16 数组访问
+ */
+typedef union
+{
+    uint8_t bytes[6]; // 原始字节
+    int16_t axis[3];  // 三轴数组: [x, y, z]
+    struct
+    {
+        int16_t x; // X 轴
+        int16_t y; // Y 轴
+        int16_t z; // Z 轴
+    };
+} BMI088_AxisRaw_u;
+
+/**
  * @brief IMU 多速率数据结构体（用于 Kalman 等需要独立时间戳的融合算法）
  */
 typedef struct

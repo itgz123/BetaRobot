@@ -257,12 +257,7 @@ static void BMI088_SPICpltCallback(SPIInstance *spi_inst)
 
         uint16_t i = inst->acc_wr_idx % BMI088_ACC_BUF_SIZE;
         uint8_t off = BMI088_ACC_RX_DATA_OFF;
-        inst->acc_raw[i][0] = spi_inst->rx_buff[off + 0];
-        inst->acc_raw[i][1] = spi_inst->rx_buff[off + 1];
-        inst->acc_raw[i][2] = spi_inst->rx_buff[off + 2];
-        inst->acc_raw[i][3] = spi_inst->rx_buff[off + 3];
-        inst->acc_raw[i][4] = spi_inst->rx_buff[off + 4];
-        inst->acc_raw[i][5] = spi_inst->rx_buff[off + 5];
+        memcpy(inst->acc_raw[i], &spi_inst->rx_buff[off], BMI088_RAW_DATA_SIZE);
         inst->t_acc[i] = inst->int_timestamp;
         inst->acc_wr_idx++;
         if (inst->acc_cnt < UINT8_MAX)
@@ -287,12 +282,7 @@ static void BMI088_SPICpltCallback(SPIInstance *spi_inst)
 
         uint16_t i = inst->gyro_wr_idx % BMI088_GYRO_BUF_SIZE;
         uint8_t off = BMI088_GYRO_RX_DATA_OFF;
-        inst->gyro_raw[i][0] = spi_inst->rx_buff[off + 0];
-        inst->gyro_raw[i][1] = spi_inst->rx_buff[off + 1];
-        inst->gyro_raw[i][2] = spi_inst->rx_buff[off + 2];
-        inst->gyro_raw[i][3] = spi_inst->rx_buff[off + 3];
-        inst->gyro_raw[i][4] = spi_inst->rx_buff[off + 4];
-        inst->gyro_raw[i][5] = spi_inst->rx_buff[off + 5];
+        memcpy(inst->gyro_raw[i], &spi_inst->rx_buff[off], BMI088_RAW_DATA_SIZE);
         inst->t_gyro[i] = inst->int_timestamp;
         inst->gyro_wr_idx++;
         if (inst->gyro_cnt < UINT8_MAX)
@@ -380,6 +370,7 @@ static uint8_t BMI088_FindBracket(const uint64_t *t_buf, uint16_t newest, uint16
  * @param t_new    新样本时间戳 (us)
  * @param t_target 目标时间戳 (us)
  * @param out      插值结果 [6]
+ * @note 使用 BMI088_AxisRaw_u 联合体直接操作 int16 轴数据
  */
 static void BMI088_InterpRaw(const uint8_t *raw_old, const uint8_t *raw_new, uint64_t t_old, uint64_t t_new, uint64_t t_target, uint8_t *out)
 {
@@ -395,39 +386,42 @@ static void BMI088_InterpRaw(const uint8_t *raw_old, const uint8_t *raw_new, uin
     if (ratio > 1.0f)
         ratio = 1.0f;
 
+    const BMI088_AxisRaw_u *old = (const BMI088_AxisRaw_u *)raw_old;
+    const BMI088_AxisRaw_u *new = (const BMI088_AxisRaw_u *)raw_new;
+    BMI088_AxisRaw_u *result = (BMI088_AxisRaw_u *)out;
+
     for (uint8_t i = 0; i < BMI088_AXIS_NUM; i++)
     {
-        int16_t v_old = (int16_t)((raw_old[i * 2 + 1] << 8) | raw_old[i * 2]);
-        int16_t v_new = (int16_t)((raw_new[i * 2 + 1] << 8) | raw_new[i * 2]);
-        int16_t v_out = (int16_t)((float)v_old + ((float)v_new - (float)v_old) * ratio + BMI088_INTERP_ROUND);
-        out[i * 2] = (uint8_t)(v_out & 0xFF);
-        out[i * 2 + 1] = (uint8_t)((v_out >> 8) & 0xFF);
+        int16_t v_out = (int16_t)((float)old->axis[i] + ((float)new->axis[i] - (float)old->axis[i]) * ratio + BMI088_INTERP_ROUND);
+        result->axis[i] = v_out;
     }
 }
 
 /**
  * @brief 加速度计原始数据 → 物理单位 (m/s²)
+ * @note 使用 BMI088_AxisRaw_u 联合体直接访问 int16 轴数据
  */
 static void BMI088_RawToAcc(const uint8_t *raw, float *out, BMI088_AccRange_e range, const float *offset)
 {
+    const BMI088_AxisRaw_u *axis = (const BMI088_AxisRaw_u *)raw;
     float sen = BMI088_AccSenTable[range];
     for (uint8_t i = 0; i < BMI088_AXIS_NUM; i++)
     {
-        int16_t v = (int16_t)((raw[i * 2 + 1] << 8) | raw[i * 2]);
-        out[i] = (float)v * sen - offset[i];
+        out[i] = (float)axis->axis[i] * sen - offset[i];
     }
 }
 
 /**
  * @brief 陀螺仪原始数据 → 物理单位 (rad/s)
+ * @note 使用 BMI088_AxisRaw_u 联合体直接访问 int16 轴数据
  */
 static void BMI088_RawToGyro(const uint8_t *raw, float *out, BMI088_GyroRange_e range, const float *offset)
 {
+    const BMI088_AxisRaw_u *axis = (const BMI088_AxisRaw_u *)raw;
     float sen = BMI088_GyroSenTable[range];
     for (uint8_t i = 0; i < BMI088_AXIS_NUM; i++)
     {
-        int16_t v = (int16_t)((raw[i * 2 + 1] << 8) | raw[i * 2]);
-        out[i] = (float)v * sen - offset[i];
+        out[i] = (float)axis->axis[i] * sen - offset[i];
     }
 }
 

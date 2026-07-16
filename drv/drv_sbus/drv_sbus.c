@@ -135,77 +135,49 @@ static SBUS_Data_t SBUSDecodeFrame(const uint8_t *data, uint16_t len)
         return result;
     }
 
+    // 使用联合体映射原始帧，支持位域访问
+    const SBUS_RawFrame_u *frame = (const SBUS_RawFrame_u *)data;
+
     // 帧头检查
-    if (data[0] != SBUS_HEADER)
+    if (frame->frame.header != SBUS_HEADER)
     {
-        LOGWARNING("[drv_sbus] Invalid frame header: 0x%02X", data[0]);
+        LOGWARNING("[drv_sbus] Invalid frame header: 0x%02X", frame->frame.header);
         result.frame_lost = 1;
         return result;
     }
 
     // 帧尾检查
-    if (data[24] != SBUS_FOOTER && data[24] != SBUS_FOOTER_FRAME_LOST && data[24] != SBUS_FOOTER_FAILSAFE)
+    if (frame->frame.footer != SBUS_FOOTER &&
+        frame->frame.footer != SBUS_FOOTER_FRAME_LOST &&
+        frame->frame.footer != SBUS_FOOTER_FAILSAFE)
     {
-        LOGWARNING("[drv_sbus] Invalid frame footer: 0x%02X", data[24]);
+        LOGWARNING("[drv_sbus] Invalid frame footer: 0x%02X", frame->frame.footer);
         result.frame_lost = 1;
         return result;
     }
 
     // 解析 16 个模拟通道（每通道 11 位）并归一化到 -1.0 ~ 1.0
-    // 通道数据从字节 1 开始，到字节 22 结束
     // 归一化公式：(raw - center) / (max - center)
     static const float scale = 1.0f / (float)(SBUS_CH_MAX - SBUS_CH_CENTER);
 
-    uint16_t raw;
-    raw = (data[1] | (data[2] << 8)) & 0x07FF;
-    result.ch[0] = (float)(raw - SBUS_CH_CENTER) * scale;
-    raw = (data[2] >> 3 | (data[3] << 5)) & 0x07FF;
-    result.ch[1] = (float)(raw - SBUS_CH_CENTER) * scale;
-    raw = (data[3] >> 6 | (data[4] << 2) | (data[5] << 10)) & 0x07FF;
-    result.ch[2] = (float)(raw - SBUS_CH_CENTER) * scale;
-    raw = (data[5] >> 1 | (data[6] << 7)) & 0x07FF;
-    result.ch[3] = (float)(raw - SBUS_CH_CENTER) * scale;
-    raw = (data[6] >> 4 | (data[7] << 4)) & 0x07FF;
-    result.ch[4] = (float)(raw - SBUS_CH_CENTER) * scale;
-    raw = (data[7] >> 7 | (data[8] << 1) | (data[9] << 9)) & 0x07FF;
-    result.ch[5] = (float)(raw - SBUS_CH_CENTER) * scale;
-    raw = (data[9] >> 2 | (data[10] << 6)) & 0x07FF;
-    result.ch[6] = (float)(raw - SBUS_CH_CENTER) * scale;
-    raw = (data[10] >> 5 | (data[11] << 3)) & 0x07FF;
-    result.ch[7] = (float)(raw - SBUS_CH_CENTER) * scale;
-    raw = (data[12] | (data[13] << 8)) & 0x07FF;
-    result.ch[8] = (float)(raw - SBUS_CH_CENTER) * scale;
-    raw = (data[13] >> 3 | (data[14] << 5)) & 0x07FF;
-    result.ch[9] = (float)(raw - SBUS_CH_CENTER) * scale;
-    raw = (data[14] >> 6 | (data[15] << 2) | (data[16] << 10)) & 0x07FF;
-    result.ch[10] = (float)(raw - SBUS_CH_CENTER) * scale;
-    raw = (data[16] >> 1 | (data[17] << 7)) & 0x07FF;
-    result.ch[11] = (float)(raw - SBUS_CH_CENTER) * scale;
-    raw = (data[17] >> 4 | (data[18] << 4)) & 0x07FF;
-    result.ch[12] = (float)(raw - SBUS_CH_CENTER) * scale;
-    raw = (data[18] >> 7 | (data[19] << 1) | (data[20] << 9)) & 0x07FF;
-    result.ch[13] = (float)(raw - SBUS_CH_CENTER) * scale;
-    raw = (data[20] >> 2 | (data[21] << 6)) & 0x07FF;
-    result.ch[14] = (float)(raw - SBUS_CH_CENTER) * scale;
-    raw = (data[21] >> 5 | (data[22] << 3)) & 0x07FF;
-    result.ch[15] = (float)(raw - SBUS_CH_CENTER) * scale;
+    for (uint8_t i = 0; i < SBUS_CHANNEL_COUNT; i++)
+    {
+        uint16_t raw = SBUS_GetChannelRaw(frame, i);
+        result.ch[i] = (float)(raw - SBUS_CH_CENTER) * scale;
+    }
 
-    // 解析数字通道和标志位（字节 23）
-    // bit 0: ch17 (数字通道 1)
-    // bit 1: ch18 (数字通道 2)
-    // bit 2: frame_lost (帧丢失)
-    // bit 3: failsafe (失控保护)
-    result.digital_ch[0] = (data[23] & 0x01) ? 1 : 0;
-    result.digital_ch[1] = (data[23] & 0x02) ? 1 : 0;
-    result.frame_lost = (data[23] & 0x04) ? 1 : 0;
-    result.failsafe = (data[23] & 0x08) ? 1 : 0;
+    // 使用位域解析数字通道和标志位（字节 23）
+    result.digital_ch[0] = frame->frame.flags.ch17 ? 1 : 0;
+    result.digital_ch[1] = frame->frame.flags.ch18 ? 1 : 0;
+    result.frame_lost = frame->frame.flags.frame_lost ? 1 : 0;
+    result.failsafe = frame->frame.flags.failsafe ? 1 : 0;
 
     // 帧尾标志也包含状态信息
-    if (data[24] == SBUS_FOOTER_FRAME_LOST)
+    if (frame->frame.footer == SBUS_FOOTER_FRAME_LOST)
     {
         result.frame_lost = 1;
     }
-    else if (data[24] == SBUS_FOOTER_FAILSAFE)
+    else if (frame->frame.footer == SBUS_FOOTER_FAILSAFE)
     {
         result.failsafe = 1;
     }
