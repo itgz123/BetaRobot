@@ -57,7 +57,7 @@ typedef struct
     DaemonFaultAction_e fault_action; // 离线故障动作, 见 DaemonFaultAction_e
     offline_callback callback;        // 异常处理函数（可为NULL）
     void *owner_id;                   // 所属模块实例指针
-} Daemon_Init_Config_s;
+} Daemon_Config_s;
 
 /*------------- 实例定义宏 --------------*/
 
@@ -72,7 +72,8 @@ typedef struct
         .last_reload_us = 0,               \
     }
 
-void DaemonRegister(DaemonInstance *inst, const Daemon_Init_Config_s *config);
+void DaemonConfig(DaemonInstance *inst, const Daemon_Config_s *config);
+void DaemonRegister(DaemonInstance *inst, const Daemon_Config_s *config);
 void DaemonReload(DaemonInstance *instance);
 uint8_t DaemonIsOnline(DaemonInstance *instance);
 void DaemonTask(void);

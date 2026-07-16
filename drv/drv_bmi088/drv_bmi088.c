@@ -579,7 +579,11 @@ static uint8_t BMI088_GyroInit(BMI088Instance *inst)
 
 /*============================ 公开接口实现 ============================*/
 
-int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
+/**
+ * @brief 配置BMI088实例（可重复调用，不修改 static 变量）
+ * @note 可运行时重新调用以重新配置传感器参数
+ */
+int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
 {
     if (inst == NULL)
     {
@@ -624,48 +628,6 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
         return -1;
     }
 
-    // 设置 parent 指针
-    inst->spi_inst->parent = inst;
-    inst->cs_acc->parent = inst;
-    inst->cs_gyro->parent = inst;
-    inst->int_acc->parent = inst;
-    inst->int_gyro->parent = inst;
-
-    SPI_Init_Config_s spi_cfg = {.spi_e = config->spi_e, .work_mode = SPI_BLOCK_MODE, .rx_callback = NULL};
-    if (SPIRegister(inst->spi_inst, &spi_cfg) != 0)
-    {
-        LOGERROR("[drv_bmi088] SPI register failed");
-        return -1;
-    }
-
-    GPIO_Init_Config_s gpio_cs_acc = {.gpio_e = config->cs_acc_e, .callback = NULL};
-    if (GPIORegister(inst->cs_acc, &gpio_cs_acc) != 0)
-    {
-        LOGERROR("[drv_bmi088] cs_acc register failed");
-        return -1;
-    }
-
-    GPIO_Init_Config_s gpio_cs_gyro = {.gpio_e = config->cs_gyro_e, .callback = NULL};
-    if (GPIORegister(inst->cs_gyro, &gpio_cs_gyro) != 0)
-    {
-        LOGERROR("[drv_bmi088] cs_gyro register failed");
-        return -1;
-    }
-
-    // 某些板级默认将 CS 拉低，上电后先释放两个片选，避免总线冲突。
-    // 同时给加速度计一个 CS 上升沿，触发其由 I2C 切换到 SPI。
-    GPIOSet(inst->cs_acc);
-    GPIOSet(inst->cs_gyro);
-    DWT_Delay(BMI088_CS_RELEASE_DELAY_S); // 修改为合适时间，使用宏定义
-
-    // 初始化加热tim_pwm
-    inst->heater_pwm->tim_e = config->heater_e;
-    if (BMI088_HeaterInit(inst) != 0)
-    {
-        LOGERROR("[drv_bmi088] heater_pwm init failed");
-        return -1;
-    }
-
     // 保存用户配置
     inst->acc_range = config->acc_range;
     inst->acc_bwp = config->acc_bwp;
@@ -684,11 +646,85 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
     if (BMI088_GyroInit(inst) != 0)
         return -1;
 
-    if (inst->daemon != NULL && config->daemon_reload > 0)
+    return 0;
+}
+
+int8_t BMI088Register(BMI088Instance *inst, const BMI088_Register_Config_s *reg_cfg)
+{
+    if (inst == NULL)
     {
-        Daemon_Init_Config_s daemon_cfg = {
-            .reload_count = config->daemon_reload,
-            .fault_action = config->daemon_fault,
+        LOGERROR("[drv_bmi088] Instance is NULL");
+        return -1;
+    }
+
+    if (reg_cfg == NULL)
+    {
+        LOGERROR("[drv_bmi088] Config is NULL");
+        return -1;
+    }
+
+    const BMI088_Config_s *config = &reg_cfg->bmi088_config;
+
+    // 防重复注册检查（通过检查 SPI parent 是否已设置）
+    if (inst->spi_inst && inst->spi_inst->parent == inst)
+    {
+        LOGERROR("[drv_bmi088] Instance already registered!");
+        return -1;
+    }
+
+    // 调用 Config 完成传感器配置
+    if (BMI088Config(inst, config) != 0)
+    {
+        return -1;
+    }
+
+    // 设置 parent 指针
+    inst->spi_inst->parent = inst;
+    inst->cs_acc->parent = inst;
+    inst->cs_gyro->parent = inst;
+    inst->int_acc->parent = inst;
+    inst->int_gyro->parent = inst;
+
+    SPI_Config_s spi_cfg = {.spi_e = reg_cfg->spi_e, .work_mode = SPI_BLOCK_MODE, .rx_callback = NULL};
+    if (SPIRegister(inst->spi_inst, &spi_cfg) != 0)
+    {
+        LOGERROR("[drv_bmi088] SPI register failed");
+        return -1;
+    }
+
+    GPIO_Config_s gpio_cs_acc = {.gpio_e = reg_cfg->cs_acc_e, .callback = NULL};
+    if (GPIORegister(inst->cs_acc, &gpio_cs_acc) != 0)
+    {
+        LOGERROR("[drv_bmi088] cs_acc register failed");
+        return -1;
+    }
+
+    GPIO_Config_s gpio_cs_gyro = {.gpio_e = reg_cfg->cs_gyro_e, .callback = NULL};
+    if (GPIORegister(inst->cs_gyro, &gpio_cs_gyro) != 0)
+    {
+        LOGERROR("[drv_bmi088] cs_gyro register failed");
+        return -1;
+    }
+
+    // 某些板级默认将 CS 拉低，上电后先释放两个片选，避免总线冲突。
+    // 同时给加速度计一个 CS 上升沿，触发其由 I2C 切换到 SPI。
+    GPIOSet(inst->cs_acc);
+    GPIOSet(inst->cs_gyro);
+    DWT_Delay(BMI088_CS_RELEASE_DELAY_S); // 修改为合适时间，使用宏定义
+
+    // 初始化加热tim_pwm
+    inst->heater_pwm->tim_e = reg_cfg->heater_e;
+    if (BMI088_HeaterInit(inst) != 0)
+    {
+        LOGERROR("[drv_bmi088] heater_pwm init failed");
+        return -1;
+    }
+
+    if (inst->daemon != NULL && reg_cfg->daemon_reload > 0)
+    {
+        Daemon_Config_s daemon_cfg = {
+            .reload_count = reg_cfg->daemon_reload,
+            .fault_action = reg_cfg->daemon_fault,
             .callback = BMI088_HeaterFaultCallback,
             .owner_id = inst,
         };
@@ -698,13 +734,13 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
     // 中断模式
     if (inst->work_mode == BMI088_MODE_INT)
     {
-        GPIO_Init_Config_s gpio_int_acc = {.gpio_e = config->int_acc_e, .callback = BMI088_IntCallback};
+        GPIO_Config_s gpio_int_acc = {.gpio_e = reg_cfg->int_acc_e, .callback = BMI088_IntCallback};
         if (GPIORegister(inst->int_acc, &gpio_int_acc) != 0)
         {
             LOGERROR("[drv_bmi088] int_acc register failed");
             return -1;
         }
-        GPIO_Init_Config_s gpio_int_gyro = {.gpio_e = config->int_gyro_e, .callback = BMI088_IntCallback};
+        GPIO_Config_s gpio_int_gyro = {.gpio_e = reg_cfg->int_gyro_e, .callback = BMI088_IntCallback};
         if (GPIORegister(inst->int_gyro, &gpio_int_gyro) != 0)
         {
             LOGERROR("[drv_bmi088] int_gyro register failed");
@@ -737,13 +773,13 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
     }
     else
     {
-        GPIO_Init_Config_s gpio_int_acc = {.gpio_e = config->int_acc_e, .callback = NULL};
+        GPIO_Config_s gpio_int_acc = {.gpio_e = reg_cfg->int_acc_e, .callback = NULL};
         if (GPIORegister(inst->int_acc, &gpio_int_acc) != 0)
         {
             LOGERROR("[drv_bmi088] int_acc register failed");
             return -1;
         }
-        GPIO_Init_Config_s gpio_int_gyro = {.gpio_e = config->int_gyro_e, .callback = NULL};
+        GPIO_Config_s gpio_int_gyro = {.gpio_e = reg_cfg->int_gyro_e, .callback = NULL};
         if (GPIORegister(inst->int_gyro, &gpio_int_gyro) != 0)
         {
             LOGERROR("[drv_bmi088] int_gyro register failed");

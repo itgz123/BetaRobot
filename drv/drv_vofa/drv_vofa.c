@@ -88,7 +88,7 @@ static void VofaTxCpltCallback(USARTInstance *instance)
 void VofaInit(void)
 {
     // 注册 USART（使用 DMA 模式 + 发送完成回调）
-    USART_Init_Config_s usart_cfg = {
+    USART_Config_s usart_cfg = {
         .uart_e = VOFA_LITE_UART,
         .tx_mode = USART_DMA_MODE,
         .rx_callback = NULL,

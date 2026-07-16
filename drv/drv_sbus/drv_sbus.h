@@ -65,13 +65,28 @@ typedef struct SBUSInstance
 
 /*------------- 配置结构体 --------------*/
 
+/**
+ * @brief SBUS 配置结构体（Config 函数使用）
+ *
+ * @note 可重复调用 SBUSConfig 运行时修改超时参数。
+ */
 typedef struct
 {
-    BoardUART_e uart_e;       // 板载UART枚举（注册时用于查找映射）
-    uint16_t daemon_reload;   // daemon 喂狗重载值
-    uint8_t daemon_fault;     // daemon 离线故障动作
     uint32_t lost_timeout_ms; // 丢帧/失控确认超时 (ms)，0=立即标志
-} SBUS_Init_Config_s;
+} SBUS_Config_s;
+
+/**
+ * @brief SBUS 注册配置结构体（Register 函数使用）
+ *
+ * @note 仅调用一次。内嵌 SBUS_Config_s + 硬件/daemon 相关字段。
+ */
+typedef struct
+{
+    SBUS_Config_s sbus_config; // SBUS 配置（传入 Config）
+    BoardUART_e uart_e;        // 板载UART枚举（注册时用于查找映射）
+    uint16_t daemon_reload;    // daemon 喂狗重载值
+    uint8_t daemon_fault;      // daemon 离线故障动作
+} SBUS_Register_Config_s;
 
 /*------------- 实例定义宏 --------------*/
 /**
@@ -95,13 +110,27 @@ typedef struct
 /*------------- 外部接口声明 --------------*/
 
 /**
- * @brief 注册 SBUS 实例
+ * @brief 配置 SBUS 实例（可重复调用，不修改 static 变量）
+ * @param instance SBUS 实例指针
+ * @param config   初始化配置结构体指针
+ * @retval 0 成功
+ * @retval -1 失败
+ *
+ * @note 仅配置 instance 字段（parent 指针、超时参数等），不调用子模块 Register。
+ *       可重复调用以更新运行时参数。
+ */
+int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config);
+
+/**
+ * @brief 注册 SBUS 实例（仅调用一次）
  * @param instance SBUS 实例指针（需先通过宏定义）
  * @param config   初始化配置结构体指针
  * @retval 0 成功
  * @retval -1 失败
+ *
+ * @note 内部调用 SBUSConfig 后，注册 USART 和 Daemon 子模块。
  */
-int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Init_Config_s *config);
+int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Register_Config_s *reg_cfg);
 
 #endif /* BSP_UART_MODULE_ENABLED */
 

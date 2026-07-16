@@ -54,7 +54,7 @@ typedef struct
     BoardSPI_e spi_e;                          // 板载SPI枚举（注册时用于查找映射）
     SPI_Work_Mode_e work_mode;                 // 工作模式（阻塞/中断/DMA）
     void (*rx_callback)(struct SPIInstance *); // 接收完成回调（可为NULL，仅DMA/IT模式有效）
-} SPI_Init_Config_s;
+} SPI_Config_s;
 
 /*------------- 实例定义宏 --------------*/
 
@@ -78,13 +78,28 @@ typedef struct
 /*------------- 外部接口声明 --------------*/
 
 /**
- * @brief 注册SPI实例
+ * @brief 配置SPI实例（可重复调用，不修改 static 管理数组）
+ * @param instance SPI实例指针
+ * @param config   初始化配置结构体指针
+ * @retval 0 成功
+ * @retval -1 失败（参数非法）
+ *
+ * @note 仅配置 instance 字段和硬件映射，不修改 static 管理数组。
+ *       可重复调用以重新配置参数。
+ */
+int8_t SPIConfig(SPIInstance *instance, const SPI_Config_s *config);
+
+/**
+ * @brief 注册SPI实例（仅调用一次）
  * @param instance SPI实例指针（需先通过宏定义）
  * @param config   初始化配置结构体指针
  * @retval 0 成功
  * @retval -1 失败（实例数超过上限或参数无效）
+ *
+ * @note 内部调用 SPIConfig 后，将 instance 加入 static 管理数组。
+ *       同一 instance 不可重复注册。
  */
-int8_t SPIRegister(SPIInstance *instance, const SPI_Init_Config_s *config);
+int8_t SPIRegister(SPIInstance *instance, const SPI_Config_s *config);
 
 /**
  * @brief SPI发送数据

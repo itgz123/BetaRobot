@@ -348,7 +348,11 @@ static void DMMotorDaemonCallback(void *owner)
  *              注册函数
  *============================================*/
 
-int8_t DMMotorRegister(DMMotorInstance *inst, DMMotor_Init_Config_s *cfg)
+/**
+ * @brief 配置DM电机实例（可重复调用，不修改 static 变量）
+ * @note 可运行时重新调用以修改 PID 参数、协议映射等
+ */
+int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
 {
     if (!inst || !cfg)
         return -1;
@@ -442,11 +446,33 @@ int8_t DMMotorRegister(DMMotorInstance *inst, DMMotor_Init_Config_s *cfg)
     inst->base.position_offset = 0.0f;
     memset(&inst->base.data, 0, sizeof(MotorData_s));
 
+    return 0;
+}
+
+int8_t DMMotorRegister(DMMotorInstance *inst, const DMMotor_Register_Config_s *reg_cfg)
+{
+    if (!inst || !reg_cfg)
+        return -1;
+
+    DMMotor_Config_s *cfg = (DMMotor_Config_s *)&reg_cfg->motor_config;
+
+    /* 参数校验 */
+    if (cfg->model >= DM_MODEL_NUM)
+        return -1;
+
+    // 防重复注册检查（通过检查 CAN instance 是否已设置 parent）
+    if (inst->base.can && inst->base.can->parent == inst)
+        return -1;
+
+    // 调用 Config 完成实例配置
+    if (DMMotorConfig(inst, cfg) != 0)
+        return -1;
+
     /* 注册 CAN 实例 */
     if (inst->base.can)
     {
-        CAN_Init_Config_s can_cfg = {
-            .can_e = cfg->can_e,
+        CAN_Config_s can_cfg = {
+            .can_e = reg_cfg->can_e,
             .tx_id = cfg->motor_can_id,
             .filter_mode = CAN_FILTER_MODE_LIST,
             .rx_id_list = {cfg->master_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},
@@ -460,11 +486,11 @@ int8_t DMMotorRegister(DMMotorInstance *inst, DMMotor_Init_Config_s *cfg)
     /* 注册守护进程 */
     if (inst->base.daemon)
     {
-        Daemon_Init_Config_s config = {
+        Daemon_Config_s config = {
             .callback = DMMotorDaemonCallback,
-            .fault_action = cfg->fault_action,
+            .fault_action = reg_cfg->fault_action,
             .owner_id = inst,
-            .reload_count = cfg->reload_count};
+            .reload_count = reg_cfg->reload_count};
         DaemonRegister(inst->base.daemon, &config);
     }
 

@@ -133,11 +133,13 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
 /*------------- 外部接口实现 --------------*/
 
-int8_t USARTRegister(USARTInstance *instance, const USART_Init_Config_s *config)
+/**
+ * @brief 配置USART实例（可重复调用，不修改 static 管理数组）
+ */
+int8_t USARTConfig(USARTInstance *instance, const USART_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_usart] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_usart] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_idx >= UART_INSTANCE_NUM, -1, LOGERROR("[bsp_usart] Exceeded max instance count!"));
     BSP_RETURN_IF_TRUE_LOG(config->uart_e >= UART_NUM_MAX, -1, LOGERROR("[bsp_usart] uart_e out of range!"));
 
     // 将配置拷贝到实例
@@ -153,20 +155,48 @@ int8_t USARTRegister(USARTInstance *instance, const USART_Init_Config_s *config)
     // RX 使用 ReceiveToIdle DMA，必须配置 RX DMA
     BSP_RETURN_IF_TRUE_LOG(instance->handle->hdmarx == NULL, -1, LOGERROR("[bsp_usart] RX DMA is required but hdmarx is NULL!"));
 
-    // 重复注册检查
+    // 启动接收
+    USARTRestartReceive(instance);
+
+    return 0;
+}
+
+/**
+ * @brief 注册USART实例（仅调用一次，修改 static 管理数组）
+ */
+int8_t USARTRegister(USARTInstance *instance, const USART_Config_s *config)
+{
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_usart] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_usart] Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(s_idx >= UART_INSTANCE_NUM, -1, LOGERROR("[bsp_usart] Exceeded max instance count!"));
+
+    // 防重复注册检查
     for (uint8_t i = 0; i < s_idx; i++)
     {
-        if (s_usart_instance[i]->handle == instance->handle)
+        if (s_usart_instance[i] == instance)
         {
             LOGERROR("[bsp_usart] Instance already registered!");
             return -1;
         }
     }
 
-    s_usart_instance[s_idx++] = instance;
+    // 调用 Config 完成硬件配置
+    if (USARTConfig(instance, config) != 0)
+    {
+        return -1;
+    }
 
-    // 启动接收
-    USARTRestartReceive(instance);
+    // 重复注册检查（同一 handle 不能重复注册）
+    for (uint8_t i = 0; i < s_idx; i++)
+    {
+        if (s_usart_instance[i]->handle == instance->handle)
+        {
+            LOGERROR("[bsp_usart] Same UART handle already registered!");
+            return -1;
+        }
+    }
+
+    s_usart_instance[s_idx++] = instance;
 
     LOGINFO("[bsp_usart] USART Instance registered, idx=%d", s_idx - 1);
     return 0;
