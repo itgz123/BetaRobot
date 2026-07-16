@@ -36,6 +36,50 @@
 #define SBUS_FOOTER_FRAME_LOST 0x04 // 帧丢失标志
 #define SBUS_FOOTER_FAILSAFE 0x08   // 失控保护标志
 
+/*------------- SBUS 原始帧联合体 --------------*/
+
+/**
+ * @brief SBUS 原始帧联合体
+ * @note 映射 25 字节 SBUS 帧：头(1) + 通道数据(22) + 标志位(1) + 帧尾(1)
+ */
+typedef union
+{
+    uint8_t raw[25];
+    struct
+    {
+        uint8_t header;      // [0]  帧头 0x0F
+        uint8_t ch_data[22]; // [1-22] 16通道 × 11位
+        struct               // [23] 标志位
+        {
+            uint8_t ch17 : 1;       // bit 0: 数字通道 1
+            uint8_t ch18 : 1;       // bit 1: 数字通道 2
+            uint8_t frame_lost : 1; // bit 2: 帧丢失
+            uint8_t failsafe : 1;   // bit 3: 失控保护
+            uint8_t reserved : 4;   // bits 4-7
+        } flags;
+        uint8_t footer; // [24] 帧尾
+    } frame;
+} SBUS_RawFrame_u;
+
+/**
+ * @brief 从 SBUS 原始帧中提取 11 位通道原始值
+ * @param frame SBUS 原始帧指针
+ * @param ch    通道索引 (0-15)
+ * @return uint16_t 11 位原始值 (0-2047)
+ * @note 第 3 个字节读取后会溢出到 flags 字节，但被 0x07FF 掩码清除
+ */
+static inline uint16_t SBUS_GetChannelRaw(const SBUS_RawFrame_u *frame, uint8_t ch)
+{
+    uint16_t bit_off = (uint16_t)ch * 11; // 从 ch_data 起始的位偏移
+    uint8_t byte_off = bit_off / 8;       // 从 raw[1] 起的字节偏移
+    uint8_t bit_rem = bit_off % 8;        // 字节内位偏移
+    // 从 raw[1 + byte_off] 读取最多 3 字节，超出的位被 0x07FF 清除
+    return (uint16_t)(((uint32_t)frame->raw[1 + byte_off] >> bit_rem) |
+                      ((uint32_t)frame->raw[1 + byte_off + 1] << (8 - bit_rem)) |
+                      ((uint32_t)frame->raw[1 + byte_off + 2] << (16 - bit_rem))) &
+           0x07FF;
+}
+
 /*------------- 类型定义 --------------*/
 
 /**

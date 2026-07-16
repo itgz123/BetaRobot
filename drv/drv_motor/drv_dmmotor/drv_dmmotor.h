@@ -30,6 +30,70 @@
 typedef struct DMMotorInstance DMMotorInstance;
 
 /*============================================
+ *              CAN 帧联合体定义
+ *
+ * DM 电机使用 CAN MIT 协议，8 字节帧格式如下。
+ * 因存在 12 位跨字节位域，联合体主要用于
+ * 文档化帧布局，解析仍使用移位操作。
+ *============================================*/
+
+/**
+ * @brief DM 电机 CAN MIT 反馈帧联合体
+ *
+ * 反馈帧格式（8字节）：
+ *   D[0]：bits[3:0]=电机ID, bits[7:4]=错误状态
+ *   D[1..2]：位置 16位 无符号 大端
+ *   D[3]：速度高8位 VEL[11:4]
+ *   D[4]：bits[7:4]=速度低4位 VEL[3:0], bits[3:0]=扭矩高4位 T[11:8]
+ *   D[5]：扭矩低8位 T[7:0]
+ *   D[6]：MOS温度 (°C)
+ *   D[7]：线圈温度 (°C)
+ */
+typedef union
+{
+    uint8_t raw[8];
+    struct
+    {
+        uint8_t id_and_error;         // [0]   bits[7:4]=error, bits[3:0]=id
+        uint16_t position_be;         // [1-2] 位置 uint16 大端
+        uint8_t vel_hi;               // [3]   速度 VEL[11:4]
+        uint8_t vel_lo_and_torque_hi; // [4]   VEL[3:0] | TORQUE[11:8]
+        uint8_t torque_lo;            // [5]   扭矩 TORQUE[7:0]
+        int8_t temp_mos;              // [6]   MOS 温度 (°C)
+        int8_t temp_coil;             // [7]   线圈温度 (°C)
+    } parts;
+} DM_FeedbackFrame_u;
+
+/**
+ * @brief DM 电机 MIT 控制帧联合体
+ *
+ * 控制帧格式（MIT 模式，8字节）：
+ *   D[0..1]：p_des 16位 大端
+ *   D[2]：v_des[11:4]
+ *   D[3]：bits[7:4]=v_des[3:0], bits[3:0]=Kp[11:8]
+ *   D[4]：Kp[7:0]
+ *   D[5]：Kd[11:4]
+ *   D[6]：bits[7:4]=Kd[3:0], bits[3:0]=t_ff[11:8]
+ *   D[7]：t_ff[7:0]
+ *
+ * @note 本项目在上位机做 PID（Kp=Kd=0），仅通过 t_ff 下发扭矩
+ */
+typedef union
+{
+    uint8_t raw[8];
+    struct
+    {
+        uint16_t p_des_be;          // [0-1] 位置目标 uint16 大端
+        uint8_t v_des_hi;           // [2]   v_des[11:4]
+        uint8_t v_des_lo_and_kp_hi; // [3]   v_des[3:0] | kp[11:8]
+        uint8_t kp_lo;              // [4]   kp[7:0]
+        uint8_t kd_hi;              // [5]   kd[11:4]
+        uint8_t kd_lo_and_tff_hi;   // [6]   kd[3:0] | t_ff[11:8]
+        uint8_t tff_lo;             // [7]   t_ff[7:0]
+    } parts;
+} DM_ControlFrame_u;
+
+/*============================================
  *              模式命令枚举
  *============================================*/
 /**

@@ -206,13 +206,14 @@ MotorData_s DMMotor_GetData(void *inst)
     uint8_t ready_idx = !base->raw_frame_idx;
     MotorRawFrame_s frame = base->raw_frames[ready_idx];
 
-    /* ====== Step 2: 解析位域 ====== */
-    uint8_t error = frame.bytes[0] >> 4;
-    uint16_t raw_position = ((uint16_t)frame.bytes[1] << 8) | frame.bytes[2];
-    uint16_t raw_velocity = ((uint16_t)frame.bytes[3] << 4) | (frame.bytes[4] >> 4);
-    uint16_t raw_torque = ((uint16_t)(frame.bytes[4] & 0x0F) << 8) | frame.bytes[5];
-    int8_t raw_temperature_mos = (int8_t)frame.bytes[6];
-    int8_t raw_temperature_coil = (int8_t)frame.bytes[7];
+    /* ====== Step 2: 使用联合体解析位域 ====== */
+    const DM_FeedbackFrame_u *fb = (const DM_FeedbackFrame_u *)frame.bytes;
+    uint8_t error = fb->parts.id_and_error >> 4;
+    uint16_t raw_position = ((uint16_t)fb->parts.position_be >> 8) | ((uint16_t)fb->parts.position_be << 8);
+    uint16_t raw_velocity = ((uint16_t)fb->parts.vel_hi << 4) | (fb->parts.vel_lo_and_torque_hi >> 4);
+    uint16_t raw_torque = ((uint16_t)(fb->parts.vel_lo_and_torque_hi & 0x0F) << 8) | fb->parts.torque_lo;
+    int8_t raw_temperature_mos = fb->parts.temp_mos;
+    int8_t raw_temperature_coil = fb->parts.temp_coil;
 
     DMModel_e model = base->model;
     if (model >= DM_MODEL_NUM)
@@ -688,16 +689,15 @@ void DMMotor_Send(void *inst)
                                      motor->proto_map.t_to_uint_scale,
                                      motor->proto_map.t_range);
 
-    /* 打包控制帧 */
-    uint8_t *buf = can->tx_buff;
-    buf[0] = (uint8_t)(p_des >> 8);
-    buf[1] = (uint8_t)(p_des & 0xFF);
-    buf[2] = (uint8_t)(v_des >> 4);
-    buf[3] = (uint8_t)(((v_des & 0xF) << 4) | ((kp >> 8) & 0xF));
-    buf[4] = (uint8_t)(kp & 0xFF);
-    buf[5] = (uint8_t)(kd >> 4);
-    buf[6] = (uint8_t)(((kd & 0xF) << 4) | ((t_ff >> 8) & 0xF));
-    buf[7] = (uint8_t)(t_ff & 0xFF);
+    /* 使用控制帧联合体打包 */
+    DM_ControlFrame_u *cf = (DM_ControlFrame_u *)can->tx_buff;
+    cf->parts.p_des_be = (uint16_t)((p_des >> 8) | ((p_des & 0xFF) << 8));
+    cf->parts.v_des_hi = (uint8_t)(v_des >> 4);
+    cf->parts.v_des_lo_and_kp_hi = (uint8_t)(((v_des & 0xF) << 4) | ((kp >> 8) & 0xF));
+    cf->parts.kp_lo = (uint8_t)(kp & 0xFF);
+    cf->parts.kd_hi = (uint8_t)(kd >> 4);
+    cf->parts.kd_lo_and_tff_hi = (uint8_t)(((kd & 0xF) << 4) | ((t_ff >> 8) & 0xF));
+    cf->parts.tff_lo = (uint8_t)(t_ff & 0xFF);
 
     CANTransmit(can, CAN_TRANSMIT_TIMEOUT);
 }

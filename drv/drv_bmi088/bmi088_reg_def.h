@@ -383,6 +383,114 @@ typedef enum : uint8_t
     BMI088_GYRO_FIFO_OVERRUN = 1 << 7, // FIFO 溢出
 } BMI088_GyroFifoStatus_e;
 
+/*============================ 寄存器位域联合体 ============================*/
+
+/**
+ * @brief ACC_CONF_REG (0x40) 位域联合体
+ * @note bit[3:0] acc_odr: 输出数据速率
+ *       bit[7:4] acc_bwp: 低通滤波器带宽
+ */
+typedef union
+{
+    uint8_t raw;
+    struct
+    {
+        uint8_t acc_odr : 4; // bits[3:0]
+        uint8_t acc_bwp : 4; // bits[7:4]
+    } bits;
+} BMI088_AccConfReg_u;
+
+/**
+ * @brief INT1_IO_CTRL_REG (0x53) 位域联合体
+ * @note bit[1] int1_lvl: 有效电平 (0=低, 1=高)
+ *       bit[2] int1_od:  开漏输出 (0=推挽, 1=开漏)
+ *       bit[3] int1_out: 输出使能
+ *       bit[4] int1_in:  输入使能
+ */
+typedef union
+{
+    uint8_t raw;
+    struct
+    {
+        uint8_t reserved1 : 1; // bit 0
+        uint8_t int1_lvl : 1;  // bit 1
+        uint8_t int1_od : 1;   // bit 2
+        uint8_t int1_out : 1;  // bit 3
+        uint8_t int1_in : 1;   // bit 4
+        uint8_t reserved2 : 3; // bits 5-7
+    } bits;
+} BMI088_Int1IoCtrl_u;
+
+/**
+ * @brief INT_MAP_DATA_REG (0x58) 位域联合体
+ * @note 中断源 → INT1/INT2 映射
+ */
+typedef union
+{
+    uint8_t raw;
+    struct
+    {
+        uint8_t int1_full : 1; // bit 0: FIFO 满 → INT1
+        uint8_t int1_fwm : 1;  // bit 1: FIFO 水印 → INT1
+        uint8_t int1_drdy : 1; // bit 2: 数据就绪 → INT1
+        uint8_t reserved : 1;  // bit 3
+        uint8_t int2_full : 1; // bit 4: FIFO 满 → INT2
+        uint8_t int2_fwm : 1;  // bit 5: FIFO 水印 → INT2
+        uint8_t int2_drdy : 1; // bit 6: 数据就绪 → INT2
+        uint8_t reserved2 : 1; // bit 7
+    } bits;
+} BMI088_IntMapData_u;
+
+/**
+ * @brief GYRO_INT_CTRL_REG (0x15) 位域联合体
+ * @note bit[6] fifo_en: FIFO 中断使能
+ *       bit[7] data_en: 数据就绪中断使能
+ */
+typedef union
+{
+    uint8_t raw;
+    struct
+    {
+        uint8_t reserved : 6; // bits 5-0
+        uint8_t fifo_en : 1;  // bit 6
+        uint8_t data_en : 1;  // bit 7
+    } bits;
+} BMI088_GyroIntCtrl_u;
+
+/**
+ * @brief INT3_INT4_IO_CONF_REG (0x16) 位域联合体
+ */
+typedef union
+{
+    uint8_t raw;
+    struct
+    {
+        uint8_t int3_lvl : 1; // bit 0: INT3 有效电平
+        uint8_t int3_od : 1;  // bit 1: INT3 开漏
+        uint8_t int4_lvl : 1; // bit 2: INT4 有效电平
+        uint8_t int4_od : 1;  // bit 3: INT4 开漏
+        uint8_t reserved : 4; // bits 4-7
+    } bits;
+} BMI088_Int3Int4IoConf_u;
+
+/**
+ * @brief INT3_INT4_IO_MAP_REG (0x18) 位域联合体
+ */
+typedef union
+{
+    uint8_t raw;
+    struct
+    {
+        uint8_t int3_data : 1; // bit 0: 数据就绪 → INT3
+        uint8_t reserved1 : 1; // bit 1
+        uint8_t int3_fifo : 1; // bit 2: FIFO 中断 → INT3
+        uint8_t reserved2 : 2; // bits 3-4
+        uint8_t int4_fifo : 1; // bit 5: FIFO 中断 → INT4
+        uint8_t reserved3 : 1; // bit 6
+        uint8_t int4_data : 1; // bit 7: 数据就绪 → INT4
+    } bits;
+} BMI088_Int3Int4IoMap_u;
+
 /**
  * @brief GYRO_FIFO_WM_EN (0x1E) FIFO 水印使能寄存器
  * @note 访问: RW
