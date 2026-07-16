@@ -97,6 +97,8 @@ typedef struct
     float vel_to_uint_scale;  // = 4095 / (2*v_range)  (float→uint12)
     float t_to_float_scale;   // = 2*t_range / 4095
     float t_to_uint_scale;    // = 4095 / (2*t_range)
+
+    float inv_wrap_span; // = 1.0f / (2.0f * p_max)  穿越跨度倒数，多圈位置检测用
 } DMMotorProtocolMap_s;
 
 /*============================================
