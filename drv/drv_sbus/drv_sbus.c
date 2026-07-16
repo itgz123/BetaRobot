@@ -33,7 +33,10 @@ static void SBUSDaemonCallback(void *owner)
 
 /*------------- 外部接口实现 --------------*/
 
-int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Init_Config_s *config)
+/**
+ * @brief 配置SBUS实例（可重复调用，不修改 static 变量）
+ */
+int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config)
 {
     if (instance == NULL)
     {
@@ -56,9 +59,44 @@ int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Init_Config_s *config)
     // 设置 parent 指针，用于 BSP 回调时获取 DRV 实例
     instance->usart_inst->parent = instance;
 
-    // 注册 BSP 层 USART 实例
-    USART_Init_Config_s usart_cfg = {
-        .uart_e = config->uart_e,
+    // 初始化信号丢失超时
+    instance->lost_timeout_us = (uint64_t)config->lost_timeout_ms * 1000;
+
+    instance->lost_start_time_us = 0;
+    instance->signal_lost = 0;
+
+    return 0;
+}
+
+int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Register_Config_s *reg_cfg)
+{
+    if (instance == NULL)
+    {
+        LOGERROR("[drv_sbus] Instance is NULL!");
+        return -1;
+    }
+
+    if (reg_cfg == NULL)
+    {
+        LOGERROR("[drv_sbus] Config is NULL!");
+        return -1;
+    }
+
+    if (instance->usart_inst == NULL)
+    {
+        LOGERROR("[drv_sbus] usart_inst is NULL!");
+        return -1;
+    }
+
+    // 调用 Config 完成配置（包括 parent 指针和超时参数）
+    if (SBUSConfig(instance, &reg_cfg->sbus_config) != 0)
+    {
+        return -1;
+    }
+
+    // 注册 BSP 层 USART 实例（USARTRegister 自身有防重复检查）
+    USART_Config_s usart_cfg = {
+        .uart_e = reg_cfg->uart_e,
         .tx_mode = USART_DMA_MODE,
         .rx_callback = SBUSUARTRxCallback,
     };
@@ -68,23 +106,17 @@ int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Init_Config_s *config)
         return -1;
     }
 
-    // 注册 daemon 看门狗
+    // 注册 daemon 看门狗（DaemonRegister 自身有防重复检查）
     if (instance->daemon != NULL)
     {
-        Daemon_Init_Config_s daemon_cfg = {
-            .reload_count = config->daemon_reload,
-            .fault_action = config->daemon_fault,
+        Daemon_Config_s daemon_cfg = {
+            .reload_count = reg_cfg->daemon_reload,
+            .fault_action = reg_cfg->daemon_fault,
             .callback = SBUSDaemonCallback,
             .owner_id = instance,
         };
         DaemonRegister(instance->daemon, &daemon_cfg);
     }
-
-    // 初始化信号丢失超时
-    instance->lost_timeout_us = (uint64_t)config->lost_timeout_ms * 1000;
-
-    instance->lost_start_time_us = 0;
-    instance->signal_lost = 0;
 
     LOGINFO("[drv_sbus] SBUS instance registered, lost_timeout=%dms",
             (int)(instance->lost_timeout_us / 1000));

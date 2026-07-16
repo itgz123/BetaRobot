@@ -76,7 +76,7 @@ typedef struct
     uint32_t rx_id_list[4];                    // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
     uint32_t rx_mask;                          // 掩码模式：掩码值（列表模式不使用）
     void (*rx_callback)(struct CANInstance *); // 接收完成回调（可为NULL）
-} CAN_Init_Config_s;
+} CAN_Config_s;
 
 /*------------- 实例定义宏 --------------*/
 
@@ -90,15 +90,28 @@ typedef struct
 /*------------- 外部接口声明 --------------*/
 
 /**
- * @brief 注册CAN实例
+ * @brief 配置CAN实例（可重复调用）
+ * @param instance CAN实例指针
+ * @param config   初始化配置结构体指针
+ * @retval 0 成功
+ * @retval -1 失败（参数非法）
+ *
+ * @note 仅配置 instance 字段和硬件滤波器/启动CAN，不修改 static 管理数组。
+ *       可重复调用以重新配置硬件参数。
+ */
+int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config);
+
+/**
+ * @brief 注册CAN实例（仅调用一次）
  * @param instance CAN实例指针（需先通过宏定义）
  * @param config   初始化配置结构体指针
  * @retval 0 成功
- * @retval -1 失败（实例数超过上限、参数非法或重复注册）
+ * @retval -1 失败（实例数超过上限、参数非法、重复注册或ID冲突）
  *
- * @note 注册时将 config 中的配置拷贝到 instance，然后配置硬件滤波器并启动CAN
+ * @note 内部调用 CANConfig 后，将 instance 加入 static 管理数组。
+ *       同一 instance 不可重复注册。
  */
-int8_t CANRegister(CANInstance *instance, const CAN_Init_Config_s *config);
+int8_t CANRegister(CANInstance *instance, const CAN_Config_s *config);
 
 /**
  * @brief 设置发送DLC长度（1~8）

@@ -327,7 +327,11 @@ static void DJIMotorDaemonCallback(void *owner)
     PIDReset(&motor->base.controller.pid_angle);
 }
 
-int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
+/**
+ * @brief 配置DJI电机实例（可重复调用，不修改 static 变量）
+ * @note 可运行时重新调用以修改 PID 参数、控制器设置等
+ */
+int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
 {
     if (!inst || !cfg)
         return -1;
@@ -341,20 +345,11 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
     if (cfg->model == DJI_MODEL_GM6020 && cfg->motor_id > 7)
         return -1;
 
-    // 计算发送ID和接收ID
-    uint16_t tx_id = can_tx_id[cfg->model][(cfg->motor_id - 1) / 4];
+    // 计算分组索引（用于保存 sender_group 指针）
     uint16_t rx_id = can_rx_id_base[cfg->model] + cfg->motor_id;
     uint8_t group_idx = (rx_id - 0x201) / 4;
     uint8_t motor_idx_in_group = (rx_id - 0x201) % 4;
     BoardCAN_e can_e = cfg->can_e;
-
-    // 检查是否已经初始化
-    if (1 == s_send_groups[can_e][group_idx].motor_init_flag[motor_idx_in_group])
-        return -1;
-
-    // 注册到发送分组
-    s_send_groups[can_e][group_idx].motors[motor_idx_in_group] = inst;
-    s_send_groups[can_e][group_idx].motor_init_flag[motor_idx_in_group] = 1;
 
     // 初始化基本属性
     inst->base.brand = MOTOR_BRAND_DJI;
@@ -428,10 +423,50 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
     inst->sender_group = &s_send_groups[can_e][group_idx];
     inst->motor_idx_in_group = motor_idx_in_group;
 
+    return 0;
+}
+
+int8_t DJIMotorRegister(DJIMotorInstance *inst, const DJIMotor_Register_Config_s *reg_cfg)
+{
+    if (!inst || !reg_cfg)
+        return -1;
+
+    DJIMotor_Config_s *cfg = (DJIMotor_Config_s *)&reg_cfg->motor_config;
+
+    // 检查参数有效性
+    if (cfg->motor_id < 1 || cfg->motor_id > 8)
+        return -1;
+    if (cfg->model >= DJI_MODEL_NUM)
+        return -1;
+    // GM6020 只有 ID 1-7
+    if (cfg->model == DJI_MODEL_GM6020 && cfg->motor_id > 7)
+        return -1;
+
+    // 计算发送ID和接收ID（需在 Config 调用前完成，用于防重复检查）
+    uint16_t tx_id = can_tx_id[cfg->model][(cfg->motor_id - 1) / 4];
+    uint16_t rx_id = can_rx_id_base[cfg->model] + cfg->motor_id;
+    uint8_t group_idx = (rx_id - 0x201) / 4;
+    uint8_t motor_idx_in_group = (rx_id - 0x201) % 4;
+    BoardCAN_e can_e = cfg->can_e;
+
+    // 检查是否已经初始化
+    if (1 == s_send_groups[can_e][group_idx].motor_init_flag[motor_idx_in_group])
+        return -1;
+
+    // 调用 Config 完成实例配置
+    if (DJIMotorConfig(inst, cfg) != 0)
+    {
+        return -1;
+    }
+
+    // 注册到发送分组
+    s_send_groups[can_e][group_idx].motors[motor_idx_in_group] = inst;
+    s_send_groups[can_e][group_idx].motor_init_flag[motor_idx_in_group] = 1;
+
     // 注册CAN实例
     if (inst->base.can)
     {
-        CAN_Init_Config_s can_cfg = {
+        CAN_Config_s can_cfg = {
             .can_e = cfg->can_e,
             .tx_id = tx_id,
             .filter_mode = CAN_FILTER_MODE_LIST,
@@ -446,11 +481,11 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
     // 注册守护进程
     if (inst->base.daemon)
     {
-        Daemon_Init_Config_s config = {
+        Daemon_Config_s config = {
             .callback = DJIMotorDaemonCallback,
-            .fault_action = cfg->fault_action,
+            .fault_action = reg_cfg->fault_action,
             .owner_id = inst,
-            .reload_count = cfg->reload_count};
+            .reload_count = reg_cfg->reload_count};
         DaemonRegister(inst->base.daemon, &config);
     }
 

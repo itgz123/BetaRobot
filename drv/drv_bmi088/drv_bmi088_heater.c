@@ -349,7 +349,7 @@ int8_t BMI088_HeaterInit(BMI088Instance *inst)
 
     /* 其他定时器：和 DJI_C 一样用 BSP PWMRegister */
     {
-        PWM_Init_Config_s cfg = {.tim_e = inst->heater_pwm->tim_e};
+        PWM_Config_s cfg = {.tim_e = inst->heater_pwm->tim_e};
         return PWMRegister(inst->heater_pwm, &cfg);
     }
 }
@@ -529,7 +529,7 @@ int8_t BMI088_HeaterInit(BMI088Instance *inst)
 {
     if (inst->heater_pwm->tim_e == BMI088_HEATER_NONE)
         return 0;
-    PWM_Init_Config_s cfg = {.tim_e = inst->heater_pwm->tim_e};
+    PWM_Config_s cfg = {.tim_e = inst->heater_pwm->tim_e};
     return PWMRegister(inst->heater_pwm, &cfg);
 }
 

@@ -52,25 +52,38 @@ typedef enum : uint8_t
 /*============================ 配置结构体 ============================*/
 
 /**
- * @brief BMI088 初始化配置结构体
+ * @brief BMI088 配置结构体（Config 函数使用）
+ *
+ * @note 可重复调用 BMI088Config 运行时重配传感器参数。
+ *       不包含硬件枚举和 daemon 相关字段（仅在 Register 时需要）。
  */
 typedef struct
 {
+    BMI088_AccRange_e acc_range;   // 加速度计量程
+    uint8_t acc_bwp;               // 加速度计低通滤波器带宽
+    uint8_t acc_odr;               // 加速度计输出数据速率
+    BMI088_GyroRange_e gyro_range; // 陀螺仪量程
+    BMI088_GyroConf_e gyro_conf;   // 陀螺仪 ODR+BW 组合配置（见 BMI088_GyroConf_e）
+    BMI088_WorkMode_e work_mode;   // 工作模式（轮询/中断）
+} BMI088_Config_s;
+
+/**
+ * @brief BMI088 注册配置结构体（Register 函数使用）
+ *
+ * @note 仅调用一次。内嵌 BMI088_Config_s + 硬件/daemon 相关字段。
+ */
+typedef struct
+{
+    BMI088_Config_s bmi088_config;    // BMI088 配置（传入 Config）
     BoardSPI_e spi_e;                 // 板载SPI枚举
     BoardGPIO_e cs_acc_e;             // 加速度计片选GPIO枚举
     BoardGPIO_e cs_gyro_e;            // 陀螺仪片选GPIO枚举
     BoardGPIO_e int_acc_e;            // 加速度计中断GPIO枚举
     BoardGPIO_e int_gyro_e;           // 陀螺仪中断GPIO枚举
     BoardTIM_e heater_e;              // 加热PWM枚举
-    BMI088_AccRange_e acc_range;      // 加速度计量程
-    uint8_t acc_bwp;                  // 加速度计低通滤波器带宽
-    uint8_t acc_odr;                  // 加速度计输出数据速率
-    BMI088_GyroRange_e gyro_range;    // 陀螺仪量程
-    BMI088_GyroConf_e gyro_conf;      // 陀螺仪 ODR+BW 组合配置（见 BMI088_GyroConf_e）
     uint16_t daemon_reload;           // daemon 喂狗重载值，0 表示禁用
     DaemonFaultAction_e daemon_fault; // daemon 离线故障动作
-    BMI088_WorkMode_e work_mode;      // 工作模式（轮询/中断）
-} BMI088_Init_Config_s;
+} BMI088_Register_Config_s;
 /**
  * @brief IMU 数据结构体
  */
@@ -186,12 +199,25 @@ typedef struct BMI088Instance
 /*============================ 公开接口声明 ============================*/
 
 /**
- * @brief 注册BMI088实例（包含BSP子实例注册和传感器配置）
+ * @brief 配置BMI088实例（可重复调用，不修改 static 变量）
  * @param inst   BMI088实例指针
  * @param config 初始化配置结构体指针
  * @return 0成功，-1失败
+ *
+ * @note 仅配置 instance 字段和传感器（AccInit/GyroInit），不调用子模块 Register。
+ *       可重复调用以重新配置传感器参数。
  */
-int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config);
+int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config);
+
+/**
+ * @brief 注册BMI088实例（仅调用一次，包含BSP子实例注册和传感器配置）
+ * @param inst   BMI088实例指针
+ * @param config 初始化配置结构体指针
+ * @return 0成功，-1失败
+ *
+ * @note 内部调用 BMI088Config 后，注册 SPI/GPIO/PWM/Daemon 子模块。
+ */
+int8_t BMI088Register(BMI088Instance *inst, const BMI088_Register_Config_s *reg_cfg);
 
 /**
  * @brief 阻塞读取BMI088数据（轮询模式专用）
