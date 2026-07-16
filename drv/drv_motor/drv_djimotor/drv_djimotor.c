@@ -72,10 +72,32 @@
 /*============================================
  *              电机参数表定义
  *============================================*/
+/* pos_scale = M_2PI / 8192 ≈ 0.000767, current_scale = 电流量程A / 电流量程raw */
 const DJIMotorParams_s dji_motor_params[DJI_MODEL_NUM] = {
-    [DJI_MODEL_M3508] = {C620_CURRENT_MAX, C620_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, M3508_NO_LOAD_SPEED},
-    [DJI_MODEL_M2006] = {C610_CURRENT_MAX, C610_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, M2006_NO_LOAD_SPEED},
-    [DJI_MODEL_GM6020] = {GM6020_CURRENT_MAX, GM6020_CURRENT_MAX_A, DJI_ENCODER_RESOLUTION, GM6020_NO_LOAD_SPEED},
+    [DJI_MODEL_M3508] = {
+        .current_max = C620_CURRENT_MAX,
+        .current_max_a = C620_CURRENT_MAX_A,
+        .encoder_resolution = DJI_ENCODER_RESOLUTION,
+        .no_load_speed = M3508_NO_LOAD_SPEED,
+        .pos_scale = M_2PI / DJI_ENCODER_RESOLUTION,
+        .current_scale = C620_CURRENT_MAX_A / C620_CURRENT_MAX,
+    },
+    [DJI_MODEL_M2006] = {
+        .current_max = C610_CURRENT_MAX,
+        .current_max_a = C610_CURRENT_MAX_A,
+        .encoder_resolution = DJI_ENCODER_RESOLUTION,
+        .no_load_speed = M2006_NO_LOAD_SPEED,
+        .pos_scale = M_2PI / DJI_ENCODER_RESOLUTION,
+        .current_scale = C610_CURRENT_MAX_A / C610_CURRENT_MAX,
+    },
+    [DJI_MODEL_GM6020] = {
+        .current_max = GM6020_CURRENT_MAX,
+        .current_max_a = GM6020_CURRENT_MAX_A,
+        .encoder_resolution = DJI_ENCODER_RESOLUTION,
+        .no_load_speed = GM6020_NO_LOAD_SPEED,
+        .pos_scale = M_2PI / DJI_ENCODER_RESOLUTION,
+        .current_scale = GM6020_CURRENT_MAX_A / GM6020_CURRENT_MAX,
+    },
 };
 
 const uint16_t can_tx_id[DJI_MODEL_NUM][2] = {
@@ -136,6 +158,9 @@ static void DJIMotorRxCallback(CANInstance *can)
     /* flip 双缓冲索引 */
     motor->base.raw_frame_idx ^= 1u;
 
+    /* 缓存失效 —— 下次 GetData 需重新处理 */
+    motor->base.data_valid = 0;
+
     /* 喂狗 */
     if (motor->base.daemon)
     {
@@ -163,6 +188,10 @@ MotorData_s DJIMotor_GetData(void *inst)
     DJIMotorInstance *motor = (DJIMotorInstance *)inst;
     MotorBase_s *base = &motor->base;
 
+    /* 缓存命中：上次获取后没有新中断，直接返回缓存 */
+    if (base->data_valid)
+        return base->data;
+
     /* ====== Step 1: 从双缓冲读取就绪帧 ====== */
     uint8_t ready_idx = !base->raw_frame_idx;
     MotorRawFrame_s frame = base->raw_frames[ready_idx];
@@ -175,21 +204,19 @@ MotorData_s DJIMotor_GetData(void *inst)
     if (model >= DJI_MODEL_NUM)
         return result;
 
-    float current_max_a = dji_motor_params[model].current_max_a;
-    uint16_t current_max = dji_motor_params[model].current_max;
-    uint16_t encoder_resolution = dji_motor_params[model].encoder_resolution;
+    const DJIMotorParams_s *params = &dji_motor_params[model];
     MotorControllerSetting_s *setting = &base->setting;
 
     uint16_t raw_encoder = ((uint16_t)can_frame.rx.encoder_h << 8) | can_frame.rx.encoder_l;
     int16_t raw_velocity = ((int16_t)can_frame.rx.velocity_h << 8) | can_frame.rx.velocity_l;
     int16_t raw_current = ((int16_t)can_frame.rx.current_h << 8) | can_frame.rx.current_l;
 
-    // 单圈位置 (rad) [0, 2π)
-    float position_single = (float)raw_encoder * M_2PI / encoder_resolution;
-    // 速度 (rad/s)
-    float velocity_raw = (float)raw_velocity * M_2PI / 60.0f;
-    // 电流 (A)
-    float current = (float)raw_current / (float)current_max * current_max_a;
+    // 单圈位置 (rad) [0, 2π) — 乘法代替除法
+    float position_single = (float)raw_encoder * params->pos_scale;
+    // 速度 (rad/s) — 乘法代替除法
+    float velocity_raw = (float)raw_velocity * RPM_SCALE;
+    // 电流 (A) — 乘法代替除法
+    float current = (float)raw_current * params->current_scale;
 
     /* ====== Step 3: dt 计算 ====== */
     float dt = 0.0f;
@@ -216,7 +243,7 @@ MotorData_s DJIMotor_GetData(void *inst)
         if (dt > 0.0f)
         {
             float expected_change = velocity_raw * dt;
-            float wrap_float = (expected_change - angle_diff) * (1.0f / M_2PI);
+            float wrap_float = (expected_change - angle_diff) * INV_M_2PI;
             wraps = (int8_t)(wrap_float > 0.0f ? wrap_float + 0.5f : wrap_float - 0.5f);
         }
         else
@@ -280,6 +307,7 @@ MotorData_s DJIMotor_GetData(void *inst)
 
     /* ====== Step 9: 缓存到 base.data ====== */
     base->data = result;
+    base->data_valid = 1;
 
     return result;
 }
@@ -385,6 +413,7 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg)
     // 双缓冲清零
     memset(inst->base.raw_frames, 0, sizeof(inst->base.raw_frames));
     inst->base.raw_frame_idx = 0;
+    inst->base.data_valid = 0;
 
     // 处理状态清零
     inst->base.position_single_last = 0.0f;
@@ -447,6 +476,9 @@ static void DJIMotor_Calculate(DJIMotorInstance *inst)
     if (model >= DJI_MODEL_NUM)
         return;
 
+    /* 统一获取一次反馈数据（后续 GetData 走缓存，不重复解析） */
+    MotorData_s md = DJIMotor_GetData(inst);
+
     // 位置环 (最外环)
     if (setting->loop_type & MOTOR_LOOP_ANGLE)
     {
@@ -476,7 +508,6 @@ static void DJIMotor_Calculate(DJIMotorInstance *inst)
         {
             position_feedforward = *setting->position_feedforward_ptr;
         }
-        MotorData_s md = DJIMotor_GetData(inst);
         measure = md.position;
         setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, position_feedforward);
     }
@@ -490,7 +521,6 @@ static void DJIMotor_Calculate(DJIMotorInstance *inst)
         {
             speed_feedforward = *setting->speed_feedforward_ptr;
         }
-        MotorData_s md = DJIMotor_GetData(inst);
         measure = md.speed;
         output = PIDCalculate(&ctrl->pid_speed, setpoint, measure, speed_feedforward);
     }

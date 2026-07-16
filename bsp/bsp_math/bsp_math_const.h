@@ -32,6 +32,10 @@
 #define M_2PI 6.28318530717958647692f
 #endif
 
+#ifndef INV_M_2PI
+#define INV_M_2PI 0.15915494309189533576f  // 1/(2π)
+#endif
+
 #ifndef M_E
 #define M_E 2.71828182845904523536f
 #endif
@@ -57,6 +61,9 @@
 
 #define RPM_TO_RADPS(rpm) ((rpm) * M_2PI / 60.0f)
 #define RADPS_TO_RPM(radps) ((radps) * 60.0f / M_2PI)
+
+/* RPM → rad/s 乘数（编译期常量，避免运行期除以 60） */
+#define RPM_SCALE (M_2PI / 60.0f)
 
 /*============================================
  *              通用数学宏

@@ -59,6 +59,10 @@ typedef struct
     float current_max_a;         // 电流最大值 (安培)
     uint16_t encoder_resolution; // 编码器分辨率
     float no_load_speed;         // 空载转速 (rad/s)
+
+    /* 预计算 scale（运行时仅乘法，零除法） */
+    float pos_scale;     // = M_2PI / encoder_resolution  编码器原始值 → rad
+    float current_scale; // = current_max_a / current_max 电流原始值 → A
 } DJIMotorParams_s;
 
 /*============================================

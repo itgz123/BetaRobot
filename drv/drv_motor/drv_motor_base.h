@@ -244,6 +244,7 @@ typedef struct
     // 原始数据双缓冲（ISR 写入，GetData 读取）
     MotorRawFrame_s raw_frames[2];  // 双缓冲：ISR 写一个，GetData 读另一个
     volatile uint8_t raw_frame_idx; // 当前 ISR 写入的缓冲区索引 (0/1)
+    volatile uint8_t data_valid;    // 数据有效标志：ISR 清 0，GetData 处理完置 1；为 1 时 GetData 返回缓存
     //
     MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
     float speed_lpf_rc;               // 速度低通滤波时间常数 RC

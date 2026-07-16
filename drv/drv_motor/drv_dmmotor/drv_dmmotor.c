@@ -158,6 +158,9 @@ static void DMMotorRxCallback(CANInstance *can)
     /* flip 双缓冲索引（volatile 保证顺序） */
     motor->base.raw_frame_idx ^= 1u;
 
+    /* 缓存失效 —— 下次 GetData 需重新处理 */
+    motor->base.data_valid = 0;
+
     /* 喂狗 */
     if (motor->base.daemon)
     {
@@ -194,6 +197,10 @@ MotorData_s DMMotor_GetData(void *inst)
 
     DMMotorInstance *motor = (DMMotorInstance *)inst;
     MotorBase_s *base = &motor->base;
+
+    /* 缓存命中：上次获取后没有新中断，直接返回缓存 */
+    if (base->data_valid)
+        return base->data;
 
     /* ====== Step 1: 从双缓冲读取就绪帧 ====== */
     uint8_t ready_idx = !base->raw_frame_idx;
@@ -243,7 +250,7 @@ MotorData_s DMMotor_GetData(void *inst)
         {
             /* 用速度反馈校验穿越 */
             float expected_change = velocity_raw_val * dt;
-            float wrap_float = (expected_change - angle_diff) * (1.0f / (2.0f * map->p_max));
+            float wrap_float = (expected_change - angle_diff) * map->inv_wrap_span;
             wraps = (int8_t)(wrap_float > 0.0f ? wrap_float + 0.5f : wrap_float - 0.5f);
         }
         else
@@ -309,6 +316,7 @@ MotorData_s DMMotor_GetData(void *inst)
 
     /* ====== Step 9: 缓存到 base.data ====== */
     base->data = result;
+    base->data_valid = 1;
 
     return result;
 }
@@ -370,6 +378,9 @@ int8_t DMMotorRegister(DMMotorInstance *inst, DMMotor_Init_Config_s *cfg)
     map->t_to_float_scale = (2.0f * map->t_range) / 4095.0f;
     map->t_to_uint_scale = 4095.0f / (2.0f * map->t_range);
 
+    /* 多圈位置用：穿越跨度倒数 */
+    map->inv_wrap_span = 1.0f / (2.0f * map->p_max);
+
     /* 基本属性 */
     inst->base.brand = MOTOR_BRAND_DM;
     inst->base.model = cfg->model;
@@ -420,6 +431,7 @@ int8_t DMMotorRegister(DMMotorInstance *inst, DMMotor_Init_Config_s *cfg)
     /* 双缓冲清零 */
     memset(inst->base.raw_frames, 0, sizeof(inst->base.raw_frames));
     inst->base.raw_frame_idx = 0;
+    inst->base.data_valid = 0;
 
     /* 处理状态清零 */
     inst->base.position_single_last = 0.0f;
@@ -487,6 +499,9 @@ static void DMMotor_Calculate(DMMotorInstance *inst)
 
     const DMMotorProtocolMap_s *map = &inst->proto_map;
 
+    /* 统一获取一次反馈数据（后续 GetData 走缓存，不重复解析） */
+    MotorData_s md = DMMotor_GetData(inst);
+
     /* 位置环（最外环） */
     if (setting->loop_type & MOTOR_LOOP_ANGLE)
     {
@@ -515,7 +530,6 @@ static void DMMotor_Calculate(DMMotorInstance *inst)
         {
             position_feedforward = *setting->position_feedforward_ptr;
         }
-        MotorData_s md = DMMotor_GetData(inst);
         measure = md.position;
         setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, position_feedforward);
     }
@@ -529,7 +543,6 @@ static void DMMotor_Calculate(DMMotorInstance *inst)
         {
             speed_feedforward = *setting->speed_feedforward_ptr;
         }
-        MotorData_s md = DMMotor_GetData(inst);
         measure = md.speed;
         output = PIDCalculate(&ctrl->pid_speed, setpoint, measure, speed_feedforward);
     }
