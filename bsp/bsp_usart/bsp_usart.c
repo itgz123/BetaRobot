@@ -24,10 +24,10 @@
 typedef void (*UART_TransmitFunc)(UART_HandleTypeDef *, uint8_t *, uint16_t, uint32_t);
 
 /*------------- 私有变量 --------------*/
-static uint8_t s_idx = 0;
+static uint8_t s_usart_idx = 0;
 #if UART_INSTANCE_NUM > 0
 static USARTInstance *s_usart_instance[UART_INSTANCE_NUM] = {NULL};
-static USARTInstance *s_last_route_instance = NULL;
+static USARTInstance *s_usart_last_route = NULL;
 #else
 static USARTInstance **s_usart_instance = NULL;
 #endif
@@ -42,16 +42,16 @@ static USARTInstance *USARTFindInstanceByHandle(UART_HandleTypeDef *huart)
         return NULL;
     }
 
-    if (s_last_route_instance != NULL && s_last_route_instance->handle == huart)
+    if (s_usart_last_route != NULL && s_usart_last_route->handle == huart)
     {
-        return s_last_route_instance;
+        return s_usart_last_route;
     }
 
-    for (uint8_t i = 0; i < s_idx; i++)
+    for (uint8_t i = 0; i < s_usart_idx; i++)
     {
         if (s_usart_instance[i]->handle == huart)
         {
-            s_last_route_instance = s_usart_instance[i];
+            s_usart_last_route = s_usart_instance[i];
             return s_usart_instance[i];
         }
     }
@@ -63,7 +63,7 @@ static USARTInstance *USARTFindInstanceByHandle(UART_HandleTypeDef *huart)
  * @brief 发送函数指针数组
  * @note IT/DMA模式的timeout参数被忽略
  */
-static const UART_TransmitFunc transmit_funcs[] = {
+static const UART_TransmitFunc s_usart_transmit_funcs[] = {
     [USART_BLOCK_MODE] = (UART_TransmitFunc)HAL_UART_Transmit,
     [USART_IT_MODE] = (UART_TransmitFunc)HAL_UART_Transmit_IT,
     [USART_DMA_MODE] = (UART_TransmitFunc)HAL_UART_Transmit_DMA,
@@ -168,10 +168,10 @@ int8_t USARTRegister(USARTInstance *instance, const USART_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_usart] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_usart] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_idx >= UART_INSTANCE_NUM, -1, LOGERROR("[bsp_usart] Exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(s_usart_idx >= UART_INSTANCE_NUM, -1, LOGERROR("[bsp_usart] Exceeded max instance count!"));
 
     // 防重复注册检查
-    for (uint8_t i = 0; i < s_idx; i++)
+    for (uint8_t i = 0; i < s_usart_idx; i++)
     {
         if (s_usart_instance[i] == instance)
         {
@@ -187,7 +187,7 @@ int8_t USARTRegister(USARTInstance *instance, const USART_Config_s *config)
     }
 
     // 重复注册检查（同一 handle 不能重复注册）
-    for (uint8_t i = 0; i < s_idx; i++)
+    for (uint8_t i = 0; i < s_usart_idx; i++)
     {
         if (s_usart_instance[i]->handle == instance->handle)
         {
@@ -196,9 +196,9 @@ int8_t USARTRegister(USARTInstance *instance, const USART_Config_s *config)
         }
     }
 
-    s_usart_instance[s_idx++] = instance;
+    s_usart_instance[s_usart_idx++] = instance;
 
-    LOGINFO("[bsp_usart] USART Instance registered, idx=%d", s_idx - 1);
+    LOGINFO("[bsp_usart] USART Instance registered, idx=%d", s_usart_idx - 1);
     return 0;
 }
 
@@ -226,7 +226,7 @@ void USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len, uint32_
         }
     }
 
-    transmit_funcs[instance->tx_mode](instance->handle, data, len, timeout_ms);
+    s_usart_transmit_funcs[instance->tx_mode](instance->handle, data, len, timeout_ms);
 }
 
 void USARTRestartReceive(USARTInstance *instance)

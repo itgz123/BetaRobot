@@ -17,7 +17,7 @@
 /*============================================
  *              私有变量
  *============================================*/
-static uint8_t s_idx = 0;                             // 已注册实例数量
+static uint8_t s_adc_idx = 0;                             // 已注册实例数量
 static ADCInstance *s_adc_instance[ADC_INSTANCE_NUM]; // 实例指针数组
 
 /**
@@ -91,10 +91,10 @@ int8_t ADCRegister(ADCInstance *instance, const ADC_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[BSP_ADC] Register failed: instance is NULL"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[BSP_ADC] Register failed: config is NULL"));
-    BSP_RETURN_IF_TRUE_LOG(s_idx >= ADC_INSTANCE_NUM, -1, LOGERROR("[BSP_ADC] Register failed: instance num exceeded %d", ADC_INSTANCE_NUM));
+    BSP_RETURN_IF_TRUE_LOG(s_adc_idx >= ADC_INSTANCE_NUM, -1, LOGERROR("[BSP_ADC] Register failed: instance num exceeded %d", ADC_INSTANCE_NUM));
 
     // 防重复注册检查
-    for (uint8_t i = 0; i < s_idx; i++)
+    for (uint8_t i = 0; i < s_adc_idx; i++)
     {
         if (s_adc_instance[i] == instance)
         {
@@ -110,7 +110,7 @@ int8_t ADCRegister(ADCInstance *instance, const ADC_Config_s *config)
     }
 
     // 保存实例指针
-    s_adc_instance[s_idx++] = instance;
+    s_adc_instance[s_adc_idx++] = instance;
 
     LOGINFO("[BSP_ADC] Register success: adc_e=%d, handle=0x%p, channel=%lu", instance->adc_e, instance->adc_map.handle, instance->adc_map.channel);
     return 0;

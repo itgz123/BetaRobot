@@ -18,7 +18,7 @@
 #include "string.h"
 
 /*------------- 私有变量 --------------*/
-static uint8_t s_idx = 0;
+static uint8_t s_can_idx = 0;
 static CANInstance *s_can_instance[CAN_INSTANCE_NUM] = {NULL};
 
 #if BSP_CAN_IP == BSP_CAN_IP_FDCAN
@@ -150,7 +150,7 @@ static HAL_StatusTypeDef CANFdcanAddFilter(CANInstance *instance)
 static HAL_StatusTypeDef CANFdcanInitIfNeeded(FDCAN_HandleTypeDef *handle)
 {
     // 检查该CAN外设是否已初始化（已有实例注册）
-    for (uint8_t i = 0; i < s_idx; i++)
+    for (uint8_t i = 0; i < s_can_idx; i++)
     {
         if (s_can_instance[i]->map.handle == handle)
         {
@@ -202,7 +202,7 @@ static void CANDispatchFdcanMessage(FDCAN_HandleTypeDef *hfdcan, uint32_t fifo)
             return;
         }
 
-        for (uint8_t i = 0; i < s_idx; i++)
+        for (uint8_t i = 0; i < s_can_idx; i++)
         {
             CANInstance *instance = s_can_instance[i];
             if (instance->map.handle != hfdcan)
@@ -339,7 +339,7 @@ static HAL_StatusTypeDef CANBxcanAddFilter(CANInstance *instance)
 
 static HAL_StatusTypeDef CANBxcanStartIfNeeded(CAN_HandleTypeDef *handle)
 {
-    for (uint8_t i = 0; i < s_idx; i++)
+    for (uint8_t i = 0; i < s_can_idx; i++)
     {
         if (s_can_instance[i]->map.handle == handle)
         {
@@ -372,7 +372,7 @@ static void CANDispatchBxcanMessage(CAN_HandleTypeDef *hcan, uint32_t fifo)
             return;
         }
 
-        for (uint8_t i = 0; i < s_idx; i++)
+        for (uint8_t i = 0; i < s_can_idx; i++)
         {
             CANInstance *instance = s_can_instance[i];
             if (instance->map.handle != hcan)
@@ -567,10 +567,10 @@ int8_t CANRegister(CANInstance *instance, const CAN_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_can] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_can] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_idx >= CAN_INSTANCE_NUM, -1, LOGERROR("[bsp_can] Exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(s_can_idx >= CAN_INSTANCE_NUM, -1, LOGERROR("[bsp_can] Exceeded max instance count!"));
 
     // 防重复注册检查
-    for (uint8_t i = 0; i < s_idx; i++)
+    for (uint8_t i = 0; i < s_can_idx; i++)
     {
         if (s_can_instance[i] == instance)
         {
@@ -589,7 +589,7 @@ int8_t CANRegister(CANInstance *instance, const CAN_Config_s *config)
     // 但重复意味着多个实例使用同一个tx_id发送，需确认是设计意图
     if (instance->tx_id != CAN_ID_UNUSED)
     {
-        for (uint8_t i = 0; i < s_idx; i++)
+        for (uint8_t i = 0; i < s_can_idx; i++)
         {
             CANInstance *existing = s_can_instance[i];
             if (existing->map.handle == instance->map.handle)
@@ -604,7 +604,7 @@ int8_t CANRegister(CANInstance *instance, const CAN_Config_s *config)
     }
 
     // 检查 rx_id 冲突（同一CAN句柄上不能有重复的接收ID，跳过 -1）
-    for (uint8_t i = 0; i < s_idx; i++)
+    for (uint8_t i = 0; i < s_can_idx; i++)
     {
         CANInstance *existing = s_can_instance[i];
         if (existing->map.handle == instance->map.handle)
@@ -635,8 +635,8 @@ int8_t CANRegister(CANInstance *instance, const CAN_Config_s *config)
         }
     }
 
-    s_can_instance[s_idx++] = instance;
-    LOGINFO("[bsp_can] CAN instance registered, idx=%d", s_idx - 1);
+    s_can_instance[s_can_idx++] = instance;
+    LOGINFO("[bsp_can] CAN instance registered, idx=%d", s_can_idx - 1);
     return 0;
 }
 
