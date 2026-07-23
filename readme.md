@@ -1,16 +1,4 @@
 # BetaRobot
 
-### 特点：
-
-1. 多开发版
-2. 多app，可以保证底层更新时所有使用这个框架的人可以直接更新
-3. 静态内存分配
-4. 分层架构
-5. 底层展示，虽然多app，bsp自动选择，但是底层实现所有人都看得到能够理解，debug。（esp的调试是反例）
-
-### 使用方法（架构说明）：
-
-复制`user_cfg.h.example`为`user_cfg.h`
-
 ### 文档：
 [GitHub Pages](https://itgz123.github.io/BetaRobot/)
