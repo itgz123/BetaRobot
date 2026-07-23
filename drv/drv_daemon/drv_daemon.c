@@ -20,9 +20,9 @@ PWM_INSTANCE_DEF(buzzer_pwm);
 // Daemon 任务实例
 TASK_INSTANCE_DEF(daemon_task, DAEMON_STACK_SIZE);
 
-void DaemonRegister(DaemonInstance *inst, const Daemon_Init_Config_s *config)
+void DaemonConfig(DaemonInstance *inst, const Daemon_Config_s *config)
 {
-    if (!inst || !config || s_idx >= DAEMON_MX_CNT)
+    if (!inst || !config)
         return;
 
     if (config->fault_action > DAEMON_FAULT_RESERVED_7)
@@ -42,6 +42,25 @@ void DaemonRegister(DaemonInstance *inst, const Daemon_Init_Config_s *config)
     inst->owner_id = config->owner_id;
     inst->temp_count = config->reload_count;
     inst->last_reload_us = DWT_GetTimeUs();
+}
+
+void DaemonRegister(DaemonInstance *inst, const Daemon_Config_s *config)
+{
+    if (!inst || !config || s_idx >= DAEMON_MX_CNT)
+        return;
+
+    // 防重复注册检查
+    for (uint8_t i = 0; i < s_idx; i++)
+    {
+        if (s_daemon_instances[i] == inst)
+        {
+            LOGERROR("[DAEMON] Instance already registered!");
+            return;
+        }
+    }
+
+    // 调用 Config 完成配置
+    DaemonConfig(inst, config);
 
     s_daemon_instances[s_idx++] = inst;
 }
@@ -145,7 +164,7 @@ void DaemonInit(void)
     TaskRegister(&daemon_task, &task_cfg);
 
 #if (DEVELOPMENT_BOARD == DM_MC02) || (DEVELOPMENT_BOARD == DJI_C) || (DEVELOPMENT_BOARD == DJI_A)
-    PWM_Init_Config_s pwm_cfg = {.tim_e = TIM_BUZZER};
+    PWM_Config_s pwm_cfg = {.tim_e = TIM_BUZZER};
     PWMRegister(&buzzer_pwm, &pwm_cfg);
 #else
 #error "without config buzzer"
@@ -154,7 +173,13 @@ void DaemonInit(void)
 
 #else
 
-void DaemonRegister(DaemonInstance *inst, const Daemon_Init_Config_s *config)
+void DaemonConfig(DaemonInstance *inst, const Daemon_Config_s *config)
+{
+    (void)inst;
+    (void)config;
+}
+
+void DaemonRegister(DaemonInstance *inst, const Daemon_Config_s *config)
 {
     if (!inst || !config)
         return;

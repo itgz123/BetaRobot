@@ -5,7 +5,7 @@
 
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
-#include "drv_motor_def.h"
+#include "drv_motor_base.h"
 #include "drv_daemon.h"
 #include "drv_pid.h"
 #include "bsp_math.h"
@@ -59,30 +59,11 @@ typedef struct
     float current_max_a;         // 电流最大值 (安培)
     uint16_t encoder_resolution; // 编码器分辨率
     float no_load_speed;         // 空载转速 (rad/s)
+
+    /* 预计算 scale（运行时仅乘法，零除法） */
+    float pos_scale;     // = M_2PI / encoder_resolution  编码器原始值 → rad
+    float current_scale; // = current_max_a / current_max 电流原始值 → A
 } DJIMotorParams_s;
-
-typedef struct
-{
-    uint16_t raw_encoder;         // 编码器原始值 (0-8191)
-    int16_t raw_velocity;         // 速度原始值 (RPM)
-    int16_t raw_current;          // 电流原始值
-    int8_t raw_temperature_motor; // 线圈温度 (°C)
-    uint8_t error_code;           // 错误码
-} DJIMotorRawData_s;
-
-typedef struct
-{
-    float position_single; // 单圈位置 (rad) [0, 2π)
-    int64_t position_cnt;  // 圈数（支持负数）
-    float position_multi;  // 多圈位置 (rad)
-    // 如果增量式 (3508,2006) 使用光电门校准；如果绝对式 (6020) 安装后调零一次即可。
-    float position_offset;    // 位置偏置 (rad) 。反馈的是加上偏置的位置
-    float speed;              // 速度 (rad/s)
-    float last_speed;         // 上次速度 (rad/s)
-    float current;            // 电流 (A)
-    float temperature;        // 线圈温度 (°C)
-    uint64_t last_time_stamp; // 上次接收时间戳
-} DJIMotorData_s;             // 速度和位置是转子的速度和位置，不是减速箱输出轴速度和位置
 
 /*============================================
  *              DJI 电机实例结构体
@@ -94,26 +75,26 @@ struct DJIMotorInstance
     /* DJI 基本属性 */
     uint8_t motor_id; // 电机 ID (1-8)
 
-    /* 数据缓冲 (DJI 特有) */
-    DJIMotorRawData_s data_raw;
-    DJIMotorData_s data;
+    /* 特有数据 */
+    float motor_temperature; // 线圈温度 (°C)
+    uint8_t error_code;      // 错误码
 
     /* 分组发送 (DJI 特有) */
     DJIMotorSendGroup_s *sender_group;
     uint8_t motor_idx_in_group;
 };
 
-/*============================================
- *              初始化配置结构体
- *============================================*/
+/**
+ * @brief DJI 电机配置结构体（Config 函数使用）
+ *
+ * @note 可重复调用 DJIMotorConfig 运行时修改 PID 参数、控制器设置等。
+ *       不包含 daemon 相关字段（仅在 Register 时需要）。
+ */
 typedef struct
 {
     BoardCAN_e can_e;                 // 板载CAN枚举
     DJIModel_e model;                 // 型号
-    uint16_t reload_count;            // 重载值（喂狗超时阈值）
-    DaemonFaultAction_e fault_action; // 离线故障动作
     uint8_t motor_id;                 // 电机 ID (1-8)
-    MotorSpeedSrc_e speed_src;        // 速度来源：反馈速度/位置微分
     MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
     float speed_lpf_rc;               // 速度低通滤波时间常数 RC
 
@@ -123,7 +104,19 @@ typedef struct
     /* PID 设置 */
     PID_Init_Config_s pid_speed_setting; // 速度环 PID 设置
     PID_Init_Config_s pid_angle_setting; // 位置环 PID 设置
-} DJIMotor_Init_Config_s;
+} DJIMotor_Config_s;
+
+/**
+ * @brief DJI 电机注册配置结构体（Register 函数使用）
+ *
+ * @note 仅调用一次。内嵌 DJIMotor_Config_s + daemon 相关字段。
+ */
+typedef struct
+{
+    DJIMotor_Config_s motor_config;   // 电机配置（传入 Config）
+    uint16_t reload_count;            // 重载值（喂狗超时阈值）
+    DaemonFaultAction_e fault_action; // 离线故障动作
+} DJIMotor_Register_Config_s;
 
 /*============================================
  *              单电机实例定义宏
@@ -137,13 +130,12 @@ typedef struct
         .base.daemon = &name##_daemon,  \
     }
 
-int8_t DJIMotorRegister(DJIMotorInstance *inst, DJIMotor_Init_Config_s *cfg);
+int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg);
+int8_t DJIMotorRegister(DJIMotorInstance *inst, const DJIMotor_Register_Config_s *reg_cfg);
 void DJIMotorEnable(void *inst);
 void DJIMotorDisable(void *inst);
 void DJIMotorSetRef(void *inst, float ref);
-float DJIMotor_GetAngle(void *inst);
-float DJIMotor_GetSpeed(void *inst);
-float DJIMotor_GetCurrent(void *inst);
+MotorData_s DJIMotor_GetData(void *inst);
 void DJIMotor_SetOffset(void *inst, float offset);
 void DJIMotorSend(void *inst); // 按照can的接收id分组，只要调用同1组的任意一个电机的发送函数，即可发送整组电机
 

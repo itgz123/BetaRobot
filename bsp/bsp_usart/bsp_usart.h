@@ -54,7 +54,7 @@ typedef struct
     USART_Work_Mode_e tx_mode;                   // 发送模式（阻塞/中断/DMA）
     void (*rx_callback)(struct USARTInstance *); // 接收完成回调（可为NULL）
     void (*tx_callback)(struct USARTInstance *); // 发送完成回调（DMA模式，可为NULL）
-} USART_Init_Config_s;
+} USART_Config_s;
 
 /*------------- 实例定义宏 --------------*/
 
@@ -78,13 +78,28 @@ typedef struct
 /*------------- 外部接口声明 --------------*/
 
 /**
- * @brief 注册USART实例
+ * @brief 配置USART实例（可重复调用，不修改 static 管理数组）
+ * @param instance USART实例指针
+ * @param config   初始化配置结构体指针
+ * @retval 0 成功
+ * @retval -1 失败（参数非法）
+ *
+ * @note 仅配置 instance 字段和启动接收，不修改 static 管理数组。
+ *       可重复调用以重新配置硬件参数。
+ */
+int8_t USARTConfig(USARTInstance *instance, const USART_Config_s *config);
+
+/**
+ * @brief 注册USART实例（仅调用一次）
  * @param instance USART实例指针（需先通过宏定义）
  * @param config   初始化配置结构体指针
  * @retval 0 成功
  * @retval -1 失败（实例数超过上限或重复注册）
+ *
+ * @note 内部调用 USARTConfig 后，将 instance 加入 static 管理数组。
+ *       同一 instance 不可重复注册。
  */
-int8_t USARTRegister(USARTInstance *instance, const USART_Init_Config_s *config);
+int8_t USARTRegister(USARTInstance *instance, const USART_Config_s *config);
 
 /**
  * @brief 发送数据

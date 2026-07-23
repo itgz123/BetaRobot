@@ -257,12 +257,7 @@ static void BMI088_SPICpltCallback(SPIInstance *spi_inst)
 
         uint16_t i = inst->acc_wr_idx % BMI088_ACC_BUF_SIZE;
         uint8_t off = BMI088_ACC_RX_DATA_OFF;
-        inst->acc_raw[i][0] = spi_inst->rx_buff[off + 0];
-        inst->acc_raw[i][1] = spi_inst->rx_buff[off + 1];
-        inst->acc_raw[i][2] = spi_inst->rx_buff[off + 2];
-        inst->acc_raw[i][3] = spi_inst->rx_buff[off + 3];
-        inst->acc_raw[i][4] = spi_inst->rx_buff[off + 4];
-        inst->acc_raw[i][5] = spi_inst->rx_buff[off + 5];
+        memcpy(inst->acc_raw[i], &spi_inst->rx_buff[off], BMI088_RAW_DATA_SIZE);
         inst->t_acc[i] = inst->int_timestamp;
         inst->acc_wr_idx++;
         if (inst->acc_cnt < UINT8_MAX)
@@ -287,12 +282,7 @@ static void BMI088_SPICpltCallback(SPIInstance *spi_inst)
 
         uint16_t i = inst->gyro_wr_idx % BMI088_GYRO_BUF_SIZE;
         uint8_t off = BMI088_GYRO_RX_DATA_OFF;
-        inst->gyro_raw[i][0] = spi_inst->rx_buff[off + 0];
-        inst->gyro_raw[i][1] = spi_inst->rx_buff[off + 1];
-        inst->gyro_raw[i][2] = spi_inst->rx_buff[off + 2];
-        inst->gyro_raw[i][3] = spi_inst->rx_buff[off + 3];
-        inst->gyro_raw[i][4] = spi_inst->rx_buff[off + 4];
-        inst->gyro_raw[i][5] = spi_inst->rx_buff[off + 5];
+        memcpy(inst->gyro_raw[i], &spi_inst->rx_buff[off], BMI088_RAW_DATA_SIZE);
         inst->t_gyro[i] = inst->int_timestamp;
         inst->gyro_wr_idx++;
         if (inst->gyro_cnt < UINT8_MAX)
@@ -380,6 +370,7 @@ static uint8_t BMI088_FindBracket(const uint64_t *t_buf, uint16_t newest, uint16
  * @param t_new    新样本时间戳 (us)
  * @param t_target 目标时间戳 (us)
  * @param out      插值结果 [6]
+ * @note 使用 BMI088_AxisRaw_u 联合体直接操作 int16 轴数据
  */
 static void BMI088_InterpRaw(const uint8_t *raw_old, const uint8_t *raw_new, uint64_t t_old, uint64_t t_new, uint64_t t_target, uint8_t *out)
 {
@@ -395,39 +386,42 @@ static void BMI088_InterpRaw(const uint8_t *raw_old, const uint8_t *raw_new, uin
     if (ratio > 1.0f)
         ratio = 1.0f;
 
+    const BMI088_AxisRaw_u *old = (const BMI088_AxisRaw_u *)raw_old;
+    const BMI088_AxisRaw_u *new = (const BMI088_AxisRaw_u *)raw_new;
+    BMI088_AxisRaw_u *result = (BMI088_AxisRaw_u *)out;
+
     for (uint8_t i = 0; i < BMI088_AXIS_NUM; i++)
     {
-        int16_t v_old = (int16_t)((raw_old[i * 2 + 1] << 8) | raw_old[i * 2]);
-        int16_t v_new = (int16_t)((raw_new[i * 2 + 1] << 8) | raw_new[i * 2]);
-        int16_t v_out = (int16_t)((float)v_old + ((float)v_new - (float)v_old) * ratio + BMI088_INTERP_ROUND);
-        out[i * 2] = (uint8_t)(v_out & 0xFF);
-        out[i * 2 + 1] = (uint8_t)((v_out >> 8) & 0xFF);
+        int16_t v_out = (int16_t)((float)old->axis[i] + ((float)new->axis[i] - (float)old->axis[i]) * ratio + BMI088_INTERP_ROUND);
+        result->axis[i] = v_out;
     }
 }
 
 /**
  * @brief 加速度计原始数据 → 物理单位 (m/s²)
+ * @note 使用 BMI088_AxisRaw_u 联合体直接访问 int16 轴数据
  */
 static void BMI088_RawToAcc(const uint8_t *raw, float *out, BMI088_AccRange_e range, const float *offset)
 {
+    const BMI088_AxisRaw_u *axis = (const BMI088_AxisRaw_u *)raw;
     float sen = BMI088_AccSenTable[range];
     for (uint8_t i = 0; i < BMI088_AXIS_NUM; i++)
     {
-        int16_t v = (int16_t)((raw[i * 2 + 1] << 8) | raw[i * 2]);
-        out[i] = (float)v * sen - offset[i];
+        out[i] = (float)axis->axis[i] * sen - offset[i];
     }
 }
 
 /**
  * @brief 陀螺仪原始数据 → 物理单位 (rad/s)
+ * @note 使用 BMI088_AxisRaw_u 联合体直接访问 int16 轴数据
  */
 static void BMI088_RawToGyro(const uint8_t *raw, float *out, BMI088_GyroRange_e range, const float *offset)
 {
+    const BMI088_AxisRaw_u *axis = (const BMI088_AxisRaw_u *)raw;
     float sen = BMI088_GyroSenTable[range];
     for (uint8_t i = 0; i < BMI088_AXIS_NUM; i++)
     {
-        int16_t v = (int16_t)((raw[i * 2 + 1] << 8) | raw[i * 2]);
-        out[i] = (float)v * sen - offset[i];
+        out[i] = (float)axis->axis[i] * sen - offset[i];
     }
 }
 
@@ -579,7 +573,11 @@ static uint8_t BMI088_GyroInit(BMI088Instance *inst)
 
 /*============================ 公开接口实现 ============================*/
 
-int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
+/**
+ * @brief 配置BMI088实例（可重复调用，不修改 static 变量）
+ * @note 可运行时重新调用以重新配置传感器参数
+ */
+int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
 {
     if (inst == NULL)
     {
@@ -624,48 +622,6 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
         return -1;
     }
 
-    // 设置 parent 指针
-    inst->spi_inst->parent = inst;
-    inst->cs_acc->parent = inst;
-    inst->cs_gyro->parent = inst;
-    inst->int_acc->parent = inst;
-    inst->int_gyro->parent = inst;
-
-    SPI_Init_Config_s spi_cfg = {.spi_e = config->spi_e, .work_mode = SPI_BLOCK_MODE, .rx_callback = NULL};
-    if (SPIRegister(inst->spi_inst, &spi_cfg) != 0)
-    {
-        LOGERROR("[drv_bmi088] SPI register failed");
-        return -1;
-    }
-
-    GPIO_Init_Config_s gpio_cs_acc = {.gpio_e = config->cs_acc_e, .callback = NULL};
-    if (GPIORegister(inst->cs_acc, &gpio_cs_acc) != 0)
-    {
-        LOGERROR("[drv_bmi088] cs_acc register failed");
-        return -1;
-    }
-
-    GPIO_Init_Config_s gpio_cs_gyro = {.gpio_e = config->cs_gyro_e, .callback = NULL};
-    if (GPIORegister(inst->cs_gyro, &gpio_cs_gyro) != 0)
-    {
-        LOGERROR("[drv_bmi088] cs_gyro register failed");
-        return -1;
-    }
-
-    // 某些板级默认将 CS 拉低，上电后先释放两个片选，避免总线冲突。
-    // 同时给加速度计一个 CS 上升沿，触发其由 I2C 切换到 SPI。
-    GPIOSet(inst->cs_acc);
-    GPIOSet(inst->cs_gyro);
-    DWT_Delay(BMI088_CS_RELEASE_DELAY_S); // 修改为合适时间，使用宏定义
-
-    // 初始化加热tim_pwm
-    inst->heater_pwm->tim_e = config->heater_e;
-    if (BMI088_HeaterInit(inst) != 0)
-    {
-        LOGERROR("[drv_bmi088] heater_pwm init failed");
-        return -1;
-    }
-
     // 保存用户配置
     inst->acc_range = config->acc_range;
     inst->acc_bwp = config->acc_bwp;
@@ -684,11 +640,85 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
     if (BMI088_GyroInit(inst) != 0)
         return -1;
 
-    if (inst->daemon != NULL && config->daemon_reload > 0)
+    return 0;
+}
+
+int8_t BMI088Register(BMI088Instance *inst, const BMI088_Register_Config_s *reg_cfg)
+{
+    if (inst == NULL)
     {
-        Daemon_Init_Config_s daemon_cfg = {
-            .reload_count = config->daemon_reload,
-            .fault_action = config->daemon_fault,
+        LOGERROR("[drv_bmi088] Instance is NULL");
+        return -1;
+    }
+
+    if (reg_cfg == NULL)
+    {
+        LOGERROR("[drv_bmi088] Config is NULL");
+        return -1;
+    }
+
+    const BMI088_Config_s *config = &reg_cfg->bmi088_config;
+
+    // 防重复注册检查（通过检查 SPI parent 是否已设置）
+    if (inst->spi_inst && inst->spi_inst->parent == inst)
+    {
+        LOGERROR("[drv_bmi088] Instance already registered!");
+        return -1;
+    }
+
+    // 调用 Config 完成传感器配置
+    if (BMI088Config(inst, config) != 0)
+    {
+        return -1;
+    }
+
+    // 设置 parent 指针
+    inst->spi_inst->parent = inst;
+    inst->cs_acc->parent = inst;
+    inst->cs_gyro->parent = inst;
+    inst->int_acc->parent = inst;
+    inst->int_gyro->parent = inst;
+
+    SPI_Config_s spi_cfg = {.spi_e = reg_cfg->spi_e, .work_mode = SPI_BLOCK_MODE, .rx_callback = NULL};
+    if (SPIRegister(inst->spi_inst, &spi_cfg) != 0)
+    {
+        LOGERROR("[drv_bmi088] SPI register failed");
+        return -1;
+    }
+
+    GPIO_Config_s gpio_cs_acc = {.gpio_e = reg_cfg->cs_acc_e, .callback = NULL};
+    if (GPIORegister(inst->cs_acc, &gpio_cs_acc) != 0)
+    {
+        LOGERROR("[drv_bmi088] cs_acc register failed");
+        return -1;
+    }
+
+    GPIO_Config_s gpio_cs_gyro = {.gpio_e = reg_cfg->cs_gyro_e, .callback = NULL};
+    if (GPIORegister(inst->cs_gyro, &gpio_cs_gyro) != 0)
+    {
+        LOGERROR("[drv_bmi088] cs_gyro register failed");
+        return -1;
+    }
+
+    // 某些板级默认将 CS 拉低，上电后先释放两个片选，避免总线冲突。
+    // 同时给加速度计一个 CS 上升沿，触发其由 I2C 切换到 SPI。
+    GPIOSet(inst->cs_acc);
+    GPIOSet(inst->cs_gyro);
+    DWT_Delay(BMI088_CS_RELEASE_DELAY_S); // 修改为合适时间，使用宏定义
+
+    // 初始化加热tim_pwm
+    inst->heater_pwm->tim_e = reg_cfg->heater_e;
+    if (BMI088_HeaterInit(inst) != 0)
+    {
+        LOGERROR("[drv_bmi088] heater_pwm init failed");
+        return -1;
+    }
+
+    if (inst->daemon != NULL && reg_cfg->daemon_reload > 0)
+    {
+        Daemon_Config_s daemon_cfg = {
+            .reload_count = reg_cfg->daemon_reload,
+            .fault_action = reg_cfg->daemon_fault,
             .callback = BMI088_HeaterFaultCallback,
             .owner_id = inst,
         };
@@ -698,13 +728,13 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
     // 中断模式
     if (inst->work_mode == BMI088_MODE_INT)
     {
-        GPIO_Init_Config_s gpio_int_acc = {.gpio_e = config->int_acc_e, .callback = BMI088_IntCallback};
+        GPIO_Config_s gpio_int_acc = {.gpio_e = reg_cfg->int_acc_e, .callback = BMI088_IntCallback};
         if (GPIORegister(inst->int_acc, &gpio_int_acc) != 0)
         {
             LOGERROR("[drv_bmi088] int_acc register failed");
             return -1;
         }
-        GPIO_Init_Config_s gpio_int_gyro = {.gpio_e = config->int_gyro_e, .callback = BMI088_IntCallback};
+        GPIO_Config_s gpio_int_gyro = {.gpio_e = reg_cfg->int_gyro_e, .callback = BMI088_IntCallback};
         if (GPIORegister(inst->int_gyro, &gpio_int_gyro) != 0)
         {
             LOGERROR("[drv_bmi088] int_gyro register failed");
@@ -737,13 +767,13 @@ int8_t BMI088Register(BMI088Instance *inst, const BMI088_Init_Config_s *config)
     }
     else
     {
-        GPIO_Init_Config_s gpio_int_acc = {.gpio_e = config->int_acc_e, .callback = NULL};
+        GPIO_Config_s gpio_int_acc = {.gpio_e = reg_cfg->int_acc_e, .callback = NULL};
         if (GPIORegister(inst->int_acc, &gpio_int_acc) != 0)
         {
             LOGERROR("[drv_bmi088] int_acc register failed");
             return -1;
         }
-        GPIO_Init_Config_s gpio_int_gyro = {.gpio_e = config->int_gyro_e, .callback = NULL};
+        GPIO_Config_s gpio_int_gyro = {.gpio_e = reg_cfg->int_gyro_e, .callback = NULL};
         if (GPIORegister(inst->int_gyro, &gpio_int_gyro) != 0)
         {
             LOGERROR("[drv_bmi088] int_gyro register failed");

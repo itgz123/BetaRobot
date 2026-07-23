@@ -5,7 +5,7 @@
  *           选择编译哪个应用
  *    对应 app/<APP_NAME>/ 目录
  *============================================*/
-#define APP_NAME target_car
+#define APP_NAME half_rudder_gimbal
 
 /*============================================
  *           选择构建类型
