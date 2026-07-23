@@ -180,11 +180,13 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 
 /*------------- 外部接口实现 --------------*/
 
-int8_t SPIRegister(SPIInstance *instance, const SPI_Init_Config_s *config)
+/**
+ * @brief 配置SPI实例（可重复调用，不修改 static 管理数组）
+ */
+int8_t SPIConfig(SPIInstance *instance, const SPI_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_spi] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_spi] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_idx >= SPI_INSTANCE_NUM, -1, LOGERROR("[bsp_spi] Exceeded max instance count!"));
     BSP_RETURN_IF_TRUE_LOG(config->spi_e >= SPI_NUM_MAX, -1, LOGERROR("[bsp_spi] spi_e out of range!"));
 
     // 将配置拷贝到实例
@@ -196,6 +198,34 @@ int8_t SPIRegister(SPIInstance *instance, const SPI_Init_Config_s *config)
     instance->handle = spi_map[instance->spi_e].handle;
 
     BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, -1, LOGERROR("[bsp_spi] SPI handle is NULL, check CubeMX configuration!"));
+
+    return 0;
+}
+
+/**
+ * @brief 注册SPI实例（仅调用一次，修改 static 管理数组）
+ */
+int8_t SPIRegister(SPIInstance *instance, const SPI_Config_s *config)
+{
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_spi] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_spi] Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(s_idx >= SPI_INSTANCE_NUM, -1, LOGERROR("[bsp_spi] Exceeded max instance count!"));
+
+    // 防重复注册检查
+    for (uint8_t i = 0; i < s_idx; i++)
+    {
+        if (s_spi_instance[i] == instance)
+        {
+            LOGERROR("[bsp_spi] Instance already registered!");
+            return -1;
+        }
+    }
+
+    // 调用 Config 完成配置
+    if (SPIConfig(instance, config) != 0)
+    {
+        return -1;
+    }
 
     s_spi_instance[s_idx++] = instance;
 

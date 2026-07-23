@@ -6,20 +6,10 @@ hero:
   name: "BetaRobot"
   text: "多开发板支持的嵌入式机器人控制框架"
   tagline: 静态内存分配 · 分层架构 · 多 App 支持 · 跨平台
-  actions:
-    - theme: brand
-      text: 项目文档
-      link: /guide/项目架构设计方案
-    - theme: alt
-      text: 开发指南
-      link: /guide/APP开发指南
-    - theme: alt
-      text: GitHub
-      link: https://github.com/itgz123/BetaRobot
 
 features:
   - title: 多开发板支持
-    details: 支持 STM32F407VET6、DM-MC02、DJI A、DJI C 等多种开发板，通过宏定义一键切换
+    details: 支持 DM-MC02、DJI A、DJI C 等多种开发板，通过宏定义一键切换
   - title: 分层架构
     details: BSP/DRV/APP 三层分离，单向依赖，上层调用下层，代码复用性强
   - title: 多 App 同步开发

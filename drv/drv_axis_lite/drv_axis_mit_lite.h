@@ -18,7 +18,7 @@
 #ifndef DRV_AXIS_MIT_LITE_H
 #define DRV_AXIS_MIT_LITE_H
 
-#include "drv_motor_def.h"
+#include "drv_motor_base.h"
 #include "drv_mit.h"
 #include "drv_axis_lite_def.h"
 #include <stdint.h>

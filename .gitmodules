@@ -1,3 +1,6 @@
-[submodule "app/target_car"]
-	path = app/target_car
-	url = git@gitee.com:trwwrt/target_car.git
+[submodule "app/half_rudder_chassis"]
+	path = app/half_rudder_chassis
+	url = git@github.com:itgz123/BetaRobot-App-Half-Rudder-Chassis.git
+[submodule "app/half_rudder_gimbal"]
+	path = app/half_rudder_gimbal
+	url = git@github.com:itgz123/BetaRobot-App-Half-Rudder-Gimbal.git
