@@ -35,10 +35,10 @@ typedef HAL_StatusTypeDef (*SPI_TransmitFunc)(SPI_HandleTypeDef *, const uint8_t
 typedef HAL_StatusTypeDef (*SPI_ReceiveFunc)(SPI_HandleTypeDef *, uint8_t *, uint16_t, uint32_t);
 
 /*------------- 私有变量 --------------*/
-static uint8_t s_idx = 0;
+static uint8_t s_spi_idx = 0;
 #if SPI_INSTANCE_NUM > 0
 static SPIInstance *s_spi_instance[SPI_INSTANCE_NUM] = {NULL};
-static SPIInstance *s_last_route_instance = NULL;
+static SPIInstance *s_spi_last_route = NULL;
 #else
 static SPIInstance **s_spi_instance = NULL;
 #endif
@@ -53,16 +53,16 @@ static SPIInstance *SPIFindInstanceByHandle(SPI_HandleTypeDef *hspi)
         return NULL;
     }
 
-    if (s_last_route_instance != NULL && s_last_route_instance->handle == hspi)
+    if (s_spi_last_route != NULL && s_spi_last_route->handle == hspi)
     {
-        return s_last_route_instance;
+        return s_spi_last_route;
     }
 
-    for (uint8_t i = 0; i < s_idx; i++)
+    for (uint8_t i = 0; i < s_spi_idx; i++)
     {
         if (s_spi_instance[i]->handle == hspi)
         {
-            s_last_route_instance = s_spi_instance[i];
+            s_spi_last_route = s_spi_instance[i];
             return s_spi_instance[i];
         }
     }
@@ -83,7 +83,7 @@ static const SPI_TransmitReceiveFunc transmit_receive_funcs[] = {
 /**
  * @brief 发送函数指针数组
  */
-static const SPI_TransmitFunc transmit_funcs[] = {
+static const SPI_TransmitFunc s_spi_transmit_funcs[] = {
     [SPI_BLOCK_MODE] = HAL_SPI_Transmit,
     [SPI_IT_MODE] = (SPI_TransmitFunc)HAL_SPI_Transmit_IT,
     [SPI_DMA_MODE] = (SPI_TransmitFunc)HAL_SPI_Transmit_DMA,
@@ -209,10 +209,10 @@ int8_t SPIRegister(SPIInstance *instance, const SPI_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_spi] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_spi] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_idx >= SPI_INSTANCE_NUM, -1, LOGERROR("[bsp_spi] Exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(s_spi_idx >= SPI_INSTANCE_NUM, -1, LOGERROR("[bsp_spi] Exceeded max instance count!"));
 
     // 防重复注册检查
-    for (uint8_t i = 0; i < s_idx; i++)
+    for (uint8_t i = 0; i < s_spi_idx; i++)
     {
         if (s_spi_instance[i] == instance)
         {
@@ -227,9 +227,9 @@ int8_t SPIRegister(SPIInstance *instance, const SPI_Config_s *config)
         return -1;
     }
 
-    s_spi_instance[s_idx++] = instance;
+    s_spi_instance[s_spi_idx++] = instance;
 
-    LOGINFO("[bsp_spi] SPI instance registered, idx=%d", s_idx - 1);
+    LOGINFO("[bsp_spi] SPI instance registered, idx=%d", s_spi_idx - 1);
     return 0;
 }
 
@@ -258,7 +258,7 @@ void SPITransmit(SPIInstance *instance, uint8_t *data, uint16_t len, uint32_t ti
     }
 
     instance->last_xfer_len = len;
-    transmit_funcs[instance->work_mode](instance->handle, data, len, timeout_ms);
+    s_spi_transmit_funcs[instance->work_mode](instance->handle, data, len, timeout_ms);
 }
 
 void SPIReceive(SPIInstance *instance, uint16_t len, uint32_t timeout_ms)

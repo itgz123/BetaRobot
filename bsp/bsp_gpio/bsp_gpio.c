@@ -15,7 +15,7 @@
 #include "bsp_uart_log.h"
 
 /*------------- 私有变量 --------------*/
-static uint8_t s_idx = 0;
+static uint8_t s_gpio_idx = 0;
 #if GPIO_INSTANCE_NUM > 0
 static GPIOInstance *s_gpio_instance[GPIO_INSTANCE_NUM] = {NULL};
 static GPIOInstance *s_exti_pin_instance[16] = {NULL};
@@ -71,7 +71,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     }
 
     // 异常情况下回退到线性扫描，保证兼容性
-    for (uint8_t i = 0; i < s_idx; i++)
+    for (uint8_t i = 0; i < s_gpio_idx; i++)
     {
         GPIOInstance *gpio = s_gpio_instance[i];
         if (gpio->map.pin == GPIO_Pin && gpio->callback != NULL)
@@ -115,10 +115,10 @@ int8_t GPIORegister(GPIOInstance *instance, const GPIO_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_gpio] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_gpio] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_idx >= GPIO_INSTANCE_NUM, -1, LOGERROR("[bsp_gpio] Exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(s_gpio_idx >= GPIO_INSTANCE_NUM, -1, LOGERROR("[bsp_gpio] Exceeded max instance count!"));
 
     // 防重复注册检查
-    for (uint8_t i = 0; i < s_idx; i++)
+    for (uint8_t i = 0; i < s_gpio_idx; i++)
     {
         if (s_gpio_instance[i] == instance)
         {
@@ -145,12 +145,12 @@ int8_t GPIORegister(GPIOInstance *instance, const GPIO_Config_s *config)
         }
     }
 
-    s_gpio_instance[s_idx++] = instance;
+    s_gpio_instance[s_gpio_idx++] = instance;
     if (instance->callback != NULL)
     {
         s_exti_pin_instance[pin_idx] = instance;
     }
-    LOGINFO("[bsp_gpio] GPIO instance registered, idx=%d", s_idx - 1);
+    LOGINFO("[bsp_gpio] GPIO instance registered, idx=%d", s_gpio_idx - 1);
     return 0;
 }
 
