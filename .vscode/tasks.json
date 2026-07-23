@@ -97,6 +97,28 @@
                 "reveal": "always",
                 "panel": "new"
             }
+        },
+        {
+            "label": "start docs",
+            "type": "shell",
+            "windows": {
+                "command": "docs/start-docs.bat"
+            },
+            "linux": {
+                "command": "bash docs/start-docs.sh"
+            },
+            "osx": {
+                "command": "bash docs/start-docs.sh"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "detail": "启动本地文档预览站点",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": []
         }
     ]
 }
