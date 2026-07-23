@@ -293,8 +293,8 @@ static HAL_StatusTypeDef CANBxcanAddFilter(CANInstance *instance)
         return HAL_ERROR;
     }
 
-    // 16位标准帧ID格式：[15]=RTR, [14]=IDE, [13:3]=STID[10:0], [2:0]=EXID[17:15]
-    // 标准帧ID左移3位，IDE=0, RTR=0
+    // 16位标准帧ID格式：[15:5]=STID[10:0], [4]=RTR, [3]=IDE, [2:0]=EXID[17:15]
+    // 标准帧ID左移5位，IDE=0, RTR=0
     filter.FilterScale = CAN_FILTERSCALE_16BIT;
     filter.FilterFIFOAssignment = (instance->rx_id_list[0] & 1U) ? CAN_RX_FIFO0 : CAN_RX_FIFO1;
     filter.FilterBank = filter_bank;
@@ -310,16 +310,16 @@ static HAL_StatusTypeDef CANBxcanAddFilter(CANInstance *instance)
         // CAN_ID_UNUSED 槽位配置为 0（不匹配有效ID）
         filter.FilterMode = CAN_FILTERMODE_IDLIST;
         filter.FilterIdLow = (instance->rx_id_list[0] != CAN_ID_UNUSED && instance->rx_id_list[0] <= 0x7FF)
-                                 ? (instance->rx_id_list[0] & 0x7FFU) << 3
+                                 ? (instance->rx_id_list[0] & 0x7FFU) << 5
                                  : 0;
         filter.FilterMaskIdLow = (instance->rx_id_list[1] != CAN_ID_UNUSED && instance->rx_id_list[1] <= 0x7FF)
-                                     ? (instance->rx_id_list[1] & 0x7FFU) << 3
+                                     ? (instance->rx_id_list[1] & 0x7FFU) << 5
                                      : 0;
         filter.FilterIdHigh = (instance->rx_id_list[2] != CAN_ID_UNUSED && instance->rx_id_list[2] <= 0x7FF)
-                                  ? (instance->rx_id_list[2] & 0x7FFU) << 3
+                                  ? (instance->rx_id_list[2] & 0x7FFU) << 5
                                   : 0;
         filter.FilterMaskIdHigh = (instance->rx_id_list[3] != CAN_ID_UNUSED && instance->rx_id_list[3] <= 0x7FF)
-                                      ? (instance->rx_id_list[3] & 0x7FFU) << 3
+                                      ? (instance->rx_id_list[3] & 0x7FFU) << 5
                                       : 0;
     }
     else
@@ -328,8 +328,8 @@ static HAL_StatusTypeDef CANBxcanAddFilter(CANInstance *instance)
         // HAL库16位掩码过滤器寄存器映射：
         // FR1 = (FilterMaskIdLow << 16) | FilterIdLow → FilterIdLow为ID，FilterMaskIdLow为掩码
         filter.FilterMode = CAN_FILTERMODE_IDMASK;
-        filter.FilterIdLow = (instance->rx_id_list[0] & 0x7FFU) << 3;
-        filter.FilterMaskIdLow = (instance->rx_mask & 0x7FFU) << 3;
+        filter.FilterIdLow = (instance->rx_id_list[0] & 0x7FFU) << 5;
+        filter.FilterMaskIdLow = (instance->rx_mask & 0x7FFU) << 5;
         filter.FilterIdHigh = 0;
         filter.FilterMaskIdHigh = 0;
     }
