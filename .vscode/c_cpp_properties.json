@@ -2,7 +2,7 @@
     "configurations": [
         {
             "name": "CMake",
-            "compilerPath": "arm-none-eabi-gcc.exe",
+            "compilerPath": "arm-none-eabi-gcc",
             "intelliSenseMode": "windows-gcc-arm",
             "compileCommands": "${workspaceFolder}/build/compile_commands.json",
             "cStandard": "c11",
