@@ -391,7 +391,7 @@ int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
     inst->base.model = cfg->model;
     inst->base.enable = MOTOR_DISABLE;
     inst->base.vtable = &s_dm_motor_vtable;
-    inst->motor_can_id = cfg->motor_can_id;
+    inst->can_id = cfg->can_id;
     inst->master_id = cfg->master_id;
 
     /* 控制器设置 */
@@ -474,7 +474,7 @@ int8_t DMMotorRegister(DMMotorInstance *inst, const DMMotor_Register_Config_s *r
     {
         CAN_Config_s can_cfg = {
             .can_e = reg_cfg->can_e,
-            .tx_id = cfg->motor_can_id,
+            .tx_id = cfg->can_id,
             .filter_mode = CAN_FILTER_MODE_LIST,
             .rx_id_list = {cfg->master_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},
             .rx_mask = 0,

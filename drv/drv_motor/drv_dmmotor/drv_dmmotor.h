@@ -173,8 +173,8 @@ struct DMMotorInstance
     MotorBase_s base; // 基类（必须是第一个成员，VTable依赖）
 
     /* DM 基本属性 */
-    uint16_t motor_can_id; // 电机 CAN ID（控制帧目标）
-    uint16_t master_id;    // Master ID（反馈帧来源）
+    uint16_t can_id;    // stm32->motor | tx
+    uint16_t master_id; // motor->stm32 | rx
 
     /* 协议映射配置 */
     DMMotorProtocolMap_s proto_map; // 用户配置范围 + 预计算 scale（初始化时计算）
@@ -197,8 +197,8 @@ struct DMMotorInstance
 typedef struct
 {
     DMModel_e model;                  // 电机型号 (DM4310 / DM4310P)
-    uint16_t motor_can_id;            // 电机 CAN ID（控制帧发送目标）
-    uint16_t master_id;               // Master ID（反馈帧接收ID）
+    uint16_t can_id;                  // stm32->motor | tx
+    uint16_t master_id;               // motor->stm32 | rx
     MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
     float speed_lpf_rc;               // 速度低通滤波时间常数 RC
 
