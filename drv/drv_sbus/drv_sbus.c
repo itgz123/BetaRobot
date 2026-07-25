@@ -99,6 +99,7 @@ int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config)
             .reload_count = config->daemon_reload,
             .fault_action = config->daemon_fault,
             .owner_id = instance,
+            .fault_threshold = config->daemon_fault_threshold,
         };
         DaemonConfig(instance->daemon, &daemon_cfg);
     }

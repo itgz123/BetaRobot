@@ -497,6 +497,7 @@ int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
             .fault_action = cfg->fault_action,
             .owner_id = inst,
             .reload_count = cfg->reload_count,
+            .fault_threshold = cfg->fault_threshold,
         };
         DaemonConfig(inst->base.daemon, &daemon_cfg);
     }
