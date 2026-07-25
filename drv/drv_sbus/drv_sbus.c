@@ -22,7 +22,40 @@ static void SBUSUARTRxCallback(USARTInstance *usart_inst);
 /*------------- 外部接口实现 --------------*/
 
 /**
- * @brief 配置SBUS实例（可重复调用，不修改 static 变量）
+ * @brief 注册 SBUS 实例（仅调用一次）
+ */
+int8_t SBUSRegister(SBUSInstance *instance, BoardUART_e uart_e)
+{
+    if (instance == NULL)
+    {
+        LOGERROR("[drv_sbus] Instance is NULL!");
+        return -1;
+    }
+
+    if (instance->usart_inst == NULL)
+    {
+        LOGERROR("[drv_sbus] usart_inst is NULL!");
+        return -1;
+    }
+
+    // 注册 BSP 层 USART 实例（USARTRegister 自身有防重复检查）
+    if (USARTRegister(instance->usart_inst, uart_e) != 0)
+    {
+        LOGERROR("[drv_sbus] USART register failed!");
+        return -1;
+    }
+
+    // 注册 daemon（占位，Config 更新运行参数）
+    if (instance->daemon)
+    {
+        DaemonRegister(instance->daemon);
+    }
+
+    return 0;
+}
+
+/**
+ * @brief 配置 SBUS 实例（可重复调用）
  */
 int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config)
 {
@@ -47,57 +80,29 @@ int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config)
     // 设置 parent 指针，用于 BSP 回调时获取 DRV 实例
     instance->usart_inst->parent = instance;
 
-    return 0;
-}
-
-int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Register_Config_s *reg_cfg)
-{
-    if (instance == NULL)
-    {
-        LOGERROR("[drv_sbus] Instance is NULL!");
-        return -1;
-    }
-
-    if (reg_cfg == NULL)
-    {
-        LOGERROR("[drv_sbus] Config is NULL!");
-        return -1;
-    }
-
-    if (instance->usart_inst == NULL)
-    {
-        LOGERROR("[drv_sbus] usart_inst is NULL!");
-        return -1;
-    }
-
-    // 调用 Config 完成配置（包括 parent 指针和超时参数）
-    if (SBUSConfig(instance, &reg_cfg->sbus_config) != 0)
-    {
-        return -1;
-    }
-
-    // 注册 BSP 层 USART 实例（USARTRegister 自身有防重复检查）
+    // 配置 USART DMA 模式和接收回调
     USART_Config_s usart_cfg = {
-        .uart_e = reg_cfg->uart_e,
         .tx_mode = USART_DMA_MODE,
         .rx_callback = SBUSUARTRxCallback,
+        .tx_callback = NULL,
     };
-    if (USARTRegister(instance->usart_inst, &usart_cfg) != 0)
+    if (USARTConfig(instance->usart_inst, &usart_cfg) != 0)
     {
-        LOGERROR("[drv_sbus] USART register failed!");
+        LOGERROR("[drv_sbus] USART config failed!");
         return -1;
     }
 
-    // 注册 daemon 看门狗（DaemonRegister 自身有防重复检查）
-    if (instance->daemon != NULL)
+    // 更新 daemon 运行参数（可重入）
+    if (instance->daemon)
     {
         Daemon_Config_s daemon_cfg = {
-            .reload_count = reg_cfg->sbus_config.daemon_reload,
-            .fault_action = (DaemonFaultAction_e)reg_cfg->sbus_config.daemon_fault,
+            .reload_count = config->daemon_reload,
+            .fault_action = config->daemon_fault,
             .owner_id = instance,
         };
-        DaemonRegister(instance->daemon, &daemon_cfg);
+        DaemonConfig(instance->daemon, &daemon_cfg);
     }
+
     return 0;
 }
 

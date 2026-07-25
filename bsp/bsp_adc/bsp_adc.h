@@ -34,17 +34,6 @@ typedef struct ADCInstance
 } ADCInstance;
 
 /*============================================
- *              配置结构体
- *============================================*/
-/**
- * @brief ADC 初始化配置结构体
- */
-typedef struct
-{
-    BoardADC_e adc_e; // 板载ADC枚举（注册时查找映射）
-} ADC_Config_s;
-
-/*============================================
  *              实例定义宏
  *============================================*/
 /**
@@ -57,23 +46,13 @@ typedef struct
  *              接口函数声明
  *============================================*/
 /**
- * @brief 配置ADC实例（可重复调用，不修改 static 管理数组）
- * @param instance ADC实例指针
- * @param config   初始化配置结构体指针
- * @return 0:成功 -1:失败
- * @note 仅配置 instance 字段、ADC通道和校准，不修改 static 管理数组。
- *       可重复调用以重新配置。
- */
-int8_t ADCConfig(ADCInstance *instance, const ADC_Config_s *config);
-
-/**
  * @brief 注册ADC实例（仅调用一次）
  * @param instance ADC实例指针
- * @param config   初始化配置结构体指针
+ * @param adc_e    板载ADC枚举
  * @return 0:成功 -1:失败
- * @note 注册时会执行ADC校准。内部调用 ADCConfig 后加入 static 管理数组。
+ * @note 配置实例字段、ADC通道、校准后加入 static 管理数组。
  */
-int8_t ADCRegister(ADCInstance *instance, const ADC_Config_s *config);
+int8_t ADCRegister(ADCInstance *instance, BoardADC_e adc_e);
 
 /**
  * @brief 获取ADC转换值（轮询模式）

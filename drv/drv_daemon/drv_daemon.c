@@ -45,9 +45,9 @@ void DaemonConfig(DaemonInstance *inst, const Daemon_Config_s *config)
     inst->fault_threshold = config->fault_threshold;
 }
 
-void DaemonRegister(DaemonInstance *inst, const Daemon_Config_s *config)
+void DaemonRegister(DaemonInstance *inst)
 {
-    if (!inst || !config || s_idx >= DAEMON_MX_CNT)
+    if (!inst || s_idx >= DAEMON_MX_CNT)
         return;
 
     // 防重复注册检查
@@ -59,9 +59,6 @@ void DaemonRegister(DaemonInstance *inst, const Daemon_Config_s *config)
             return;
         }
     }
-
-    // 调用 Config 完成配置
-    DaemonConfig(inst, config);
 
     s_daemon_instances[s_idx++] = inst;
 }
@@ -173,8 +170,7 @@ void DaemonInit(void)
     TaskRegister(&daemon_task, &task_cfg);
 
 #if (DEVELOPMENT_BOARD == DM_MC02) || (DEVELOPMENT_BOARD == DJI_C) || (DEVELOPMENT_BOARD == DJI_A)
-    PWM_Config_s pwm_cfg = {.tim_e = TIM_BUZZER};
-    PWMRegister(&buzzer_pwm, &pwm_cfg);
+    PWMRegister(&buzzer_pwm, TIM_BUZZER);
 #else
 #error "without config buzzer"
 #endif // #if DEVELOPMENT_BOARD
@@ -188,9 +184,9 @@ void DaemonConfig(DaemonInstance *inst, const Daemon_Config_s *config)
     (void)config;
 }
 
-void DaemonRegister(DaemonInstance *inst, const Daemon_Config_s *config)
+void DaemonRegister(DaemonInstance *inst)
 {
-    if (!inst || !config)
+    if (!inst)
         return;
 }
 

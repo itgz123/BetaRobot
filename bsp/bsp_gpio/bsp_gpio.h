@@ -29,17 +29,6 @@ typedef struct GPIOInstance
     void (*callback)(struct GPIOInstance *); // EXTI中断回调函数
 } GPIOInstance;
 
-/*------------- 配置结构体 --------------*/
-
-/**
- * @brief GPIO 初始化配置结构体
- */
-typedef struct
-{
-    BoardGPIO_e gpio_e;                      // 板载GPIO枚举（注册时用于查找映射）
-    void (*callback)(struct GPIOInstance *); // EXTI中断回调函数（可为NULL）
-} GPIO_Config_s;
-
 /*------------- 实例定义宏 --------------*/
 
 /**
@@ -52,28 +41,28 @@ typedef struct
 /*------------- 外部接口声明 --------------*/
 
 /**
- * @brief 配置GPIO实例（可重复调用，不修改 static 管理数组）
- * @param instance GPIO实例指针
- * @param config   初始化配置结构体指针
- * @retval 0 成功
- * @retval -1 失败（参数非法）
- *
- * @note 仅配置 instance 字段和硬件映射，不修改 static 管理数组。
- *       可重复调用以重新配置参数。
- */
-int8_t GPIOConfig(GPIOInstance *instance, const GPIO_Config_s *config);
-
-/**
  * @brief 注册GPIO实例（仅调用一次）
  * @param instance GPIO实例指针（需先通过宏定义）
- * @param config   初始化配置结构体指针
+ * @param gpio_e   板载GPIO枚举
  * @retval 0 成功
- * @retval -1 失败（实例数超过上限）
+ * @retval -1 失败（实例数超过上限、参数非法、重复注册）
  *
- * @note 内部调用 GPIOConfig 后，将 instance 加入 static 管理数组。
- *       同一 instance 不可重复注册。
+ * @note 设置 gpio_e、填充硬件映射后加入 static 管理数组。
+ *       不设置回调（由 GPIOConfig 负责）。
  */
-int8_t GPIORegister(GPIOInstance *instance, const GPIO_Config_s *config);
+int8_t GPIORegister(GPIOInstance *instance, BoardGPIO_e gpio_e);
+
+/**
+ * @brief 配置GPIO回调（可重复调用）
+ * @param instance GPIO实例指针
+ * @param callback EXTI中断回调函数（可为NULL）
+ * @retval 0 成功
+ * @retval -1 失败（回调冲突）
+ *
+ * @note 设置回调并注册 EXTI 映射。
+ *       要求在 GPIORegister 之后调用（需先填充硬件映射）。
+ */
+int8_t GPIOConfig(GPIOInstance *instance, void (*callback)(struct GPIOInstance *));
 
 /**
  * @brief 翻转GPIO电平

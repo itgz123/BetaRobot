@@ -328,8 +328,44 @@ static void DJIMotorDaemonCallback(void *owner)
 }
 
 /**
- * @brief 配置DJI电机实例（可重复调用，不修改 static 变量）
- * @note 可运行时重新调用以修改 PID 参数、控制器设置等
+ * @brief 注册DJI电机实例（仅调用一次）
+ * @note 只注册 CAN 实例，不配置电机参数（由 DJIMotorConfig 负责）。
+ */
+int8_t DJIMotorRegister(DJIMotorInstance *inst, BoardCAN_e can_e)
+{
+    if (!inst)
+        return -1;
+
+    // 防重复注册检查
+    if (inst->base.can && inst->base.can->parent == inst)
+        return -1;
+
+    // 注册 CAN 实例（仅绑定 CAN 外设，tx_id/rx_id/callback 由 Config 设置）
+    if (inst->base.can)
+    {
+        if (CANRegister(inst->base.can, can_e) != 0)
+            return -1;
+        inst->base.can->parent = inst;
+    }
+
+    // 初始化基本属性
+    inst->base.brand = MOTOR_BRAND_DJI;
+    inst->base.enable = MOTOR_DISABLE;
+    inst->base.vtable = &s_dji_motor_vtable;
+
+    // 注册 daemon（占位，Config 更新运行参数）
+    if (inst->base.daemon)
+    {
+        DaemonRegister(inst->base.daemon);
+    }
+
+    return 0;
+}
+
+/**
+ * @brief 配置DJI电机实例（可重复调用）
+ * @note 配置电机参数、PID、CAN 滤波器、daemon 等。
+ *       要求在 DJIMotorRegister 之后调用。
  */
 int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
 {
@@ -345,20 +381,34 @@ int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
     if (cfg->model == DJI_MODEL_GM6020 && cfg->motor_id > 7)
         return -1;
 
-    // 计算分组索引（用于保存 sender_group 指针）
+    // 计算发送ID、接收ID和分组索引
+    uint16_t tx_id = can_tx_id[cfg->model][(cfg->motor_id - 1) / 4];
     uint16_t rx_id = can_rx_id_base[cfg->model] + cfg->motor_id;
     uint8_t group_idx = (rx_id - 0x201) / 4;
     uint8_t motor_idx_in_group = (rx_id - 0x201) % 4;
-    BoardCAN_e can_e = cfg->can_e;
+    BoardCAN_e can_e = inst->base.can ? inst->base.can->can_e : (BoardCAN_e)-1;
 
-    // 初始化基本属性
-    inst->base.brand = MOTOR_BRAND_DJI;
+    // 检查发送分组是否已初始化
+    if (1 == s_send_groups[can_e][group_idx].motor_init_flag[motor_idx_in_group])
+        return -1;
+
+    // 配置 CAN 滤波器（tx_id, rx_id, callback）
+    if (inst->base.can)
+    {
+        CAN_Config_s can_cfg = {
+            .tx_id = tx_id,
+            .filter_mode = CAN_FILTER_MODE_LIST,
+            .rx_id_list = {rx_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},
+            .rx_mask = 0,
+            .rx_callback = DJIMotorRxCallback,
+        };
+        if (CANConfig(inst->base.can, &can_cfg) != 0)
+            return -1;
+    }
+
+    // 保存电机参数
     inst->base.model = cfg->model;
     inst->motor_id = cfg->motor_id;
-    inst->base.enable = MOTOR_DISABLE;
-    inst->base.vtable = &s_dji_motor_vtable;
-
-    // 初始化控制器设置
     inst->base.setting = cfg->controller_setting;
 
     // 初始化控制器状态
@@ -372,22 +422,18 @@ int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
     // 初始化速度环 PID (输出限幅: 电流安培值)
     if (cfg->controller_setting.loop_type & MOTOR_LOOP_SPEED)
     {
-        // 添加固定掩码
         cfg->pid_speed_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL | PID_ENABLE_OUTPUT_LIMIT;
-        // 设置输出限幅
         cfg->pid_speed_setting.out_max = current_max_a;
         cfg->pid_speed_setting.out_min = -current_max_a;
 
         PIDInit(&inst->base.controller.pid_speed, &cfg->pid_speed_setting);
     }
 
-    // 初始化位置环 PID (输出限幅: 空载速度 rad/s)。这里限幅是速度，不要直接把位置环输出给电流
+    // 初始化位置环 PID
     if (cfg->controller_setting.loop_type & MOTOR_LOOP_ANGLE)
     {
-        // 添加固定掩码
         cfg->pid_angle_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL | PID_ENABLE_OUTPUT_LIMIT;
 
-        // 仅位置环模式：输出限幅为电流；位置-速度双环模式：输出限幅为速度
         if (!(cfg->controller_setting.loop_type & MOTOR_LOOP_SPEED))
         {
             cfg->pid_angle_setting.out_max = current_max_a;
@@ -419,74 +465,20 @@ int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
     inst->base.position_offset = 0.0f;
     memset(&inst->base.data, 0, sizeof(MotorData_s));
 
-    // 保存分组信息
-    inst->sender_group = &s_send_groups[can_e][group_idx];
-    inst->motor_idx_in_group = motor_idx_in_group;
-
-    return 0;
-}
-
-int8_t DJIMotorRegister(DJIMotorInstance *inst, const DJIMotor_Register_Config_s *reg_cfg)
-{
-    if (!inst || !reg_cfg)
-        return -1;
-
-    DJIMotor_Config_s *cfg = (DJIMotor_Config_s *)&reg_cfg->motor_config;
-
-    // 检查参数有效性
-    if (cfg->motor_id < 1 || cfg->motor_id > 8)
-        return -1;
-    if (cfg->model >= DJI_MODEL_NUM)
-        return -1;
-    // GM6020 只有 ID 1-7
-    if (cfg->model == DJI_MODEL_GM6020 && cfg->motor_id > 7)
-        return -1;
-
-    // 计算发送ID和接收ID（需在 Config 调用前完成，用于防重复检查）
-    uint16_t tx_id = can_tx_id[cfg->model][(cfg->motor_id - 1) / 4];
-    uint16_t rx_id = can_rx_id_base[cfg->model] + cfg->motor_id;
-    uint8_t group_idx = (rx_id - 0x201) / 4;
-    uint8_t motor_idx_in_group = (rx_id - 0x201) % 4;
-    BoardCAN_e can_e = cfg->can_e;
-
-    // 检查是否已经初始化
-    if (1 == s_send_groups[can_e][group_idx].motor_init_flag[motor_idx_in_group])
-        return -1;
-
-    // 调用 Config 完成实例配置
-    if (DJIMotorConfig(inst, cfg) != 0)
-    {
-        return -1;
-    }
-
     // 注册到发送分组
     s_send_groups[can_e][group_idx].motors[motor_idx_in_group] = inst;
     s_send_groups[can_e][group_idx].motor_init_flag[motor_idx_in_group] = 1;
 
-    // 注册CAN实例
-    if (inst->base.can)
-    {
-        CAN_Config_s can_cfg = {
-            .can_e = cfg->can_e,
-            .tx_id = tx_id,
-            .filter_mode = CAN_FILTER_MODE_LIST,
-            .rx_id_list = {rx_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},
-            .rx_mask = 0,
-            .rx_callback = DJIMotorRxCallback,
-        };
-        CANRegister(inst->base.can, &can_cfg);
-        inst->base.can->parent = inst;
-    }
-
-    // 注册守护进程
+    // 更新 daemon 运行参数（可重入）
     if (inst->base.daemon)
     {
-        Daemon_Config_s config = {
+        Daemon_Config_s daemon_cfg = {
             .callback = DJIMotorDaemonCallback,
-            .fault_action = reg_cfg->fault_action,
+            .fault_action = cfg->fault_action,
             .owner_id = inst,
-            .reload_count = reg_cfg->reload_count};
-        DaemonRegister(inst->base.daemon, &config);
+            .reload_count = cfg->reload_count,
+        };
+        DaemonConfig(inst->base.daemon, &daemon_cfg);
     }
 
     return 0;

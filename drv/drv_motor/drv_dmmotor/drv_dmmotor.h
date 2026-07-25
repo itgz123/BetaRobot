@@ -196,7 +196,7 @@ struct DMMotorInstance
  * @brief DM 电机配置结构体（Config 函数使用）
  *
  * @note 可重复调用 DMMotorConfig 运行时修改 PID 参数、控制器设置等。
- *       不包含 can_e 和 daemon 相关字段（仅在 Register 时需要）。
+ *       不包含 can_e（由 DMMotorRegister 设置）。
  */
 typedef struct
 {
@@ -217,20 +217,11 @@ typedef struct
     /* PID 设置 */
     PID_Init_Config_s pid_speed_setting; // 速度环 PID 设置
     PID_Init_Config_s pid_angle_setting; // 位置环 PID 设置
-} DMMotor_Config_s;
 
-/**
- * @brief DM 电机注册配置结构体（Register 函数使用）
- *
- * @note 仅调用一次。内嵌 DMMotor_Config_s + CAN/daemon 相关字段。
- */
-typedef struct
-{
-    DMMotor_Config_s motor_config;    // 电机配置（传入 Config）
-    BoardCAN_e can_e;                 // 板载CAN枚举
+    /* daemon 设置 */
     uint16_t reload_count;            // 重载值（喂狗超时阈值）
     DaemonFaultAction_e fault_action; // 离线故障动作
-} DMMotor_Register_Config_s;
+} DMMotor_Config_s;
 
 /*============================================
  *              单电机实例定义宏
@@ -246,8 +237,8 @@ typedef struct
 /*============================================
  *              公共接口
  *============================================*/
+int8_t DMMotorRegister(DMMotorInstance *inst, BoardCAN_e can_e);
 int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg);
-int8_t DMMotorRegister(DMMotorInstance *inst, const DMMotor_Register_Config_s *reg_cfg);
 void DMMotor_Enable(void *inst);
 void DMMotor_Disable(void *inst);
 void DMMotor_SetRef(void *inst, float ref);

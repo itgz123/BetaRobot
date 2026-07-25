@@ -43,19 +43,6 @@ typedef struct USARTInstance
     void (*tx_callback)(struct USARTInstance *); // 发送完成回调（DMA模式）
 } USARTInstance;
 
-/*------------- 配置结构体 --------------*/
-
-/**
- * @brief USART 初始化配置结构体
- */
-typedef struct
-{
-    BoardUART_e uart_e;                          // 板载UART枚举（注册时用于查找映射）
-    USART_Work_Mode_e tx_mode;                   // 发送模式（阻塞/中断/DMA）
-    void (*rx_callback)(struct USARTInstance *); // 接收完成回调（可为NULL）
-    void (*tx_callback)(struct USARTInstance *); // 发送完成回调（DMA模式，可为NULL）
-} USART_Config_s;
-
 /*------------- 实例定义宏 --------------*/
 
 /**
@@ -75,31 +62,44 @@ typedef struct
         .rx_buff = name##_rx_buff,                        \
         .rx_buff_size = buff_sz}
 
-/*------------- 外部接口声明 --------------*/
+/*------------- 配置结构体 --------------*/
 
 /**
- * @brief 配置USART实例（可重复调用，不修改 static 管理数组）
- * @param instance USART实例指针
- * @param config   初始化配置结构体指针
- * @retval 0 成功
- * @retval -1 失败（参数非法）
- *
- * @note 仅配置 instance 字段和启动接收，不修改 static 管理数组。
- *       可重复调用以重新配置硬件参数。
+ * @brief USART 运行时配置结构体（用于 USARTConfig）
  */
-int8_t USARTConfig(USARTInstance *instance, const USART_Config_s *config);
+typedef struct
+{
+    USART_Work_Mode_e tx_mode;                   // 发送模式（阻塞/中断/DMA）
+    void (*rx_callback)(struct USARTInstance *); // 接收完成回调（可为NULL）
+    void (*tx_callback)(struct USARTInstance *); // 发送完成回调（DMA模式，可为NULL）
+} USART_Config_s;
+
+/*------------- 外部接口声明 --------------*/
 
 /**
  * @brief 注册USART实例（仅调用一次）
  * @param instance USART实例指针（需先通过宏定义）
- * @param config   初始化配置结构体指针
+ * @param uart_e   板载UART枚举
  * @retval 0 成功
  * @retval -1 失败（实例数超过上限或重复注册）
  *
- * @note 内部调用 USARTConfig 后，将 instance 加入 static 管理数组。
- *       同一 instance 不可重复注册。
+ * @note 设置 uart_e、填充硬件句柄、启动 DMA 接收后加入 static 管理数组。
+ *       不配置发送模式和回调（由 USARTConfig 负责）。
  */
-int8_t USARTRegister(USARTInstance *instance, const USART_Config_s *config);
+int8_t USARTRegister(USARTInstance *instance, BoardUART_e uart_e);
+
+/**
+ * @brief 配置USART实例（可重复调用）
+ * @param instance   USART实例指针
+ * @param config     配置结构体指针（发送模式 + 回调）
+ * @retval 0 成功
+ * @retval -1 失败（参数非法）
+ *
+ * @note 设置发送模式和回调，不修改 static 管理数组。
+ *       可重复调用以重新配置参数。
+ *       要求在 USARTRegister 之后调用。
+ */
+int8_t USARTConfig(USARTInstance *instance, const USART_Config_s *config);
 
 /**
  * @brief 发送数据

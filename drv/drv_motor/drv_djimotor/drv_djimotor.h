@@ -32,14 +32,14 @@ typedef struct
  */
 typedef union
 {
-    uint8_t raw[8]; // 原始字节
+    uint8_t raw[8];                // 原始字节
     struct __attribute__((packed)) // 发送帧：4通道电流（大端 int16）
     {
-        uint8_t ch1_h, ch1_l; // 通道1电流 MSB, LSB
-        uint8_t ch2_h, ch2_l; // 通道2电流 MSB, LSB
-        uint8_t ch3_h, ch3_l; // 通道3电流 MSB, LSB
-        uint8_t ch4_h, ch4_l; // 通道4电流 MSB, LSB
-    } tx;                     // 发送布局
+        uint8_t ch1_h, ch1_l;      // 通道1电流 MSB, LSB
+        uint8_t ch2_h, ch2_l;      // 通道2电流 MSB, LSB
+        uint8_t ch3_h, ch3_l;      // 通道3电流 MSB, LSB
+        uint8_t ch4_h, ch4_l;      // 通道4电流 MSB, LSB
+    } tx;                          // 发送布局
     struct __attribute__((packed)) // 接收帧：DJI 电机反馈（大端 int16）
     {
         uint8_t encoder_h, encoder_l;   // 编码器 (uint16)
@@ -87,12 +87,11 @@ struct DJIMotorInstance
 /**
  * @brief DJI 电机配置结构体（Config 函数使用）
  *
- * @note 可重复调用 DJIMotorConfig 运行时修改 PID 参数、控制器设置等。
- *       不包含 daemon 相关字段（仅在 Register 时需要）。
+ * @note 可重复调用 DJIMotorConfig 运行时修改 PID 参数、控制器设置、daemon 等。
+ *       不包含硬件枚举（由 DJIMotorRegister 设置）。
  */
 typedef struct
 {
-    BoardCAN_e can_e;                 // 板载CAN枚举
     DJIModel_e model;                 // 型号
     uint8_t motor_id;                 // 电机 ID (1-8)
     MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
@@ -104,19 +103,11 @@ typedef struct
     /* PID 设置 */
     PID_Init_Config_s pid_speed_setting; // 速度环 PID 设置
     PID_Init_Config_s pid_angle_setting; // 位置环 PID 设置
-} DJIMotor_Config_s;
 
-/**
- * @brief DJI 电机注册配置结构体（Register 函数使用）
- *
- * @note 仅调用一次。内嵌 DJIMotor_Config_s + daemon 相关字段。
- */
-typedef struct
-{
-    DJIMotor_Config_s motor_config;   // 电机配置（传入 Config）
+    /* daemon 设置 */
     uint16_t reload_count;            // 重载值（喂狗超时阈值）
     DaemonFaultAction_e fault_action; // 离线故障动作
-} DJIMotor_Register_Config_s;
+} DJIMotor_Config_s;
 
 /*============================================
  *              单电机实例定义宏
@@ -130,8 +121,8 @@ typedef struct
         .base.daemon = &name##_daemon,  \
     }
 
+int8_t DJIMotorRegister(DJIMotorInstance *inst, BoardCAN_e can_e);
 int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg);
-int8_t DJIMotorRegister(DJIMotorInstance *inst, const DJIMotor_Register_Config_s *reg_cfg);
 void DJIMotorEnable(void *inst);
 void DJIMotorDisable(void *inst);
 void DJIMotorSetRef(void *inst, float ref);

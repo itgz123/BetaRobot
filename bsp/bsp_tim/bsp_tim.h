@@ -44,24 +44,6 @@ typedef struct EncoderInstance
     uint64_t last_time_us;    // 上次更新时间 (us)
 } EncoderInstance;
 
-/*------------- 配置结构体 --------------*/
-
-/**
- * @brief PWM 初始化配置结构体
- */
-typedef struct
-{
-    BoardTIM_e tim_e; // 板载TIM枚举（注册时用于查找映射）
-} PWM_Config_s;
-
-/**
- * @brief 编码器 初始化配置结构体
- */
-typedef struct
-{
-    BoardTIM_e tim_e; // 板载TIM枚举（注册时用于查找映射）
-} Encoder_Config_s;
-
 /*------------- 实例定义宏 --------------*/
 
 /**
@@ -79,23 +61,13 @@ typedef struct
 /*------------- PWM接口声明 --------------*/
 
 /**
- * @brief 配置PWM实例（可重复调用，不修改 static 管理数组）
- * @param instance PWM实例指针
- * @param config   初始化配置结构体指针
- * @return 0成功，-1失败
- * @note 仅配置 instance 字段和启动PWM，不修改 static 管理数组。
- *       可重复调用以重新配置。
- */
-int8_t PWMConfig(PWMInstance *instance, const PWM_Config_s *config);
-
-/**
  * @brief 注册PWM实例（仅调用一次）
  * @param instance PWM实例指针
- * @param config   初始化配置结构体指针
+ * @param tim_e    板载TIM枚举
  * @return 0成功，-1失败
- * @note 注册即启动PWM输出。内部调用 PWMConfig 后加入 static 管理数组。
+ * @note 注册即配置硬件映射并启动PWM输出。内部不依赖 Config 步骤。
  */
-int8_t PWMRegister(PWMInstance *instance, const PWM_Config_s *config);
+int8_t PWMRegister(PWMInstance *instance, BoardTIM_e tim_e);
 
 /**
  * @brief 设置PWM占空比
@@ -107,23 +79,13 @@ void PWMSetDutyRatio(PWMInstance *instance, float dutyratio);
 /*------------- 编码器接口声明 --------------*/
 
 /**
- * @brief 配置编码器实例（可重复调用，不修改 static 管理数组）
- * @param instance 编码器实例指针
- * @param config   初始化配置结构体指针
- * @return 0成功，-1失败
- * @note 仅配置 instance 字段和启动编码器，不修改 static 管理数组。
- *       可重复调用以重新配置。
- */
-int8_t EncoderConfig(EncoderInstance *instance, const Encoder_Config_s *config);
-
-/**
  * @brief 注册编码器实例（仅调用一次）
  * @param instance 编码器实例指针
- * @param config   初始化配置结构体指针
+ * @param tim_e    板载TIM枚举
  * @return 0成功，-1失败
- * @note 注册即启动编码器，自动使能更新中断。内部调用 EncoderConfig 后加入 static 管理数组。
+ * @note 注册即配置硬件映射并启动编码器，自动使能更新中断。
  */
-int8_t EncoderRegister(EncoderInstance *instance, const Encoder_Config_s *config);
+int8_t EncoderRegister(EncoderInstance *instance, BoardTIM_e tim_e);
 
 /**
  * @brief 获取当前速度（脉冲/秒）
