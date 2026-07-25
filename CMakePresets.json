@@ -2,7 +2,7 @@
     "version": 3,
     "configurePresets": [
         {
-            "name": "build",
+            "name": "default",
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build",
             "toolchainFile": "${sourceDir}/cmake/toolchain-gcc-arm-none-eabi.cmake"
@@ -10,8 +10,8 @@
     ],
     "buildPresets": [
         {
-            "name": "build",
-            "configurePreset": "build"
+            "name": "default",
+            "configurePreset": "default"
         }
     ]
 }
