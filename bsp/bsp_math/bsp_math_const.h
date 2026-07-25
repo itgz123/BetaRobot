@@ -33,7 +33,7 @@
 #endif
 
 #ifndef INV_M_2PI
-#define INV_M_2PI 0.15915494309189533576f  // 1/(2π)
+#define INV_M_2PI 0.15915494309189533576f // 1/(2π)
 #endif
 
 #ifndef M_E
@@ -52,18 +52,15 @@
  *              角度弧度转换
  *============================================*/
 
-#define DEG_TO_RAD(deg) ((deg) * M_PI / 180.0f)
-#define RAD_TO_DEG(rad) ((rad) * 180.0f / M_PI)
+#define DEG_TO_RAD(deg) ((deg) * 0.01745329252f) /* π/180 */
+#define RAD_TO_DEG(rad) ((rad) * 57.29577951f)   /* 180/π  */
 
 /*============================================
  *              RPM与rad/s转换
  *============================================*/
 
-#define RPM_TO_RADPS(rpm) ((rpm) * M_2PI / 60.0f)
-#define RADPS_TO_RPM(radps) ((radps) * 60.0f / M_2PI)
-
-/* RPM → rad/s 乘数（编译期常量，避免运行期除以 60） */
-#define RPM_SCALE (M_2PI / 60.0f)
+#define RPM_TO_RADPS(rpm) ((rpm) * 0.104719755f)    /* 2π/60   */
+#define RADPS_TO_RPM(radps) ((radps) * 9.54929658f) /* 60/(2π) */
 
 /*============================================
  *              通用数学宏

@@ -213,8 +213,8 @@ MotorData_s DJIMotor_GetData(void *inst)
 
     // 单圈位置 (rad) [0, 2π) — 乘法代替除法
     float position_single = (float)raw_encoder * params->pos_scale;
-    // 速度 (rad/s) — 乘法代替除法
-    float velocity_raw = (float)raw_velocity * RPM_SCALE;
+    // 速度 (rad/s) — RPM转rad/s
+    float velocity_raw = RPM_TO_RADPS((float)raw_velocity);
     // 电流 (A) — 乘法代替除法
     float current = (float)raw_current * params->current_scale;
 
