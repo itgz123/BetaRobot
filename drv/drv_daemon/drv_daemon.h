@@ -47,6 +47,8 @@ typedef struct daemon_ins
     void *owner_id;                   // daemon实例的地址,初始化的时候填入
     uint8_t is_online;                // 当前在线状态,用于检测状态转换
     uint64_t last_reload_us;          // 上次喂狗时间戳 (us)，由 DWT 获取
+    uint16_t offline_count;           // 连续离线计数, 用于故障动作去抖
+    uint16_t fault_threshold;         // 离线故障触发阈值, 连续 offline_count >= 此值时触发, 0=立即触发
 } DaemonInstance;
 
 /*------------- 配置结构体 --------------*/
@@ -57,6 +59,7 @@ typedef struct
     DaemonFaultAction_e fault_action; // 离线故障动作, 见 DaemonFaultAction_e
     offline_callback callback;        // 异常处理函数（可为NULL）
     void *owner_id;                   // 所属模块实例指针
+    uint16_t fault_threshold;         // 离线故障触发阈值, 连续 offline_count >= 此值时触发, 0=立即触发
 } Daemon_Config_s;
 
 /*------------- 实例定义宏 --------------*/
@@ -70,6 +73,8 @@ typedef struct
         .callback = NULL,                  \
         .owner_id = NULL,                  \
         .last_reload_us = 0,               \
+        .offline_count = 0,                \
+        .fault_threshold = 0,              \
     }
 
 void DaemonConfig(DaemonInstance *inst, const Daemon_Config_s *config);

@@ -42,6 +42,7 @@ void DaemonConfig(DaemonInstance *inst, const Daemon_Config_s *config)
     inst->owner_id = config->owner_id;
     inst->temp_count = config->reload_count;
     inst->last_reload_us = DWT_GetTimeUs();
+    inst->fault_threshold = config->fault_threshold;
 }
 
 void DaemonRegister(DaemonInstance *inst, const Daemon_Config_s *config)
@@ -78,6 +79,7 @@ void DaemonReload(DaemonInstance *instance)
 
     instance->temp_count = instance->reload_count;
     instance->last_reload_us = DWT_GetTimeUs();
+    instance->offline_count = 0;
 }
 
 uint8_t DaemonIsOnline(DaemonInstance *instance)
@@ -96,6 +98,7 @@ void DaemonTask(void)
         if (dins->temp_count > 0)
         {
             dins->temp_count--;
+            dins->offline_count = 0;
             if (dins->temp_count == 0)
             {
                 dins->is_online = 0;
@@ -104,28 +107,34 @@ void DaemonTask(void)
         }
         else
         {
-            // 执行离线故障动作
-            switch (dins->fault_action)
+            dins->offline_count++;
+
+            // 故障去抖：连续离线次数达到阈值后才触发动作
+            if (dins->fault_threshold == 0 || dins->offline_count >= dins->fault_threshold)
             {
-            case DAEMON_FAULT_BUZZER_SHORT:
-                buzzer_flag = 1;
-                break;
-            case DAEMON_FAULT_BUZZER_LONG:
-                break;
-            case DAEMON_FAULT_LIGHT_SHORT:
-                break;
-            case DAEMON_FAULT_LIGHT_LONG:
-                break;
-            case DAEMON_FAULT_RESERVED_5:
-                break;
-            case DAEMON_FAULT_RESERVED_6:
-                break;
-            case DAEMON_FAULT_RESERVED_7:
-                break;
-            case DAEMON_FAULT_NONE:
-            default:
-                break;
+                switch (dins->fault_action)
+                {
+                case DAEMON_FAULT_BUZZER_SHORT:
+                    buzzer_flag = 1;
+                    break;
+                case DAEMON_FAULT_BUZZER_LONG:
+                    break;
+                case DAEMON_FAULT_LIGHT_SHORT:
+                    break;
+                case DAEMON_FAULT_LIGHT_LONG:
+                    break;
+                case DAEMON_FAULT_RESERVED_5:
+                    break;
+                case DAEMON_FAULT_RESERVED_6:
+                    break;
+                case DAEMON_FAULT_RESERVED_7:
+                    break;
+                case DAEMON_FAULT_NONE:
+                default:
+                    break;
+                }
             }
+
             if (dins->callback)
             {
                 // 每次检查都调用回调（持续掉线状态）
