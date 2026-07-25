@@ -33,14 +33,14 @@ typedef struct
 typedef union
 {
     uint8_t raw[8]; // 原始字节
-    struct          // 发送帧：4通道电流（大端 int16）
+    struct __attribute__((packed)) // 发送帧：4通道电流（大端 int16）
     {
         uint8_t ch1_h, ch1_l; // 通道1电流 MSB, LSB
         uint8_t ch2_h, ch2_l; // 通道2电流 MSB, LSB
         uint8_t ch3_h, ch3_l; // 通道3电流 MSB, LSB
         uint8_t ch4_h, ch4_l; // 通道4电流 MSB, LSB
     } tx;                     // 发送布局
-    struct                    // 接收帧：DJI 电机反馈（大端 int16）
+    struct __attribute__((packed)) // 接收帧：DJI 电机反馈（大端 int16）
     {
         uint8_t encoder_h, encoder_l;   // 编码器 (uint16)
         uint8_t velocity_h, velocity_l; // 转速 (int16)

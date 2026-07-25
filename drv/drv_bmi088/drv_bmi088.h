@@ -103,7 +103,7 @@ typedef union
 {
     uint8_t bytes[6]; // 原始字节
     int16_t axis[3];  // 三轴数组: [x, y, z]
-    struct
+    struct __attribute__((packed))
     {
         int16_t x; // X 轴
         int16_t y; // Y 轴
