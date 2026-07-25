@@ -437,15 +437,15 @@ static void CANDispatchBxcanMessage(CAN_HandleTypeDef *hcan, uint32_t fifo)
 
 /**
  * @brief 配置CAN实例（可重复调用，不修改 static 管理数组）
+ * @note 要求先调用 CANRegister 填充硬件映射
  */
 int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_can] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_can] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->can_e >= CAN_NUM_MAX, -1, LOGERROR("[bsp_can] can_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, -1, LOGERROR("[bsp_can] CAN handle is NULL, call CANRegister first!"));
 
     // 将配置拷贝到实例
-    instance->can_e = config->can_e;
     instance->tx_id = config->tx_id;
     instance->filter_mode = config->filter_mode;
     memcpy(instance->rx_id_list, config->rx_id_list, sizeof(config->rx_id_list));
@@ -493,8 +493,62 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
         return -1;
     }
 
-    instance->map = can_map[instance->can_e];
-    BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, -1, LOGERROR("[bsp_can] CAN handle is NULL, check bsp_cfg mapping!"));
+    // 检查 tx_id 重复（同一CAN句柄上重复的发送ID可能是有意为之，仅警告）
+    if (instance->tx_id != CAN_ID_UNUSED)
+    {
+        for (uint8_t i = 0; i < s_can_idx; i++)
+        {
+            CANInstance *existing = s_can_instance[i];
+            if (existing == instance)
+            {
+                continue;
+            }
+            if (existing->map.handle == instance->map.handle)
+            {
+                if (existing->tx_id != CAN_ID_UNUSED && existing->tx_id == instance->tx_id)
+                {
+                    LOGWARNING("[bsp_can] Duplicate tx_id=0x%lX on same CAN handle!", instance->tx_id);
+                    break;
+                }
+            }
+        }
+    }
+
+    // 检查 rx_id 冲突（同一CAN句柄上不能有重复的接收ID，跳过自身）
+    for (uint8_t i = 0; i < s_can_idx; i++)
+    {
+        CANInstance *existing = s_can_instance[i];
+        if (existing == instance)
+        {
+            continue;
+        }
+        if (existing->map.handle == instance->map.handle)
+        {
+            for (uint8_t j = 0; j < 4; j++)
+            {
+                uint32_t new_id = instance->rx_id_list[j];
+                if (new_id == CAN_ID_UNUSED)
+                {
+                    continue;
+                }
+
+                for (uint8_t k = 0; k < 4; k++)
+                {
+                    uint32_t existing_id = existing->rx_id_list[k];
+                    if (existing_id == CAN_ID_UNUSED)
+                    {
+                        continue;
+                    }
+
+                    if (new_id == existing_id)
+                    {
+                        LOGERROR("[bsp_can] Duplicate rx_id=0x%lX on same CAN handle!", new_id);
+                        return -1;
+                    }
+                }
+            }
+        }
+    }
 
     // 判断是否需要配置接收过滤器
     uint8_t need_rx_filter = 1;
@@ -563,10 +617,10 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
 /**
  * @brief 注册CAN实例（仅调用一次，修改 static 管理数组）
  */
-int8_t CANRegister(CANInstance *instance, const CAN_Config_s *config)
+int8_t CANRegister(CANInstance *instance, BoardCAN_e can_e)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_can] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_can] Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(can_e >= CAN_NUM_MAX, -1, LOGERROR("[bsp_can] can_e out of range!"));
     BSP_RETURN_IF_TRUE_LOG(s_can_idx >= CAN_INSTANCE_NUM, -1, LOGERROR("[bsp_can] Exceeded max instance count!"));
 
     // 防重复注册检查
@@ -579,61 +633,11 @@ int8_t CANRegister(CANInstance *instance, const CAN_Config_s *config)
         }
     }
 
-    // 调用 Config 完成硬件配置
-    if (CANConfig(instance, config) != 0)
-    {
-        return -1;
-    }
+    // 填充枚举和硬件映射
+    instance->can_e = can_e;
+    instance->map = can_map[instance->can_e];
 
-    // 检查 tx_id 重复（同一CAN句柄上重复的发送ID是允许的，如DJI电机ID1-4共用tx_id=0x200）
-    // 但重复意味着多个实例使用同一个tx_id发送，需确认是设计意图
-    if (instance->tx_id != CAN_ID_UNUSED)
-    {
-        for (uint8_t i = 0; i < s_can_idx; i++)
-        {
-            CANInstance *existing = s_can_instance[i];
-            if (existing->map.handle == instance->map.handle)
-            {
-                if (existing->tx_id != CAN_ID_UNUSED && existing->tx_id == instance->tx_id)
-                {
-                    LOGWARNING("[bsp_can] Duplicate tx_id=0x%lX on same CAN handle!", instance->tx_id);
-                    break;
-                }
-            }
-        }
-    }
-
-    // 检查 rx_id 冲突（同一CAN句柄上不能有重复的接收ID，跳过 -1）
-    for (uint8_t i = 0; i < s_can_idx; i++)
-    {
-        CANInstance *existing = s_can_instance[i];
-        if (existing->map.handle == instance->map.handle)
-        {
-            for (uint8_t j = 0; j < 4; j++)
-            {
-                uint32_t new_id = instance->rx_id_list[j];
-                if (new_id == CAN_ID_UNUSED)
-                {
-                    continue;
-                }
-
-                for (uint8_t k = 0; k < 4; k++)
-                {
-                    uint32_t existing_id = existing->rx_id_list[k];
-                    if (existing_id == CAN_ID_UNUSED)
-                    {
-                        continue;
-                    }
-
-                    if (new_id == existing_id)
-                    {
-                        LOGERROR("[bsp_can] Duplicate rx_id=0x%lX on same CAN handle!", new_id);
-                        return -1;
-                    }
-                }
-            }
-        }
-    }
+    BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, -1, LOGERROR("[bsp_can] CAN handle is NULL, check bsp_cfg mapping!"));
 
     s_can_instance[s_can_idx++] = instance;
     LOGINFO("[bsp_can] CAN instance registered, idx=%d", s_can_idx - 1);

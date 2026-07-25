@@ -64,13 +64,12 @@ typedef struct CANInstance
 /*------------- 配置结构体 --------------*/
 
 /**
- * @brief CAN 初始化配置结构体
+ * @brief CAN 运行时配置结构体（仅用于 CANConfig）
  * @note 统一掩码模式和列表模式，通过 filter_mode 区分
  * @note rx_id_count 会根据 rx_id_list 自动计算，无需用户填写
  */
 typedef struct
 {
-    BoardCAN_e can_e;                          // 板载CAN枚举（注册时用于查找映射）
     uint32_t tx_id;                            // 发送标准ID；CAN_ID_UNUSED(-1) 表示不发送
     CANFilterMode_e filter_mode;               // 过滤器模式（掩码/列表）
     uint32_t rx_id_list[4];                    // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
@@ -90,28 +89,29 @@ typedef struct
 /*------------- 外部接口声明 --------------*/
 
 /**
+ * @brief 注册CAN实例（仅调用一次）
+ * @param instance CAN实例指针（需先通过宏定义）
+ * @param can_e    板载CAN枚举
+ * @retval 0 成功
+ * @retval -1 失败（实例数超过上限、参数非法、重复注册）
+ *
+ * @note 设置 can_e、填充硬件映射后加入 static 管理数组。
+ *       不配置硬件参数（由 CANConfig 负责）。
+ */
+int8_t CANRegister(CANInstance *instance, BoardCAN_e can_e);
+
+/**
  * @brief 配置CAN实例（可重复调用）
  * @param instance CAN实例指针
- * @param config   初始化配置结构体指针
+ * @param config   运行时配置结构体指针（tx_id/filter/rx/callback）
  * @retval 0 成功
  * @retval -1 失败（参数非法）
  *
- * @note 仅配置 instance 字段和硬件滤波器/启动CAN，不修改 static 管理数组。
+ * @note 设置运行时参数并配置硬件滤波器/启动CAN，不修改 static 管理数组。
  *       可重复调用以重新配置硬件参数。
+ *       要求在 CANRegister 之后调用（需先填充硬件映射）。
  */
 int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config);
-
-/**
- * @brief 注册CAN实例（仅调用一次）
- * @param instance CAN实例指针（需先通过宏定义）
- * @param config   初始化配置结构体指针
- * @retval 0 成功
- * @retval -1 失败（实例数超过上限、参数非法、重复注册或ID冲突）
- *
- * @note 内部调用 CANConfig 后，将 instance 加入 static 管理数组。
- *       同一 instance 不可重复注册。
- */
-int8_t CANRegister(CANInstance *instance, const CAN_Config_s *config);
 
 /**
  * @brief 设置发送DLC长度（1~8）

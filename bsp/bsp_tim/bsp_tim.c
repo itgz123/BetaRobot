@@ -29,36 +29,12 @@ static PWMInstance **s_pwm_instance = NULL;
 /*------------- PWM接口实现 --------------*/
 
 /**
- * @brief 配置PWM实例（可重复调用，不修改 static 管理数组）
- */
-int8_t PWMConfig(PWMInstance *instance, const PWM_Config_s *config)
-{
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_tim] PWM instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_tim] PWM config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->tim_e >= TIM_NUM_MAX, -1, LOGERROR("[bsp_tim] PWM tim_e out of range!"));
-
-    // 将配置拷贝到实例
-    instance->tim_e = config->tim_e;
-
-    // 根据枚举自动填充硬件映射
-    instance->map = tim_map[instance->tim_e];
-
-    // 启动PWM
-    HAL_TIM_PWM_Start(instance->map.htim, instance->map.channel);
-
-    // 设置初始占空比
-    PWMSetDutyRatio(instance, instance->dutyratio);
-
-    return 0;
-}
-
-/**
  * @brief 注册PWM实例（仅调用一次，修改 static 管理数组）
  */
-int8_t PWMRegister(PWMInstance *instance, const PWM_Config_s *config)
+int8_t PWMRegister(PWMInstance *instance, BoardTIM_e tim_e)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_tim] PWM instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_tim] PWM config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(tim_e >= TIM_NUM_MAX, -1, LOGERROR("[bsp_tim] PWM tim_e out of range!"));
     BSP_RETURN_IF_TRUE_LOG(s_pwm_idx >= PWM_INSTANCE_NUM, -1, LOGERROR("[bsp_tim] PWM exceeded max instance count!"));
 
     // 防重复注册检查
@@ -71,11 +47,9 @@ int8_t PWMRegister(PWMInstance *instance, const PWM_Config_s *config)
         }
     }
 
-    // 调用 Config 完成配置
-    if (PWMConfig(instance, config) != 0)
-    {
-        return -1;
-    }
+    // 填充枚举和硬件映射
+    instance->tim_e = tim_e;
+    instance->map = tim_map[instance->tim_e];
 
     // 重复注册检查（同一 htim+channel 不能重复注册）
     for (uint8_t i = 0; i < s_pwm_idx; i++)
@@ -87,6 +61,12 @@ int8_t PWMRegister(PWMInstance *instance, const PWM_Config_s *config)
             return -1;
         }
     }
+
+    // 启动PWM
+    HAL_TIM_PWM_Start(instance->map.htim, instance->map.channel);
+
+    // 设置初始占空比
+    PWMSetDutyRatio(instance, instance->dutyratio);
 
     s_pwm_instance[s_pwm_idx++] = instance;
 
@@ -126,38 +106,12 @@ static EncoderInstance **s_encoder_instance = NULL;
 /*------------- 编码器接口实现 --------------*/
 
 /**
- * @brief 配置编码器实例（可重复调用，不修改 static 管理数组）
- */
-int8_t EncoderConfig(EncoderInstance *instance, const Encoder_Config_s *config)
-{
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_tim] Encoder instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_tim] Encoder config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->tim_e >= TIM_NUM_MAX, -1, LOGERROR("[bsp_tim] Encoder tim_e out of range!"));
-
-    // 将配置拷贝到实例
-    instance->tim_e = config->tim_e;
-
-    // 根据枚举自动填充硬件映射
-    instance->map = tim_map[instance->tim_e];
-    instance->arr = instance->map.htim->Instance->ARR + 1; // 溢出周期 = ARR + 1
-    instance->last_time_us = DWT_GetTimeUs();
-
-    // 启动编码器
-    HAL_TIM_Encoder_Start(instance->map.htim, TIM_CHANNEL_ALL);
-
-    // 单独使能更新中断（用于溢出检测）
-    __HAL_TIM_ENABLE_IT(instance->map.htim, TIM_IT_UPDATE);
-
-    return 0;
-}
-
-/**
  * @brief 注册编码器实例（仅调用一次，修改 static 管理数组）
  */
-int8_t EncoderRegister(EncoderInstance *instance, const Encoder_Config_s *config)
+int8_t EncoderRegister(EncoderInstance *instance, BoardTIM_e tim_e)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_tim] Encoder instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_tim] Encoder config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(tim_e >= TIM_NUM_MAX, -1, LOGERROR("[bsp_tim] Encoder tim_e out of range!"));
     BSP_RETURN_IF_TRUE_LOG(s_encoder_idx >= ENCODER_INSTANCE_NUM, -1, LOGERROR("[bsp_tim] Encoder exceeded max instance count!"));
 
     // 防重复注册检查
@@ -170,11 +124,11 @@ int8_t EncoderRegister(EncoderInstance *instance, const Encoder_Config_s *config
         }
     }
 
-    // 调用 Config 完成配置
-    if (EncoderConfig(instance, config) != 0)
-    {
-        return -1;
-    }
+    // 填充枚举和硬件映射
+    instance->tim_e = tim_e;
+    instance->map = tim_map[instance->tim_e];
+    instance->arr = instance->map.htim->Instance->ARR + 1; // 溢出周期 = ARR + 1
+    instance->last_time_us = DWT_GetTimeUs();
 
     // 重复注册检查（同一 htim 不能重复注册）
     for (uint8_t i = 0; i < s_encoder_idx; i++)
@@ -185,6 +139,12 @@ int8_t EncoderRegister(EncoderInstance *instance, const Encoder_Config_s *config
             return -1;
         }
     }
+
+    // 启动编码器
+    HAL_TIM_Encoder_Start(instance->map.htim, TIM_CHANNEL_ALL);
+
+    // 单独使能更新中断（用于溢出检测）
+    __HAL_TIM_ENABLE_IT(instance->map.htim, TIM_IT_UPDATE);
 
     s_encoder_instance[s_encoder_idx++] = instance;
 

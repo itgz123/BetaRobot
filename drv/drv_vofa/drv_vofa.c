@@ -88,13 +88,13 @@ static void VofaTxCpltCallback(USARTInstance *instance)
 void VofaInit(void)
 {
     // 注册 USART（使用 DMA 模式 + 发送完成回调）
+    USARTRegister(&s_vofa_lite_uart, VOFA_LITE_UART);
     USART_Config_s usart_cfg = {
-        .uart_e = VOFA_LITE_UART,
         .tx_mode = USART_DMA_MODE,
         .rx_callback = NULL,
         .tx_callback = VofaTxCpltCallback,
     };
-    USARTRegister(&s_vofa_lite_uart, &usart_cfg);
+    USARTConfig(&s_vofa_lite_uart, &usart_cfg);
 
     LOGINFO("[VOFA Lite] Initialized, UART: %d, Channels: %d (ch0=timestamp, ch1~%d=user), Triple-buffer DMA",
             VOFA_LITE_UART, VOFA_LITE_CHANNELS, VOFA_LITE_CHANNELS);

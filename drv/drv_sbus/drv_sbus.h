@@ -47,8 +47,8 @@ typedef union
     uint8_t raw[25];
     struct __attribute__((packed))
     {
-        uint8_t header;      // [0]  帧头 0x0F
-        uint8_t ch_data[22]; // [1-22] 16通道 × 11位
+        uint8_t header;                // [0]  帧头 0x0F
+        uint8_t ch_data[22];           // [1-22] 16通道 × 11位
         struct __attribute__((packed)) // [23] 标志位
         {
             uint8_t ch17 : 1;       // bit 0: 数字通道 1
@@ -106,20 +106,9 @@ typedef struct SBUSInstance
 
 typedef struct
 {
-    uint16_t daemon_reload; // daemon 喂狗重载值
-    uint8_t daemon_fault;   // daemon 离线故障动作
+    uint16_t daemon_reload;           // daemon 喂狗重载值
+    DaemonFaultAction_e daemon_fault; // daemon 离线故障动作
 } SBUS_Config_s;
-
-/**
- * @brief SBUS 注册配置结构体（Register 函数使用）
- *
- * @note 仅调用一次。内嵌 SBUS_Config_s + 硬件相关字段。
- */
-typedef struct
-{
-    SBUS_Config_s sbus_config; // SBUS 配置（传入 Config）
-    BoardUART_e uart_e;        // 板载UART枚举（注册时用于查找映射）
-} SBUS_Register_Config_s;
 
 /*------------- 实例定义宏 --------------*/
 /**
@@ -143,27 +132,28 @@ typedef struct
 /*------------- 外部接口声明 --------------*/
 
 /**
- * @brief 配置 SBUS 实例（可重复调用，不修改 static 变量）
- * @param instance SBUS 实例指针
- * @param config   初始化配置结构体指针
+ * @brief 注册 SBUS 实例（仅调用一次）
+ * @param instance SBUS 实例指针（需先通过宏定义）
+ * @param uart_e   板载UART枚举
  * @retval 0 成功
  * @retval -1 失败
  *
- * @note 仅配置 instance 字段（parent 指针、超时参数等），不调用子模块 Register。
+ * @note 内部调用 USARTRegister 注册 BSP 层 USART 实例。
+ *       不包含 parent 指针、回调、daemon 等配置（由 SBUSConfig 完成）。
+ */
+int8_t SBUSRegister(SBUSInstance *instance, BoardUART_e uart_e);
+
+/**
+ * @brief 配置 SBUS 实例（可重复调用）
+ * @param instance SBUS 实例指针
+ * @param config   配置结构体指针
+ * @retval 0 成功
+ * @retval -1 失败
+ *
+ * @note 设置 parent 指针、USART DMA 模式和回调、daemon 看门狗。
  *       可重复调用以更新运行时参数。
  */
 int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config);
-
-/**
- * @brief 注册 SBUS 实例（仅调用一次）
- * @param instance SBUS 实例指针（需先通过宏定义）
- * @param config   初始化配置结构体指针
- * @retval 0 成功
- * @retval -1 失败
- *
- * @note 内部调用 SBUSConfig 后，注册 USART 和 Daemon 子模块。
- */
-int8_t SBUSRegister(SBUSInstance *instance, const SBUS_Register_Config_s *reg_cfg);
 
 #endif /* BSP_UART_MODULE_ENABLED */
 

@@ -181,34 +181,12 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 /*------------- 外部接口实现 --------------*/
 
 /**
- * @brief 配置SPI实例（可重复调用，不修改 static 管理数组）
- */
-int8_t SPIConfig(SPIInstance *instance, const SPI_Config_s *config)
-{
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_spi] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_spi] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->spi_e >= SPI_NUM_MAX, -1, LOGERROR("[bsp_spi] spi_e out of range!"));
-
-    // 将配置拷贝到实例
-    instance->spi_e = config->spi_e;
-    instance->work_mode = config->work_mode;
-    instance->rx_callback = config->rx_callback;
-
-    // 根据枚举自动填充硬件句柄
-    instance->handle = spi_map[instance->spi_e].handle;
-
-    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, -1, LOGERROR("[bsp_spi] SPI handle is NULL, check CubeMX configuration!"));
-
-    return 0;
-}
-
-/**
  * @brief 注册SPI实例（仅调用一次，修改 static 管理数组）
  */
-int8_t SPIRegister(SPIInstance *instance, const SPI_Config_s *config)
+int8_t SPIRegister(SPIInstance *instance, BoardSPI_e spi_e)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_spi] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_spi] Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(spi_e >= SPI_NUM_MAX, -1, LOGERROR("[bsp_spi] spi_e out of range!"));
     BSP_RETURN_IF_TRUE_LOG(s_spi_idx >= SPI_INSTANCE_NUM, -1, LOGERROR("[bsp_spi] Exceeded max instance count!"));
 
     // 防重复注册检查
@@ -221,15 +199,32 @@ int8_t SPIRegister(SPIInstance *instance, const SPI_Config_s *config)
         }
     }
 
-    // 调用 Config 完成配置
-    if (SPIConfig(instance, config) != 0)
-    {
-        return -1;
-    }
+    // 填充枚举和硬件句柄
+    instance->spi_e = spi_e;
+    instance->handle = spi_map[instance->spi_e].handle;
+
+    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, -1, LOGERROR("[bsp_spi] SPI handle is NULL, check CubeMX configuration!"));
 
     s_spi_instance[s_spi_idx++] = instance;
 
     LOGINFO("[bsp_spi] SPI instance registered, idx=%d", s_spi_idx - 1);
+    return 0;
+}
+
+/**
+ * @brief 配置SPI实例（可重复调用）
+ * @note 要求先调用 SPIRegister 填充硬件句柄
+ */
+int8_t SPIConfig(SPIInstance *instance, const SPI_Config_s *config)
+{
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_spi] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_spi] Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, -1, LOGERROR("[bsp_spi] SPI handle not initialized, call SPIRegister first!"));
+    BSP_RETURN_IF_TRUE_LOG(config->work_mode != SPI_BLOCK_MODE && config->work_mode != SPI_IT_MODE && config->work_mode != SPI_DMA_MODE, -1, LOGERROR("[bsp_spi] Invalid work_mode=%d!", config->work_mode));
+
+    instance->work_mode = config->work_mode;
+    instance->rx_callback = config->rx_callback;
+
     return 0;
 }
 

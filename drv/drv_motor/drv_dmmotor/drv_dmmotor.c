@@ -350,8 +350,43 @@ static void DMMotorDaemonCallback(void *owner)
  *============================================*/
 
 /**
- * @brief 配置DM电机实例（可重复调用，不修改 static 变量）
- * @note 可运行时重新调用以修改 PID 参数、协议映射等
+ * @brief 注册DM电机实例（仅调用一次）
+ */
+int8_t DMMotorRegister(DMMotorInstance *inst, BoardCAN_e can_e)
+{
+    if (!inst)
+        return -1;
+
+    // 防重复注册检查
+    if (inst->base.can && inst->base.can->parent == inst)
+        return -1;
+
+    // 注册 CAN 实例（仅绑定 CAN 外设，tx_id/rx_id/callback 由 Config 设置）
+    if (inst->base.can)
+    {
+        if (CANRegister(inst->base.can, can_e) != 0)
+            return -1;
+        inst->base.can->parent = inst;
+    }
+
+    // 初始化基本属性
+    inst->base.brand = MOTOR_BRAND_DM;
+    inst->base.enable = MOTOR_DISABLE;
+    inst->base.vtable = &s_dm_motor_vtable;
+
+    // 注册 daemon（占位，Config 更新运行参数）
+    if (inst->base.daemon)
+    {
+        DaemonRegister(inst->base.daemon);
+    }
+
+    return 0;
+}
+
+/**
+ * @brief 配置DM电机实例（可重复调用）
+ * @note 配置协议映射、PID、CAN 滤波器、daemon 等。
+ *       要求在 DMMotorRegister 之后调用。
  */
 int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
 {
@@ -362,6 +397,20 @@ int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
     if (cfg->model >= DM_MODEL_NUM)
         return -1;
 
+    /* 配置 CAN 滤波器（tx_id=can_id, rx_id=master_id） */
+    if (inst->base.can)
+    {
+        CAN_Config_s can_cfg = {
+            .tx_id = cfg->can_id,
+            .filter_mode = CAN_FILTER_MODE_LIST,
+            .rx_id_list = {cfg->master_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},
+            .rx_mask = 0,
+            .rx_callback = DMMotorRxCallback,
+        };
+        if (CANConfig(inst->base.can, &can_cfg) != 0)
+            return -1;
+    }
+
     /* --- 协议映射：校验用户配置 ≤ 硬件极限，计算 scale --- */
     const DMMotorParams_s *params = &dm_motor_params[cfg->model];
     DMMotorProtocolMap_s *map = &inst->proto_map;
@@ -370,27 +419,20 @@ int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
     map->v_range = BSP_Math_Clamp(cfg->vel_range, 0.0f, params->v_max);
     map->t_range = BSP_Math_Clamp(cfg->t_range, 0.0f, params->t_max);
 
-    /* 防止零范围导致后续除法产生 inf */
     if (map->v_range < 1e-6f)
         map->v_range = 1e-6f;
     if (map->t_range < 1e-6f)
         map->t_range = 1e-6f;
 
-    /* 计算预计算 scale 因子（运行时仅乘法，零除法） */
     map->pos_to_float_scale = (2.0f * map->p_max) / 65535.0f;
     map->vel_to_float_scale = (2.0f * map->v_range) / 4095.0f;
     map->vel_to_uint_scale = 4095.0f / (2.0f * map->v_range);
     map->t_to_float_scale = (2.0f * map->t_range) / 4095.0f;
     map->t_to_uint_scale = 4095.0f / (2.0f * map->t_range);
-
-    /* 多圈位置用：穿越跨度倒数 */
     map->inv_wrap_span = 1.0f / (2.0f * map->p_max);
 
     /* 基本属性 */
-    inst->base.brand = MOTOR_BRAND_DM;
     inst->base.model = cfg->model;
-    inst->base.enable = MOTOR_DISABLE;
-    inst->base.vtable = &s_dm_motor_vtable;
     inst->can_id = cfg->can_id;
     inst->master_id = cfg->master_id;
 
@@ -401,7 +443,7 @@ int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
     inst->base.controller.ref = 0.0f;
     inst->base.controller.output = 0.0f;
 
-    /* 初始化速度环 PID（输出限幅：用户配置的扭矩范围） */
+    /* 初始化速度环 PID */
     if (cfg->controller_setting.loop_type & MOTOR_LOOP_SPEED)
     {
         cfg->pid_speed_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL | PID_ENABLE_OUTPUT_LIMIT;
@@ -411,7 +453,7 @@ int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
         PIDInit(&inst->base.controller.pid_speed, &cfg->pid_speed_setting);
     }
 
-    /* 初始化位置环 PID（输出限幅：扭矩/速度） */
+    /* 初始化位置环 PID */
     if (cfg->controller_setting.loop_type & MOTOR_LOOP_ANGLE)
     {
         cfg->pid_angle_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL | PID_ENABLE_OUTPUT_LIMIT;
@@ -447,52 +489,16 @@ int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
     inst->base.position_offset = 0.0f;
     memset(&inst->base.data, 0, sizeof(MotorData_s));
 
-    return 0;
-}
-
-int8_t DMMotorRegister(DMMotorInstance *inst, const DMMotor_Register_Config_s *reg_cfg)
-{
-    if (!inst || !reg_cfg)
-        return -1;
-
-    DMMotor_Config_s *cfg = (DMMotor_Config_s *)&reg_cfg->motor_config;
-
-    /* 参数校验 */
-    if (cfg->model >= DM_MODEL_NUM)
-        return -1;
-
-    // 防重复注册检查（通过检查 CAN instance 是否已设置 parent）
-    if (inst->base.can && inst->base.can->parent == inst)
-        return -1;
-
-    // 调用 Config 完成实例配置
-    if (DMMotorConfig(inst, cfg) != 0)
-        return -1;
-
-    /* 注册 CAN 实例 */
-    if (inst->base.can)
-    {
-        CAN_Config_s can_cfg = {
-            .can_e = reg_cfg->can_e,
-            .tx_id = cfg->can_id,
-            .filter_mode = CAN_FILTER_MODE_LIST,
-            .rx_id_list = {cfg->master_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},
-            .rx_mask = 0,
-            .rx_callback = DMMotorRxCallback,
-        };
-        CANRegister(inst->base.can, &can_cfg);
-        inst->base.can->parent = inst;
-    }
-
-    /* 注册守护进程 */
+    /* 更新 daemon 运行参数（可重入） */
     if (inst->base.daemon)
     {
-        Daemon_Config_s config = {
+        Daemon_Config_s daemon_cfg = {
             .callback = DMMotorDaemonCallback,
-            .fault_action = reg_cfg->fault_action,
+            .fault_action = cfg->fault_action,
             .owner_id = inst,
-            .reload_count = reg_cfg->reload_count};
-        DaemonRegister(inst->base.daemon, &config);
+            .reload_count = cfg->reload_count,
+        };
+        DaemonConfig(inst->base.daemon, &daemon_cfg);
     }
 
     return 0;

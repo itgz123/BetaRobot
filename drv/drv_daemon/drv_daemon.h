@@ -78,7 +78,7 @@ typedef struct
     }
 
 void DaemonConfig(DaemonInstance *inst, const Daemon_Config_s *config);
-void DaemonRegister(DaemonInstance *inst, const Daemon_Config_s *config);
+void DaemonRegister(DaemonInstance *inst);
 void DaemonReload(DaemonInstance *instance);
 uint8_t DaemonIsOnline(DaemonInstance *instance);
 void DaemonTask(void);

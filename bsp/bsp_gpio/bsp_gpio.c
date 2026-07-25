@@ -85,36 +85,12 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 /*------------- 外部接口实现 --------------*/
 
 /**
- * @brief 配置GPIO实例（可重复调用，不修改 static 管理数组）
- */
-int8_t GPIOConfig(GPIOInstance *instance, const GPIO_Config_s *config)
-{
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_gpio] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_gpio] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->gpio_e >= GPIO_NUM_MAX, -1, LOGERROR("[bsp_gpio] gpio_e out of range!"));
-
-    // 将配置拷贝到实例
-    instance->gpio_e = config->gpio_e;
-    instance->callback = config->callback;
-
-    // 根据枚举自动填充硬件映射
-    instance->map = gpio_map[instance->gpio_e];
-
-    BSP_RETURN_IF_TRUE_LOG(instance->map.port == NULL || !GPIOIsSingleBitPin(instance->map.pin), -1, LOGERROR("[bsp_gpio] Invalid GPIO map, check bsp_cfg mapping!"));
-
-    uint8_t pin_idx = GPIOPinToIndex(instance->map.pin);
-    BSP_RETURN_IF_TRUE_LOG(pin_idx >= 16, -1, LOGERROR("[bsp_gpio] Invalid pin index!"));
-
-    return 0;
-}
-
-/**
  * @brief 注册GPIO实例（仅调用一次，修改 static 管理数组）
  */
-int8_t GPIORegister(GPIOInstance *instance, const GPIO_Config_s *config)
+int8_t GPIORegister(GPIOInstance *instance, BoardGPIO_e gpio_e)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_gpio] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_gpio] Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(gpio_e >= GPIO_NUM_MAX, -1, LOGERROR("[bsp_gpio] gpio_e out of range!"));
     BSP_RETURN_IF_TRUE_LOG(s_gpio_idx >= GPIO_INSTANCE_NUM, -1, LOGERROR("[bsp_gpio] Exceeded max instance count!"));
 
     // 防重复注册检查
@@ -127,30 +103,53 @@ int8_t GPIORegister(GPIOInstance *instance, const GPIO_Config_s *config)
         }
     }
 
-    // 调用 Config 完成配置
-    if (GPIOConfig(instance, config) != 0)
-    {
-        return -1;
-    }
+    // 填充枚举和硬件映射
+    instance->gpio_e = gpio_e;
+    instance->map = gpio_map[instance->gpio_e];
 
-    // 仅对使用 EXTI 回调的实例做冲突检查
-    // EXTI 回调只有 GPIO_Pin 参数，因此同一 pin 位只能绑定一个回调
+    BSP_RETURN_IF_TRUE_LOG(instance->map.port == NULL || !GPIOIsSingleBitPin(instance->map.pin), -1, LOGERROR("[bsp_gpio] Invalid GPIO map, check bsp_cfg mapping!"));
+
     uint8_t pin_idx = GPIOPinToIndex(instance->map.pin);
-    if (instance->callback != NULL)
-    {
-        if (s_exti_pin_instance[pin_idx] != NULL)
-        {
-            LOGERROR("[bsp_gpio] Duplicate EXTI pin registration is not allowed!");
-            return -1;
-        }
-    }
+    BSP_RETURN_IF_TRUE_LOG(pin_idx >= 16, -1, LOGERROR("[bsp_gpio] Invalid pin index!"));
 
     s_gpio_instance[s_gpio_idx++] = instance;
-    if (instance->callback != NULL)
+    LOGINFO("[bsp_gpio] GPIO instance registered, idx=%d", s_gpio_idx - 1);
+    return 0;
+}
+
+/**
+ * @brief 配置GPIO回调（可重复调用）
+ * @note 要求先调用 GPIORegister 填充硬件映射
+ */
+int8_t GPIOConfig(GPIOInstance *instance, void (*callback)(struct GPIOInstance *))
+{
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_gpio] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->map.port == NULL, -1, LOGERROR("[bsp_gpio] GPIO map not initialized, call GPIORegister first!"));
+
+    uint8_t pin_idx = GPIOPinToIndex(instance->map.pin);
+    BSP_RETURN_IF_TRUE_LOG(pin_idx >= 16, -1, LOGERROR("[bsp_gpio] Invalid pin index!"));
+
+    // 如果之前注册过 EXTI 映射且是本实例，先清除
+    if (s_exti_pin_instance[pin_idx] == instance)
     {
+        s_exti_pin_instance[pin_idx] = NULL;
+    }
+
+    instance->callback = callback;
+
+    // 注册 EXTI 映射
+    if (callback != NULL)
+    {
+        // 同一 pin 位只能绑定一个回调
+        if (s_exti_pin_instance[pin_idx] != NULL)
+        {
+            LOGERROR("[bsp_gpio] Duplicate EXTI pin registration not allowed! pin_idx=%d", pin_idx);
+            instance->callback = NULL;
+            return -1;
+        }
         s_exti_pin_instance[pin_idx] = instance;
     }
-    LOGINFO("[bsp_gpio] GPIO instance registered, idx=%d", s_gpio_idx - 1);
+
     return 0;
 }
 

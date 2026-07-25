@@ -44,18 +44,6 @@ typedef struct SPIInstance
     void (*rx_callback)(struct SPIInstance *); // DMA接收完成回调
 } SPIInstance;
 
-/*------------- 配置结构体 --------------*/
-
-/**
- * @brief SPI 初始化配置结构体
- */
-typedef struct
-{
-    BoardSPI_e spi_e;                          // 板载SPI枚举（注册时用于查找映射）
-    SPI_Work_Mode_e work_mode;                 // 工作模式（阻塞/中断/DMA）
-    void (*rx_callback)(struct SPIInstance *); // 接收完成回调（可为NULL，仅DMA/IT模式有效）
-} SPI_Config_s;
-
 /*------------- 实例定义宏 --------------*/
 
 /**
@@ -75,31 +63,43 @@ typedef struct
         .rx_buff = name##_rx_buff,                        \
         .buff_size = buff_sz}
 
-/*------------- 外部接口声明 --------------*/
+/*------------- 配置结构体 --------------*/
 
 /**
- * @brief 配置SPI实例（可重复调用，不修改 static 管理数组）
- * @param instance SPI实例指针
- * @param config   初始化配置结构体指针
- * @retval 0 成功
- * @retval -1 失败（参数非法）
- *
- * @note 仅配置 instance 字段和硬件映射，不修改 static 管理数组。
- *       可重复调用以重新配置参数。
+ * @brief SPI 运行时配置结构体（用于 SPIConfig）
  */
-int8_t SPIConfig(SPIInstance *instance, const SPI_Config_s *config);
+typedef struct
+{
+    SPI_Work_Mode_e work_mode;                 // 工作模式（阻塞/中断/DMA）
+    void (*rx_callback)(struct SPIInstance *); // 接收完成回调（可为NULL，仅DMA/IT模式有效）
+} SPI_Config_s;
+
+/*------------- 外部接口声明 --------------*/
 
 /**
  * @brief 注册SPI实例（仅调用一次）
  * @param instance SPI实例指针（需先通过宏定义）
- * @param config   初始化配置结构体指针
+ * @param spi_e    板载SPI枚举
  * @retval 0 成功
  * @retval -1 失败（实例数超过上限或参数无效）
  *
- * @note 内部调用 SPIConfig 后，将 instance 加入 static 管理数组。
- *       同一 instance 不可重复注册。
+ * @note 设置 spi_e、填充硬件句柄后加入 static 管理数组。
+ *       不配置工作模式和回调（由 SPIConfig 负责）。
  */
-int8_t SPIRegister(SPIInstance *instance, const SPI_Config_s *config);
+int8_t SPIRegister(SPIInstance *instance, BoardSPI_e spi_e);
+
+/**
+ * @brief 配置SPI实例（可重复调用）
+ * @param instance   SPI实例指针
+ * @param config     配置结构体指针（工作模式 + 回调）
+ * @retval 0 成功
+ * @retval -1 失败（参数非法）
+ *
+ * @note 设置工作模式和回调，不修改 static 管理数组。
+ *       可重复调用以重新配置。
+ *       要求在 SPIRegister 之后调用。
+ */
+int8_t SPIConfig(SPIInstance *instance, const SPI_Config_s *config);
 
 /**
  * @brief SPI发送数据
