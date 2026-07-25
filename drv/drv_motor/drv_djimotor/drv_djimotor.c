@@ -468,6 +468,8 @@ int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
     // 注册到发送分组
     s_send_groups[can_e][group_idx].motors[motor_idx_in_group] = inst;
     s_send_groups[can_e][group_idx].motor_init_flag[motor_idx_in_group] = 1;
+    inst->sender_group = &s_send_groups[can_e][group_idx];
+    inst->motor_idx_in_group = motor_idx_in_group;
 
     // 更新 daemon 运行参数（可重入）
     if (inst->base.daemon)

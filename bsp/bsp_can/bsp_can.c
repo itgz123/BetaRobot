@@ -20,6 +20,7 @@
 /*------------- 私有变量 --------------*/
 static uint8_t s_can_idx = 0;
 static CANInstance *s_can_instance[CAN_INSTANCE_NUM] = {NULL};
+static uint8_t s_can_started[CAN_NUM_MAX] = {0}; // 标记每个CAN外设是否已启动
 
 #if BSP_CAN_IP == BSP_CAN_IP_FDCAN
 
@@ -149,16 +150,19 @@ static HAL_StatusTypeDef CANFdcanAddFilter(CANInstance *instance)
 
 static HAL_StatusTypeDef CANFdcanInitIfNeeded(FDCAN_HandleTypeDef *handle)
 {
-    // 检查该CAN外设是否已初始化（已有实例注册）
-    for (uint8_t i = 0; i < s_can_idx; i++)
+    // 查找 can_e 索引，检查该CAN外设是否已启动
+    for (uint8_t i = 0; i < CAN_NUM_MAX; i++)
     {
-        if (s_can_instance[i]->map.handle == handle)
+        if (can_map[i].handle == handle)
         {
-            return HAL_OK;
+            if (s_can_started[i])
+                return HAL_OK;
+            s_can_started[i] = 1;
+            break;
         }
     }
 
-    // 首次注册该CAN外设实例时，执行全局配置
+    // 首次启动该CAN外设时，执行全局配置
     // 全局过滤器：拒绝所有未匹配专用过滤器的消息（专用过滤器在CANFdcanAddFilter中配置）
     if (HAL_FDCAN_ConfigGlobalFilter(handle, FDCAN_REJECT, FDCAN_REJECT, FDCAN_REJECT_REMOTE, FDCAN_REJECT_REMOTE) != HAL_OK)
     {
@@ -339,11 +343,15 @@ static HAL_StatusTypeDef CANBxcanAddFilter(CANInstance *instance)
 
 static HAL_StatusTypeDef CANBxcanStartIfNeeded(CAN_HandleTypeDef *handle)
 {
-    for (uint8_t i = 0; i < s_can_idx; i++)
+    // 查找 can_e 索引，检查该CAN外设是否已启动
+    for (uint8_t i = 0; i < CAN_NUM_MAX; i++)
     {
-        if (s_can_instance[i]->map.handle == handle)
+        if (can_map[i].handle == handle)
         {
-            return HAL_OK;
+            if (s_can_started[i])
+                return HAL_OK;
+            s_can_started[i] = 1;
+            break;
         }
     }
 
