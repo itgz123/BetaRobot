@@ -479,7 +479,6 @@ int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
             .fault_action = cfg->fault_action,
             .owner_id = inst,
             .reload_count = cfg->reload_count,
-            .fault_threshold = cfg->fault_threshold,
         };
         DaemonConfig(inst->base.daemon, &daemon_cfg);
     }

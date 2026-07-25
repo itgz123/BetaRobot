@@ -108,7 +108,6 @@ typedef struct
 {
     uint16_t daemon_reload;           // daemon 喂狗重载值
     DaemonFaultAction_e daemon_fault; // daemon 离线故障动作
-    uint16_t daemon_fault_threshold;  // daemon 离线故障触发阈值，连续离线次数 >= 此值时触发, 0=立即触发
 } SBUS_Config_s;
 
 /*------------- 实例定义宏 --------------*/
