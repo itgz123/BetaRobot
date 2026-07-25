@@ -45,11 +45,11 @@
 typedef union
 {
     uint8_t raw[25];
-    struct
+    struct __attribute__((packed))
     {
         uint8_t header;      // [0]  帧头 0x0F
         uint8_t ch_data[22]; // [1-22] 16通道 × 11位
-        struct               // [23] 标志位
+        struct __attribute__((packed)) // [23] 标志位
         {
             uint8_t ch17 : 1;       // bit 0: 数字通道 1
             uint8_t ch18 : 1;       // bit 1: 数字通道 2
