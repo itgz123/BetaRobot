@@ -76,7 +76,6 @@ typedef struct
 {
     uint16_t daemon_reload;           // daemon 喂狗重载值，0 表示禁用
     DaemonFaultAction_e daemon_fault; // daemon 离线故障动作
-    uint16_t daemon_fault_threshold;  // daemon 离线故障触发阈值，连续离线次数 >= 此值时触发, 0=立即触发
     BMI088_AccRange_e acc_range;      // 加速度计量程
     uint8_t acc_bwp;                  // 加速度计低通滤波器带宽
     uint8_t acc_odr;                  // 加速度计输出数据速率

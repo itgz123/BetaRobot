@@ -709,7 +709,6 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
             .fault_action = config->daemon_fault,
             .callback = BMI088_HeaterFaultCallback,
             .owner_id = inst,
-            .fault_threshold = config->daemon_fault_threshold,
         };
         DaemonConfig(inst->daemon, &daemon_cfg);
     }

@@ -107,7 +107,6 @@ typedef struct
     /* daemon 设置 */
     uint16_t reload_count;            // 重载值（喂狗超时阈值）
     DaemonFaultAction_e fault_action; // 离线故障动作
-    uint16_t fault_threshold;         // 离线故障触发阈值，连续离线次数 >= 此值时触发, 0=立即触发
 } DJIMotor_Config_s;
 
 /*============================================
