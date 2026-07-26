@@ -352,7 +352,7 @@ static void DMMotorDaemonCallback(void *owner)
 /**
  * @brief 注册DM电机实例（仅调用一次）
  */
-int8_t DMMotorRegister(DMMotorInstance *inst, BoardCAN_e can_e)
+int8_t DMMotorRegister(DMMotorInstance *inst)
 {
     if (!inst)
         return -1;
@@ -364,7 +364,7 @@ int8_t DMMotorRegister(DMMotorInstance *inst, BoardCAN_e can_e)
     // 注册 CAN 实例（仅绑定 CAN 外设，tx_id/rx_id/callback 由 Config 设置）
     if (inst->base.can)
     {
-        if (CANRegister(inst->base.can, can_e) != 0)
+        if (CANRegister(inst->base.can) != 0)
             return -1;
         inst->base.can->parent = inst;
     }
@@ -401,6 +401,7 @@ int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
     if (inst->base.can)
     {
         CAN_Config_s can_cfg = {
+            .can_e = cfg->can_e,
             .tx_id = cfg->can_id,
             .filter_mode = CAN_FILTER_MODE_LIST,
             .rx_id_list = {cfg->master_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},

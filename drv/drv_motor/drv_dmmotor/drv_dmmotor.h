@@ -196,10 +196,10 @@ struct DMMotorInstance
  * @brief DM 电机配置结构体（Config 函数使用）
  *
  * @note 可重复调用 DMMotorConfig 运行时修改 PID 参数、控制器设置等。
- *       不包含 can_e（由 DMMotorRegister 设置）。
  */
 typedef struct
 {
+    BoardCAN_e can_e;                 // 板载CAN枚举（用于查找硬件映射）
     DMModel_e model;                  // 电机型号 (DM4310 / DM4310P)
     uint16_t can_id;                  // stm32->motor | tx
     uint16_t master_id;               // motor->stm32 | rx
@@ -237,7 +237,7 @@ typedef struct
 /*============================================
  *              公共接口
  *============================================*/
-int8_t DMMotorRegister(DMMotorInstance *inst, BoardCAN_e can_e);
+int8_t DMMotorRegister(DMMotorInstance *inst);
 int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg);
 void DMMotor_Enable(void *inst);
 void DMMotor_Disable(void *inst);

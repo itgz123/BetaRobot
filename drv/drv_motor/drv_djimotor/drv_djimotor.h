@@ -88,10 +88,10 @@ struct DJIMotorInstance
  * @brief DJI 电机配置结构体（Config 函数使用）
  *
  * @note 可重复调用 DJIMotorConfig 运行时修改 PID 参数、控制器设置、daemon 等。
- *       不包含硬件枚举（由 DJIMotorRegister 设置）。
  */
 typedef struct
 {
+    BoardCAN_e can_e;                 // 板载CAN枚举（用于查找硬件映射）
     DJIModel_e model;                 // 型号
     uint8_t motor_id;                 // 电机 ID (1-8)
     MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
@@ -121,7 +121,7 @@ typedef struct
         .base.daemon = &name##_daemon,  \
     }
 
-int8_t DJIMotorRegister(DJIMotorInstance *inst, BoardCAN_e can_e);
+int8_t DJIMotorRegister(DJIMotorInstance *inst);
 int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg);
 void DJIMotorEnable(void *inst);
 void DJIMotorDisable(void *inst);

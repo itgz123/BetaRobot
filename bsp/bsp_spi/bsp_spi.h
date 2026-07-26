@@ -34,8 +34,8 @@ typedef enum : uint8_t
 typedef struct SPIInstance
 {
     void *parent;                              // 父实例指针（由 DRV 层设置）
-    BoardSPI_e spi_e;                          // 板载SPI枚举（注册时用于查找映射）
-    SPI_HandleTypeDef *handle;                 // SPI句柄（注册时自动填充）
+    BoardSPI_e spi_e;                          // 板载SPI枚举（Config时查找映射）
+    SPI_HandleTypeDef *handle;                 // SPI句柄（Config时自动填充）
     SPI_Work_Mode_e work_mode;                 // 工作模式
     uint8_t *rx_buff;                          // 接收缓冲区指针
     uint16_t buff_size;                        // 缓冲区大小
@@ -70,6 +70,7 @@ typedef struct SPIInstance
  */
 typedef struct
 {
+    BoardSPI_e spi_e;                          // 板载SPI枚举（用于查找硬件映射）
     SPI_Work_Mode_e work_mode;                 // 工作模式（阻塞/中断/DMA）
     void (*rx_callback)(struct SPIInstance *); // 接收完成回调（可为NULL，仅DMA/IT模式有效）
 } SPI_Config_s;
@@ -79,23 +80,22 @@ typedef struct
 /**
  * @brief 注册SPI实例（仅调用一次）
  * @param instance SPI实例指针（需先通过宏定义）
- * @param spi_e    板载SPI枚举
  * @retval 0 成功
  * @retval -1 失败（实例数超过上限或参数无效）
  *
- * @note 设置 spi_e、填充硬件句柄后加入 static 管理数组。
- *       不配置工作模式和回调（由 SPIConfig 负责）。
+ * @note 仅检查参数、防重后加入 static 管理数组。
+ *       不配置硬件参数（由 SPIConfig 负责）。
  */
-int8_t SPIRegister(SPIInstance *instance, BoardSPI_e spi_e);
+int8_t SPIRegister(SPIInstance *instance);
 
 /**
  * @brief 配置SPI实例（可重复调用）
  * @param instance   SPI实例指针
- * @param config     配置结构体指针（工作模式 + 回调）
+ * @param config     配置结构体指针（spi_e/工作模式/回调）
  * @retval 0 成功
  * @retval -1 失败（参数非法）
  *
- * @note 设置工作模式和回调，不修改 static 管理数组。
+ * @note 填充硬件句柄，设置工作模式和回调，不修改 static 管理数组。
  *       可重复调用以重新配置。
  *       要求在 SPIRegister 之后调用。
  */

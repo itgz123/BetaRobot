@@ -109,6 +109,7 @@ typedef struct SBUSInstance
 
 typedef struct
 {
+    BoardUART_e uart_e;               // 板载UART枚举（用于查找硬件映射）
     uint16_t daemon_reload;           // daemon 喂狗重载值
     DaemonFaultAction_e daemon_fault; // daemon 离线故障动作
     uint32_t lost_timeout_ms;         // 丢帧/失控确认超时 (ms)，0=立即标志
@@ -138,24 +139,24 @@ typedef struct
 /**
  * @brief 注册 SBUS 实例（仅调用一次）
  * @param instance SBUS 实例指针（需先通过宏定义）
- * @param uart_e   板载UART枚举
  * @retval 0 成功
  * @retval -1 失败
  *
  * @note 内部调用 USARTRegister 注册 BSP 层 USART 实例。
- *       不包含 parent 指针、回调、daemon 等配置（由 SBUSConfig 完成）。
+ *       不配置硬件参数和运行参数（由 SBUSConfig 负责）。
  */
-int8_t SBUSRegister(SBUSInstance *instance, BoardUART_e uart_e);
+int8_t SBUSRegister(SBUSInstance *instance);
 
 /**
  * @brief 配置 SBUS 实例（可重复调用）
  * @param instance SBUS 实例指针
- * @param config   配置结构体指针
+ * @param config   配置结构体指针（含 uart_e/daemon/超时）
  * @retval 0 成功
  * @retval -1 失败
  *
- * @note 设置 parent 指针、USART DMA 模式和回调、daemon 看门狗。
+ * @note 填充 USART 硬件映射，设置 DMA 模式和回调、daemon 看门狗。
  *       可重复调用以更新运行时参数。
+ *       要求在 SBUSRegister 之后调用。
  */
 int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config);
 

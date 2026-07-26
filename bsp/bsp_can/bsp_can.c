@@ -444,14 +444,20 @@ static void CANDispatchBxcanMessage(CAN_HandleTypeDef *hcan, uint32_t fifo)
 /*------------- 外部接口实现 --------------*/
 
 /**
- * @brief 配置CAN实例（可重复调用，不修改 static 管理数组）
- * @note 要求先调用 CANRegister 填充硬件映射
+ * @brief 配置CAN实例（填充硬件映射 + 运行时参数 + 滤波器/启动，可重复调用）
+ * @note 要求先调用 CANRegister 注册实例
  */
 int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_can] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_can] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, -1, LOGERROR("[bsp_can] CAN handle is NULL, call CANRegister first!"));
+    BSP_RETURN_IF_TRUE_LOG(config->can_e >= CAN_NUM_MAX, -1, LOGERROR("[bsp_can] can_e out of range!"));
+
+    // 填充枚举和硬件映射
+    instance->can_e = config->can_e;
+    instance->map = can_map[instance->can_e];
+
+    BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, -1, LOGERROR("[bsp_can] CAN handle is NULL, check bsp_cfg mapping!"));
 
     // 将配置拷贝到实例
     instance->tx_id = config->tx_id;
@@ -624,11 +630,11 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
 
 /**
  * @brief 注册CAN实例（仅调用一次，修改 static 管理数组）
+ * @note 仅注册，不配置硬件参数（由 CANConfig 负责）
  */
-int8_t CANRegister(CANInstance *instance, BoardCAN_e can_e)
+int8_t CANRegister(CANInstance *instance)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_can] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(can_e >= CAN_NUM_MAX, -1, LOGERROR("[bsp_can] can_e out of range!"));
     BSP_RETURN_IF_TRUE_LOG(s_can_idx >= CAN_INSTANCE_NUM, -1, LOGERROR("[bsp_can] Exceeded max instance count!"));
 
     // 防重复注册检查
@@ -640,12 +646,6 @@ int8_t CANRegister(CANInstance *instance, BoardCAN_e can_e)
             return -1;
         }
     }
-
-    // 填充枚举和硬件映射
-    instance->can_e = can_e;
-    instance->map = can_map[instance->can_e];
-
-    BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, -1, LOGERROR("[bsp_can] CAN handle is NULL, check bsp_cfg mapping!"));
 
     s_can_instance[s_can_idx++] = instance;
     LOGINFO("[bsp_can] CAN instance registered, idx=%d", s_can_idx - 1);

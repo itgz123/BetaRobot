@@ -135,11 +135,11 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 
 /**
  * @brief 注册USART实例（仅调用一次，修改 static 管理数组）
+ * @note 仅注册，不配置硬件参数（由 USARTConfig 负责）
  */
-int8_t USARTRegister(USARTInstance *instance, BoardUART_e uart_e)
+int8_t USARTRegister(USARTInstance *instance)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_usart] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(uart_e >= UART_NUM_MAX, -1, LOGERROR("[bsp_usart] uart_e out of range!"));
     BSP_RETURN_IF_TRUE_LOG(s_usart_idx >= UART_INSTANCE_NUM, -1, LOGERROR("[bsp_usart] Exceeded max instance count!"));
 
     // 防重复注册检查
@@ -152,8 +152,25 @@ int8_t USARTRegister(USARTInstance *instance, BoardUART_e uart_e)
         }
     }
 
+    s_usart_instance[s_usart_idx++] = instance;
+
+    LOGINFO("[bsp_usart] USART Instance registered, idx=%d", s_usart_idx - 1);
+    return 0;
+}
+
+/**
+ * @brief 配置USART实例（填充硬件映射 + 发送模式 + 回调，可重复调用）
+ * @note 要求先调用 USARTRegister 注册实例
+ */
+int8_t USARTConfig(USARTInstance *instance, const USART_Config_s *config)
+{
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_usart] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_usart] Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config->uart_e >= UART_NUM_MAX, -1, LOGERROR("[bsp_usart] uart_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(config->tx_mode != USART_BLOCK_MODE && config->tx_mode != USART_IT_MODE && config->tx_mode != USART_DMA_MODE, -1, LOGERROR("[bsp_usart] Invalid tx_mode=%d!", config->tx_mode));
+
     // 填充枚举和硬件句柄
-    instance->uart_e = uart_e;
+    instance->uart_e = config->uart_e;
     instance->handle = uart_map[instance->uart_e].handle;
     BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, -1, LOGERROR("[bsp_usart] UART handle is NULL, check bsp_cfg mapping!"));
 
@@ -163,6 +180,8 @@ int8_t USARTRegister(USARTInstance *instance, BoardUART_e uart_e)
     // 重复注册检查（同一 handle 不能重复注册）
     for (uint8_t i = 0; i < s_usart_idx; i++)
     {
+        if (s_usart_instance[i] == instance)
+            continue;
         if (s_usart_instance[i]->handle == instance->handle)
         {
             LOGERROR("[bsp_usart] Same UART handle already registered!");
@@ -170,29 +189,12 @@ int8_t USARTRegister(USARTInstance *instance, BoardUART_e uart_e)
         }
     }
 
-    // 启动 DMA 接收
-    USARTRestartReceive(instance);
-
-    s_usart_instance[s_usart_idx++] = instance;
-
-    LOGINFO("[bsp_usart] USART Instance registered, idx=%d", s_usart_idx - 1);
-    return 0;
-}
-
-/**
- * @brief 配置USART实例（可重复调用）
- * @note 要求先调用 USARTRegister 填充硬件句柄
- */
-int8_t USARTConfig(USARTInstance *instance, const USART_Config_s *config)
-{
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_usart] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_usart] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, -1, LOGERROR("[bsp_usart] UART handle not initialized, call USARTRegister first!"));
-    BSP_RETURN_IF_TRUE_LOG(config->tx_mode != USART_BLOCK_MODE && config->tx_mode != USART_IT_MODE && config->tx_mode != USART_DMA_MODE, -1, LOGERROR("[bsp_usart] Invalid tx_mode=%d!", config->tx_mode));
-
     instance->tx_mode = config->tx_mode;
     instance->rx_callback = config->rx_callback;
     instance->tx_callback = config->tx_callback;
+
+    // 启动 DMA 接收
+    USARTRestartReceive(instance);
 
     return 0;
 }
