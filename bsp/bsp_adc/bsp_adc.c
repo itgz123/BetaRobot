@@ -49,11 +49,11 @@ static HAL_StatusTypeDef ADCConfigChannel(ADCInstance *instance)
 
 /**
  * @brief 注册ADC实例（仅调用一次，修改 static 管理数组）
+ * @note 仅注册，不配置硬件参数（由 ADCConfig 负责）
  */
-int8_t ADCRegister(ADCInstance *instance, BoardADC_e adc_e)
+int8_t ADCRegister(ADCInstance *instance)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[BSP_ADC] Register failed: instance is NULL"));
-    BSP_RETURN_IF_TRUE_LOG(adc_e >= ADC_NUM_MAX, -1, LOGERROR("[BSP_ADC] Register failed: adc_e out of range"));
     BSP_RETURN_IF_TRUE_LOG(s_adc_idx >= ADC_INSTANCE_NUM, -1, LOGERROR("[BSP_ADC] Register failed: instance num exceeded %d", ADC_INSTANCE_NUM));
 
     // 防重复注册检查
@@ -66,16 +66,31 @@ int8_t ADCRegister(ADCInstance *instance, BoardADC_e adc_e)
         }
     }
 
-    // 填充实例字段
-    instance->adc_e = adc_e;
+    // 保存实例指针
+    s_adc_instance[s_adc_idx++] = instance;
 
-    // 自动填充硬件映射
+    LOGINFO("[BSP_ADC] Register success, total=%d", s_adc_idx);
+    return 0;
+}
+
+/**
+ * @brief 配置ADC实例（填充硬件映射 + 通道配置 + 校准，可重复调用）
+ * @note 要求先调用 ADCRegister 注册实例
+ */
+int8_t ADCConfig(ADCInstance *instance, const ADC_Config_s *config)
+{
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[BSP_ADC] Config failed: instance is NULL"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[BSP_ADC] Config failed: config is NULL"));
+    BSP_RETURN_IF_TRUE_LOG(config->adc_e >= ADC_NUM_MAX, -1, LOGERROR("[BSP_ADC] Config failed: adc_e out of range"));
+
+    // 填充枚举和硬件映射
+    instance->adc_e = config->adc_e;
     instance->adc_map = adc_map[instance->adc_e];
 
-    BSP_RETURN_IF_TRUE_LOG(instance->adc_map.handle == NULL, -1, LOGERROR("[BSP_ADC] Register failed: ADC handle is NULL"));
+    BSP_RETURN_IF_TRUE_LOG(instance->adc_map.handle == NULL, -1, LOGERROR("[BSP_ADC] Config failed: ADC handle is NULL"));
 
     // 配置ADC通道
-    BSP_RETURN_IF_TRUE_LOG(ADCConfigChannel(instance) != HAL_OK, -1, LOGERROR("[BSP_ADC] Register failed: config channel failed, adc_e=%d", instance->adc_e));
+    BSP_RETURN_IF_TRUE_LOG(ADCConfigChannel(instance) != HAL_OK, -1, LOGERROR("[BSP_ADC] Config failed: config channel failed, adc_e=%d", instance->adc_e));
 
     // ADC校准（仅H7系列支持，F4系列无校准API）
     ADC_HandleTypeDef *hadc = instance->adc_map.handle;
@@ -83,7 +98,7 @@ int8_t ADCRegister(ADCInstance *instance, BoardADC_e adc_e)
     // H7系列：需要指定校准类型和差分模式
     if (HAL_ADCEx_Calibration_Start(hadc, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED) != HAL_OK)
     {
-        LOGERROR("[BSP_ADC] Calibration failed: adc_e=%d", instance->adc_e);
+        LOGERROR("[BSP_ADC] Config failed: Calibration failed, adc_e=%d", instance->adc_e);
         return -1;
     }
 #else
@@ -92,10 +107,7 @@ int8_t ADCRegister(ADCInstance *instance, BoardADC_e adc_e)
     LOGINFO("[BSP_ADC] ADC calibration skipped (not supported on F4 series)");
 #endif
 
-    // 保存实例指针
-    s_adc_instance[s_adc_idx++] = instance;
-
-    LOGINFO("[BSP_ADC] Register success: adc_e=%d, handle=0x%p, channel=%lu", instance->adc_e, instance->adc_map.handle, instance->adc_map.channel);
+    LOGINFO("[BSP_ADC] Config success: adc_e=%d, handle=0x%p, channel=%lu", instance->adc_e, instance->adc_map.handle, instance->adc_map.channel);
     return 0;
 }
 

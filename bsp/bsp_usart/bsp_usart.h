@@ -33,8 +33,8 @@ typedef enum : uint8_t
 typedef struct USARTInstance
 {
     void *parent;                                // 父实例指针（由 DRV 层设置）
-    BoardUART_e uart_e;                          // 板载UART枚举（注册时用于查找映射）
-    UART_HandleTypeDef *handle;                  // UART句柄（注册时自动填充）
+    BoardUART_e uart_e;                          // 板载UART枚举（Config时查找映射）
+    UART_HandleTypeDef *handle;                  // UART句柄（Config时自动填充）
     USART_Work_Mode_e tx_mode;                   // 发送模式
     uint8_t *rx_buff;                            // 接收缓冲区指针
     uint16_t rx_buff_size;                       // 接收缓冲区大小
@@ -69,6 +69,7 @@ typedef struct USARTInstance
  */
 typedef struct
 {
+    BoardUART_e uart_e;                          // 板载UART枚举（用于查找硬件映射）
     USART_Work_Mode_e tx_mode;                   // 发送模式（阻塞/中断/DMA）
     void (*rx_callback)(struct USARTInstance *); // 接收完成回调（可为NULL）
     void (*tx_callback)(struct USARTInstance *); // 发送完成回调（DMA模式，可为NULL）
@@ -79,23 +80,23 @@ typedef struct
 /**
  * @brief 注册USART实例（仅调用一次）
  * @param instance USART实例指针（需先通过宏定义）
- * @param uart_e   板载UART枚举
  * @retval 0 成功
  * @retval -1 失败（实例数超过上限或重复注册）
  *
- * @note 设置 uart_e、填充硬件句柄、启动 DMA 接收后加入 static 管理数组。
- *       不配置发送模式和回调（由 USARTConfig 负责）。
+ * @note 仅检查参数、防重后加入 static 管理数组。
+ *       不配置硬件参数（由 USARTConfig 负责）。
  */
-int8_t USARTRegister(USARTInstance *instance, BoardUART_e uart_e);
+int8_t USARTRegister(USARTInstance *instance);
 
 /**
  * @brief 配置USART实例（可重复调用）
  * @param instance   USART实例指针
- * @param config     配置结构体指针（发送模式 + 回调）
+ * @param config     配置结构体指针（uart_e/发送模式/回调）
  * @retval 0 成功
  * @retval -1 失败（参数非法）
  *
- * @note 设置发送模式和回调，不修改 static 管理数组。
+ * @note 填充硬件句柄、启动 DMA 接收、设置发送模式和回调。
+ *       不修改 static 管理数组。
  *       可重复调用以重新配置参数。
  *       要求在 USARTRegister 之后调用。
  */

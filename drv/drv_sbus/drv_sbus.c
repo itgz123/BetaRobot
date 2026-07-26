@@ -25,7 +25,7 @@ static void SBUSUARTRxCallback(USARTInstance *usart_inst);
 /**
  * @brief 注册 SBUS 实例（仅调用一次）
  */
-int8_t SBUSRegister(SBUSInstance *instance, BoardUART_e uart_e)
+int8_t SBUSRegister(SBUSInstance *instance)
 {
     if (instance == NULL)
     {
@@ -40,7 +40,7 @@ int8_t SBUSRegister(SBUSInstance *instance, BoardUART_e uart_e)
     }
 
     // 注册 BSP 层 USART 实例（USARTRegister 自身有防重复检查）
-    if (USARTRegister(instance->usart_inst, uart_e) != 0)
+    if (USARTRegister(instance->usart_inst) != 0)
     {
         LOGERROR("[drv_sbus] USART register failed!");
         return -1;
@@ -83,6 +83,7 @@ int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config)
 
     // 配置 USART DMA 模式和接收回调
     USART_Config_s usart_cfg = {
+        .uart_e = config->uart_e,
         .tx_mode = USART_DMA_MODE,
         .rx_callback = SBUSUARTRxCallback,
         .tx_callback = NULL,

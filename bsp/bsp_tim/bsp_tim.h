@@ -19,23 +19,23 @@
 
 /**
  * @brief PWM实例结构体
- * @note 注册即启动，不用时设置 dutyratio = 0 即可
+ * @note 配置即启动，不用时设置 dutyratio = 0 即可
  */
 typedef struct PWMInstance
 {
-    BoardTIM_e tim_e; // 板载TIM枚举（注册时用于查找映射）
-    TIM_Map_t map;    // 硬件映射（注册时自动填充）
+    BoardTIM_e tim_e; // 板载TIM枚举（Config时查找映射）
+    TIM_Map_t map;    // 硬件映射（Config时自动填充）
     float dutyratio;  // 占空比（0~1）
 } PWMInstance;
 
 /**
  * @brief 编码器实例结构体
- * @note 注册即启动，自动使能溢出中断
+ * @note 配置即启动，自动使能溢出中断
  */
 typedef struct EncoderInstance
 {
-    BoardTIM_e tim_e;         // 板载TIM枚举（注册时用于查找映射）
-    TIM_Map_t map;            // 硬件映射（注册时自动填充）
+    BoardTIM_e tim_e;         // 板载TIM枚举（Config时查找映射）
+    TIM_Map_t map;            // 硬件映射（Config时自动填充）
     uint32_t arr;             // 溢出周期（ARR + 1）
     int32_t overflow_count;   // 溢出次数
     int64_t total_count;      // 扩展总计数（用于速度计算）
@@ -58,16 +58,43 @@ typedef struct EncoderInstance
  */
 #define ENCODER_INSTANCE_DEF(name) EncoderInstance name
 
+/*------------- 配置结构体 --------------*/
+
+/**
+ * @brief PWM 配置结构体（用于 PWMConfig）
+ */
+typedef struct
+{
+    BoardTIM_e tim_e; // 板载TIM枚举（用于查找硬件映射）
+} PWM_Config_s;
+
+/**
+ * @brief 编码器配置结构体（用于 EncoderConfig）
+ */
+typedef struct
+{
+    BoardTIM_e tim_e; // 板载TIM枚举（用于查找硬件映射）
+} Encoder_Config_s;
+
 /*------------- PWM接口声明 --------------*/
 
 /**
  * @brief 注册PWM实例（仅调用一次）
  * @param instance PWM实例指针
- * @param tim_e    板载TIM枚举
  * @return 0成功，-1失败
- * @note 注册即配置硬件映射并启动PWM输出。内部不依赖 Config 步骤。
+ * @note 仅注册，不配置硬件参数（由 PWMConfig 负责）。
  */
-int8_t PWMRegister(PWMInstance *instance, BoardTIM_e tim_e);
+int8_t PWMRegister(PWMInstance *instance);
+
+/**
+ * @brief 配置PWM实例（可重复调用）
+ * @param instance PWM实例指针
+ * @param config   PWM配置结构体指针（含 tim_e）
+ * @return 0成功，-1失败
+ * @note 填充硬件映射并启动PWM输出。
+ *       要求在 PWMRegister 之后调用。
+ */
+int8_t PWMConfig(PWMInstance *instance, const PWM_Config_s *config);
 
 /**
  * @brief 设置PWM占空比
@@ -81,11 +108,20 @@ void PWMSetDutyRatio(PWMInstance *instance, float dutyratio);
 /**
  * @brief 注册编码器实例（仅调用一次）
  * @param instance 编码器实例指针
- * @param tim_e    板载TIM枚举
  * @return 0成功，-1失败
- * @note 注册即配置硬件映射并启动编码器，自动使能更新中断。
+ * @note 仅注册，不配置硬件参数（由 EncoderConfig 负责）。
  */
-int8_t EncoderRegister(EncoderInstance *instance, BoardTIM_e tim_e);
+int8_t EncoderRegister(EncoderInstance *instance);
+
+/**
+ * @brief 配置编码器实例（可重复调用）
+ * @param instance 编码器实例指针
+ * @param config   编码器配置结构体指针（含 tim_e）
+ * @return 0成功，-1失败
+ * @note 填充硬件映射并启动编码器，使能更新中断。
+ *       要求在 EncoderRegister 之后调用。
+ */
+int8_t EncoderConfig(EncoderInstance *instance, const Encoder_Config_s *config);
 
 /**
  * @brief 获取当前速度（脉冲/秒）

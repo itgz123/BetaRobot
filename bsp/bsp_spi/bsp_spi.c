@@ -182,11 +182,11 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 
 /**
  * @brief 注册SPI实例（仅调用一次，修改 static 管理数组）
+ * @note 仅注册，不配置硬件参数（由 SPIConfig 负责）
  */
-int8_t SPIRegister(SPIInstance *instance, BoardSPI_e spi_e)
+int8_t SPIRegister(SPIInstance *instance)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_spi] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(spi_e >= SPI_NUM_MAX, -1, LOGERROR("[bsp_spi] spi_e out of range!"));
     BSP_RETURN_IF_TRUE_LOG(s_spi_idx >= SPI_INSTANCE_NUM, -1, LOGERROR("[bsp_spi] Exceeded max instance count!"));
 
     // 防重复注册检查
@@ -199,12 +199,6 @@ int8_t SPIRegister(SPIInstance *instance, BoardSPI_e spi_e)
         }
     }
 
-    // 填充枚举和硬件句柄
-    instance->spi_e = spi_e;
-    instance->handle = spi_map[instance->spi_e].handle;
-
-    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, -1, LOGERROR("[bsp_spi] SPI handle is NULL, check CubeMX configuration!"));
-
     s_spi_instance[s_spi_idx++] = instance;
 
     LOGINFO("[bsp_spi] SPI instance registered, idx=%d", s_spi_idx - 1);
@@ -212,15 +206,21 @@ int8_t SPIRegister(SPIInstance *instance, BoardSPI_e spi_e)
 }
 
 /**
- * @brief 配置SPI实例（可重复调用）
- * @note 要求先调用 SPIRegister 填充硬件句柄
+ * @brief 配置SPI实例（填充硬件句柄 + 工作模式 + 回调，可重复调用）
+ * @note 要求先调用 SPIRegister 注册实例
  */
 int8_t SPIConfig(SPIInstance *instance, const SPI_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_spi] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_spi] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, -1, LOGERROR("[bsp_spi] SPI handle not initialized, call SPIRegister first!"));
+    BSP_RETURN_IF_TRUE_LOG(config->spi_e >= SPI_NUM_MAX, -1, LOGERROR("[bsp_spi] spi_e out of range!"));
     BSP_RETURN_IF_TRUE_LOG(config->work_mode != SPI_BLOCK_MODE && config->work_mode != SPI_IT_MODE && config->work_mode != SPI_DMA_MODE, -1, LOGERROR("[bsp_spi] Invalid work_mode=%d!", config->work_mode));
+
+    // 填充枚举和硬件句柄
+    instance->spi_e = config->spi_e;
+    instance->handle = spi_map[instance->spi_e].handle;
+
+    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, -1, LOGERROR("[bsp_spi] SPI handle is NULL, check CubeMX configuration!"));
 
     instance->work_mode = config->work_mode;
     instance->rx_callback = config->rx_callback;

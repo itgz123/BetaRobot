@@ -52,28 +52,22 @@ typedef enum : uint8_t
 /*============================ 配置结构体 ============================*/
 
 /**
- * @brief BMI088 注册配置结构体（Register 函数使用）
+ * @brief BMI088 配置结构体（用于 BMI088Config）
  *
- * @note 仅调用一次。包含所有硬件枚举参数。
+ * @note 包含硬件枚举和传感器运行时参数。
+ *       硬件枚举由 Config 传给子模块，Register 只负责注册。
  */
 typedef struct
 {
+    /* 硬件枚举（Config时传给子模块） */
     BoardSPI_e spi_e;       // 板载SPI枚举
     BoardGPIO_e cs_acc_e;   // 加速度计片选GPIO枚举
     BoardGPIO_e cs_gyro_e;  // 陀螺仪片选GPIO枚举
     BoardGPIO_e int_acc_e;  // 加速度计中断GPIO枚举
     BoardGPIO_e int_gyro_e; // 陀螺仪中断GPIO枚举
     BoardTIM_e heater_e;    // 加热PWM枚举
-} BMI088_Register_Config_s;
 
-/**
- * @brief BMI088 配置结构体（Config 函数使用）
- *
- * @note 可重复调用 BMI088Config 运行时重配传感器参数和 daemon。
- *       不包含硬件枚举（由 BMI088Register 设置）。
- */
-typedef struct
-{
+    /* 传感器运行时参数 */
     uint16_t daemon_reload;           // daemon 喂狗重载值，0 表示禁用
     DaemonFaultAction_e daemon_fault; // daemon 离线故障动作
     BMI088_AccRange_e acc_range;      // 加速度计量程
@@ -188,7 +182,7 @@ typedef struct BMI088Instance
  * @param name 实例名称
  *
  * @note 使用 BSP 层的实例定义宏，parent 在注册时设置
- *       中断模式字段由 BMI088Register 初始化
+ *       中断模式字段由 BMI088Config 初始化
  *
  * @example
  *   BMI088_INSTANCE_DEF(bmi088);
@@ -216,22 +210,21 @@ typedef struct BMI088Instance
 
 /**
  * @brief 注册BMI088实例（仅调用一次）
- * @param inst    BMI088实例指针
- * @param config  注册配置结构体指针（硬件枚举集合）
+ * @param inst BMI088实例指针
  * @return 0成功，-1失败
  *
- * @note 注册 SPI/GPIO/PWM 子模块，填充硬件映射。
- *       不配置传感器参数和 daemon（由 BMI088Config 负责）。
+ * @note 注册 SPI/GPIO/PWM/Daemon 子模块。
+ *       不配置硬件参数（由 BMI088Config 负责）。
  */
-int8_t BMI088Register(BMI088Instance *inst, const BMI088_Register_Config_s *config);
+int8_t BMI088Register(BMI088Instance *inst);
 
 /**
  * @brief 配置BMI088实例（可重复调用）
  * @param inst   BMI088实例指针
- * @param config 配置结构体指针（传感器参数 + daemon 配置）
+ * @param config 配置结构体指针（硬件枚举 + 传感器参数 + daemon 配置）
  * @return 0成功，-1失败
  *
- * @note 配置 daemon、传感器初始化（AccInit/GyroInit）、中断模式设置。
+ * @note 填充子模块硬件映射，配置 daemon 和传感器初始化。
  *       可重复调用以重新配置传感器参数。
  *       要求在 BMI088Register 之后调用。
  */

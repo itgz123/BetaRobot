@@ -41,11 +41,11 @@ typedef enum : uint8_t
 typedef struct CANInstance
 {
     void *parent;                              // 父实例指针（由 DRV 层设置）
-    BoardCAN_e can_e;                          // 板载CAN枚举（注册时用于查找映射）
-    CAN_Map_t map;                             // CAN映射（注册时自动填充）
+    BoardCAN_e can_e;                          // 板载CAN枚举（Config时查找映射）
+    CAN_Map_t map;                             // CAN映射（Config时自动填充）
     uint32_t tx_id;                            // 发送标准ID；CAN_ID_UNUSED(-1) 表示不发送
     CANFilterMode_e filter_mode;               // 过滤器模式（掩码/列表）
-    uint8_t rx_id_count;                       // 列表模式下有效接收ID数量（注册时自动计算）
+    uint8_t rx_id_count;                       // 列表模式下有效接收ID数量（Config时自动计算）
     uint32_t rx_id_list[4];                    // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
     uint32_t rx_mask;                          // 掩码模式：掩码值（列表模式不使用）
     uint32_t rx_id_matched;                    // 实际匹配到的ID（回调中使用）
@@ -70,6 +70,7 @@ typedef struct CANInstance
  */
 typedef struct
 {
+    BoardCAN_e can_e;                          // 板载CAN枚举（用于查找硬件映射）
     uint32_t tx_id;                            // 发送标准ID；CAN_ID_UNUSED(-1) 表示不发送
     CANFilterMode_e filter_mode;               // 过滤器模式（掩码/列表）
     uint32_t rx_id_list[4];                    // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
@@ -91,25 +92,25 @@ typedef struct
 /**
  * @brief 注册CAN实例（仅调用一次）
  * @param instance CAN实例指针（需先通过宏定义）
- * @param can_e    板载CAN枚举
  * @retval 0 成功
  * @retval -1 失败（实例数超过上限、参数非法、重复注册）
  *
- * @note 设置 can_e、填充硬件映射后加入 static 管理数组。
+ * @note 仅检查参数、防重后加入 static 管理数组。
  *       不配置硬件参数（由 CANConfig 负责）。
  */
-int8_t CANRegister(CANInstance *instance, BoardCAN_e can_e);
+int8_t CANRegister(CANInstance *instance);
 
 /**
  * @brief 配置CAN实例（可重复调用）
  * @param instance CAN实例指针
- * @param config   运行时配置结构体指针（tx_id/filter/rx/callback）
+ * @param config   运行时配置结构体指针（can_e/tx_id/filter/rx/callback）
  * @retval 0 成功
  * @retval -1 失败（参数非法）
  *
- * @note 设置运行时参数并配置硬件滤波器/启动CAN，不修改 static 管理数组。
+ * @note 填充硬件映射，设置运行时参数并配置硬件滤波器/启动CAN。
+ *       不修改 static 管理数组。
  *       可重复调用以重新配置硬件参数。
- *       要求在 CANRegister 之后调用（需先填充硬件映射）。
+ *       要求在 CANRegister 之后调用。
  */
 int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config);
 

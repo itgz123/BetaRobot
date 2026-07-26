@@ -329,9 +329,9 @@ static void DJIMotorDaemonCallback(void *owner)
 
 /**
  * @brief 注册DJI电机实例（仅调用一次）
- * @note 只注册 CAN 实例，不配置电机参数（由 DJIMotorConfig 负责）。
+ * @note 只注册 CAN/Daemon 实例，不配置电机参数（由 DJIMotorConfig 负责）。
  */
-int8_t DJIMotorRegister(DJIMotorInstance *inst, BoardCAN_e can_e)
+int8_t DJIMotorRegister(DJIMotorInstance *inst)
 {
     if (!inst)
         return -1;
@@ -343,7 +343,7 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst, BoardCAN_e can_e)
     // 注册 CAN 实例（仅绑定 CAN 外设，tx_id/rx_id/callback 由 Config 设置）
     if (inst->base.can)
     {
-        if (CANRegister(inst->base.can, can_e) != 0)
+        if (CANRegister(inst->base.can) != 0)
             return -1;
         inst->base.can->parent = inst;
     }
@@ -386,7 +386,7 @@ int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
     uint16_t rx_id = can_rx_id_base[cfg->model] + cfg->motor_id;
     uint8_t group_idx = (rx_id - 0x201) / 4;
     uint8_t motor_idx_in_group = (rx_id - 0x201) % 4;
-    BoardCAN_e can_e = inst->base.can ? inst->base.can->can_e : (BoardCAN_e)-1;
+    BoardCAN_e can_e = cfg->can_e;
 
     // 检查发送分组是否已初始化
     if (1 == s_send_groups[can_e][group_idx].motor_init_flag[motor_idx_in_group])
@@ -396,6 +396,7 @@ int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
     if (inst->base.can)
     {
         CAN_Config_s can_cfg = {
+            .can_e = cfg->can_e,
             .tx_id = tx_id,
             .filter_mode = CAN_FILTER_MODE_LIST,
             .rx_id_list = {rx_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},

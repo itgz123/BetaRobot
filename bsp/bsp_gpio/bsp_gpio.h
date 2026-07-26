@@ -23,8 +23,8 @@
 typedef struct GPIOInstance
 {
     void *parent;                            // 父实例指针（由 DRV 层设置）
-    BoardGPIO_e gpio_e;                      // 板载GPIO枚举（注册时用于查找映射）
-    GPIO_Map_t map;                          // GPIO映射（注册时自动填充）
+    BoardGPIO_e gpio_e;                      // 板载GPIO枚举（Config时查找映射）
+    GPIO_Map_t map;                          // GPIO映射（Config时自动填充）
     GPIO_PinState pin_state;                 // 引脚状态
     void (*callback)(struct GPIOInstance *); // EXTI中断回调函数
 } GPIOInstance;
@@ -38,31 +38,42 @@ typedef struct GPIOInstance
  */
 #define GPIO_INSTANCE_DEF(name) static GPIOInstance name
 
+/*------------- 配置结构体 --------------*/
+
+/**
+ * @brief GPIO 运行时配置结构体（用于 GPIOConfig）
+ */
+typedef struct
+{
+    BoardGPIO_e gpio_e;                      // 板载GPIO枚举（用于查找硬件映射）
+    void (*callback)(struct GPIOInstance *); // EXTI中断回调函数（可为NULL）
+} GPIO_Config_s;
+
 /*------------- 外部接口声明 --------------*/
 
 /**
  * @brief 注册GPIO实例（仅调用一次）
  * @param instance GPIO实例指针（需先通过宏定义）
- * @param gpio_e   板载GPIO枚举
  * @retval 0 成功
  * @retval -1 失败（实例数超过上限、参数非法、重复注册）
  *
- * @note 设置 gpio_e、填充硬件映射后加入 static 管理数组。
- *       不设置回调（由 GPIOConfig 负责）。
+ * @note 仅检查参数、防重后加入 static 管理数组。
+ *       不配置硬件参数（由 GPIOConfig 负责）。
  */
-int8_t GPIORegister(GPIOInstance *instance, BoardGPIO_e gpio_e);
+int8_t GPIORegister(GPIOInstance *instance);
 
 /**
- * @brief 配置GPIO回调（可重复调用）
+ * @brief 配置GPIO实例（可重复调用）
  * @param instance GPIO实例指针
- * @param callback EXTI中断回调函数（可为NULL）
+ * @param config   配置结构体指针（含 gpio_e 板载枚举和回调）
  * @retval 0 成功
  * @retval -1 失败（回调冲突）
  *
- * @note 设置回调并注册 EXTI 映射。
- *       要求在 GPIORegister 之后调用（需先填充硬件映射）。
+ * @note 填充硬件映射，设置回调并注册 EXTI 映射。
+ *       不修改 static 管理数组。
+ *       要求在 GPIORegister 之后调用。
  */
-int8_t GPIOConfig(GPIOInstance *instance, void (*callback)(struct GPIOInstance *));
+int8_t GPIOConfig(GPIOInstance *instance, const GPIO_Config_s *config);
 
 /**
  * @brief 翻转GPIO电平

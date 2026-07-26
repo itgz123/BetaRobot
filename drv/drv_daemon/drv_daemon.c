@@ -161,7 +161,9 @@ void DaemonInit(void)
     TaskRegister(&daemon_task, &task_cfg);
 
 #if (DEVELOPMENT_BOARD == DM_MC02) || (DEVELOPMENT_BOARD == DJI_C) || (DEVELOPMENT_BOARD == DJI_A)
-    PWMRegister(&buzzer_pwm, TIM_BUZZER);
+    PWMRegister(&buzzer_pwm);
+    PWM_Config_s pwm_cfg = { .tim_e = TIM_BUZZER };
+    PWMConfig(&buzzer_pwm, &pwm_cfg);
 #else
 #error "without config buzzer"
 #endif // #if DEVELOPMENT_BOARD
