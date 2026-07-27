@@ -29,7 +29,7 @@ typedef enum : uint8_t
  *============================================*/
 typedef struct
 {
-    float torque_coeff;         // 有的电机setref是电流，有的是扭矩，有的有减速箱。这个参数自己看着填。
+    float gear_ratio;           // 减速比 (电机转速 / 输出转速)
     float gravity;              // 重力矩 (Nm)
     float inertia;              // 转动惯量 (kg·m²)
     float friction_coulomb_pos; // 正向库仑摩擦 (Nm)
@@ -66,15 +66,19 @@ typedef struct
 
 /*============================================
  *              多正弦叠加参数结构体
+ *
+ * 用于时域正交可分离最小二乘法辨识惯量、双向摩擦。
+ * 频率自动设为 f_i = i / duration (i=1..num_freqs)，
+ * 正交周期 = duration，满足 ∫₀ᵀ sin(2πfᵢt)·sin(2πfⱼt)dt = 0 (i≠j)。
+ * 各频率等幅 excitation，计算复杂度 O(1)（三角恒等封闭形式），
+ * num_freqs 增加不额外消耗算力。
  *============================================*/
-#define AXIS_LITE_MULTI_SINE_MAX_FREQS 8 // 最大正弦频率数量
 
 typedef struct
 {
-    float freqs[AXIS_LITE_MULTI_SINE_MAX_FREQS];      // 频率数组 (Hz)
-    float amplitudes[AXIS_LITE_MULTI_SINE_MAX_FREQS]; // 振幅数组 (Nm)
-    uint8_t num_freqs;                                // 正弦波数量
-    float duration;                                   // 总时长 (s)
+    float amplitude;   // 统一振幅 (Nm)，所有频率等幅
+    float duration;    // 正交周期 (s)，频率为 i / duration (i=1..num_freqs)
+    uint8_t num_freqs; // 正弦波数量
 } MultiSineParam_s;
 
 #endif // !DRV_AXIS_LITE_DEF_H
