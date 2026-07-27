@@ -99,48 +99,45 @@ static inline void CalcFeedforward(AxisMitLiteInstance *inst, float ref_acc, flo
 }
 
 /**
- * @brief 生成多正弦叠加力矩设定值
+ * @brief 生成多正弦叠加力矩设定值（封闭形式，O(1) 计算）
  * @param params 多正弦参数结构体指针
  * @param t 当前时间 (s)
  * @return 叠加力矩 (Nm)
- * @note 多正弦信号: τ(t) = Σ A_i * sin(2π * f_i * t)
- *       用于时域正交可分离最小二乘法辨识，频率需满足正交性条件
+ * @note τ(t) = A · Σ sin(2π·i·t/T) = A · sin(Nπt/T) · sin((N+1)πt/T) / sin(πt/T)
+ *       三角恒等封闭形式，O(1) 计算，num_freqs 不影响执行时间。
  */
 static inline float GenerateMultiSineTorque(MultiSineParam_s *params, float t)
 {
-    float torque = 0.0f;
-    float w, phase;
+    float theta = M_2PI * t / params->duration; // ω₀·t = 2π·t/T
+    float half = 0.5f * theta;                  // π·t/T
+    float sin_half = BSP_Math_Sin(half);
 
-    for (uint8_t i = 0; i < params->num_freqs && i < AXIS_LITE_MULTI_SINE_MAX_FREQS; i++)
-    {
-        w = M_2PI * params->freqs[i]; // rad/s
-        phase = w * t;                // rad
-        torque += params->amplitudes[i] * BSP_Math_Sin(phase);
-    }
+    // sin(πt/T) = 0 时（t = kT），所有 sin(i·θ) = 0，总和为 0
+    if (sin_half == 0.0f)
+        return 0.0f;
 
-    return torque;
+    float N = (float)params->num_freqs;
+    float sum = BSP_Math_Sin(N * half) * BSP_Math_Sin((N + 1.0f) * half) / sin_half;
+
+    return params->amplitude * sum;
 }
 
 void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
 {
-    if (inst == NULL || inst->motor == NULL)
+    if (inst == NULL || inst->motor.get_data == NULL || inst->motor.set_ref == NULL)
     {
         return;
     }
 
     // ======== 公共反馈与重力前馈 ========
-    MotorData_s mdata = MotorGetData(inst->motor);
-    float angle = mdata.position; // rad
-    if (!isfinite(angle))
-    {
-        angle = 0.0f;
-    }
+    MotorData_s mdata = inst->motor.get_data();
+    float gear = inst->params.gear_ratio;
 
-    float speed = mdata.speed; // rad/s
-    if (!isfinite(speed))
-    {
-        speed = 0.0f;
-    }
+    // 反馈从电机侧转换到输出侧（减速比影响位置/速度/加速度/力矩）
+    float angle_motor = mdata.position;                              // 电机侧 rad
+    float speed_motor = mdata.speed;                                 // 电机侧 rad/s
+    float angle = isfinite(angle_motor) ? angle_motor / gear : 0.0f; // 输出侧 rad
+    float speed = isfinite(speed_motor) ? speed_motor / gear : 0.0f; // 输出侧 rad/s
 
     inst->params.gravity_ff = inst->params.gravity * BSP_Math_Cos(angle); // Nm
 
@@ -172,7 +169,7 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
         if (elapsed_us < delay_us)
         {
             // 延时中：仅重力前馈
-            MotorSetRef(inst->motor, inst->params.torque_coeff * inst->params.gravity_ff);
+            inst->motor.set_ref(inst->params.gravity_ff / inst->params.gear_ratio);
             goto vofa_output;
         }
     }
@@ -276,15 +273,15 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
         break;
     }
 
-    setref = inst->params.torque_coeff * output;
-    MotorSetRef(inst->motor, setref);
+    setref = output / inst->params.gear_ratio;
+    inst->motor.set_ref(setref);
 
 vofa_output:
 #ifdef AxisMitVofaLiteSetChannelUsed
     /* CH1-CH3: 测量值 */
-    VofaSetChannel(1, angle);                // CH1: 反馈位置 (rad)
-    VofaSetChannel(2, speed);                // CH2: 反馈速度 (rad/s)
-    VofaSetChannel(3, mdata.torque); // CH3: 电机实际电流/力矩
+    VofaSetChannel(1, angle);               // CH1: 反馈位置 (rad)
+    VofaSetChannel(2, speed);               // CH2: 反馈速度 (rad/s)
+    VofaSetChannel(3, mdata.torque * gear); // CH3: 轴侧实际力矩 (Nm)
     /* CH4-CH6: 设定值 */
     VofaSetChannel(4, ref_pos); // CH4: 位置设定值 (rad)
     VofaSetChannel(5, ref_vel); // CH5: 速度设定值 (rad/s)

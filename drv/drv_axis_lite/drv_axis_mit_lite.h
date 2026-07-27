@@ -29,11 +29,7 @@
  *============================================*/
 typedef struct
 {
-    // 电机基类要求：
-    // 1. MotorLoopType_e=loop_type
-    // 2. position_mode = MOTOR_POSITION_WRAP/MOTOR_POSITION_LIMITED
-// MotorVTable_s或者    void (*set_ref)(void *inst, float ref);       // 设置参考值    MotorData_s (*get_data)(void *inst);          // 统一获取所有反馈数据
-    MotorBase_s *motor;                 // 电机基类
+    MotorVTableSimple_s motor;          // 电机接口 (set_ref/get_data)，app 定义
     AxisLiteStage_e stage;              // 控制阶段
     AxisLiteParams_s params;            // 轴参数
     ChirpParam_s chirp_params;          // 扫频参数
@@ -53,7 +49,7 @@ typedef struct
  *============================================*/
 typedef struct
 {
-    MotorBase_s *motor;                 // 电机基类
+    MotorVTableSimple_s motor;          // 电机接口 (set_ref/get_data)
     AxisLiteStage_e stage;              // 控制阶段
     uint32_t delay_ms;                  // 延时时间 (ms)
     AxisLiteParams_s params;            // 轴参数
@@ -78,14 +74,14 @@ typedef struct
 int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, AxisMitLite_Init_Config_s *cfg);
 
 /**
- * @brief 计算控制输出并调用MotorSetRef
+ * @brief 计算控制输出并调用 motor.set_ref
  * @param inst 实例指针
  * @note setref =（重力前馈 + 惯量前馈 + 摩擦前馈） + （kp * 位置误差 + kd * 速度误差）
  * @note 启用 AxisMitVofaLiteSetChannelUsed 时，自动设定 12 个 VOFA 调试通道：
- *       CH1-CH3: 传感器测量 (独立物理量)
+ *       CH1-CH3: 反馈量（轴侧，经 gear_ratio 转换）
  *       ch1:  position       — 反馈位置 (rad)
  *       ch2:  speed          — 反馈速度 (rad/s)
- *       ch3:  MotorGetCurrent — 电机实际电流
+ *       ch3:  torque          — 轴侧实际力矩 (Nm)
  *
  *       CH4-CH6: 设定值
  *       ch4:  ref_pos        — 位置设定值 (rad)
@@ -101,7 +97,7 @@ int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, AxisMitLite_Init_Config_s *cfg
  *       ch10: pos_output     — 位置环输出 (Nm)
  *       ch11: speed_output   — 速度环输出 (Nm)
  *
- *       ch12: setref值，最终发送给电机的电流/力矩值
+ *       ch12: setref值，最终发送给电机的力矩值 (Nm)
  */
 void AxisMitLiteCalculate(AxisMitLiteInstance *inst);
 
