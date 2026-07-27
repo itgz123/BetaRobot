@@ -239,6 +239,7 @@ void PIDInit(PIDInstance *instance, const PID_Init_Config_s *config)
     instance->d_lpf_rc = config->d_lpf_rc;
     instance->out_lpf_rc = config->out_lpf_rc;
     instance->deadband = config->deadband;
+    instance->error_normalize_range = config->error_normalize_range;
 
     // 输出限幅参数
     instance->out_max = config->out_max;
@@ -298,7 +299,14 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float f
     // 1. 计算误差
     instance->error = setpoint - measure;
 
-    // 2. 死区控制
+    // 2. 误差归一化（用于角度等周期量，在死区检查之前）
+    if ((instance->config_mask & PID_ENABLE_ERROR_NORMALIZE) && instance->error_normalize_range > 0.0f)
+    {
+        float half = instance->error_normalize_range * 0.5f;
+        instance->error = BSP_Math_WrapAngle(instance->error, -half, half);
+    }
+
+    // 3. 死区控制
     if ((instance->config_mask & PID_ENABLE_DEADBAND) && FABS(instance->error) < instance->deadband)
     {
         instance->i_out = 0.0f;
@@ -308,7 +316,7 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float f
         return 0.0f;
     }
 
-    // 3. 比例项
+    // 4. 比例项
     if (instance->config_mask & PID_ENABLE_PROPORTIONAL_ON_MEAS)
     {
         f_Proportional_On_Measurement(instance);
@@ -318,7 +326,7 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float f
         instance->p_out = instance->kp * instance->error;
     }
 
-    // 4. 积分项
+    // 5. 积分项
     instance->i_term = instance->ki * instance->error;
 
     // 梯形积分
@@ -342,7 +350,7 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float f
         f_Integral_Limit(instance);
     }
 
-    // 5. 微分项
+    // 6. 微分项
     if (instance->config_mask & PID_ENABLE_DERIVATIVE_ON_MEAS)
     {
         f_Derivative_On_Measurement(instance);
@@ -358,25 +366,25 @@ float PIDCalculate(PIDInstance *instance, float setpoint, float measure, float f
         f_Derivative_Filter(instance);
     }
 
-    // 6. 前馈控制 (直接使用传入的前馈值，不需要前馈时传 0)
+    // 7. 前馈控制 (直接使用传入的前馈值，不需要前馈时传 0)
     instance->feedforward_out = feedforward;
 
-    // 7. 计算总输出
+    // 8. 计算总输出
     instance->output = instance->p_out + instance->i_out + instance->d_out + instance->feedforward_out;
 
-    // 8. 输出滤波
+    // 9. 输出滤波
     if (instance->config_mask & PID_ENABLE_OUTPUT_FILTER)
     {
         f_Output_Filter(instance);
     }
 
-    // 9. 输出限幅 (可配置)
+    // 10. 输出限幅 (可配置)
     if (instance->config_mask & PID_ENABLE_OUTPUT_LIMIT)
     {
         instance->output = BSP_Math_Clamp(instance->output, instance->out_min, instance->out_max);
     }
 
-    // 10. 保存状态
+    // 11. 保存状态
     instance->last_error = instance->error;
     instance->last_measure = measure;
     instance->last_d_out = instance->d_out;

@@ -31,6 +31,7 @@ void MITInit(MITInstance *instance, const MIT_Init_Config_s *config)
     instance->kd = config->kd;
     instance->out_max = config->out_max;
     instance->out_min = config->out_min;
+    instance->error_normalize_range = config->error_normalize_range;
 }
 
 float MITCalculate(MITInstance *instance, float speed_set, float speed_measure, float pos_set, float pos_measure, float feedforward)
@@ -44,6 +45,13 @@ float MITCalculate(MITInstance *instance, float speed_set, float speed_measure, 
     instance->pos_error = pos_set - pos_measure;
     instance->speed_error = speed_set - speed_measure;
     instance->feedforward = feedforward;
+
+    // 位置误差归一化（用于角度等周期量）
+    if (instance->error_normalize_range > 0.0f)
+    {
+        float half = instance->error_normalize_range * 0.5f;
+        instance->pos_error = BSP_Math_WrapAngle(instance->pos_error, -half, half);
+    }
 
     // MIT 计算: output = kp * pos_error + kd * speed_error + feedforward
     instance->pos_output = instance->kp * instance->pos_error;

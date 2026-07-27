@@ -27,21 +27,6 @@
 #define CAN_TRANSMIT_TIMEOUT 1
 
 /*============================================
- *              电机参数表（硬件极限）
- *============================================*/
-/**
- * @brief DM 电机硬件参数
- * @note  4310: 扭矩 3.5Nm，转速 200RPM (20.944 rad/s)
- */
-const DMMotorParams_s dm_motor_params[DM_MODEL_NUM] = {
-    [DM_MODEL_DM4310] =
-        {
-            .v_max = 20.944f, /* 200 RPM × 2π/60 */
-            .t_max = 3.5f,    /* 额定扭矩 Nm */
-        },
-};
-
-/*============================================
  *              虚函数表实例
  *
  * @note  必须放在文件顶部（Register 函数中使用）
@@ -280,7 +265,6 @@ MotorData_s DMMotor_GetData(void *inst)
 
     /* ====== Step 6: 更新处理状态 ====== */
     base->position_single_last = position_single;
-    base->position_multi_last = position_multi;
     base->speed_last = speed;
     base->timestamp_last_us = frame.timestamp_us;
 
@@ -312,7 +296,7 @@ MotorData_s DMMotor_GetData(void *inst)
         result.speed = speed * setting->feedback_direction;
     }
 
-    result.torque_current = torque * setting->feedback_direction;
+    result.torque = torque * setting->feedback_direction;
     result.timestamp_us = frame.timestamp_us;
 
     /* ====== Step 9: 缓存到 base.data ====== */
@@ -413,12 +397,9 @@ int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
     }
 
     /* --- 协议映射：校验用户配置 ≤ 硬件极限，计算 scale --- */
-    const DMMotorParams_s *params = &dm_motor_params[cfg->model];
     DMMotorProtocolMap_s *map = &inst->proto_map;
 
     map->p_max = cfg->pos_max;
-    map->v_range = BSP_Math_Clamp(cfg->vel_range, 0.0f, params->v_max);
-    map->t_range = BSP_Math_Clamp(cfg->t_range, 0.0f, params->t_max);
 
     if (map->v_range < 1e-6f)
         map->v_range = 1e-6f;
@@ -447,9 +428,7 @@ int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
     /* 初始化速度环 PID */
     if (cfg->controller_setting.loop_type & MOTOR_LOOP_SPEED)
     {
-        cfg->pid_speed_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL | PID_ENABLE_OUTPUT_LIMIT;
-        cfg->pid_speed_setting.out_max = map->t_range;
-        cfg->pid_speed_setting.out_min = -map->t_range;
+        cfg->pid_speed_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL;
 
         PIDInit(&inst->base.controller.pid_speed, &cfg->pid_speed_setting);
     }
@@ -457,18 +436,7 @@ int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
     /* 初始化位置环 PID */
     if (cfg->controller_setting.loop_type & MOTOR_LOOP_ANGLE)
     {
-        cfg->pid_angle_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL | PID_ENABLE_OUTPUT_LIMIT;
-
-        if (!(cfg->controller_setting.loop_type & MOTOR_LOOP_SPEED))
-        {
-            cfg->pid_angle_setting.out_max = map->t_range;
-            cfg->pid_angle_setting.out_min = -map->t_range;
-        }
-        else
-        {
-            cfg->pid_angle_setting.out_max = map->v_range;
-            cfg->pid_angle_setting.out_min = -map->v_range;
-        }
+        cfg->pid_angle_setting.config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL;
 
         PIDInit(&inst->base.controller.pid_angle, &cfg->pid_angle_setting);
     }
@@ -483,7 +451,6 @@ int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
 
     /* 处理状态清零 */
     inst->base.position_single_last = 0.0f;
-    inst->base.position_multi_last = 0.0f;
     inst->base.position_cnt = 0;
     inst->base.speed_last = 0.0f;
     inst->base.timestamp_last_us = 0;

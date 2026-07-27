@@ -58,11 +58,11 @@ typedef struct
     uint16_t current_max;        // 电流最大值 (原始值)
     float current_max_a;         // 电流最大值 (安培)
     uint16_t encoder_resolution; // 编码器分辨率
-    float no_load_speed;         // 空载转速 (rad/s)
 
     /* 预计算 scale（运行时仅乘法，零除法） */
-    float pos_scale;     // = M_2PI / encoder_resolution  编码器原始值 → rad
-    float current_scale; // = current_max_a / current_max 电流原始值 → A
+    float pos_scale;         // = M_2PI / encoder_resolution  编码器原始值 → rad
+    float current_scale;     // = current_max_a / current_max  电流原始值 → A
+    float inv_current_scale; // = current_max / current_max_a  电流 A → 原始值
 } DJIMotorParams_s;
 
 /*============================================
@@ -74,6 +74,10 @@ struct DJIMotorInstance
 
     /* DJI 基本属性 */
     uint8_t motor_id; // 电机 ID (1-8)
+
+    /* 转矩常数 */
+    float torque_constant;     // 转矩常数 (Nm/A)
+    float inv_torque_constant; // 转矩常数倒数 (A/Nm)
 
     /* 特有数据 */
     float motor_temperature; // 线圈温度 (°C)
@@ -96,6 +100,8 @@ typedef struct
     uint8_t motor_id;                 // 电机 ID (1-8)
     MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
     float speed_lpf_rc;               // 速度低通滤波时间常数 RC
+
+    float torque_constant; // 转矩常数 (Nm/A)
 
     /* 控制器设置 */
     MotorControllerSetting_s controller_setting; // 控制器设置

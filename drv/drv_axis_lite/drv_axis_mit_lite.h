@@ -32,6 +32,7 @@ typedef struct
     // 电机基类要求：
     // 1. MotorLoopType_e=loop_type
     // 2. position_mode = MOTOR_POSITION_WRAP/MOTOR_POSITION_LIMITED
+// MotorVTable_s或者    void (*set_ref)(void *inst, float ref);       // 设置参考值    MotorData_s (*get_data)(void *inst);          // 统一获取所有反馈数据
     MotorBase_s *motor;                 // 电机基类
     AxisLiteStage_e stage;              // 控制阶段
     AxisLiteParams_s params;            // 轴参数
