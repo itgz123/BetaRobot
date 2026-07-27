@@ -24,10 +24,18 @@
  */
 typedef struct
 {
-    float kp;       // 位置比例系数
-    float kd;       // 速度比例系数
-    float out_max;  // 输出上限
-    float out_min;  // 输出下限
+    float kp;      // 位置比例系数
+    float kd;      // 速度比例系数
+    float out_max; // 输出上限
+    float out_min; // 输出下限
+
+    /**
+     * @brief 误差归一化范围 (0=不启用)
+     * @note 对位置误差进行周期归一化，将误差映射到 [-range/2, range/2)
+     *       用于角度等周期量：range=2π 时误差映射到 [-π, π)
+     *       使用 BSP_Math_WrapAngle 实现
+     */
+    float error_normalize_range;
 } MIT_Init_Config_s;
 
 /*------------- 类型定义 --------------*/
@@ -44,6 +52,9 @@ typedef struct MITInstance
     /*------------- 输出限幅 -------------*/
     float out_max; // 输出上限
     float out_min; // 输出下限
+
+    /*------------- 误差归一化 -------------*/
+    float error_normalize_range; // 误差归一化范围 (0=不启用)
 
     /*------------- 状态变量 -------------*/
     float pos_error;   // 位置误差

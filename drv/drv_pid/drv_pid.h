@@ -48,6 +48,7 @@ typedef enum : uint16_t
     PID_ENABLE_OUTPUT_FILTER = 0x40,        // 启用输出滤波
     PID_ENABLE_OUTPUT_LIMIT = 0x80,         // 启用输出限幅
     PID_ENABLE_DEADBAND = 0x100,            // 启用死区控制
+    PID_ENABLE_ERROR_NORMALIZE = 0x200,     // 启用误差归一化
 } PIDConfigMask;
 
 /*------------- 配置结构体 --------------*/
@@ -57,18 +58,19 @@ typedef enum : uint16_t
  */
 typedef struct
 {
-    float kp;                  // 比例系数
-    float ki;                  // 积分系数
-    float kd;                  // 微分系数
-    float integral_limit;      // 积分限幅阈值 (0 = 禁用)
-    float coef_a;              // 变速积分参数 A (0 = 禁用)
-    float coef_b;              // 变速积分参数 B
-    float d_lpf_rc;            // 微分滤波时间常数 RC (0 = 禁用)
-    float out_lpf_rc;          // 输出滤波时间常数 RC (0 = 禁用)
-    float deadband;            // 死区范围 (0 = 禁用)
-    float out_max;             // 输出上限 (需要 PID_ENABLE_OUTPUT_LIMIT)
-    float out_min;             // 输出下限 (需要 PID_ENABLE_OUTPUT_LIMIT)
-    PIDConfigMask config_mask; // 功能配置掩码
+    float kp;                    // 比例系数
+    float ki;                    // 积分系数
+    float kd;                    // 微分系数
+    float integral_limit;        // 积分限幅阈值 (0 = 禁用)
+    float coef_a;                // 变速积分参数 A (0 = 禁用)
+    float coef_b;                // 变速积分参数 B
+    float d_lpf_rc;              // 微分滤波时间常数 RC (0 = 禁用)
+    float out_lpf_rc;            // 输出滤波时间常数 RC (0 = 禁用)
+    float deadband;              // 死区范围 (0 = 禁用)
+    float error_normalize_range; // 误差归一化范围 (0 = 禁用, 需要 PID_ENABLE_ERROR_NORMALIZE)
+    float out_max;               // 输出上限 (需要 PID_ENABLE_OUTPUT_LIMIT)
+    float out_min;               // 输出下限 (需要 PID_ENABLE_OUTPUT_LIMIT)
+    PIDConfigMask config_mask;   // 功能配置掩码
 } PID_Init_Config_s;
 
 /*------------- 类型定义 --------------*/
@@ -99,6 +101,9 @@ typedef struct PIDInstance
 
     // 输出滤波 (需要掩码 PID_ENABLE_OUTPUT_FILTER 启用)
     float out_lpf_rc; // 输出滤波时间常数 RC = 1/omegac
+
+    // 误差归一化 (需要掩码 PID_ENABLE_ERROR_NORMALIZE 启用)
+    float error_normalize_range; // 误差归一化范围 (0=不启用)
 
     // 死区控制 (需要掩码 PID_ENABLE_DEADBAND 启用)
     float deadband; // 死区范围 (误差小于此值时不输出)

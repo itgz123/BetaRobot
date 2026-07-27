@@ -126,23 +126,26 @@ typedef enum : uint8_t
     MOTOR_SPEED_LPF_ENABLE = 1,  // 启用速度低通滤波
 } MotorSpeedLpf_e;
 
-/*============================================
- *              统一电机数据结构体
- *
- * MotorGetData() 的返回值类型。
- * position 已含偏置 + 方向修正 + WRAP 归一化。
- * position_single 是原始单圈位置（未修正），可用于调试。
- * torque_current 含义由电机品牌决定（DM: 扭矩Nm, DJI: 电流A）。
- * timestamp_us 来自 DWT 定时器，标记 CAN 帧到达时刻。
- *============================================*/
 typedef struct
 {
-    float position_single; // 原始位置 (rad)，无偏置/方向修正（DJI: [0,2π) 单圈; DM: [-p_max,+p_max] 可跨多圈）
-    float position;        // 多圈位置 (rad)，已含偏置 + 方向修正 + WRAP 归一化
-    float speed;           // 速度 (rad/s)，已含方向修正
-    float torque_current;  // 扭矩 (Nm) 或 电流 (A)，已含方向修正
+    double position;       // 多圈位置 (rad) 。多圈累加 + 添加偏置 + 归一化 + 方向修正
+    float speed;           // 速度 (rad/s) 。方向修正
+    float torque;          // 扭矩 (Nm) 。方向修正
     uint64_t timestamp_us; // CAN 帧到达时间戳 (us)
 } MotorData_s;
+
+typedef struct
+{
+
+    // 解析数据
+    MotorData_s data;
+    float position_single; // 原始位置 (rad)，无偏置/方向修正（DJI: [0,2π) 单圈; DM: [-p_max,+p_max] 可跨多圈）
+    int64_t position_cnt;  // 边界穿越累加（DJI: 机械圈数; DM: 协议边界数，每跨 ±p_max 一次）
+    // 上次数据
+    float position_single_last; // 上次单圈位置 (rad)，用于 wraps 检测
+    float speed_last;           // 上次滤波后速度 (rad/s)
+    uint64_t timestamp_last_us; // 上次处理的时间戳 (us)
+} MotorDataAll_s;
 
 /*============================================
  *              原始 CAN 帧缓冲区（通用双缓冲）
@@ -166,7 +169,7 @@ typedef struct
  * @note get_data: 统一数据获取接口，替代 get_angle/get_speed/get_current。
  *       返回 MotorData_s 结构体包含所有反馈数据。
  *============================================*/
-typedef struct MotorVTable_s
+typedef struct
 {
     void (*enable)(void *inst);                   // 使能电机
     void (*disable)(void *inst);                  // 禁用电机
@@ -176,6 +179,13 @@ typedef struct MotorVTable_s
     void (*set_offset)(void *inst, float offset); // 设置位置偏置
     void (*send_cmd)(void *inst, uint8_t cmd);    // 发送模式命令（可为 NULL）
 } MotorVTable_s;
+
+// 简单表，给axis，chassis使用
+typedef struct
+{
+    void (*set_ref)(float ref);    // 设置参考值
+    MotorData_s (*get_data)(void); // 统一获取所有反馈数据
+} MotorVTableSimple_s;
 
 /*============================================
  *              控制器结构体
@@ -249,14 +259,9 @@ typedef struct
     MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
     float speed_lpf_rc;               // 速度低通滤波时间常数 RC
     float position_offset;            // 位置偏置 (rad)，由 MotorSetOffset 写入
-    // 解析数据
-    MotorData_s data;
-    // 上次数据
-    float position_single_last; // 上次单圈位置 (rad)，用于 wraps 检测
-    float position_multi_last;  // 上次多圈位置 (rad)，用于微分求速度
-    int64_t position_cnt;       // 边界穿越累加（DJI: 机械圈数; DM: 协议边界数，每跨 ±p_max 一次）
-    float speed_last;           // 上次滤波后速度 (rad/s)
-    uint64_t timestamp_last_us; // 上次处理的时间戳 (us)
+
+    /* 数据 */
+    MotorDataAll_s data_all;
 
     /* 统一接口 */
     CANInstance *can;       // CAN 实例指针
