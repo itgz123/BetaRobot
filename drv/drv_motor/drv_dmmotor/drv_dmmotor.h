@@ -193,7 +193,7 @@ typedef struct
     MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
     float speed_lpf_rc;               // 速度低通滤波时间常数 RC
 
-    /* 协议映射范围（必须与 DM 调试助手一致，≤ 硬件极限） */
+    /* 协议映射范围（必须与 DM 调试助手一致） */
     float pos_max;   // 位置范围 ±pos_max (rad)
     float vel_range; // 速度范围 ±vel_range (rad/s)
     float t_range;   // 扭矩范围 ±t_range (Nm)
