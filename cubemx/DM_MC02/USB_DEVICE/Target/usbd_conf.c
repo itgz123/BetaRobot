@@ -108,7 +108,16 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef* pcdHandle)
     HAL_NVIC_SetPriority(OTG_HS_IRQn, 5, 0);
     HAL_NVIC_EnableIRQ(OTG_HS_IRQn);
   /* USER CODE BEGIN USB_OTG_HS_MspInit 1 */
-
+    /**USB_OTG_HS GPIO Configuration
+    PA12     ------> USB_OTG_HS_DP
+    PA11     ------> USB_OTG_HS_DM
+    */
+    GPIO_InitStruct.Pin = GPIO_PIN_12|GPIO_PIN_11;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Alternate = GPIO_AF10_OTG1_HS;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
   /* USER CODE END USB_OTG_HS_MspInit 1 */
   }
 }
@@ -136,7 +145,7 @@ void HAL_PCD_MspDeInit(PCD_HandleTypeDef* pcdHandle)
     HAL_NVIC_DisableIRQ(OTG_HS_IRQn);
 
   /* USER CODE BEGIN USB_OTG_HS_MspDeInit 1 */
-
+    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_12|GPIO_PIN_11);
   /* USER CODE END USB_OTG_HS_MspDeInit 1 */
   }
 }
