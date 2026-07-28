@@ -32,6 +32,10 @@
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
 
+/* bsp_usb 内部函数（非 static，供 BSP 链接） */
+extern void bsp_usb_rx_handler(uint8_t *buf, uint32_t len);
+extern void bsp_usb_tx_complete_handler(void);
+extern void bsp_usb_process_tx(void);
 /* USER CODE END PV */
 
 /** @addtogroup STM32_USB_OTG_DEVICE_LIBRARY
@@ -263,6 +267,7 @@ static int8_t CDC_Receive_FS(uint8_t* Buf, uint32_t *Len)
   /* USER CODE BEGIN 6 */
   USBD_CDC_SetRxBuffer(&hUsbDeviceFS, &Buf[0]);
   USBD_CDC_ReceivePacket(&hUsbDeviceFS);
+  bsp_usb_rx_handler(Buf, *Len);
   return (USBD_OK);
   /* USER CODE END 6 */
 }
@@ -311,6 +316,7 @@ static int8_t CDC_TransmitCplt_FS(uint8_t *Buf, uint32_t *Len, uint8_t epnum)
   UNUSED(Buf);
   UNUSED(Len);
   UNUSED(epnum);
+  bsp_usb_tx_complete_handler();
   /* USER CODE END 13 */
   return result;
 }
