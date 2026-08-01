@@ -11,6 +11,7 @@ set(MODULE_SOURCES
     bsp_adc/bsp_adc.c
     bsp_can/bsp_can.c
     bsp_freertos/bsp_freertos.c
+    bsp_usb/bsp_usb.c
 )
 
 # bsp 层头文件路径
@@ -28,4 +29,5 @@ set(MODULE_INCLUDE_DIRS
     bsp_adc
     bsp_can
     bsp_freertos
+    bsp_usb
 )
