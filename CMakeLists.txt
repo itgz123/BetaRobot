@@ -5,8 +5,8 @@
 #       读取 CubeMX 生成的 cmake/stm32cubemx/CMakeLists.txt 中的变量作为 HAL 源文件和头文件配置
 #
 # 使用方法：
-#   cmake --preset default     # 配置构建
-#   cmake --build build -j24   # 编译
+#   cmake --preset Debug       # 配置构建
+#   cmake --build build/Debug -j24   # 编译
 #   cmake --build build --target clean  # 清理
 #
 # 切换应用：修改 user_cfg.h 中的 APP_NAME

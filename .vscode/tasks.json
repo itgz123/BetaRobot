@@ -17,7 +17,7 @@
         {
             "label": "build",
             "type": "shell",
-            "command": "cmake --preset default ; cmake --build build -j24",
+            "command": "cmake --preset Debug ; cmake --build build/Debug -j24",
             "options": {
                 "cwd": "${workspaceFolder}"
             },
@@ -36,7 +36,7 @@
             "command": "cmake",
             "args": [
                 "--build",
-                "build",
+                "build/Debug",
                 "--target",
                 "download_dap"
             ],
@@ -52,7 +52,7 @@
             "command": "cmake",
             "args": [
                 "--build",
-                "build",
+                "build/Debug",
                 "--target",
                 "download_jlink"
             ],
@@ -70,7 +70,7 @@
                 "-E",
                 "rm",
                 "-rf",
-                "build"
+                "build/Debug"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"
@@ -84,7 +84,7 @@
             "command": "cmake",
             "args": [
                 "--build",
-                "build",
+                "build/Debug",
                 "--target",
                 "rtt_connect"
             ],
