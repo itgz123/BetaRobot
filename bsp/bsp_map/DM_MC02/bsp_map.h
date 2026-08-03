@@ -26,6 +26,7 @@ void BSPInit();
 
 #define DMA_RAM __attribute__((section(".ram_d1")))
 #define ITCM_RAM __attribute__((section(".itcmram")))
+#define ALIGN_4 __attribute__((aligned(4)))
 
 /*============================================
  *              映射结构体类型
@@ -142,6 +143,7 @@ typedef enum
 #define PWM_INSTANCE_NUM 6
 #define ENCODER_INSTANCE_NUM 0
 #define ADC_INSTANCE_NUM 1
+#define USB_INSTANCE_NUM 1
 
 /*============================================
  *              extern 声明
