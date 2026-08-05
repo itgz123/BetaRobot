@@ -14,8 +14,8 @@
 
 #ifdef DRV_COMM_USED
 
-#include "bsp_map.h"      /* COMM_DEFAULT_UART: UART_1 */
-#include "bsp_usart.h"    /* USART_DMA_MODE */
+#include "bsp_map.h"   /* COMM_DEFAULT_UART: UART_1 */
+#include "bsp_usart.h" /* USART_DMA_MODE */
 #include "media/comm_media_usart.h"
 #include "proto/comm_proto_custom.h"
 
@@ -26,23 +26,6 @@ COMM_PROTO_DEF(comm_custom, PROTO_CUSTOM);
 void CommInit(void)
 {
     EngineInit(); /* 内部自建 RX 任务（drv/drv_comm/engine/comm_engine.c） */
-
-    /* 1. 介质：板载 UART（DMA 收发） */
-    EngineAttachMedia(comm_uart1);
-    MediaUsartConfig(comm_uart1, &(CommMediaUsart_Config_s){
-                                     .uart_e = COMM_DEFAULT_UART,
-                                     .tx_mode = USART_DMA_MODE,
-                                     .media_id = COMM_DEFAULT_MEDIA_ID,
-                                     .unpack_in_isr = 0,
-                                 });
-
-    /* 2. 协议：统一自定义帧（0x5A）挂到该介质 */
-    CommProtoCustomConfig(comm_custom, &(CommProtoCustom_Config_s){
-                                           .proto_id = COMM_DEFAULT_PROTO_ID,
-                                           .max_payload = COMM_DEFAULT_MAX_PAYLOAD,
-                                           .daemon = NULL,
-                                       });
-    EngineAttachProtocol(comm_uart1, comm_custom);
 }
 
 #else /* !DRV_COMM_USED */
