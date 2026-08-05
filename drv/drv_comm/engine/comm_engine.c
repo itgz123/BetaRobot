@@ -4,11 +4,13 @@
  */
 
 #include "comm_engine.h"
+#ifdef DRV_COMM_USED
 #include "drv_comm.h"
 #include "comm_media.h"
 #include "comm_proto.h"
 #include "comm_ring.h"
 
+#include "bsp_freertos.h"
 #include "bsp_uart_log.h"
 #include <string.h>
 
@@ -30,6 +32,12 @@ static CommRing s_ring;
 static TaskHandle_t s_rx_task = NULL;
 static EngineConsumer_s s_consumers[ENGINE_CONSUMER_NUM];
 static uint8_t s_consumer_cnt = 0;
+static uint8_t s_rx_task_started = 0; /* EngineInit 幂等 */
+
+/* RX 任务实例：仿 drv_daemon，任务在 drv 定义并自建，app 零关心 */
+TASK_INSTANCE_DEF(comm_rx_task, COMM_RX_STACK_SIZE);
+
+static void CommEngineRxTaskFunc(void *argument);
 
 static void EngineRxHook(CommMedia *media, MediaEvent_e evt, const uint8_t *data, uint16_t len);
 
@@ -105,10 +113,21 @@ static void EngineRxProcess(void)
 
 int8_t EngineInit(void)
 {
+    if (s_rx_task_started)
+    {
+        return 0; /* 幂等：避免重复 TaskRegister 同一静态缓冲 */
+    }
     CommRingInit(&s_ring);
     memset(s_consumers, 0, sizeof(s_consumers));
     s_consumer_cnt = 0;
     s_rx_task = NULL;
+
+    /* 自建 RX 任务（仿 drv_daemon：任务实例/注册收进 drv，app 只调 EngineInit） */
+    TaskRegister(&comm_rx_task, &(Task_Init_Config_s){
+                                       .func = CommEngineRxTaskFunc,
+                                       .priority = COMM_RX_TASK_PRIORITY,
+                                   });
+    s_rx_task_started = 1;
     return 0;
 }
 
@@ -183,12 +202,10 @@ int8_t EngineSend(uint8_t media_id, CommId_t comm_id, const uint8_t *payload, ui
     return MediaSend(media, tx_buf, (uint16_t)n, 10);
 }
 
-void EngineRxTask(void)
+static void CommEngineRxTaskFunc(void *argument)
 {
-    if (!s_rx_task)
-    {
-        s_rx_task = xTaskGetCurrentTaskHandle();
-    }
+    (void)argument;
+    s_rx_task = xTaskGetCurrentTaskHandle();
     for (;;)
     {
         EngineRxProcess();
@@ -212,3 +229,4 @@ static void EngineRxHook(CommMedia *media, MediaEvent_e evt, const uint8_t *data
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
 }
+#endif /* DRV_COMM_USED */

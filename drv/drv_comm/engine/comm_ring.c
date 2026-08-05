@@ -7,6 +7,7 @@
  */
 
 #include "comm_ring.h"
+#ifdef DRV_COMM_USED
 #include "drv_comm.h"
 
 #include "FreeRTOS.h"
@@ -75,3 +76,4 @@ uint16_t CommRingCount(CommRing *ring)
     }
     return (uint16_t)((ring->head + COMM_RING_CHUNK_NUM - ring->tail) % COMM_RING_CHUNK_NUM);
 }
+#endif /* DRV_COMM_USED */

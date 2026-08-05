@@ -4,6 +4,7 @@
  */
 
 #include "comm_media.h"
+#ifdef DRV_COMM_USED
 #include "drv_comm.h"
 
 #include "bsp_uart_log.h"
@@ -91,3 +92,4 @@ CommMedia *MediaFindById(uint8_t media_id)
     }
     return NULL;
 }
+#endif /* DRV_COMM_USED */

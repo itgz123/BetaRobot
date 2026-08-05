@@ -6,6 +6,7 @@
  */
 
 #include "comm_proto.h"
+#ifdef DRV_COMM_USED
 #include "drv_comm.h"
 
 #include "bsp_uart_log.h"
@@ -77,3 +78,4 @@ int16_t ProtocolPack(CommProto *inst, CommId_t comm_id, const uint8_t *payload, 
     }
     return inst->vtable->pack(inst, comm_id, payload, len, out_buf);
 }
+#endif /* DRV_COMM_USED */

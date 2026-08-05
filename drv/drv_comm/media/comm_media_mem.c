@@ -7,6 +7,7 @@
  */
 
 #include "comm_media_mem.h"
+#ifdef DRV_COMM_USED
 #include "drv_comm.h"
 
 #include "bsp_uart_log.h"
@@ -55,3 +56,4 @@ int8_t MediaMemConfig(CommMedia *inst, const CommMediaMem_Config_s *cfg)
     inst->unpack_in_isr = cfg->unpack_in_isr;
     return 0;
 }
+#endif /* DRV_COMM_USED */

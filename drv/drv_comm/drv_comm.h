@@ -22,6 +22,18 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include "app_cfg.h" /* DRV_COMM_USED 总开关（仿 DAEMON_USED） */
+
+/**
+ * @brief 通信框架一键初始化（仿 DaemonInit，供 function_in_main_c 调用）
+ *
+ * 用法（app 开发者无需关心内部实现）：
+ *   1. app_cfg.h 定义 DRV_COMM_USED；
+ *   2. function_in_main_c 调用 CommInit()。
+ * 未定义 DRV_COMM_USED 时本函数为空操作，且整个 comm 模块（含 RX 任务）
+ * 不编译、不占资源。
+ */
+void CommInit(void);
 
 /*============================================
  *              comm_id 位宽配置
@@ -63,6 +75,26 @@ typedef uint16_t CommId_t;
 #endif
 #ifndef COMM_TX_BUF_SIZE
 #define COMM_TX_BUF_SIZE 256
+#endif
+#ifndef COMM_RX_STACK_SIZE
+#define COMM_RX_STACK_SIZE 512   /* EngineRxTask 栈（字） */
+#endif
+#ifndef COMM_RX_TASK_PRIORITY
+#define COMM_RX_TASK_PRIORITY 4  /* RX 任务优先级（高于业务任务） */
+#endif
+
+/*=========== CommInit 默认接线配置（app_cfg.h 可覆盖） ===========*/
+#ifndef COMM_DEFAULT_UART
+#define COMM_DEFAULT_UART UART_1     /* 默认介质：板载 UART */
+#endif
+#ifndef COMM_DEFAULT_MEDIA_ID
+#define COMM_DEFAULT_MEDIA_ID 1      /* 默认介质 id */
+#endif
+#ifndef COMM_DEFAULT_PROTO_ID
+#define COMM_DEFAULT_PROTO_ID 1      /* 默认协议 id */
+#endif
+#ifndef COMM_DEFAULT_MAX_PAYLOAD
+#define COMM_DEFAULT_MAX_PAYLOAD 8   /* 默认载荷上限（字节） */
 #endif
 
 /* 派生结构体内嵌基类作首成员（偏移 0），基类指针可直接反推派生实例 */

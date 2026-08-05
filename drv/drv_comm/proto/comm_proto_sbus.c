@@ -6,6 +6,7 @@
  */
 
 #include "comm_proto_sbus.h"
+#ifdef DRV_COMM_USED
 #include "drv_comm.h"
 
 #include "bsp_uart_log.h"
@@ -132,3 +133,4 @@ int8_t CommProtoSbusConfig(CommProto *inst, const CommProtoSbus_Config_s *cfg)
     SbusReset(inst);
     return 0;
 }
+#endif /* DRV_COMM_USED */

@@ -13,6 +13,7 @@ set(MODULE_SOURCES
     drv_axis_lite/drv_axis_mit_lite.c
     drv_mit/drv_mit.c
     # 通用通信驱动框架（Media / Protocol / Engine 三层）
+    drv_comm/drv_comm.c
     drv_comm/media/comm_media.c
     drv_comm/media/comm_media_can.c
     drv_comm/media/comm_media_usart.c
