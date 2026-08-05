@@ -12,6 +12,19 @@ set(MODULE_SOURCES
     drv_motor/drv_dmmotor/drv_dmmotor.c
     drv_axis_lite/drv_axis_mit_lite.c
     drv_mit/drv_mit.c
+    # 通用通信驱动框架（Media / Protocol / Engine 三层）
+    drv_comm/media/comm_media.c
+    drv_comm/media/comm_media_can.c
+    drv_comm/media/comm_media_usart.c
+    drv_comm/media/comm_media_usb.c
+    drv_comm/media/comm_media_mem.c
+    drv_comm/proto/comm_proto.c
+    drv_comm/proto/comm_proto_custom.c
+    drv_comm/proto/comm_proto_sbus.c
+    drv_comm/proto/comm_proto_seasky.c
+    drv_comm/proto/comm_proto_referee.c
+    drv_comm/engine/comm_ring.c
+    drv_comm/engine/comm_engine.c
 )
 
 # drv 层头文件路径
@@ -28,4 +41,8 @@ set(MODULE_INCLUDE_DIRS
     drv_axis_lite
     drv_mahony
     drv_mit
+    drv_comm
+    drv_comm/media
+    drv_comm/proto
+    drv_comm/engine
 )
