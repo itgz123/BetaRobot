@@ -10,6 +10,7 @@
  */
 
 #include "comm_proto_referee.h"
+#ifdef DRV_COMM_USED
 #include "drv_comm.h"
 
 #include "bsp_crc.h"
@@ -204,3 +205,4 @@ int8_t CommProtoRefereeConfig(CommProto *inst, const CommProtoReferee_Config_s *
     RefereeReset(inst);
     return 0;
 }
+#endif /* DRV_COMM_USED */

@@ -9,6 +9,7 @@
  */
 
 #include "comm_media_usart.h"
+#ifdef DRV_COMM_USED
 #include "drv_comm.h"
 
 #include "bsp_uart_log.h"
@@ -91,3 +92,4 @@ int8_t MediaUsartConfig(CommMedia *inst, const CommMediaUsart_Config_s *cfg)
     us->tx_mode = cfg->tx_mode;
     return 0;
 }
+#endif /* DRV_COMM_USED */

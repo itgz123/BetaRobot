@@ -8,11 +8,11 @@
  *   EngineAttachProtocol  把协议绑到介质上（ProtocolRegister + MediaAttachProtocol）
  *   EngineRegisterConsumer 注册消费者（按 comm_id 路由）
  *   EngineSend            统一发送入口（取介质协议打包后经介质发出）
- *   EngineRxTask          接收任务主体（由 app 包装为 RTOS 任务）
  *
- * 接收链路：bsp ISR -> 介质适配钩子 -> EngineRxHook(写 ring) -> vTaskNotifyGive
- *          -> EngineRxTask 取 chunk -> 该介质 proto_list 逐个 unpack
- *          -> 出帧按 comm_id 分发消费者 + DaemonReload
+ * RX 任务由 EngineInit 内部自建（仿 drv_daemon），app 无需关心：
+ *   bsp ISR -> 介质适配钩子 -> EngineRxHook(写 ring) -> vTaskNotifyGive
+ *   -> 内置 RX 任务取 chunk -> 该介质 proto_list 逐个 unpack
+ *   -> 出帧按 comm_id 分发消费者 + DaemonReload
  */
 
 #ifndef DRV_COMM_ENGINE_H
@@ -55,6 +55,6 @@ int8_t EngineAttachMedia(CommMedia *media);
 int8_t EngineAttachProtocol(CommMedia *media, CommProto *proto);
 int8_t EngineRegisterConsumer(const EngineConsumer_Config_s *cfg);
 int8_t EngineSend(uint8_t media_id, CommId_t comm_id, const uint8_t *payload, uint16_t len);
-void EngineRxTask(void); /* 自带 for(;;)，由 app 用 TASK_INSTANCE_DEF 包装 */
+/* RX 任务在 drv 内部自建（EngineInit 内 TaskRegister），不向 app 暴露 */
 
 #endif /* DRV_COMM_ENGINE_H */

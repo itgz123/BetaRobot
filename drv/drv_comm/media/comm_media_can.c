@@ -9,6 +9,7 @@
  */
 
 #include "comm_media_can.h"
+#ifdef DRV_COMM_USED
 #include "drv_comm.h"
 
 #include "bsp_uart_log.h"
@@ -91,3 +92,4 @@ int8_t MediaCanConfig(CommMedia *inst, const CommMediaCan_Config_s *cfg)
     }
     return 0;
 }
+#endif /* DRV_COMM_USED */

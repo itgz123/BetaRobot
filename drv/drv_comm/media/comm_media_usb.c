@@ -7,6 +7,7 @@
  */
 
 #include "comm_media_usb.h"
+#ifdef DRV_COMM_USED
 #include "drv_comm.h"
 
 #ifdef HAL_PCD_MODULE_ENABLED
@@ -88,3 +89,4 @@ int8_t MediaUsbConfig(CommMedia *inst, const CommMediaUsb_Config_s *cfg)
 }
 
 #endif /* HAL_PCD_MODULE_ENABLED */
+#endif /* DRV_COMM_USED */

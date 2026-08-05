@@ -8,6 +8,7 @@
  */
 
 #include "comm_proto_custom.h"
+#ifdef DRV_COMM_USED
 #include "drv_comm.h"
 
 #include "bsp_crc.h"
@@ -219,3 +220,4 @@ int8_t CommProtoCustomConfig(CommProto *inst, const CommProtoCustom_Config_s *cf
     CustomResetState(COMM_CONTAINER_OF(inst, CommProtoCustom));
     return 0;
 }
+#endif /* DRV_COMM_USED */

@@ -4,6 +4,7 @@
  */
 
 #include "comm_proto_seasky.h"
+#ifdef DRV_COMM_USED
 #include "drv_comm.h"
 
 #include "bsp_crc.h"
@@ -147,3 +148,4 @@ int8_t CommProtoSeaskyConfig(CommProto *inst, const CommProtoSeasky_Config_s *cf
     SeaskyReset(inst);
     return 0;
 }
+#endif /* DRV_COMM_USED */
