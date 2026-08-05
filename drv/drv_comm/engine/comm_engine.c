@@ -32,7 +32,6 @@ static CommRing s_ring;
 static TaskHandle_t s_rx_task = NULL;
 static EngineConsumer_s s_consumers[ENGINE_CONSUMER_NUM];
 static uint8_t s_consumer_cnt = 0;
-static uint8_t s_rx_task_started = 0; /* EngineInit 幂等 */
 
 /* RX 任务实例：仿 drv_daemon，任务在 drv 定义并自建，app 零关心 */
 TASK_INSTANCE_DEF(comm_rx_task, COMM_RX_STACK_SIZE);
@@ -113,10 +112,6 @@ static void EngineRxProcess(void)
 
 int8_t EngineInit(void)
 {
-    if (s_rx_task_started)
-    {
-        return 0; /* 幂等：避免重复 TaskRegister 同一静态缓冲 */
-    }
     CommRingInit(&s_ring);
     memset(s_consumers, 0, sizeof(s_consumers));
     s_consumer_cnt = 0;
@@ -127,7 +122,6 @@ int8_t EngineInit(void)
                                        .func = CommEngineRxTaskFunc,
                                        .priority = COMM_RX_TASK_PRIORITY,
                                    });
-    s_rx_task_started = 1;
     return 0;
 }
 
