@@ -12,6 +12,14 @@ set(MODULE_SOURCES
     drv_motor/drv_dmmotor/drv_dmmotor.c
     drv_axis_lite/drv_axis_mit_lite.c
     drv_mit/drv_mit.c
+    # comm开始
+    drv_comm/drv_comm.c
+    drv_comm/media/comm_media.c
+    drv_comm/media/comm_media_usart.c
+    drv_comm/proto/comm_proto.c
+    drv_comm/proto/comm_proto_raw.c
+    drv_comm/engine/comm_engine.c
+    # comm结束
 )
 
 # drv 层头文件路径
@@ -28,4 +36,10 @@ set(MODULE_INCLUDE_DIRS
     drv_axis_lite
     drv_mahony
     drv_mit
+    # comm开始
+    drv_comm/
+    drv_comm/media
+    drv_comm/proto
+    drv_comm/engine
+    # comm结束
 )
