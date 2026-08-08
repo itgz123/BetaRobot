@@ -22,6 +22,14 @@ typedef struct
 #define COMM_INSTANCE_MEDIA(inst) ((CommMedia *)((inst)->media))
 #define COMM_INSTANCE_PROTO(inst) ((CommProto *)((inst)->proto))
 
+/* 挂载/消费者表容量（默认值，可被 app_cfg.h 覆盖） */
+#ifndef COMM_LINK_NUM
+#define COMM_LINK_NUM 16 /* media↔proto 挂载表容量 */
+#endif
+#ifndef COMM_CONSUMER_NUM
+#define COMM_CONSUMER_NUM 16 /* 出帧消费者表容量 */
+#endif
+
 /**
  * @brief comm 运行时配置（CommConfig 传入；可重入，可反复调用修改）
  */
@@ -37,8 +45,8 @@ typedef struct
  * @retval 0 成功；-1 失败（参数非法 / 后端注册失败 / 类型未支持）
  *
  * @note 完成三步：1) media 后端注册（USART 内部做 USARTRegister，防重复注册）；
- *       2) proto 后端 Init（挂 vtable）；3) 引擎接线（EngineAttachMedia +
- *       EngineAttachProtocol）。介质参数与出帧回调由 CommConfig 配置。
+ *       2) proto 后端 Init（挂 vtable）；3) 接线分发（media 接管接收钩子 +
+ *       proto 接管出帧钩子 + 建挂载）。介质参数与出帧回调由 CommConfig 配置。
  */
 int8_t CommRegister(CommInstance *inst);
 
@@ -49,10 +57,20 @@ int8_t CommRegister(CommInstance *inst);
  * @retval 0 成功；-1 失败（参数非法 / 未注册 / 配置失败 / 类型未支持）
  *
  * @note media_cfg 经 media 后端下发（USART → MediaUsartConfig → bsp USARTConfig），
- *       运行中可再次调用以切换波特率/发送模式等；on_frame 由引擎层按 proto
- *       覆盖式注册，可运行期修改消费逻辑。
+ *       运行中可再次调用以切换波特率/发送模式等；on_frame 按 proto 覆盖式
+ *       注册进消费者表，可运行期修改消费逻辑。
  */
 int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg);
+
+/**
+ * @brief 统一发送：经该实例的 proto 打包后由绑定的 media 发出
+ * @param inst    CommInstance 指针（须已 CommRegister）
+ * @param payload 待发送 payload 指针（长度 = 编译期确定）
+ * @retval 0 成功；-1 失败（参数非法 / 打包或发送失败）
+ *
+ * @note proto->media 由 COMM_DEF 宏静态绑定，直接走该协议的 pack → media 发出。
+ */
+int8_t CommSend(CommInstance *inst, const uint8_t *payload);
 
 #define COMM_DEF(name, media_type_, proto_type_, payload_size)             \
     COMM_##media_type_##_DEF(name##_media,                                 \
