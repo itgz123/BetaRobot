@@ -120,7 +120,6 @@ void DJIMotor_Disable(void *inst);
 void DJIMotor_SetRef(void *inst, float ref);
 void DJIMotor_Send(void *inst);
 MotorData_s DJIMotor_GetData(void *inst);
-void DJIMotor_SetOffset(void *inst, float offset);
 
 const static MotorVTable_s s_dji_motor_vtable = {
     .enable = DJIMotor_Enable,
@@ -128,7 +127,6 @@ const static MotorVTable_s s_dji_motor_vtable = {
     .set_ref = DJIMotor_SetRef,
     .send = DJIMotor_Send,
     .get_data = DJIMotor_GetData,
-    .set_offset = DJIMotor_SetOffset,
     .send_cmd = NULL, /* DJI 电机无需模式命令 */
 };
 
@@ -398,6 +396,7 @@ int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
     inst->base.model = cfg->model;
     inst->motor_id = cfg->motor_id;
     inst->base.setting = cfg->controller_setting;
+    inst->base.position_offset = cfg->position_offset; // 位置偏置
 
     // 转矩常数
     inst->torque_constant = cfg->torque_constant;
@@ -595,20 +594,6 @@ void DJIMotor_SetRef(void *inst, float ref)
     motor->base.controller.ref = ref;
 }
 
-/**
- * @brief 设置电机位置偏置
- * @param inst DJIMotorInstance 指针
- * @param offset 位置偏置值 (rad)
- * @note 增量编码器置零：MotorSetOffset(&motor, -motor.data.position_multi)
- *       绝对式编码器设偏置：MotorSetOffset(&motor, fixed_offset)
- */
-void DJIMotor_SetOffset(void *inst, float offset)
-{
-    if (!inst)
-        return;
-    DJIMotorInstance *motor = (DJIMotorInstance *)inst;
-    motor->base.position_offset = offset;
-}
 
 void DJIMotor_Send(void *inst)
 {

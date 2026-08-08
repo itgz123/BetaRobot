@@ -108,6 +108,12 @@ static inline void CalcFeedforward(AxisMitLiteInstance *inst, float ref_acc, flo
  */
 static inline float GenerateMultiSineTorque(MultiSineParam_s *params, float t)
 {
+    // 保护：duration 非正时无法定义频率，直接返回 0，避免除零
+    if (params->duration <= 0.0f)
+    {
+        return 0.0f;
+    }
+
     float theta = M_2PI * t / params->duration; // ω₀·t = 2π·t/T
     float half = 0.5f * theta;                  // π·t/T
     float sin_half = BSP_Math_Sin(half);
@@ -132,6 +138,11 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
     // ======== 公共反馈与重力前馈 ========
     MotorData_s mdata = inst->motor.get_data();
     float gear = inst->params.gear_ratio;
+    // 保护：减速比为 0 或非有限值时按直驱 (1.0) 处理，避免除零产生 Inf/NaN
+    if (!isfinite(gear) || gear == 0.0f)
+    {
+        gear = 1.0f;
+    }
 
     // 反馈从电机侧转换到输出侧（减速比影响位置/速度/加速度/力矩）
     float angle_motor = mdata.position;                              // 电机侧 rad
@@ -168,8 +179,8 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
 
         if (elapsed_us < delay_us)
         {
-            // 延时中：仅重力前馈
-            inst->motor.set_ref(inst->params.gravity_ff / inst->params.gear_ratio);
+            // 延时中：仅重力前馈（gear 已在上方保护为合法值）
+            inst->motor.set_ref(inst->params.gravity_ff / gear);
             goto vofa_output;
         }
     }
@@ -202,7 +213,7 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
         // amplitude_end <= 0 时退化为恒幅，兼容旧配置
         float A_start = inst->chirp_params.amplitude_start;
         float A_end = inst->chirp_params.amplitude_end;
-        float amp_t = (A_end > 0.0f) ? A_start + (A_end - A_start) * t / T : A_start;
+        float amp_t = (A_end > 0.0f && T > 0.0f) ? A_start + (A_end - A_start) * t / T : A_start;
 
         float chirp = amp_t * BSP_Math_Sin(phase); // Nm
 
@@ -273,7 +284,7 @@ void AxisMitLiteCalculate(AxisMitLiteInstance *inst)
         break;
     }
 
-    setref = output / inst->params.gear_ratio;
+    setref = output / gear; // gear 已在上方保护为合法值
     inst->motor.set_ref(setref);
 
 vofa_output:

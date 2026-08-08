@@ -36,7 +36,6 @@ void DMMotor_Disable(void *inst);
 void DMMotor_SetRef(void *inst, float ref);
 void DMMotor_Send(void *inst);
 MotorData_s DMMotor_GetData(void *inst);
-void DMMotor_SetOffset(void *inst, float offset);
 
 const static MotorVTable_s s_dm_motor_vtable = {
     .enable = DMMotor_Enable,
@@ -44,7 +43,6 @@ const static MotorVTable_s s_dm_motor_vtable = {
     .set_ref = DMMotor_SetRef,
     .send = DMMotor_Send,
     .get_data = DMMotor_GetData,
-    .set_offset = DMMotor_SetOffset,
     .send_cmd = DMMotor_SendModeCmd,
 };
 
@@ -403,6 +401,7 @@ int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
     inst->base.model = cfg->model;
     inst->can_id = cfg->can_id;
     inst->master_id = cfg->master_id;
+    inst->base.position_offset = cfg->position_offset; // 位置偏置
 
     /* 控制器设置 */
     inst->base.setting = cfg->controller_setting;
@@ -601,21 +600,6 @@ void DMMotor_SetRef(void *inst, float ref)
         return;
     DMMotorInstance *motor = (DMMotorInstance *)inst;
     motor->base.controller.ref = ref;
-}
-
-/**
- * @brief 设置电机位置偏置
- * @param inst DMMotorInstance 指针
- * @param offset 位置偏置值 (rad)
- * @note 增量编码器置零：MotorSetOffset(&motor, -MotorGetData(&motor).position)
- *       绝对式编码器设偏置：MotorSetOffset(&motor, fixed_offset)
- */
-void DMMotor_SetOffset(void *inst, float offset)
-{
-    if (!inst)
-        return;
-    DMMotorInstance *motor = (DMMotorInstance *)inst;
-    motor->base.position_offset = offset;
 }
 
 /**

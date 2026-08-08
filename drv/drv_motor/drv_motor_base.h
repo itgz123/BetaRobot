@@ -39,7 +39,7 @@ typedef enum : uint8_t
  *============================================*/
 typedef enum : uint8_t
 {
-    DM_MODEL_DM4310 = 0, // DM4310电机（4310/4310P仅轴承不同，驱动层不区分）
+    DM_MODEL_DM4310 = 0, // DM4310电机（电机反馈的位置，速度，力矩语义是输出轴的）
     DM_MODEL_NUM,        // DM电机型号数量
 } DMModel_e;
 
@@ -171,13 +171,12 @@ typedef struct
  *============================================*/
 typedef struct
 {
-    void (*enable)(void *inst);                   // 使能电机
-    void (*disable)(void *inst);                  // 禁用电机
-    void (*set_ref)(void *inst, float ref);       // 设置参考值
-    void (*send)(void *inst);                     // 发送控制数据
-    MotorData_s (*get_data)(void *inst);          // 统一获取所有反馈数据
-    void (*set_offset)(void *inst, float offset); // 设置位置偏置
-    void (*send_cmd)(void *inst, uint8_t cmd);    // 发送模式命令（可为 NULL）
+    void (*enable)(void *inst);                // 使能电机
+    void (*disable)(void *inst);               // 禁用电机
+    void (*set_ref)(void *inst, float ref);    // 设置参考值
+    void (*send)(void *inst);                  // 发送控制数据
+    MotorData_s (*get_data)(void *inst);       // 统一获取所有反馈数据
+    void (*send_cmd)(void *inst, uint8_t cmd); // 发送模式命令（可为 NULL）
 } MotorVTable_s;
 
 // 简单表，给axis，chassis使用
@@ -258,7 +257,7 @@ typedef struct
     //
     MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
     float speed_lpf_rc;               // 速度低通滤波时间常数 RC
-    float position_offset;            // 位置偏置 (rad)，由 MotorSetOffset 写入
+    float position_offset;            // 位置偏置 (rad)，由 xxxMotorConfig 写入
 
     /* 数据 */
     MotorDataAll_s data_all;
@@ -286,8 +285,8 @@ typedef struct
  * @note 使用下面的宏必须确保所有电机派生类的 base 成员都是结构体的第一个成员
  * @note MotorDisable需要调用PIDReset
  * @note DaemonCallback需要重新给电机发送使能
- * @note MotorSetZero对于增量编码器，在初始化时候保持静止或者用光电门的gpio回调中调用MotorSetOffset(inst, -MotorGetAngle(inst))
- * @note MotorSetZero对于绝对式编码器，只要机械安装后读取零点时偏置，然后在初始化MotorSetOffset(inst, offset)固定偏置即可
+ * @note MotorSetZero对于增量编码器，在初始化时候保持静止或者用光电门的gpio回调中配置 position_offset = -MotorGetAngle(inst)（在 xxxMotorConfig 中设置）
+ * @note MotorSetZero对于绝对式编码器，只要机械安装后读取零点时偏置，然后在 xxxMotorConfig 中配置 position_offset = fixed_offset 固定偏置即可
  * @note MotorSendCmd 用于发送模式命令（使能/失能/归零/清除错误等），
  *       命令码由各电机品牌定义。DJI 电机可将 send_cmd 设为 NULL，宏会判空。
  */
@@ -332,13 +331,6 @@ static inline MotorData_s MotorGetData(MotorBase_s *inst)
     if (!inst)
         return zero;
     return inst->vtable->get_data(inst);
-}
-
-static inline void MotorSetOffset(MotorBase_s *inst, float offset)
-{
-    if (!inst)
-        return;
-    inst->vtable->set_offset(inst, offset);
 }
 
 static inline void MotorSendCmd(MotorBase_s *inst, uint8_t cmd)

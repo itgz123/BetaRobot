@@ -100,6 +100,7 @@ typedef struct
     uint8_t motor_id;                 // 电机 ID (1-8)
     MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
     float speed_lpf_rc;               // 速度低通滤波时间常数 RC
+    float position_offset;            // 位置偏置 (rad)，默认 0
 
     float torque_constant; // 转矩常数 (Nm/A)
 
@@ -133,7 +134,6 @@ void DJIMotorEnable(void *inst);
 void DJIMotorDisable(void *inst);
 void DJIMotorSetRef(void *inst, float ref);
 MotorData_s DJIMotor_GetData(void *inst);
-void DJIMotor_SetOffset(void *inst, float offset);
 void DJIMotorSend(void *inst); // 按照can的接收id分组，只要调用同1组的任意一个电机的发送函数，即可发送整组电机
 
 #endif // BSP_CAN_MODULE_ENABLED

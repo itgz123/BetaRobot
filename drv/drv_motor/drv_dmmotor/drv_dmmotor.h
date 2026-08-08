@@ -192,6 +192,7 @@ typedef struct
     uint16_t master_id;               // motor->stm32 | rx
     MotorSpeedLpf_e speed_lpf_enable; // 速度低通滤波使能
     float speed_lpf_rc;               // 速度低通滤波时间常数 RC
+    float position_offset;            // 位置偏置 (rad)，默认 0
 
     /* 协议映射范围（必须与 DM 调试助手一致） */
     float pos_max;   // 位置范围 ±pos_max (rad)
@@ -231,7 +232,6 @@ void DMMotor_Disable(void *inst);
 void DMMotor_SetRef(void *inst, float ref);
 void DMMotor_Send(void *inst);
 MotorData_s DMMotor_GetData(void *inst);
-void DMMotor_SetOffset(void *inst, float offset);
 
 /* 模式命令（调试用） */
 void DMMotor_SendModeCmd(void *inst, uint8_t cmd);
