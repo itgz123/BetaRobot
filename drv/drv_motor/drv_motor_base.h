@@ -21,6 +21,7 @@ typedef enum : uint8_t
     MOTOR_BRAND_OTHER = 0, // 其他电机
     MOTOR_BRAND_DJI,       // DJI电机（大疆）
     MOTOR_BRAND_DM,        // DM电机（达妙）
+    MOTOR_BRAND_RS,        // RS电机（灵足时代）
 } MotorBrand_e;
 
 /*============================================
@@ -42,6 +43,15 @@ typedef enum : uint8_t
     DM_MODEL_DM4310 = 0, // DM4310电机（电机反馈的位置，速度，力矩语义是输出轴的）
     DM_MODEL_NUM,        // DM电机型号数量
 } DMModel_e;
+
+/*============================================
+ *              RS电机型号枚举
+ *============================================*/
+typedef enum : uint8_t
+{
+    RS_MODEL_RS05 = 0, // RS05准直驱电机（反馈的位置/速度/力矩语义是输出轴的，7.75:1减速比已由固件折算）
+    RS_MODEL_NUM,      // RS电机型号数量
+} RSModel_e;
 
 /*============================================
  *              控制模式枚举 (位掩码)
