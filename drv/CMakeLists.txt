@@ -3,6 +3,7 @@ set(MODULE_SOURCES
     drv_pid/drv_pid.c
     drv_chassis/drv_chassis_position_lite.c
     drv_sbus/drv_sbus.c
+    drv_dbus/drv_dbus.c
     drv_bmi088/drv_bmi088.c
     drv_bmi088/drv_bmi088_heater.c
     drv_daemon/drv_daemon.c
@@ -21,6 +22,7 @@ set(MODULE_INCLUDE_DIRS
     drv_chassis
     drv_pid
     drv_sbus
+    drv_dbus
     drv_daemon
     drv_vofa
     drv_motor
