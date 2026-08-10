@@ -4,13 +4,13 @@
  *
  * @note 独立于 bsp_math_trig.h 的 CMSIS/libm 路径，可单独选用
  * @note 表数据由 tools/gen_trig_lut.py 生成于 bsp_math_trig_lut.c
- * @note 用 BSP_MATH_TRIG_TABLE_KIND 宏选择表结构：
- *       - BSP_MATH_TRIG_KIND_QUARTER（默认）：四分之一周期 [0,π/2] 表 + 象限映射，
- *         BSP_MATH_TRIG_TABLE_SIZE = 四分之一区间数 M，默认 2048（满 float32 精度档）；
- *       - BSP_MATH_TRIG_KIND_FULL：2π 完整周期表，无象限映射（速度优先），
- *         BSP_MATH_TRIG_TABLE_SIZE = 全周期区间数 N（=4M 同精度），满精度档 N=8192。
- *       可在编译前覆盖，如：
- *       -DBSP_MATH_TRIG_TABLE_KIND=BSP_MATH_TRIG_KIND_FULL -DBSP_MATH_TRIG_TABLE_SIZE=8192
+ * @note 表结构类型 BSP_MATH_TRIG_TABLE_KIND 用数字字面量：0=QUARTER（四分之一周期
+ *       [0,π/2] 表 + 象限映射，省 flash）、1=FULL（2π 完整周期表，无象限映射，速度优先）。
+ *       BSP_MATH_TRIG_TABLE_SIZE = 区间数（QUARTER 满精度档 M=2048，FULL 满精度档 N=8192，同精度 N=4M）。
+ * @note 配置入口（共用同一套 SPEED/PREC → KIND/SIZE 映射）：
+ *       1) 固件：app_cfg.h 定义 BSP_MATH_TRIG_LUT_USED、SPEED(0|1)、PREC(0..3)；
+ *       2) PC 检验：定义 BSP_MATH_TRIG_LUT_STANDALONE 跳过 app_cfg.h，命令行
+ *          -D BSP_MATH_TRIG_LUT_SPEED/PREC 选档（见 tools/test_trig_lut.sh）。
  * @note 本文件仅依赖 <stdint.h>/<stddef.h>，无 CMSIS/libm 依赖，可在 PC 端直接编译检验
  */
 
@@ -20,38 +20,60 @@
 #include <stdint.h>
 #include <stddef.h>
 
+/* 配置入口：
+ *   固件编译——include app_cfg.h（bsp 层可包含的唯一 app 文件），从中获取
+ *   BSP_MATH_TRIG_LUT_USED/SPEED/PREC；
+ *   PC 独立检验（tools/test_trig_lut.sh）——定义 BSP_MATH_TRIG_LUT_STANDALONE
+ *   跳过 app_cfg.h（PC 端不引入工程配置），命令行直接 -D SPEED/PREC，
+ *   与 app_cfg.h 走同一高层入口、覆盖任意一档。 */
+#ifndef BSP_MATH_TRIG_LUT_STANDALONE
+#include "app_cfg.h"
+#endif
+
 /*============================================
- *          精度配置与查表常量
+ *            启用开关（app_cfg.h）
  *============================================*/
 
-/* 表结构类型：QUARTER = 四分之一周期表（省 flash，象限映射）；
- *              FULL    = 2π 完整周期表（无象限映射，速度优先）。 */
-#ifndef BSP_MATH_TRIG_KIND_QUARTER
-#define BSP_MATH_TRIG_KIND_QUARTER 0
-#endif
-#ifndef BSP_MATH_TRIG_KIND_FULL
-#define BSP_MATH_TRIG_KIND_FULL 1
-#endif
+/* 仅在 app_cfg.h 定义了 BSP_MATH_TRIG_LUT_USED 时本模块才编译表与接口；
+ * 未定义时本头为空、表不占 flash（若调用 BSP_Math_*LUT 将编译报错）。 */
+#ifdef BSP_MATH_TRIG_LUT_USED
 
-/* 当前选用的表结构，默认四分之一周期（兼容既有行为与固件 flash 占用）。
- * 需要全周期时编译前覆盖：-DBSP_MATH_TRIG_TABLE_KIND=BSP_MATH_TRIG_KIND_FULL */
-#ifndef BSP_MATH_TRIG_TABLE_KIND
-#define BSP_MATH_TRIG_TABLE_KIND BSP_MATH_TRIG_KIND_QUARTER
-#endif
-
-#if BSP_MATH_TRIG_TABLE_KIND != BSP_MATH_TRIG_KIND_QUARTER && \
-    BSP_MATH_TRIG_TABLE_KIND != BSP_MATH_TRIG_KIND_FULL
-#error "BSP_MATH_TRIG_TABLE_KIND 必须为 BSP_MATH_TRIG_KIND_QUARTER 或 BSP_MATH_TRIG_KIND_FULL"
-#endif
-
-/* 表区间数（表实际存储 SIZE+1 个 float）。
- * QUARTER：SIZE = 四分之一周期区间数 M，默认 2048（满 float32 精度档）；
- * FULL：   SIZE = 2π 全周期区间数 N（=4M 同精度），满精度档 N=8192。
- * 可选值见 bsp_math_trig_lut.c 中的 #if 分支。 */
-#ifndef BSP_MATH_TRIG_TABLE_SIZE
+#if defined(BSP_MATH_TRIG_LUT_SPEED) && defined(BSP_MATH_TRIG_LUT_PREC)
+#if BSP_MATH_TRIG_LUT_SPEED == 1
+#define BSP_MATH_TRIG_TABLE_KIND 1 /* FULL：2π 完整周期表（无象限映射，速度优先） */
+#if BSP_MATH_TRIG_LUT_PREC == 0
+#define BSP_MATH_TRIG_TABLE_SIZE 1024
+#elif BSP_MATH_TRIG_LUT_PREC == 1
 #define BSP_MATH_TRIG_TABLE_SIZE 2048
+#elif BSP_MATH_TRIG_LUT_PREC == 2
+#define BSP_MATH_TRIG_TABLE_SIZE 4096
+#elif BSP_MATH_TRIG_LUT_PREC == 3
+#define BSP_MATH_TRIG_TABLE_SIZE 8192
+#else
+#error "BSP_MATH_TRIG_LUT_PREC 必须为 0..3（0=低 1=中 2=高 3=满精度）"
+#endif
+#elif BSP_MATH_TRIG_LUT_SPEED == 0
+#define BSP_MATH_TRIG_TABLE_KIND 0 /* QUARTER：四分之一周期表（省 flash，象限映射） */
+#if BSP_MATH_TRIG_LUT_PREC == 0
+#define BSP_MATH_TRIG_TABLE_SIZE 256
+#elif BSP_MATH_TRIG_LUT_PREC == 1
+#define BSP_MATH_TRIG_TABLE_SIZE 512
+#elif BSP_MATH_TRIG_LUT_PREC == 2
+#define BSP_MATH_TRIG_TABLE_SIZE 1024
+#elif BSP_MATH_TRIG_LUT_PREC == 3
+#define BSP_MATH_TRIG_TABLE_SIZE 2048
+#else
+#error "BSP_MATH_TRIG_LUT_PREC 必须为 0..3（0=低 1=中 2=高 3=满精度）"
+#endif
+#else
+#error "BSP_MATH_TRIG_LUT_SPEED 必须为 0（四分之一表）或 1（2π 全周期表）"
+#endif
+#else
+#error "BSP_MATH_TRIG_LUT_SPEED 与 BSP_MATH_TRIG_LUT_PREC 须同时定义（app_cfg.h 或 -D）"
 #endif
 
+/*============================================
+ *============================================*/
 /* 数学常量（float32 字面量，编译期折叠） */
 #define BSP_MATH_TRIG_INV_2PI 0.15915494309189533577f     /* 1/2π   */
 #define BSP_MATH_TRIG_2PI 6.28318530717958647692f         /* 2π     */
@@ -124,7 +146,7 @@ static inline float BSP_Math_FullTrigLerp(float u)
  */
 static inline void BSP_Math_SinCosLUT(float theta, float *p_sin, float *p_cos)
 {
-#if BSP_MATH_TRIG_TABLE_KIND == BSP_MATH_TRIG_KIND_FULL
+#if BSP_MATH_TRIG_TABLE_KIND == 1 /* FULL：2π 完整周期表，无象限映射，直接索引 */
     /* ---- FULL：2π 完整周期表，无象限映射，直接索引 ---- */
     const float two_pi = BSP_MATH_TRIG_2PI;
     const float inv_two_pi = BSP_MATH_TRIG_INV_2PI;
@@ -266,5 +288,7 @@ static inline float BSP_Math_TanLUT(float theta)
     BSP_Math_SinCosLUT(theta, &s, &c);
     return s / c;
 }
+
+#endif /* BSP_MATH_TRIG_LUT_USED */
 
 #endif /* __BSP_MATH_TRIG_LUT_H */

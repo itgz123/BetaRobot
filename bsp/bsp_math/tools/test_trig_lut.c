@@ -26,6 +26,11 @@
 #include <stdint.h>
 #include <math.h>
 
+/* PC 检验始终启用 LUT（app_cfg.h 不参与 PC 端编译） */
+#ifndef BSP_MATH_TRIG_LUT_USED
+#define BSP_MATH_TRIG_LUT_USED
+#endif
+
 #include "bsp_math_trig_lut.h"
 
 #define PI_D      (3.14159265358979323846264338327950288)
@@ -71,7 +76,7 @@ static double mode_a_max(void)
             i = S - 1;
             frac = 1.0;
         }
-#if BSP_MATH_TRIG_TABLE_KIND == BSP_MATH_TRIG_KIND_FULL
+#if BSP_MATH_TRIG_TABLE_KIND == 1   /* FULL */
         double v0 = (double)BSP_Math_FullSinTable[i];
         double v1 = (double)BSP_Math_FullSinTable[i + 1];
 #else
@@ -79,7 +84,7 @@ static double mode_a_max(void)
         double v1 = (double)BSP_Math_SinTable[i + 1];
 #endif
         double got = v0 + frac * (v1 - v0);
-#if BSP_MATH_TRIG_TABLE_KIND == BSP_MATH_TRIG_KIND_FULL
+#if BSP_MATH_TRIG_TABLE_KIND == 1   /* FULL */
         double ref = sin(u / (double)S * TWO_PI_D);
 #else
         double ref = sin(u / (double)S * QUARTER_D);
@@ -161,7 +166,7 @@ int main(void)
     double modeb_gate;
     int fail = 0;
 
-#if BSP_MATH_TRIG_TABLE_KIND == BSP_MATH_TRIG_KIND_FULL
+#if BSP_MATH_TRIG_TABLE_KIND == 1   /* FULL */
     printf("=== test_trig_lut: KIND=FULL(2π完整周期), SIZE = %d ===\n", M);
 #else
     printf("=== test_trig_lut: KIND=QUARTER(四分之一), SIZE = %d ===\n", M);
