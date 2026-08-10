@@ -16,9 +16,10 @@
  *       - ModeA（纯插值+表量化）：精确 double 相位喂入插值核心，判定"查表线性
  *         插值误差"是否小于 TEST_MODE_A_TARGET（满精度档取 float32 机器精度
  *         ε = 2^-23 ≈ 1.192e-7）。
- *       - ModeB（整管 float32）：全区域抽样所有点，跑完整 BSP_Math_SinLUT/
- *         CosLUT/SinCosLUT/TanLUT 与 double sin/cos/tan 比对，含归一/象限/索引
- *         计算的 float32 舍入，报告 max/rms。
+ *       - ModeB（整管 float32）：全区域抽样所有点，跑完整 BSP_Math_Sin/Cos/
+ *         SinCos/TanLUT（BSP_MATH_TRIG_LUT_USED 时经 bsp_math_trig.h 分发，
+ *         实际走查表）与 double sin/cos/tan 比对，含归一/象限/索引计算的
+ *         float32 舍入，报告 max/rms。
  * @note 退出码：ModeA 或 ModeB 超限则返回非零。
  */
 
@@ -26,12 +27,14 @@
 #include <stdint.h>
 #include <math.h>
 
-/* PC 检验始终启用 LUT（app_cfg.h 不参与 PC 端编译） */
+/* PC 检验始终启用 LUT（app_cfg.h 不参与 PC 端编译）。
+ * STANDALONE 由 test_trig_lut.sh 通过 -D 传入，bsp_math_trig.h 据此跳过 app_cfg.h；
+ * 三个三角函数 BSP_Math_Sin/Cos/SinCos 在 BSP_MATH_TRIG_LUT_USED 下自动走查表。 */
 #ifndef BSP_MATH_TRIG_LUT_USED
 #define BSP_MATH_TRIG_LUT_USED
 #endif
 
-#include "bsp_math_trig_lut.h"
+#include "bsp_math_trig.h"
 
 #define PI_D      (3.14159265358979323846264338327950288)
 #define TWO_PI_D  (2.0 * PI_D)
@@ -98,19 +101,19 @@ static double mode_a_max(void)
     return mx;
 }
 
-/*---------- Mode B：整管 float32 管线 ----------*/
+/*---------- Mode B：整管 float32 管线（经 bsp_math_trig.h 分发接口） ----------*/
 static void run_pipeline(double theta)
 {
     float thf = (float)theta;
     double thd = (double)thf;
     double rs = sin(thd), rc = cos(thd);
-    float s = BSP_Math_SinLUT(thf);
-    float c = BSP_Math_CosLUT(thf);
+    float s = BSP_Math_Sin(thf);
+    float c = BSP_Math_Cos(thf);
 
     upd(fabs((double)s - rs), &g_sin_max, &g_sin_rms, &g_n_sin);
     upd(fabs((double)c - rc), &g_cos_max, &g_cos_rms, &g_n_cos);
 
-    /* tan：排除 cos≈0 的极点附近（两边都发散，比较无意义） */
+    /* tan：无标准分发接口，直接用查表 TanLUT；排除 cos≈0 极点附近 */
     if (fabs(rc) > 1e-3)
     {
         float t = BSP_Math_TanLUT(thf);
@@ -120,17 +123,17 @@ static void run_pipeline(double theta)
 
     /* 一致性：cos(x) == sin(x + π/2) */
     {
-        double e = fabs((double)BSP_Math_SinLUT(thf + (float)QUARTER_D) - (double)c);
+        double e = fabs((double)BSP_Math_Sin(thf + (float)QUARTER_D) - (double)c);
         if (e > g_cons_max)
         {
             g_cons_max = e;
         }
     }
-    /* 一致性：SinCosLUT 输出与单独调用一致 */
+    /* 一致性：SinCos 输出与单独调用一致 */
     {
         float ss, cc;
         double e1, e2;
-        BSP_Math_SinCosLUT(thf, &ss, &cc);
+        BSP_Math_SinCos(thf, &ss, &cc);
         e1 = fabs((double)ss - (double)s);
         e2 = fabs((double)cc - (double)c);
         if (e1 > g_sincos_max)
