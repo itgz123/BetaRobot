@@ -15,6 +15,8 @@
 #include "bsp_dwt.h"
 #include "bsp_math.h"
 #include "drv_vofa.h"
+#include <string.h>
+#include <float.h>
 #include <math.h>
 
 int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, const AxisMitLite_Init_Config_s *cfg)
