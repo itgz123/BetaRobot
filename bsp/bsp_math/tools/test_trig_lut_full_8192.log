@@ -1,0 +1,15 @@
+=== test_trig_lut: KIND=FULL(2π完整周期), SIZE = 8192 ===
+表条目 8193（约 32 KB flash）
+ModeA 纯插值+量化 max = 1.009e-07   目标 < 1.192e-07  [PASS]
+  grid [0, 2pi)                   524288 pts
+  grid [-4pi, 0)                  524288 pts
+  grid 特殊边界点                12 pts
+ModeB sin  整管 max = 4.406e-07  rms = 1.335e-07  (1048588 pts)
+ModeB cos  整管 max = 5.722e-07  rms = 1.677e-07  (1048588 pts)
+ModeB tan  整管 max = 4.603e-01  rms = 3.238e-03  (1047918 pts, |cos|>1e-3)
+一致性 cos(x)=sin(x+pi/2)   max = 7.525e-07
+一致性 SinCos 与单独调用    max = 0.000e+00
+ModeB 门限 < 2.000e-06
+大角度 |theta|<=1000 sin 信息 max = 1.434e-05（不作判定）
+
+结果: PASS
