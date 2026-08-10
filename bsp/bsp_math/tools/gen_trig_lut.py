@@ -192,25 +192,30 @@ def gen_c_file(quarter_sizes, full_sizes, out_path) -> None:
         " * @brief 自研查表三角函数表（四分之一周期 + 2π 完整周期，宏切换）",
         " *",
         " * @note 本文件由 tools/gen_trig_lut.py 自动生成，请勿手动修改",
-        " * @note 外层按 BSP_MATH_TRIG_TABLE_KIND 选择表结构：",
+        " * @note 仅当定义了 BSP_MATH_TRIG_LUT_USED 时编译表（固件来自 app_cfg.h、",
+        " *       PC 检验来自命令行 -D）；否则本文件为空 TU",
+        " * @note 外层按 BSP_MATH_TRIG_TABLE_KIND（0=QUARTER/1=FULL）选择表结构：",
         " *       - QUARTER：BSP_Math_SinTable，[0,π/2] 四分之一表，SIZE=区间数 M；",
         " *       - FULL：BSP_Math_FullSinTable，[0,2π) 完整周期表，SIZE=区间数 N（=4M 同精度）。",
         " *       只编译被选中的表；表存放于 flash（.rodata）",
         " */",
         "",
+        "/* 配置入口由 bsp_math_trig_lut.h 统一处理：固件 include app_cfg.h 取 SPEED/PREC；",
+        " * PC 独立检验（tools/test_trig_lut.sh）定义 BSP_MATH_TRIG_LUT_STANDALONE 跳过。 */",
         '#include "bsp_math_trig_lut.h"',
         "",
     ]
-    lines.append("#if BSP_MATH_TRIG_TABLE_KIND == BSP_MATH_TRIG_KIND_QUARTER")
+    lines.append("#ifdef BSP_MATH_TRIG_LUT_USED")
+    lines.append("")
+    lines.append("#if BSP_MATH_TRIG_TABLE_KIND == 0   /* QUARTER：四分之一周期表 */")
     _emit_size_branches(lines, "BSP_Math_SinTable", quarter_sizes, make_table)
-    lines.append("#elif BSP_MATH_TRIG_TABLE_KIND == BSP_MATH_TRIG_KIND_FULL")
+    lines.append("#elif BSP_MATH_TRIG_TABLE_KIND == 1   /* FULL：2π 完整周期表 */")
     _emit_size_branches(lines, "BSP_Math_FullSinTable", full_sizes, make_full_table)
     lines.append("#else")
-    lines.append(
-        '#error "BSP_MATH_TRIG_TABLE_KIND 必须为 BSP_MATH_TRIG_KIND_QUARTER / '
-        'BSP_MATH_TRIG_KIND_FULL"'
-    )
+    lines.append('#error "BSP_MATH_TRIG_TABLE_KIND 必须为 0（QUARTER）或 1（FULL）"')
     lines.append("#endif /* BSP_MATH_TRIG_TABLE_KIND */")
+    lines.append("")
+    lines.append("#endif /* BSP_MATH_TRIG_LUT_USED */")
     lines.append("")
     with open(out_path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(lines))
@@ -286,8 +291,8 @@ def analyze_full(eps: float):
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="bsp_math 查表三角函数表生成器")
-    ap.add_argument("--sizes", type=int, nargs="*", default=[256, 1024, 2048, 4096],
-                    help="QUARTER 表写入 .c 的精度档（区间数 M），默认 256 1024 2048 4096")
+    ap.add_argument("--sizes", type=int, nargs="*", default=[256, 512, 1024, 2048, 4096],
+                    help="QUARTER 表写入 .c 的精度档（区间数 M），默认 256 512 1024 2048 4096")
     ap.add_argument("--full-sizes", type=int, nargs="*", default=[1024, 2048, 4096, 8192],
                     help="FULL 表写入 .c 的精度档（区间数 N），默认 1024 2048 4096 8192")
     ap.add_argument("--target-eps", type=float, default=float(2.0 ** -23),
