@@ -3,9 +3,13 @@
  * @brief PC 端查表三角函数检验程序（gcc 编译，double 三角函数作真值参考）
  *
  * @note 用法（在 tools/ 目录下）：
- *       gcc -O2 -Wall -Wextra -DBSP_MATH_TRIG_TABLE_SIZE=4096 \
+ *       QUARTER（默认）：
+ *       gcc -O2 -Wall -Wextra -DBSP_MATH_TRIG_TABLE_SIZE=2048 \
  *           -DTEST_MODE_A_TARGET=1.1920928955078125e-07 \
  *           -I .. -o test_trig_lut test_trig_lut.c ../bsp_math_trig_lut.c -lm
+ *       FULL（2π 完整周期表）：
+ *       gcc ... -DBSP_MATH_TRIG_TABLE_KIND=BSP_MATH_TRIG_KIND_FULL \
+ *           -DBSP_MATH_TRIG_TABLE_SIZE=8192 -DTEST_MODE_A_TARGET=... ...
  *       ./test_trig_lut
  *
  * @note 两类检验：
@@ -52,25 +56,34 @@ static void upd(double e, double *mx, double *rms, unsigned long *n)
 /*---------- Mode A：纯插值 + 表量化误差 ----------*/
 static double mode_a_max(void)
 {
-    const int M = BSP_MATH_TRIG_TABLE_SIZE;
-    const int K = 32;                     /* 每个区间 32 个采样偏移 */
+    const int S = BSP_MATH_TRIG_TABLE_SIZE;   /* QUARTER: M；FULL: N */
+    const int K = 32;                         /* 每个区间 32 个采样偏移 */
     double mx = 0.0;
     long k;
 
-    for (k = 0; k <= (long)M * K; k++)
+    for (k = 0; k <= (long)S * K; k++)
     {
-        double u = (double)k / (double)K; /* [0, M]，含所有表索引点 */
+        double u = (double)k / (double)K;     /* [0, S]，含所有表索引点 */
         long i = (long)floor(u);
         double frac = u - (double)i;
-        if (i >= M)
+        if (i >= S)
         {
-            i = M - 1;
+            i = S - 1;
             frac = 1.0;
         }
+#if BSP_MATH_TRIG_TABLE_KIND == BSP_MATH_TRIG_KIND_FULL
+        double v0 = (double)BSP_Math_FullSinTable[i];
+        double v1 = (double)BSP_Math_FullSinTable[i + 1];
+#else
         double v0 = (double)BSP_Math_SinTable[i];
         double v1 = (double)BSP_Math_SinTable[i + 1];
+#endif
         double got = v0 + frac * (v1 - v0);
-        double ref = sin(u / (double)M * QUARTER_D);
+#if BSP_MATH_TRIG_TABLE_KIND == BSP_MATH_TRIG_KIND_FULL
+        double ref = sin(u / (double)S * TWO_PI_D);
+#else
+        double ref = sin(u / (double)S * QUARTER_D);
+#endif
         double e = fabs(got - ref);
         if (e > mx)
         {
@@ -148,7 +161,11 @@ int main(void)
     double modeb_gate;
     int fail = 0;
 
-    printf("=== test_trig_lut: BSP_MATH_TRIG_TABLE_SIZE = %d ===\n", M);
+#if BSP_MATH_TRIG_TABLE_KIND == BSP_MATH_TRIG_KIND_FULL
+    printf("=== test_trig_lut: KIND=FULL(2π完整周期), SIZE = %d ===\n", M);
+#else
+    printf("=== test_trig_lut: KIND=QUARTER(四分之一), SIZE = %d ===\n", M);
+#endif
     printf("表条目 %d（约 %u KB flash）\n", M + 1, (unsigned)((M + 1) * 4u / 1024u));
 
     /* Mode A */

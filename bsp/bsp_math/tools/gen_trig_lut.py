@@ -7,10 +7,12 @@ gen_trig_lut.py — bsp_math 查表三角函数表生成器
 
 表设计
 ------
-- 只存储 sin 在四分之一周期 [0, π/2] 上的采样值：M 个区间，M+1 个 float32 条目，
-  table[i] = float32(sin(i·(π/2)/M))。
-- 同一 .c 内用 `#if BSP_MATH_TRIG_TABLE_SIZE == <M>` 切换精度档，只编译被选中的表。
-- cos 通过 sin(x+π/2) 复用同表；奇象限用"从高端反向索引"实现镜像。
+- QUARTER（四分之一）：只存储 sin 在 [0, π/2] 上的采样值：M 个区间，M+1 个 float32 条目，
+  table[i] = float32(sin(i·(π/2)/M))。cos 通过 sin(x+π/2) 复用同表；奇象限反向索引镜像。
+- FULL（2π 完整周期）：存储 sin 在 [0, 2π) 上的采样值：N 个区间，N+1 个 float32 条目，
+  table[i] = float32(sin(i·2π/N))。无象限映射，按归一化角度直接索引；cos 用 θ+π/2 移位复用。
+- 同一 .c 内先按 BSP_MATH_TRIG_TABLE_KIND（QUARTER/FULL）分派外层 #if，
+  再按 `#if BSP_MATH_TRIG_TABLE_SIZE == <M 或 N>` 切换精度档，只编译被选中的表。
 
 精度分析
 --------
@@ -25,8 +27,9 @@ gen_trig_lut.py — bsp_math 查表三角函数表生成器
 
 用法
 ----
-    python gen_trig_lut.py                          # 分析 128..8192，生成 256/1024/4096
-    python gen_trig_lut.py --sizes 256 1024 4096 8192 -o ../bsp_math_trig_lut.c
+    python gen_trig_lut.py                          # 分析两套，生成 QUARTER 256/1024/2048/4096 + FULL 1024/2048/4096/8192
+    python gen_trig_lut.py --sizes 256 1024 2048 -o ../bsp_math_trig_lut.c
+    python gen_trig_lut.py --full-sizes 4096 8192 -o ../bsp_math_trig_lut.c
     python gen_trig_lut.py --target-eps 1.19e-7     # 自定义目标误差
     python gen_trig_lut.py --no-verify              # 生成后跳过自检
 """
@@ -48,9 +51,16 @@ QUARTER_F32 = np.float32(0.5 * np.pi)
 
 
 def make_table(M: int) -> np.ndarray:
-    """table[i] = float32(sin(i·(π/2)/M))，i ∈ [0, M]。"""
+    """QUARTER 表：table[i] = float32(sin(i·(π/2)/M))，i ∈ [0, M]。"""
     idx = np.arange(M + 1, dtype=np.float64)
     vals = np.sin(idx * (QUARTER_F64 / np.float64(M)))
+    return vals.astype(np.float32)
+
+
+def make_full_table(N: int) -> np.ndarray:
+    """FULL 表：table[i] = float32(sin(i·2π/N))，i ∈ [0, N]，末尾=sin(2π)=0=第 0 项。"""
+    idx = np.arange(N + 1, dtype=np.float64)
+    vals = np.sin(idx * (TWO_PI_F64 / np.float64(N)))
     return vals.astype(np.float32)
 
 
@@ -100,6 +110,29 @@ def measure_interp_error(M: int, table: np.ndarray):
     return _err_stats(np.abs(got - ref))
 
 
+def measure_full_interp_error(N: int, table: np.ndarray):
+    """FULL 表纯插值 + 表量化误差（判定满精度档的标准，与 QUARTER 版对称）。
+
+    用精确 float64 位置 u ∈ [0, N]（覆盖全部索引点与每区间 32 个偏移），
+    float32 表值 + double 插值，对照 float64 sin(u/N·2π)。
+    """
+    offsets = np.linspace(0.0, 1.0, 33)[:-1]
+    grid = (np.arange(N, dtype=np.float64)[:, None] + offsets[None, :]).ravel()
+    grid = np.append(grid, np.float64(N))
+    u = grid
+    i0 = np.floor(u).astype(np.int64)
+    frac = u - i0
+    over = i0 >= np.int64(N)                        # u==N 时钳制：i=N-1、frac=1（与 C 一致）
+    i = np.where(over, np.int64(N - 1), i0)
+    frac = np.where(over, 1.0, frac)
+    v0 = table[i].astype(np.float64)
+    v1 = table[np.minimum(i + 1, np.int64(N))].astype(np.float64)
+    got = v0 + frac * (v1 - v0)
+    phi = u / np.float64(N) * TWO_PI_F64
+    ref = np.sin(phi)
+    return _err_stats(np.abs(got - ref))
+
+
 def measure_pipeline(theta64: np.ndarray, M: int, table: np.ndarray):
     """ModeB：整管误差。float32 θ 走完整管线，对照 sin((double)θ_f32)。"""
     scale = np.float32(M) * INV_QUARTER_F32
@@ -132,25 +165,13 @@ def fmt_f32(v: np.float32) -> str:
     return s + "f"
 
 
-def gen_c_file(sizes, out_path) -> None:
-    lines = [
-        "/**",
-        " * @file bsp_math_trig_lut.c",
-        " * @brief 自研查表三角函数表（四分之一周期 [0,π/2] 正弦表）",
-        " *",
-        " * @note 本文件由 tools/gen_trig_lut.py 自动生成，请勿手动修改",
-        " * @note 用 BSP_MATH_TRIG_TABLE_SIZE 宏（四分之一周期区间数 M）切换精度档，",
-        " *       只编译被选中的表；表存放于 flash（.rodata）",
-        " */",
-        "",
-        '#include "bsp_math_trig_lut.h"',
-        "",
-    ]
-    for i, M in enumerate(sizes):
+def _emit_size_branches(lines, var_name, sizes, table_fn):
+    """输出内层按 BSP_MATH_TRIG_TABLE_SIZE 切档的一段表（不含外层 KIND 分支）。"""
+    for i, S in enumerate(sizes):
         kw = "#if" if i == 0 else "#elif"
-        lines.append("%s BSP_MATH_TRIG_TABLE_SIZE == %d" % (kw, M))
-        lines.append("const float BSP_Math_SinTable[%d] = {" % (M + 1))
-        vals = [fmt_f32(v) for v in make_table(M)]
+        lines.append("%s BSP_MATH_TRIG_TABLE_SIZE == %d" % (kw, S))
+        lines.append("const float %s[%d] = {" % (var_name, S + 1))
+        vals = [fmt_f32(v) for v in table_fn(S)]
         for j in range(0, len(vals), 12):
             lines.append("    " + ", ".join(vals[j:j + 12]) + ",")
         lines.append("};")
@@ -162,41 +183,57 @@ def gen_c_file(sizes, out_path) -> None:
     )
     lines.append("#endif /* BSP_MATH_TRIG_TABLE_SIZE */")
     lines.append("")
+
+
+def gen_c_file(quarter_sizes, full_sizes, out_path) -> None:
+    lines = [
+        "/**",
+        " * @file bsp_math_trig_lut.c",
+        " * @brief 自研查表三角函数表（四分之一周期 + 2π 完整周期，宏切换）",
+        " *",
+        " * @note 本文件由 tools/gen_trig_lut.py 自动生成，请勿手动修改",
+        " * @note 外层按 BSP_MATH_TRIG_TABLE_KIND 选择表结构：",
+        " *       - QUARTER：BSP_Math_SinTable，[0,π/2] 四分之一表，SIZE=区间数 M；",
+        " *       - FULL：BSP_Math_FullSinTable，[0,2π) 完整周期表，SIZE=区间数 N（=4M 同精度）。",
+        " *       只编译被选中的表；表存放于 flash（.rodata）",
+        " */",
+        "",
+        '#include "bsp_math_trig_lut.h"',
+        "",
+    ]
+    lines.append("#if BSP_MATH_TRIG_TABLE_KIND == BSP_MATH_TRIG_KIND_QUARTER")
+    _emit_size_branches(lines, "BSP_Math_SinTable", quarter_sizes, make_table)
+    lines.append("#elif BSP_MATH_TRIG_TABLE_KIND == BSP_MATH_TRIG_KIND_FULL")
+    _emit_size_branches(lines, "BSP_Math_FullSinTable", full_sizes, make_full_table)
+    lines.append("#else")
+    lines.append(
+        '#error "BSP_MATH_TRIG_TABLE_KIND 必须为 BSP_MATH_TRIG_KIND_QUARTER / '
+        'BSP_MATH_TRIG_KIND_FULL"'
+    )
+    lines.append("#endif /* BSP_MATH_TRIG_TABLE_KIND */")
+    lines.append("")
     with open(out_path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(lines))
-    print("[gen] 已生成 %s，包含档位：%s" % (out_path, " / ".join(map(str, sizes))))
+    print("[gen] 已生成 %s：QUARTER %s / FULL %s"
+          % (out_path, " / ".join(map(str, quarter_sizes)), " / ".join(map(str, full_sizes))))
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description="bsp_math 查表三角函数表生成器")
-    ap.add_argument("--sizes", type=int, nargs="*", default=[256, 1024, 2048, 4096],
-                    help="写入 .c 的精度档（四分之一表区间数 M），默认 256 1024 2048 4096")
-    ap.add_argument("--target-eps", type=float, default=float(2.0 ** -23),
-                    help="满精度目标误差，默认 2^-23 ≈ 1.19e-7")
-    ap.add_argument("-o", "--out", default="../bsp_math_trig_lut.c",
-                    help="输出 C 文件路径（相对脚本目录）")
-    ap.add_argument("--no-verify", action="store_true", help="生成后跳过自检")
-    args = ap.parse_args()
-
-    eps = float(args.target_eps)
-    print("=== bsp_math 查表三角函数精度分析 ===")
-    print("目标：线性插值误差 < float32 机器精度 ε = 2^-23 ≈ %.3e" % eps)
-    print("")
-
-    # 分析候选档位：128..8192（含生成档）
-    candidates = [s for s in (128, 256, 512, 1024, 2048, 4096, 8192)]
-
+def analyze_quarter(eps: float):
+    """QUARTER 候选档分析：返回 (满精度档 M, 各档插值+量化误差 dict)。"""
+    candidates = [128, 256, 512, 1024, 2048, 4096, 8192]
     header = "  M    | 理论插值 | 插值+量化(纯) | 整管[0,2π) | 整管负区间 | 满精度档"
+    print("【QUARTER 四分之一周期表】")
     print(header)
     print("-" * len(header))
 
     full_prec = None
-    results = {}
+    a_map = {}
     for M in candidates:
         table = make_table(M)
         h = float(QUARTER_F64) / M
         theory = h * h / 8.0
-        a_max, a_rms = measure_interp_error(M, table)
+        a_max, _ = measure_interp_error(M, table)
+        a_map[M] = a_max
         num = max(4 * M * 8, 1 << 16)
         theta_full = np.linspace(0.0, TWO_PI_F64, num, endpoint=False)
         special = np.array([0.0, QUARTER_F64, np.pi, 3.0 * QUARTER_F64,
@@ -214,40 +251,99 @@ def main() -> int:
             star = "  (满足)"
         print("  %-4d | %9.2e | %13.2e | %11.2e | %12.2e |%s"
               % (M, theory, a_max, b_full, b_neg, star))
-        results[M] = (a_max, b_full, b_neg)
+    return full_prec, a_map
 
-    if full_prec is None:
-        print("\n[FAIL] 候选档位内均未达到目标误差 %.3e，请增大 M。" % eps)
+
+def analyze_full(eps: float):
+    """FULL 候选档分析：返回 (满精度档 N, 各档插值+量化误差 dict)。
+
+    整管误差与 QUARTER 同源（float32 索引舍入），此处只测插值+量化；
+    整管全点由 PC 端 C 检验程序覆盖。
+    """
+    candidates = [1024, 2048, 4096, 8192, 16384]
+    header = "  N    | 理论插值 | 插值+量化(纯) | 满精度档"
+    print("【FULL 2π 完整周期表】")
+    print(header)
+    print("-" * len(header))
+
+    full_prec = None
+    a_map = {}
+    for N in candidates:
+        table = make_full_table(N)
+        h = float(TWO_PI_F64) / N
+        theory = h * h / 8.0
+        a_max, _ = measure_full_interp_error(N, table)
+        a_map[N] = a_max
+        star = ""
+        if a_max < eps and full_prec is None:
+            full_prec = N
+            star = "  ★ 满精度"
+        elif a_max < eps:
+            star = "  (满足)"
+        print("  %-4d | %9.2e | %13.2e |%s" % (N, theory, a_max, star))
+    return full_prec, a_map
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="bsp_math 查表三角函数表生成器")
+    ap.add_argument("--sizes", type=int, nargs="*", default=[256, 1024, 2048, 4096],
+                    help="QUARTER 表写入 .c 的精度档（区间数 M），默认 256 1024 2048 4096")
+    ap.add_argument("--full-sizes", type=int, nargs="*", default=[1024, 2048, 4096, 8192],
+                    help="FULL 表写入 .c 的精度档（区间数 N），默认 1024 2048 4096 8192")
+    ap.add_argument("--target-eps", type=float, default=float(2.0 ** -23),
+                    help="满精度目标误差，默认 2^-23 ≈ 1.19e-7")
+    ap.add_argument("-o", "--out", default="../bsp_math_trig_lut.c",
+                    help="输出 C 文件路径（相对脚本目录）")
+    ap.add_argument("--no-verify", action="store_true", help="生成后跳过自检")
+    args = ap.parse_args()
+
+    eps = float(args.target_eps)
+    print("=== bsp_math 查表三角函数精度分析 ===")
+    print("目标：线性插值误差 < float32 机器精度 ε = 2^-23 ≈ %.3e" % eps)
+    print("")
+
+    q_full, q_map = analyze_quarter(eps)
+    print("")
+    f_full, f_map = analyze_full(eps)
+    print("")
+
+    if q_full is None or f_full is None:
+        print("\n[FAIL] 存在候选档位内均未达到目标误差 %.3e 的表类型，请增大对应档位。" % eps)
         return 1
-    print("\n结论：满精度档为 M = %d（表 %d 项 ≈ %.1f KB flash）"
-          % (full_prec, full_prec + 1, (full_prec + 1) * 4 / 1024.0))
-    if full_prec not in args.sizes:
-        print("警告：满精度档 %d 不在生成列表 %s 中，建议 --sizes 包含它。"
-              % (full_prec, args.sizes))
+    print("结论：QUARTER 满精度档 M = %d（表 %d 项 ≈ %.1f KB flash）"
+          % (q_full, q_full + 1, (q_full + 1) * 4 / 1024.0))
+    print("      FULL    满精度档 N = %d（表 %d 项 ≈ %.1f KB flash）"
+          % (f_full, f_full + 1, (f_full + 1) * 4 / 1024.0))
+    for name, fp, sizes in (("QUARTER", q_full, args.sizes), ("FULL", f_full, args.full_sizes)):
+        if fp not in sizes:
+            print("警告：%s 满精度档 %d 不在生成列表 %s 中，建议补入。"
+                  % (name, fp, sizes))
 
-    gen_c_file(args.sizes, args.out)
+    gen_c_file(args.sizes, args.full_sizes, args.out)
 
-    # 生成后自检：生成档中必须包含满精度档（低档位是速度优先，不要求达 ε）
+    # 生成后自检：两套生成档中各自必须包含满精度档（低档位是速度优先，不要求达 ε）
     if not args.no_verify:
         print("\n=== 生成后自检 ===")
         ok = True
-        for M in args.sizes:
-            table = make_table(M)
-            a_max, a_rms = measure_interp_error(M, table)
-            if a_max < eps:
-                status = "满精度(PASS)"
-            else:
-                status = "低精度档(速度优先)"
-                if M == full_prec:
+        checks = [("QUARTER", args.sizes, q_full, measure_interp_error, make_table),
+                  ("FULL", args.full_sizes, f_full, measure_full_interp_error, make_full_table)]
+        for name, sizes, fp, meas, make in checks:
+            for S in sizes:
+                table = make(S)
+                a_max, _ = meas(S, table)
+                if a_max < eps or S == fp:
                     status = "满精度(PASS)"
-            print("  M=%-4d 插值+量化 max=%.3e  [%s]" % (M, a_max, status))
-        if full_prec not in args.sizes:
-            print("[WARN] 生成档位 %s 不包含满精度档 %d（若刻意只用低档位可忽略）"
-                  % (args.sizes, full_prec))
-            ok = False
+                else:
+                    status = "低精度档(速度优先)"
+                print("  [%s] %-5s 插值+量化 max=%.3e  [%s]" % (name, S, a_max, status))
+            if fp not in sizes:
+                print("[WARN] %s 生成档位 %s 不包含满精度档 %d（若刻意只用低档位可忽略）"
+                      % (name, sizes, fp))
+                ok = False
         if not ok:
             return 1
-        print("[OK] 生成档位包含满精度档 M=%d" % full_prec)
+        print("[OK] 两套生成档位均包含各自满精度档：QUARTER M=%d / FULL N=%d"
+              % (q_full, f_full))
 
     return 0
 
