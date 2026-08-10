@@ -98,4 +98,22 @@ void BSP_AssertCount(BSP_Assert_Group_e group);
 #define BSP_ASSERT_DRV() BSP_AssertCount(BSP_ASSERT_GROUP_DRV)
 #define BSP_ASSERT_APP() BSP_AssertCount(BSP_ASSERT_GROUP_APP)
 
+/**
+ * @brief 调用函数并断言返回值为 0（0 视为成功，非 0 视为异常）
+ * @param func 要调用的 bsp/drv 函数调用表达式
+ * @note 用于 app 层调用 bsp/drv 注册/配置/初始化函数时自动检查返回值：
+ *       返回值非 0 则调用 BSP_AssertCount(BSP_ASSERT_GROUP_APP) 计数 +1。
+ *       约定：仅适用于"返回 0 表示成功"的注册/配置类函数
+ *       （如 CANRegister / CANConfig 返回 0 成功、-1 失败）。
+ * @example BSP_ASSERT_APP_CALL(CANRegister(&can_inst));
+ */
+#define BSP_ASSERT_APP_CALL(func)                  \
+    do                                             \
+    {                                              \
+        if ((func) != 0)                           \
+        {                                          \
+            BSP_AssertCount(BSP_ASSERT_GROUP_APP); \
+        }                                          \
+    } while (0)
+
 #endif /* __BSP_ASSERT_H */
