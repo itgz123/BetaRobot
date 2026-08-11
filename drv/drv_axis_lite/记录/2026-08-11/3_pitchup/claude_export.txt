@@ -1,0 +1,508 @@
+╭─── Claude Code v2.1.178 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│                    Welcome back!                   │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ What's new              │
+│                        ▘▘ ▝▝                       │ Added `CLAUDE_CODE_SES… │
+│                                                    │ Added `CLAUDE_CODE_DIS… │
+│       deepseek-v4-flash · API Usage Billing        │ Added a "Pasting…" foo… │
+│ ~\Desktop\betarobot_main\drv\drv_axis_lite\记录\2… │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+
+✻ Conversation compacted (ctrl+o for history)
+
+
+  Thought for 1s (ctrl+o to expand)
+
+● 交叉验证决定性成功：前 8 周期辨识的参数，在后 8
+  周期（未参与辨识）的动力学仿真中，全参数组合速度 NRMSE 仅 
+  2.3%；而同样的摩擦参数、只把重力改回 θ0=0 → 掉到 6.5%——确凿证明 θ0=−46°
+  是真实重力基准偏移，不是摩擦吸收的伪影。
+
+  分析完成。以下是完整报告。
+
+  ---
+  多正弦辨识结果报告（3_pitchup/plot_data.csv）
+
+  一、数据本身
+
+  ┌────────┬────────────────────────────────────────────────────────────┐
+  │  项目  │                             值                             │
+  ├────────┼────────────────────────────────────────────────────────────┤
+  │ 阶段   │ IDENTIFY_OLS，多正弦力矩 τ(t)=0.1·Σ₁₀ sin(2π·i·t/2)        │
+  ├────────┼────────────────────────────────────────────────────────────┤
+  │ 频率   │ 0.5~5 Hz，步长 0.5 Hz，2s 周期循环，16 个周期              │
+  ├────────┼────────────────────────────────────────────────────────────┤
+  │ 采样   │ 原始 100 万行但 96% 是重复时间戳，去重后 37951 行 @~980 Hz │
+  ├────────┼────────────────────────────────────────────────────────────┤
+  │ 激励段 │ t=10.9~43.1 s（约 32s）                                    │
+  └────────┴────────────────────────────────────────────────────────────┘
+
+  ⚠ 数据被限位污染：多正弦低频分量位置幅值理论 ±1.27 rad，超过机械限位（实测 pos
+  范围 [−0.674, +0.799]）。位置直方图显示 ~54% 时间贴在上限位 +0.5~0.8（每 2s
+  周期约 1.2s 卡住静止，仅 ~0.8s
+  自由摆动）。所有全段辨识都会因此失真——这是前几轮"参数荒谬"的根本原因。
+
+  二、方法（关键教训）
+
+  1. 时域 OLS 多重共线性病态——I⁺/I⁻/v·I⁺/v·I⁻/cos/sin 列相关，条件数可达
+  3e17，R²=1.0 是过拟合。
+  2. 频域复数 LS 可靠确定 J（用实际力矩而非命令，且需含 sin(pos) 项）。
+  3. 最终收敛：固定 J=0.008（频域值）→ 自由段（|pos|<0.55 剔除限位）→ 非线性优化
+  [cv⁺,cv⁻,Tc,G,θ₀] → 前 8/后 8 周期交叉验证。
+  4. 必须用实际力矩 CH3：电机响应并非理想，实际力矩 = 命令的 87~100%，5 Hz
+  处衰减 12% + 滞后 18°。用命令作 y 会把电机动态算进系统。
+
+  三、辨识结果（交叉验证 2.3% NRMSE）
+
+  ┌──────┬──────────────────┬─────────────┬──────────────┐
+  │ 参数 │      辨识值      │  当前配置   │     评价     │
+  ├──────┼──────────────────┼─────────────┼──────────────┤
+  │ J    │ 0.0080           │ 0.008       │ ✅ 正确      │
+  ├──────┼──────────────────┼─────────────┼──────────────┤
+  │ G    │ 0.284            │ 0.28        │ ✅ 正确      │
+  ├──────┼──────────────────┼─────────────┼──────────────┤
+  │ θ₀   │ −0.80 rad (−46°) │ 0（未建模） │ 🔴 重大缺失  │
+  ├──────┼──────────────────┼─────────────┼──────────────┤
+  │ cv+  │ 0.048            │ 0.05        │ ✅ 正确      │
+  ├──────┼──────────────────┼─────────────┼──────────────┤
+  │ cv−  │ 0.012            │ 0.06        │ ⚠ 偏高 5×    │
+  ├──────┼──────────────────┼─────────────┼──────────────┤
+  │ Tc   │ 0.055            │ 0.02        │ ⚠ 偏低 2.75× │
+  └──────┴──────────────────┴─────────────┴──────────────┘
+
+  交叉验证对照（后 8 周期，实际力矩输入）：
+  训练辨识(全参数)        速度RMSE=0.266 (2.3%)  ← 最佳
+  训练辨识摩擦+配置重力    速度RMSE=0.753 (6.5%)   ← θ0 还原为 0 就差 3 倍
+  配置参数                速度RMSE=0.756 (6.6%)
+
+  四、核心发现
+
+  1. 重力前馈角度基准偏移 θ₀=−46°：真实重力力矩 = 0.284·cos(pos − 
+  0.80)，而配置用 0.28·cos(pos)（隐含基准水平）。差动位置的零点 ≠
+  重力零力矩点（机械水平）。这是纯 cos(pos) 
+  模型永远无法校准的系统性误差，它会随位置摆动产生错误力矩——很可能就是 
+  plot_data2 的 20°/28ms 滞后的真实主因（此前归因于速度延迟）。
+  2. 电机力矩响应非理想（12% 衰减 + 18° 滞后 @5Hz），辨识和仿真都要用实际力矩。
+  3. 摩擦修正：负向粘滞 cv− 应降到 ~0.01，库仑 Tc 应升到 ~0.055（配置的 Tc=0.02
+  低速欠补偿明显）。
+
+  五、给 app_gimbal.c 的建议改动
+
+  // 重力前馈: 0.284·cos(θ0+pos) = Gc·cos(pos)+Gs·sin(pos)
+  // Gc = 0.284·cos(-0.80) = 0.198,  Gs = -0.284·sin(-0.80) = +0.204
+  .params = {
+      .gravity = 0.284f,           // 或保持 0.28
+      .inertia = 0.008f,           // 不动
+      .friction_coulomb_pos = 0.055f,  // 原 0.02
+      .friction_coulomb_neg = 0.055f,  // 原 0.0
+      .friction_viscous_pos = 0.048f,  // 原 0.05
+      .friction_viscous_neg = 0.012f,  // 原 0.06
+  },
+  重力 θ₀ 需要代码支持（CalcFeedforward 目前只有 gravity·cos(angle)），需把
+  gravity_ff 改成 Gc·cos + Gs·sin 两系数形式。
+
+  六、关于重做实验
+
+  当前幅值 0.1 Nm 太大（撞限位）。重做建议：A=0.03~0.04 Nm（0.5Hz 位置幅值降到
+  ~0.4~0.5 rad 不撞限位），或把最低频率从 0.5Hz 提到 1Hz。
+
+  ---
+  需要我：
+  1. 把 app_gimbal.c 的 pitchup 参数改成上表（含重力 Gc/Gs 两系数改造）？
+  2. 修复 identify_axis_mit_lite.py 的几个 bug（extract_friction_sg
+  漏减重力、模型缺 sin 项、时域微分低估 J）？
+
+  app 是 git 子模块，改动需在子模块内单独提交。
+
+✻ Churned for 12m 37s
+
+※ recap: 多正弦辨识已完成：J=0.008 正确，但发现重力角度基准偏移 θ0=-46°（交叉验证 2.3% NRMSE），且 cv- 和 Tc 需修正。下一步：确认是否要我改 app_gimbal.c 参数并修复辨识脚本 bug。
+
+❯ /compact                                                                      
+  ⎿  Compacted (ctrl+o to see full summary)
+  ⎿  Read drv\drv_axis_lite\记录\2026-08-11\3_pitchup\verify_final.py (104 lines)
+  ⎿  Read drv\drv_axis_lite\记录\2026-08-11\3_pitchup\check_gravity2.py (68 lines)
+  ⎿  Read drv\drv_axis_lite\记录\2026-08-11\3_pitchup\identify8_final.py (118 lines)
+  ⎿  Read drv\drv_axis_lite\记录\2026-08-11\3_pitchup\identify7_nl.py (138 lines)
+  ⎿  Read drv\drv_axis_lite\记录\2026-08-11\3_pitchup\identify6_free.py (141 lines)
+
+❯ 我用新数据覆盖了drv\drv_axis_lite\记录\2026-08-11\3_pitchup\plot_data.csv。   
+       .multi_sine_params = {                                                   
+              .amplitude = 0.1,                                                 
+              .duration = 1,                                                    
+              .num_freqs = 10,                                                  
+          },       // 多正弦叠加参数                                            
+
+  Thought for 5s (ctrl+o to expand)
+
+● 用户用新数据覆盖了 plot_data.csv，并改了激励参数（duration 2→1，基频
+  0.5Hz→1Hz，频率范围 1~10Hz）。我先探查新数据的结构，再重跑辨识流程。
+
+  先看目录和文件格式：
+
+  Thought for 1s, listed 1 directory (ctrl+o to expand)
+
+● Bash(cd /c/Users/itgz2/Desktop/betarobot_main/drv/drv_axis_lite/记录/2026-08-1
+      1/3_pitchup/ && ls -la && echo "---HEAD---" && head -3 plot_data.csv)
+  ⎿  total 41956
+     drwxr-xr-x 1 itgz2 197609        0 Aug 11 16:29 .
+     drwxr-xr-x 1 itgz2 197609        0 Aug 11 16:16 ..
+     … +22 lines (ctrl+o to expand)
+
+  Thought for 3s (ctrl+o to expand)
+
+● 新数据 42MB。先确认之前脚本的通道映射，再重写探查：
+
+  Thought for 2s, read 1 file (ctrl+o to expand)
+
+● 通道映射确认（CH0=DWT us, CH1=pos, CH2=spd, CH3=trq, CH7=gff,
+  CH9=multi）。写新探查脚本，重新生成
+  dedup.npz（保持字段名以复用现有分析脚本）：
+
+● Write(examine3.py)
+  ⎿  Wrote 90 lines to examine3.py
+       2 """探查新数据 (duration=1s, 基频1Hz, 1~10Hz) + 重新生成 dedup.np
+         z"""
+       3 import sys, os
+       4 import numpy as np
+       5 import pandas as pd
+       6 
+       7 if sys.platform == "win32":
+       8     sys.stdout.reconfigure(encoding="utf-8")
+       9 
+      10 BASE = os.path.dirname(os.path.abspath(__file__))
+     … +91 lines (ctrl+o to expand)
+
+● Bash(cd /c/Users/itgz2/Desktop/betarobot_main/drv/drv_axis_lite/记录/2026-08-1
+      1/3_pitchup/ && python examine3.py)
+  ⎿  列: ['Time', 'CH0', 'CH1', 'CH2', 'CH3', 'CH4', 'CH5', 'CH6', 'CH7', '
+     CH8', 'CH9', 'CH10', 'CH11', 'CH12', 'CH13', 'CH14', 'CH15']
+     形状: (1000000, 17)
+     … +27 lines (ctrl+o to expand)
+
+  Thought for 10s (ctrl+o to expand)
+
+● 新数据质量大幅改善：
+
+  - 位置范围 [−0.109, +0.461]，完全不撞限位（基频 1Hz
+  后位置幅值骤减，实验设计问题解决了）
+  - 去重后 20274 样本 @1000Hz，激励段 12.7s ≈ 12.7 个周期
+  - ⚠ 静止样本 40.5% 偏高——需确认运动模式
+
+  直接跑现有辨识脚本（固定 J 非线性优化）：
+
+● Bash(cd /c/Users/itgz2/Desktop/betarobot_main/drv/drv_axis_lite/记录/2026-08-1
+      1/3_pitchup/ && python identify8_final.py)
+  ⎿  ======================================================================
+       [1] 固定 J=0.008, 优化 [cv+, cv-, Tc, G, θ0]
+     ======================================================================
+     … +25 lines (ctrl+o to expand)
+
+  Thought for 16s (ctrl+o to expand)
+
+● 新数据辨识结果有疑点，需要诊断：
+
+  - 固定 J=0.008 优化残差 RMSE=0.219 Nm（≈数据 trq 的 std，模型几乎没拟合上）
+  - 残差 vs 速度在 v≈−2.5 处偏差 −0.32，其他分箱也 ±0.05~0.12——摩擦模型严重失配
+  - 40% 静止样本进入优化，会偏置摩擦辨识
+  - J 自由优化收敛到 0.0025（过拟合，仿真崩 13.27）无物理意义
+
+  先理解数据运动模式，写诊断脚本：
+
+● Write(diag4.py)
+  ⎿  Wrote 80 lines to diag4.py
+       1 #!/usr/bin/env python3
+       2 """新数据诊断: 运动模式 / 静止段 / 频域J / 摩擦分箱"""
+       3 import sys, os
+       4 import numpy as np
+       5 from scipy.signal import savgol_filter, welch
+       6 
+       7 if sys.platform == "win32":
+       8     sys.stdout.reconfigure(encoding="utf-8")
+       9 
+      10 BASE = os.path.dirname(os.path.abspath(__file__))
+     … +78 lines (ctrl+o to expand)
+
+● Bash(cd /c/Users/itgz2/Desktop/betarobot_main/drv/drv_axis_lite/记录/2026-08-1
+      1/3_pitchup/ && python diag4.py)
+  ⎿  Error: Exit code 1
+     激励段重采样: 12717 样本 @ 1000Hz = 12.72s
+
+     ========================================================================
+       速度分布 (激励段)
+     ========================================================================
+       v[-4.00,-3.75) n=    0 
+       v[-3.75,-3.50) n=   10 
+       v[-3.50,-3.25) n=  140 #
+       v[-3.25,-3.00) n=  204 ##
+     … +37 lines (ctrl+o to expand)
+
+  Thought for 16s (ctrl+o to expand)
+● 速度直方图揭示严重问题：运动非对称且大量停滞——位置全在 [−0.11,
+  +0.46]（重力偏置在正侧），v∈[−0.25,0) 密集 5464
+  样本（43%），负向高速多但正向高速少。这是"停止-滑动"运动，摩擦辨识会很难。
+
+  先修 welch 调用看频域 J 和摩擦形状：
+
+● Update(diag4.py)
+  ⎿  Added 1 line, removed 1 line
+      47  print("="*72)
+      48  npseg = 2000
+      49  fv, Pxx = welch(spd_r, fs=fs, nperseg=npseg, noverlap=npseg//2)
+      50 -_, Pxv = welch(spd_r, trq_r - gff_r, fs=fs, nperseg=npseg, nove
+         -rlap=npseg//2)                                                 
+      50 +_, Pxv = welch(spd_r, y=trq_r - gff_r, fs=fs, nperseg=npseg, no
+         +verlap=npseg//2)                                               
+      51  with np.errstate(divide='ignore', invalid='ignore'):
+      52      Z = np.divide(Pxv, Pxx, out=np.zeros_like(Pxv), where=np.ab
+          s(Pxx) > 1e-12)
+      53  Jlist = []
+
+● Bash(cd /c/Users/itgz2/Desktop/betarobot_main/drv/drv_axis_lite/记录/2026-08-1
+      1/3_pitchup/ && python diag4.py 2>&1 | tail -50)
+  ⎿  激励段重采样: 12717 样本 @ 1000Hz = 12.72s
+
+     ======================================================================
+     … +43 lines (ctrl+o to expand)
+
+  Thought for 3s (ctrl+o to expand)
+
+● scipy 版本不支持 y= 关键字。改用 csd 计算交叉谱：
+
+● Update(diag4.py)
+  ⎿  Added 3 lines, removed 1 line
+       2  """新数据诊断: 运动模式 / 静止段 / 频域J / 摩擦分箱"""
+       3  import sys, os
+       4  import numpy as np
+       5 -from scipy.signal import savgol_filter, welch                  
+       5 +from scipy.signal import savgol_filter, csd                    
+       6 +import scipy                                                   
+       7 +print(f"scipy {scipy.__version__}")                            
+       8  
+       9  if sys.platform == "win32":
+      10      sys.stdout.reconfigure(encoding="utf-8")
+
+● Update(diag4.py)
+  ⎿  Added 2 lines, removed 2 lines
+      48  print("  频域阻抗 J (实际力矩 trq, Welch)")
+      49  print("="*72)
+      50  npseg = 2000
+      51 -fv, Pxx = welch(spd_r, fs=fs, nperseg=npseg, noverlap=npseg//2)
+      52 -_, Pxv = welch(spd_r, y=trq_r - gff_r, fs=fs, nperseg=npseg, no
+         -verlap=npseg//2)                                               
+      51 +fv, Pxx = csd(spd_r, spd_r, fs=fs, nperseg=npseg, noverlap=npse
+         +g//2)                                                          
+      52 +fv2, Pxv = csd(spd_r, trq_r - gff_r, fs=fs, nperseg=npseg, nove
+         +rlap=npseg//2)                                                 
+      53  with np.errstate(divide='ignore', invalid='ignore'):
+      54      Z = np.divide(Pxv, Pxx, out=np.zeros_like(Pxv), where=np.ab
+          s(Pxx) > 1e-12)
+      55  Jlist = []
+
+● Bash(cd /c/Users/itgz2/Desktop/betarobot_main/drv/drv_axis_lite/记录/2026-08-1
+      1/3_pitchup/ && python diag4.py 2>&1 | sed -n '50,120p')
+  ⎿    f= 4.50Hz  J=Im(Z)/w=+0.00833  <-- 合理
+       f= 5.00Hz  J=Im(Z)/w=+0.00794  <-- 合理
+       f= 5.50Hz  J=Im(Z)/w=+0.00727  <-- 合理
+     … +40 lines (ctrl+o to expand)
+
+  Thought for 22s (ctrl+o to expand)
+
+● 频域 J 很干净：J(1~10Hz) 中位 = 0.0073，4.5~10Hz 稳定在
+  0.0067~0.0084（高频略降是电机衰减），配置 0.008 合理。
+
+  但摩擦分箱一团乱——负向运动在 v∈[−1,−2] 摩擦变正号（+0.1~+0.27，物理不可能），
+  说明负向高速段受停滞-滑动加速度尖峰污染。正向摩擦约 0.13~0.16 基本与 v
+  无关（更像库仑主导）。
+
+  画时间序列确认运动模式：
+
+● Write(plot_ts.py)
+  ⎿  Wrote 63 lines to plot_ts.py
+       1 #!/usr/bin/env python3
+       2 """画激励段时间序列: pos/spd/trq/multi, 观察运动模式"""
+       3 import sys, os
+       4 import numpy as np
+       5 import matplotlib
+       6 matplotlib.use("Agg")
+       7 import matplotlib.pyplot as plt
+       8 
+       9 if sys.platform == "win32":
+      10     sys.stdout.reconfigure(encoding="utf-8")
+     … +59 lines (ctrl+o to expand)
+
+● Bash(cd /c/Users/itgz2/Desktop/betarobot_main/drv/drv_axis_lite/记录/2026-08-1
+      1/3_pitchup/ && python plot_ts.py)
+  ⎿  saved timeseries.png
+
+     停滞段(|v|<0.1)数量: 136, 平均长 38ms, 中位 5ms, 最长 179ms
+     … +4 lines (ctrl+o to expand)
+
+  Thought for 5s (ctrl+o to expand)
+
+● 停滞段其实很短（中位 5ms，最长 179ms），不是长时间卡住——"40%
+  静止"其实是速度集中在零附近（v∈[−0.25,0) 占
+  43%），运动呈脉动式、位置单向偏置（全正侧）。看下图：
+
+  Thought for 7s, read 1 file (ctrl+o to expand)
+
+● 图片不支持显示，改用数值分析。关键疑点：负向高速段 T_fric 
+  非物理变号。针对性检查负向/正向高速段的组成：
+
+● Write(diag5.py)
+  ⎿  Wrote 71 lines to diag5.py
+       1 #!/usr/bin/env python3
+       2 """检查高速段组成: 负向 vs 正向, 加速度尖峰, T_fric 成分"""
+       3 import sys, os
+       4 import numpy as np
+       5 from scipy.signal import savgol_filter
+       6 
+       7 if sys.platform == "win32":
+       8     sys.stdout.reconfigure(encoding="utf-8")
+       9 
+      10 BASE = os.path.dirname(os.path.abspath(__file__))
+     … +77 lines (ctrl+o to expand)
+
+● Bash(cd /c/Users/itgz2/Desktop/betarobot_main/drv/drv_axis_lite/记录/2026-08-1
+      1/3_pitchup/ && python diag5.py)
+  ⎿  ======================================================================
+     ==========
+       负向高速段 (v < -2) 组成
+     … +79 lines (ctrl+o to expand)
+
+  Thought for 19s (ctrl+o to expand)
+
+● 重大发现：负向高速段 J·a 范围达 ±160 Nm（真实力矩才
+  ±0.76）——加速度伪尖峰是真实力矩的 200 倍！这正是摩擦辨识崩溃的根源。
+
+  - 加速度分布：|a|>20 rad/s² 占 6.8%，a∈[−5,5] 仅 46%——时域微分被速度噪声放大
+  - 但频域 J 干净（0.0073），因为频域只提取激励频率处的响应、抑制宽带噪声
+
+  验证速度信号量化情况（是否阶梯噪声导致微分尖峰）：
+
+● Bash(cd /c/Users/itgz2/Desktop/betarobot_main/drv/drv_axis_lite/记录/2026-08-1
+      1/3_pitchup/ && python -c "
+      import numpy as np…)
+  ⎿  ������ Ψһֵ: 414 / 12156�ٶ�
+     ռ�� 65.8% ]True  True  True ...  True False False [ ���� :��ڲ���
+     ������: min=0.014648 ��λ=0.014652 max=0.8498
+     … +5 lines (ctrl+o to expand)
+
+  Thought for 17s (ctrl+o to expand)
+
+● 确认：速度信号严重量化——12156 样本只有 414 个唯一值，相邻差分全是 0.01465 
+  rad/s 的整数倍（量化步长）。阶梯速度经微分后放大成 ±160 Nm
+  的伪加速度，时域辨识不可靠。
+
+  这个数据时域不可用，但频域 J 已拿到（0.0073）。
+  还有个可做：低速段（|v|<0.6，摩擦≈库仑常数）用 pos 分箱分离重力 G·cos(θ0+pos)
+  与库仑：
+
+● Write(gravity_low.py)
+  ⎿  Wrote 68 lines to gravity_low.py
+       2 """低速段(|v|<0.6) pos分箱分离重力与库仑摩擦 (避免加速度微分污染
+         )"""
+       3 import sys, os
+       4 import numpy as np
+       5 from scipy.optimize import curve_fit
+       6 
+       7 if sys.platform == "win32":
+       8     sys.stdout.reconfigure(encoding="utf-8")
+       9 
+      10 BASE = os.path.dirname(os.path.abspath(__file__))
+     … +67 lines (ctrl+o to expand)
+● Bash(cd /c/Users/itgz2/Desktop/betarobot_main/drv/drv_axis_lite/记录/2026-08-1
+      1/3_pitchup/ && python gravity_low.py)
+  ⎿  低速段(|v|<0.6): 8735 样本 (68.7%)
+       低速段 pos: [-0.109, +0.461]
+     … +21 lines (ctrl+o to expand)
+
+  Thought for 15s (ctrl+o to expand)
+
+● 低速段重力分离失败：pos 分箱后只有 4 个不连续的箱有足够样本，pos
+  覆盖稀疏（轴在少数位置徘徊而非平滑扫过），重力拟合 G=1.0 无物理意义。库仑估计
+  ~0.04 Nm（信号弱）。
+
+  看完整频域 J（尤其 1~4Hz）和 pos 直方图，确认运动覆盖：
+
+● Bash(cd /c/Users/itgz2/Desktop/betarobot_main/drv/drv_axis_lite/记录/2026-08-1
+      1/3_pitchup/ && python diag4.py 2>&1 | sed -n '42,52p' && echo "=== POS
+      HIST ===" && pyth…)
+  ⎿  ======================================================================
+     ==
+       f= 1.00Hz  J=Im(Z)/w=+0.00883  <-- 合理
+     … +22 lines (ctrl+o to expand)
+
+  Thought for 15s (ctrl+o to expand)
+
+● pos 直方图揭示根本原因：轴 59% 时间停在 pos≈0.17（重力+激励的平衡点），运动被
+  库仑摩擦锁住，只在峰值冲击时短暂移动。而频域 J 完整验证 1~10Hz 稳定
+  0.0065~0.0089（中位 0.0073）。
+
+  诊断完成，给你完整报告。
+
+  ---
+  新数据（duration=1s）多正弦辨识诊断报告
+
+  一、这次数据的关键特征
+
+  ┌────────────┬─────────────────────────────────┬───────────────────────┐
+  │    项目    │      新数据 (duration=1s)       │ 旧数据 (duration=2s)  │
+  ├────────────┼─────────────────────────────────┼───────────────────────┤
+  │ 频率范围   │ 1~10Hz（基频 1Hz）              │ 0.5~5Hz（基频 0.5Hz） │
+  ├────────────┼─────────────────────────────────┼───────────────────────┤
+  │ 位置范围   │ [−0.109, +0.461]（不撞限位✓）   │ ±0.67（撞限位✗）      │
+  ├────────────┼─────────────────────────────────┼───────────────────────┤
+  │ 位置覆盖   │ 59% 时间锁在 pos≈0.17，覆盖稀疏 │ 覆盖广                │
+  ├────────────┼─────────────────────────────────┼───────────────────────┤
+  │ 速度       │ ±3.6，但集中在零附近            │ ±7.5，动态范围大      │
+  ├────────────┼─────────────────────────────────┼───────────────────────┤
+  │ 时域可用性 │ 不可用                          │ 可用（交叉验证 2.3%） │
+  └────────────┴─────────────────────────────────┴───────────────────────┘
+
+  二、核心问题：时域辨识被两件事杀死
+
+  1. 速度信号严重量化：12156 样本只有 414 个唯一值，量化步长 0.01465 
+  rad/s（0.84°/s）。时域微分（SG）把阶梯速度放大成 ±160 Nm 
+  的伪加速度——真实力矩才 ±0.76 Nm，伪尖峰是真实值的 200 
+  倍。所有时域方法（OLS、非线性最小二乘）都依赖加速度，全部被污染。
+
+  2. 运动信息量不足：基频 1Hz 使位置幅值理论降 4 倍（1.27→0.32 rad），且单频分量
+  0.01 Nm 低于库仑摩擦 Tc≈0.05，轴被重力+库仑锁在平衡点 pos≈0.17，59%
+  时间停驻。摩擦/重力辨识需要的对称速度-力矩覆盖完全缺失（负向高速段仅 ~800
+  样本且 T_fric 非物理变号 +0.3）。
+
+  三、能可靠得到 / 不能得到的
+
+  ✅ 可靠：J = 0.0073 kg·m²（频域 1~10Hz 稳定 0.0065~0.0089，中位 0.0073；配置
+  0.008 合理，高频端略降是电机力矩衰减）
+
+  ❌ 不可靠：
+  - 重力 G/θ₀：pos 覆盖太窄，拟合收敛到 G=1.0（无物理意义）
+  - 粘滞 cv⁺/cv⁻、库仑 Tc：时域污染，负向段 T_fric 非物理
+
+  四、对比结论与建议
+
+  旧数据（duration=2s）辨识的完整参数集依然是最佳：J=0.008, G=0.284, θ₀=−46°, 
+  cv⁺=0.048, cv⁻=0.012, Tc=0.055（交叉验证 2.3%）。新数据只额外确认了 
+  J≈0.007~0.008，未能验证摩擦/重力。
+
+  为什么 duration=1s 反而差：最低频率翻倍→位置幅值降 4 倍→运动范围不够；单频分量
+  低于库仑死区→轴被锁住。这是实验设计问题，不是处理技巧。
+
+  要辨识摩擦/重力的建议（任选其一）：
+  1. 回到 duration=2s（0.5~5Hz），运动范围最好
+  2. 叠加重力前馈消除偏置（total_ff = gff + multi 里 gff
+  已含，但激励未叠加；应让激励围绕重力平衡点对称驱动，即轴在零位附近摆动）
+  3. 若坚持高频段：duration=2 已覆盖到 5Hz；想更高频可 duration=1 但把幅值降到 
+  0.03~0.04 并在 IDENTIFY 阶段先做重力前馈补偿，使轴对称摆动
+
+  ---
+  要我把这个诊断整理成一份分析脚本归档（report_newdata.py
+  输出上述结论），还是先帮你调整 app_gimbal.c 的激励参数（比如改回
+  duration=2，或加重力偏置补偿）重测？
+
+✻ Cogitated for 4m 20s
