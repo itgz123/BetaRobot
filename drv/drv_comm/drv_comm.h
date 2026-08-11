@@ -25,12 +25,9 @@ typedef struct
 #define COMM_INSTANCE_RX_PROTO(inst) ((CommProto *)((inst)->rx_proto))
 #define COMM_INSTANCE_TX_PROTO(inst) ((CommProto *)((inst)->tx_proto))
 
-/* 挂载/消费者表容量（默认值，可被 app_cfg.h 覆盖） */
+/* 挂载表容量（默认值，可被 app_cfg.h 覆盖） */
 #ifndef COMM_LINK_NUM
 #define COMM_LINK_NUM 16 /* media↔proto 挂载表容量 */
-#endif
-#ifndef COMM_CONSUMER_NUM
-#define COMM_CONSUMER_NUM 16 /* 出帧消费者表容量 */
 #endif
 
 /**
@@ -39,7 +36,7 @@ typedef struct
 typedef struct
 {
     void *media_cfg;             /* 介质后端配置指针（USART → USART_Config_s*；NULL 跳过介质配置） */
-    ProtoFrameCallback on_frame; /* 出帧消费回调（同 proto 覆盖更新；NULL 表示不修改） */
+    ProtoFrameCallback on_frame; /* 出帧消费回调（NULL 表示不修改） */
 } CommConfig_s;
 
 /**
@@ -60,8 +57,8 @@ int8_t CommRegister(CommInstance *inst);
  * @retval 0 成功；-1 失败（参数非法 / 未注册 / 配置失败 / 类型未支持）
  *
  * @note media_cfg 经 media 后端下发（USART → MediaUsartConfig → bsp USARTConfig），
- *       运行中可再次调用以切换波特率/发送模式等；on_frame 按 proto 覆盖式
- *       注册进消费者表，可运行期修改消费逻辑。
+ *       运行中可再次调用以切换波特率/发送模式等；on_frame 直接覆盖挂到
+ *       接收协议 rx_proto->on_frame，可运行期修改消费逻辑。
  */
 int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg);
 

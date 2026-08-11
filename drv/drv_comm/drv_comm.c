@@ -9,10 +9,10 @@
  * 一条 comm = 一个双向对话：接收协议(rx_proto)与发送协议(tx_proto)分离，
  * 各自 payload 大小可不同（编译期确定，DEF 宏写入）。
  *
- * 分发链路（原独立 engine 层收编到本层，删除了纯冗余的抽象）：
+ * 分发链路：
  *   接收：bsp ISR → media 适配钩子 → MediaHandleRx → CommMediaRxHook
- *         → 遍历挂载表 → rx_proto unpack → 出帧 → CommProtoFrameHook
- *         → 消费者表匹配 → 消费回调
+ *         → 遍历挂载表 → rx_proto unpack → 出帧 → on_frame（业务回调，
+ *         由 CommConfig 直接挂到 rx_proto->on_frame，无需中间分发层）
  *   发送：CommSend → tx_proto pack → MediaSend（tx_proto->media 由 DEF 宏绑定）
  */
 
@@ -32,26 +32,14 @@ typedef struct
     CommProto *proto; /* 协议基类指针 */
 } CommLink_s;
 
-/* 出帧消费者表（按 proto 匹配，可运行期覆盖更新） */
-typedef struct
-{
-    CommProto *proto;            /* 监听的协议 */
-    ProtoFrameCallback consumer; /* 消费回调 */
-} CommConsumer_s;
-
 /*------------- 静态实例 -------------*/
 
 static CommLink_s s_links[COMM_LINK_NUM];
 static uint8_t s_link_cnt = 0;
 
-static CommConsumer_s s_consumers[COMM_CONSUMER_NUM];
-static uint8_t s_consumer_cnt = 0;
-
 /*------------- 内部函数声明 -------------*/
 
 static void CommMediaRxHook(CommMedia *media, const uint8_t *data);
-static void CommProtoFrameHook(CommProto *proto, const uint8_t *payload);
-static int8_t CommSetConsumer(CommProto *proto, ProtoFrameCallback cb);
 
 /*------------- 内部函数实现 -------------*/
 
@@ -69,47 +57,6 @@ static void CommMediaRxHook(CommMedia *media, const uint8_t *data)
             ProtoUnpack(s_links[i].proto, data);
         }
     }
-}
-
-/**
- * @brief 出帧分发钩子（挂到 proto->on_frame）
- * @note 解出一条完整 payload 后，按 proto 匹配消费者表逐个回调。
- */
-static void CommProtoFrameHook(CommProto *proto, const uint8_t *payload)
-{
-    for (uint8_t i = 0; i < s_consumer_cnt; i++)
-    {
-        if (s_consumers[i].proto == proto && s_consumers[i].consumer)
-        {
-            s_consumers[i].consumer(proto, payload);
-        }
-    }
-}
-
-/**
- * @brief 设置出帧消费者回调（可重入：同 proto 重复调用即覆盖更新）
- */
-static int8_t CommSetConsumer(CommProto *proto, ProtoFrameCallback cb)
-{
-    if (proto == NULL || cb == NULL)
-        return -1;
-
-    for (uint8_t i = 0; i < s_consumer_cnt; i++)
-    {
-        if (s_consumers[i].proto == proto)
-        {
-            s_consumers[i].consumer = cb;
-            return 0;
-        }
-    }
-
-    if (s_consumer_cnt >= COMM_CONSUMER_NUM)
-        return -1;
-
-    s_consumers[s_consumer_cnt].proto = proto;
-    s_consumers[s_consumer_cnt].consumer = cb;
-    s_consumer_cnt++;
-    return 0;
 }
 
 /*------------- 外部接口实现 -------------*/
@@ -161,10 +108,11 @@ int8_t CommRegister(CommInstance *inst)
         return -1; /* 发送协议类型未支持 */
     }
 
-    /* 3. 接线分发：media 接管接收钩子 → rx_proto 接管出帧钩子 → 建挂载
-     * @note 只挂接收协议（发送协议不参与接收分发）；挂载表静态零初始化 */
+    /* 3. 接线分发：media 接管接收钩子 → 建挂载
+     * @note 只挂接收协议（发送协议不参与接收分发）；挂载表静态零初始化。
+     *       出帧回调 on_frame 由 CommConfig 挂到 rx_proto，本阶段置 NULL 即可。 */
     media->rx_cb = CommMediaRxHook;
-    rx_proto->on_frame = CommProtoFrameHook;
+    rx_proto->on_frame = NULL;
     if (s_link_cnt >= COMM_LINK_NUM)
         return -1;
     s_links[s_link_cnt].media = media;
@@ -200,11 +148,10 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
         }
     }
 
-    /* 2. 出帧消费回调（可重入：按接收协议覆盖式注册，运行期可修改） */
+    /* 2. 出帧消费回调（可重入：直接覆盖 rx_proto->on_frame，运行期可修改） */
     if (cfg->on_frame != NULL)
     {
-        if (CommSetConsumer(COMM_INSTANCE_RX_PROTO(inst), cfg->on_frame) != 0)
-            return -1;
+        COMM_INSTANCE_RX_PROTO(inst)->on_frame = cfg->on_frame;
     }
     return 0;
 }
