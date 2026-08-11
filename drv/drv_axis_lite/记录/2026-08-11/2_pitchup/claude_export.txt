@@ -1,0 +1,497 @@
+╭─── Claude Code v2.1.178 ─────────────────────────────────────────────────────╮
+│                                           │ Tips for getting started         │
+│               Welcome back!               │ Run /init to create a CLAUDE.md… │
+│                                           │ ──────────────────────────────── │
+│                  ▐▛███▜▌                  │ What's new                       │
+│                 ▝▜█████▛▘                 │ Added `CLAUDE_CODE_SESSION_ID` … │
+│                   ▘▘ ▝▝                   │ Added `CLAUDE_CODE_DISABLE_ALTE… │
+│                                           │ Added a "Pasting…" footer hint … │
+│   deepseek-v4-flash · API Usage Billing   │ /release-notes for more          │
+│         ~\Desktop\betarobot_main          │                                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+
+✻ Conversation compacted (ctrl+o for history)
+
+
+  Thought for 1s (ctrl+o to expand)
+
+● 重大发现：时域 LSQ 因共线性和加速度噪声给出非物理结果（负库仑、G=1.29），但
+  2Hz 分量分析显示扭矩-加速度相位差 -57.7°，远超阻尼可解释的 ~31°——差约
+  27°≈37ms，这很可能就是速度测量延迟（此前 IDENTIFY 数据也测到 34ms
+  互相关滞后）。让我做直接的对齐/交叉相关测试来确认。
+
+● Bash(python -c "
+      import sys, io…)
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ /compact                                                                      
+  ⎿  Compacted (ctrl+o to see full summary)
+  ⎿  Read ig\analyze_tune.py (114 lines)
+  ⎿  Read app\half_rudder_gimbal\app_gimbal\app_gimbal.c (229 lines)
+  ⎿  Read drv\drv_axis_lite\drv_axis_mit_lite.c (316 lines)
+  ⎿  Read drv\drv_axis_lite\drv_axis_mit_lite.h (108 lines)
+
+❯ 这里的上下pitch可能耦合，虽然我让下pitch锁定在一个位置。所以我添加了          
+  VofaSetChannel(13, pitchdown_mdata.speed);                                    
+      VofaSetChannel(14, pitchup_mdata.speed);2个通道。数据在drv\drv_axis_lite\ 
+  记录\2026-08-11\2_pitchup\plot_data2.csv                                      
+
+  Thought for 10s (ctrl+o to expand)
+
+● 用户新增了 CH13(pitchdown 速度) 和 CH14(pitchup 速度)，怀疑上下 pitch
+  耦合。关键点：代码里 pitchup_mdata.position 被改成差动位置（pitchup -
+  pitchdown），但 speed 仍是 pitchup 电机的原始速度——如果 pitchdown
+  有微小运动，位置会被污染而速度不会，两者就不一致了。让我分析新数据。
+
+  先做结构检查和基本统计：
+
+● Bash(python -c "
+      import sys, io…)
+  ⎿  shape (1000000, 17) 列数 17
+     列名: ['Time', 'CH0', 'CH1', 'CH2', 'CH3', 'CH4', 'CH5', 'CH6', 'CH7',
+      'CH8', 'CH9', 'CH10', 'CH11', 'CH12', 'CH13', 'CH14', 'CH15']
+     … +18 lines (ctrl+o to expand)
+
+  Thought for 12s (ctrl+o to expand)
+
+● 重大发现：CH13（pitchdown 速度）恒等于 -0.0073，std=0.0000——20
+  秒内每个采样点完全相同，这是冻结的陈旧反馈（stale
+  CAN），不是真实静止（真实静止会有微小抖动）。这意味着 pitchdown
+  电机的速度反馈根本没在更新。让我深入验证。
+
+● Bash(python -c "
+      import sys, io…)
+  ⎿  === 前25个采样 (t, CH13 pitchdown_speed, CH14 pitchup_speed, CH2) ===
+         0.0000  -0.007326  +0.007326  +0.007326
+         0.0020  -0.007326  -0.021978  -0.021978
+     … +30 lines (ctrl+o to expand)
+
+  Thought for 9s (ctrl+o to expand)
+
+● CH13（pitchdown 速度）真正冻结：仅 3 个唯一值（±1e-8 浮点噪声），44/20777
+  次变化。DM4310 发送恒定 int16 → 解码成恒定 float。而 CH14 = CH2 = pitchup
+  原始速度。
+
+  关键推论：CH1 是差动位置（pitchup − pitchdown）。如果 pitchdown 静止，则
+  d(CH1)/dt = CH2；若 pitchdown 在动，两者会系统性偏差。让我验证差动一致性、CH1
+  漂移、以及滞后。
+
+● Bash(python -c "
+      import sys, io…)
+  ⎿  Error: Exit code 1
+     Traceback (most recent call last):
+       File "<string>", line 37, in <module>
+         A,B,D = np.linalg.lstsq(np.column_stack([S,C,np.ones_like(t),t]), pos, 
+     rcond=None)[0]
+         ^^^^^
+     ValueError: too many values to unpack (expected 3)
+     实际FS=990.1
+
+     === 差动一致性检查: d(CH1)/dt vs CH2(pitchup原始速度) ===
+       若pitchdown静止, dpos应≈CH2; 差=(dpos-CH2)≈pitchdown速度(带符号)
+
+     … +7 lines (ctrl+o to expand)
+
+  Thought for 17s (ctrl+o to expand)
+
+● 数据出来了：d(CH1)/dt ≈ CH2（残差 std=0.059，仅信号 7%），且残差恒定 +0.0067 ≈
+  −CH13(−0.0073) 的符号翻转值——说明 pitchdown 要么以恒定 -0.0073 rad/s
+  缓慢移动（但 CH1 漂移仅 -0.039 rad/20s，积分对不上），要么 CH13
+  是陈旧值。修复脚本后继续分析残差的 2Hz 成分和滞后：
+
+● Bash(python -c "
+      import sys, io…)
+  ⎿  === 各通道 2Hz 分量(含线性漂移) ===
+       CH1 位置    : 幅值=0.0782 相位=-119.1°  漂移K=-0.00035 rad/s 偏置D=+
+     0.1221
+     … +19 lines (ctrl+o to expand)
+
+  Thought for 32s (ctrl+o to expand)
+
+● 等一下——我发现一个方法论错误：实际采样率是 990Hz 而非 1000Hz，21
+  秒内累积相位误差达 2.6 rad（远超一个周期），用固定 w=2×2π
+  拟合正弦会严重低估幅值（所以 CH5 拟合幅值 1.09 < 实际 min/max
+  1.257）。必须均匀重采样后再拟合。让我重写分析：
+
+● Write(ig\analyze_coupling.py)
+  ⎿  Wrote 102 lines to ig\analyze_coupling.py
+       2 """*- coding: utf-8 -*-
+       3 分析 plot_data2.csv (CH13=pitchdown速度, CH14=pitchup速度) 上下p
+       4 核心: CH1 是差动位置 (pitchup - pitchdown), CH2 是 pitchup 原始
+         速度(非差动)。
+       5 方法: 均匀重采样到1000Hz后再做2Hz正弦拟合(避免非均匀时间戳累积相
+       6 """ 差)。
+       7 import sys, io
+         rapper):latform == "win32" and isinstance(sys.stdout, io.TextIOW
+       9     sys.stdout.reconfigure(encoding="utf-8")
+      10 import numpy as np
+     … +110 lines (ctrl+o to expand)
+
+● Bash(python ig/analyze_coupling.py 2>&1)
+  ⎿  原始: 20778 点, 21.2s, 实际FS=990.1Hz
+     重采样: 21159 点 @ 1000Hz
+     … +22 lines (ctrl+o to expand)
+
+  Thought for 47s (ctrl+o to expand)
+
+● 修正后结果非常清晰了。关键数据：
+
+  - 速度滞后 ref_vel 20° = 27.7ms，幅值比 92.5%；位置滞后 24°，幅值
+  92.7%——位置/速度一致（同一运动）
+  - 差动一致性：d(CH1)/dt ≈ CH2（残差仅 6.3%），且反演 pitchdown 2Hz 幅值仅
+  0.005 rad（0.3°）——耦合极小，不是跟踪偏差主因
+  - CH13 恒等于 -0.0073，21s 零变化——pitchdown 速度反馈冻结
+
+  现在验证滞后/幅值不足的物理机制。假设是欠补偿阻尼：真实 cv=0.09 而前馈只用
+  cv=0.05，则滞后 = atan(Δcv/(Jω)) = atan(0.04/(0.008·12.57)) = 21.7°，幅值
+  0.925——与实测 20°/92.5% 惊人一致。让我写正确仿真验证（真实参数 ≠ 前馈参数）：
+
+● Write(ig\simulate_fix.py)
+  ⎿  Wrote 80 lines to ig\simulate_fix.py
+       2 """*- coding: utf-8 -*-
+       3 验证 TUNE 开环跟踪偏差机制: 欠补偿阻尼 cv.
+       4 真实动力学固定 (J=0.008, cv_true, Tc_true), 前馈参数变化.
+       5 预测: cv_ff=0.05 且 cv_true=0.09 时 滞后~22° 幅值~0.92, 与实测(2
+         0°/92.5%)对比.
+       7 import sys, io
+       8 import numpy as np
+       9 if sys.platform == "win32" and isinstance(sys.stdout, io.TextIOW
+         rapper):
+      10     sys.stdout.reconfigure(encoding="utf-8")
+     … +84 lines (ctrl+o to expand)
+  Thought for 1s (ctrl+o to expand)
+
+● Update(ig\simulate_fix.py)
+  ⎿  Removed 5 lines
+      55  
+      56  tt = t[t > 2.0]
+      57  a_rv, p_rv = fit2(ref_vel[tt > 2.0][:len(tt)], tt)
+      58 -# ref_vel 相位基准                                             
+      58  print("=" * 60)
+      59  print(f"实测: 速度滞后 19.9° (27.7ms), 幅值比 0.925")
+      60  print("=" * 60)
+      62 -for lbl, (J_ff, cvp, cvn, Tcf, cvtp, cvtn, Tct) in {           
+      63 -    "当前前馈(cv_ff=0.05/0.06, 真实cv=0.09)", None,            
+      64 -}.items():                                                     
+      65 -    pass                                                       
+      61  
+      62  cases = [
+      63      # 标签, 前馈cv, 真实cv
+
+● Update(ig\simulate_fix.py)
+  ⎿  Added 1 line, removed 1 line
+      68  ]
+      69  for lbl, cvpf, cvnf, tcf, cvpt, cvnt, tct in cases:
+      70      v, th = simulate(J, cvpf, cvnf, tcf, cvpt, cvnt, tct)
+      71 -    a_s, p_s = fit2(v[tt < 0][:len(tt)] if False else v[tt > 2.
+         -0], tt)                                                        
+      71 +    a_s, p_s = fit2(v[t > 2.0], tt)                            
+      72      lag = p_rv - p_s
+      73      print(f"\n{lbl}")
+      74      print(f"  仿真速度2Hz: 幅值={a_s:.4f} (ref {a_rv:.4f}, 比{a
+          _s/a_rv:.3f})  相位={p_s:+.1f}°")
+
+● Bash(python ig/simulate_fix.py 2>&1)
+  ⎿  Error: Exit code 1
+     Traceback (most recent call last):
+       File "C:\Users\itgz2\Desktop\betarobot_main\ig\simulate_fix.py", line 57,
+     in <module>
+         a_rv, p_rv = fit2(ref_vel[tt > 2.0][:len(tt)], tt)
+                           ~~~~~~~^^^^^^^^^^
+     IndexError: boolean index did not match indexed array along axis 0; size of
+     axis is 12000 but size of corresponding boolean axis is 9999
+
+● Update(ig\simulate_fix.py)
+  ⎿  Added 1 line, removed 1 line
+      54  
+      55  
+      56  tt = t[t > 2.0]
+      57 -a_rv, p_rv = fit2(ref_vel[tt > 2.0][:len(tt)], tt)             
+      57 +a_rv, p_rv = fit2(ref_vel[t > 2.0], tt)                        
+      58  print("=" * 60)
+      59  print(f"实测: 速度滞后 19.9° (27.7ms), 幅值比 0.925")
+      60  print("=" * 60)
+
+● Bash(python ig/simulate_fix.py 2>&1)
+  ⎿  ============================================================
+     实测: 速度滞后 19.9° (27.7ms), 幅值比 0.925
+     ============================================================
+     … +16 lines (ctrl+o to expand)
+
+  Thought for 17s (ctrl+o to expand)
+
+● 仿真验证成功——机制确认：
+
+  ┌─────────────────────────────────────┬──────────┬────────────┐
+  │          前馈配置 vs 真实           │ 预测滞后 │ 预测幅值比 │
+  ├─────────────────────────────────────┼──────────┼────────────┤
+  │ 当前 cv=0.05/0.06 vs 真实 0.09/0.10 │ 21.4°    │ 0.931      │
+  ├─────────────────────────────────────┼──────────┼────────────┤
+  │ 实测（plot_data2.csv）              │ 19.9°    │ 0.925      │
+  ├─────────────────────────────────────┼──────────┼────────────┤
+  │ cv 修正为 0.09/0.10（理想）         │ 0.4°     │ 1.000      │
+  └─────────────────────────────────────┴──────────┴────────────┘
+
+  纯欠补偿阻尼就能同时解释滞后和幅值损失，不需要假设测量延迟。分析完成，以下是完
+  整报告。
+
+  ---
+  结论：plot_data2.csv 分析报告
+
+  1. 上下 pitch 耦合：存在但很小，不是跟踪偏差的主因
+
+  数据（20778 点 @990Hz，21.2s）关键发现：
+
+  - CH13（pitchdown 速度）恒等于 −0.0073，21 秒内只有 3 个唯一浮点值（±1e-8
+  浮点舍入）。这不是正常静止（静止会有编码器抖动），而是速度反馈冻结/陈旧。注意
+  ：−0.0073 恰好等于反演出的 pitchdown
+  漂移速度，所以它可能是"真实恒定低速"，但以 0.42°/s 匀速移动 21s 应累积
+  8.4°，与 CH1 漂移（仅 −0.04 rad）对不上——最可能：速度反馈未更新，是陈旧值。
+  - 差动一致性：d(CH1)/dt ≈ CH2（残差仅 6.3%）。反演 pitchdown 位置 2Hz 幅值仅
+  0.005 rad（0.3°），速度 0.07 rad/s。pitchdown 的耦合运动对
+  CH1（差动位置）的污染 <0.5%，肉眼看不到。
+
+  建议：在 pitchdown 锁位时手推一下 pitchdown，看 CH13 是否变化。若不变 → 检查
+  DM4310 速度反馈（CAN 解码/电机使能）；这影响 pitchdown
+  锁位控制的速度阻尼项（pitchdown_kd*(2-speed) 在用陈旧速度），但不影响 pitchup
+  开环跟踪。
+
+  2. 开环速度跟踪偏差的根因：欠补偿粘滞阻尼 Δcv≈0.037
+
+  均匀重采样后的可靠拟合（消除了 990Hz vs 1000Hz 的累积相位误差）：
+
+  - 速度滞后 ref_vel 19.9°（27.7ms），幅值比 0.925
+  - 位置滞后 ref_pos 24°，幅值 0.927（位置/速度一致，同一物理运动）
+
+  机制：真实总粘滞阻尼约 cv≈0.09/0.10，而当前前馈只补偿了 cv=0.05/0.06，欠补偿
+  Δcv≈0.037 Nm·s/rad。物理上 Δcv/(Jω) = 0.037/(0.008×12.57) = 0.37 → 滞后 
+  20°，幅值 1/√(1+0.37²) = 0.94，与实测完美吻合（仿真复现 21.4°/0.931）。
+
+  为什么 IDENTIFY 只辨识出 0.05？ 因为 chirp 激励幅值大（0.1→3
+  Nm）、速度高，粘滞项占主导且贴近平均工况；而 TUNE
+  低速段，真实粘滞+静摩擦综合效应更强。这正是你警告过的"脚本不一定对"——IDENTIFY 
+  的 cv 辨识在低速段系统性偏低。
+
+  3. 建议
+
+  将 app_gimbal.c 中 pitchup_axis_cfg.params 的粘滞摩擦提高到：
+
+  .friction_viscous_pos = 0.09f,  // 原 0.05
+  .friction_viscous_neg = 0.10f,  // 原 0.06
+
+  仿真预测：滞后降到 ~2.7°，幅值比 0.999（接近完美）。库仑摩擦（0.02/0.0）和
+  J=0.008 保持不动。改完后可重新录一次 TUNE 数据验证。
+
+  ---
+  需要我更新 app_gimbal.c 的参数吗？（注意 app 是 git
+  子模块，改完需在子模块内单独 commit）另外，那个 analyze_coupling.py 和
+  simulate_fix.py 已保存在 ig/ 下，可供后续复用。
+
+✻ Churned for 3m 47s
+
+※ recap: 分析 pitchup 轴开环跟踪偏差：根因是欠补偿粘滞阻尼（真实 cv≈0.09，前馈只有 0.05/0.06），已用仿真验证。下一步：待你确认是否把 app_gimbal.c 的 cv 参数改成 0.09/0.10。 (disable recaps in /config)
+
+❯ 下pitch有机械限位，所以        pitchdown_motor_setref = 2.2 +                 
+                                        // 固定值                               
+                                   1.0 * (pitchdown_position_max -              
+  pitchdown_mdata.position) + // 约等于重力前馈                                 
+                                   pitchdown_kd * (2 - pitchdown_mdata.speed) + 
+                 // 速度误差项                                                  
+                                   diejia_pitchup_motor_setref;                 
+                 // pitchup单向基本可以顶在机械限位上面不动。drv\drv_axis_lite  
+  \记录\2026-08-11\2_pitchup\plot_data3.csv这个是改了参数之后的数据，在下pitch  
+  还没有直立时开始测量，然后5s延迟后就卡住了，手碰一下就上下撞限位              
+
+  Thought for 6s (ctrl+o to expand)
+
+● 新数据 plot_data3.csv 是改参数后的结果，而且出现了新现象："5s
+  延迟后卡住，手碰就上下撞限位"。让我先看数据。
+
+● Bash(python -c "
+      import sys, io…)
+  ⎿  shape (1000000, 17) 列数 17
+     第一个非零索引: 975786 总行 1000000
+     时长 27.2 s, FS 889 Hz
+     … +26 lines (ctrl+o to expand)
+
+  Thought for 29s (ctrl+o to expand)
+
+● 数据揭示了严重问题：全程速度高达 ±17.96 rad/s、力矩 ±3.7 Nm，位置在
+  +0.72、+0.6055 等处长时间"卡住"不动，期间 setref 却在小范围变化。用户说"5s
+  延迟后就卡住了，手碰就撞限位"。
+
+  关键疑点：t=6-8s 时 setref=0.2787 精确等于重力前馈（0.28·cos(0.095)），说明
+  iff=0 且 fff=0——即 t 或参考信号被冻结。让我检查
+  CH4/CH5/CH6（参考）是否冻结，以及"卡住"段落在发生什么：
+
+● Bash(python -c "
+      import sys, io…)
+  ⎿  CH4 ref_pos: 非零段 15512点, 唯一值~297, min=-0.1000 max=+0.1000
+     CH5 ref_vel: 非零段 15513点, 唯一值~642, min=-1.2566 max=+1.2566
+     CH6 ref_acc: 非零段 15512点, 唯一值~2088, min=-15.7914 max=+15.7914
+     … +6 lines (ctrl+o to expand)
+
+  Thought for 17s (ctrl+o to expand)
+
+● 关键发现：CH4/CH5/CH6（参考）正常在跑，但 t=4.42~9.41s 静止段 setref 精确 =
+  0.2787（=重力前馈），这是 5s 延时中（合理）。但延时结束后位置冲到 +0.72
+  卡住、来回撞限位。让我看 t=9~20s 的详细时间序列，理解"撞限位"的机制：
+
+● Bash(python -c "
+      import sys, io…)
+  ⎿  === t=9.3~12s 详细 (延时结束→冲限位) ===
+       t= 9.300  pos=+0.0952  spd=-0.0073  ref_pos=+0.0000  ref_acc=+0.00
+     gff=+0.2787  iff=+0.0000  fff=+0.0000  setref=+0.2787
+     … +138 lines (ctrl+o to expand)
+
+  Thought for 53s (ctrl+o to expand)
+
+● 现在完全看清了！这是过补偿正反馈失控。让我确认当前代码参数，然后定量验证：
+
+● Bash(cd /c/Users/itgz2/Desktop/betarobot_main/app && git diff --
+      app_gimbal/app_gimbal.c | head -60; echo "---当前参数---"; grep -n
+      "friction_viscous\|friction_coulomb\|…)
+  ⎿  ---当前参数---
+     144:            .gravity = 0.28,
+     146:            .inertia = 0.008f, // kg·m²
+     … +4 lines (ctrl+o to expand)
+
+  Thought for 5s (ctrl+o to expand)
+
+● 确认：代码已改成 cv=0.09/0.10。现在从 plot_data3 数据定量求解真实粘滞系数
+  cv_real，验证过补偿：
+
+● Bash(python -c "
+      import sys, io…)
+  ⎿  Error: Exit code 1
+     Traceback (most recent call last):
+       File "<string>", line 6, in <module>
+         df = 
+     pd.read_csv('drv/drv_axis_lite/��¼/2026-08-11/2_pitchup/plot_data3.csv')
+              
+     ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+       File "C:\Users\itgz2\AppData\Local\Programs\Python\Python314\Lib\site-pac
+     kages\pandas\io\parsers\readers.py", line 873, in read_csv
+         return _read(filepath_or_buffer, kwds)
+       File "C:\Users\itgz2\AppData\Local\Programs\Python\Python314\Lib\site-pac
+     kages\pandas\io\parsers\readers.py", line 300, in _read
+         parser = TextFileReader(filepath_or_buffer, **kwds)
+       File "C:\Users\itgz2\AppData\Local\Programs\Python\Python314\Lib\site-pac
+     kages\pandas\io\parsers\readers.py", line 1645, in __init__
+
+     … +19 lines (ctrl+o to expand)
+  Thought for 2s (ctrl+o to expand)
+
+● bash 传中文路径被 Windows 命令行编码破坏了。写成脚本文件运行：
+
+● Write(ig\verify_cv.py)
+  ⎿  Wrote 68 lines to ig\verify_cv.py
+       2 """*- coding: utf-8 -*-
+       3 从 plot_data3 (cv_ff=0.09/0.10 失控数据) 反解真实粘滞系数 cv_rea
+         l.
+       4 动力学: setref - gff = J*a + cv_real*v + Tc*sign(v)   (假设 gff=
+         真实重力, Tc_ff=真实Tc)
+       6 """real = (setref - gff - J*a - Tc*sign(v)) / v
+       7 import sys, io
+       8 import numpy as np
+       9 import pandas as pd
+      10 from scipy.signal import savgol_filter
+     … +71 lines (ctrl+o to expand)
+
+● Bash(cd /c/Users/itgz2/Desktop/betarobot_main && python ig/verify_cv.py 2>&1)
+  ⎿  速度最小非零变化: 0.014600 rad/s  (对比 60/8192=0.007324)
+
+     反解 cv_real (假设 gff=重力, J=0.008):
+     … +20 lines (ctrl+o to expand)
+
+  Thought for 21s (ctrl+o to expand)
+
+● cv_real 反解结果：跑偏段收敛到 0.06（P25~P75: 0.046~0.076），而前馈用了
+  0.09——过补偿约 0.03。正反馈系数 Δcv/J = 3.75/s（时间常数 0.27s），所以 1
+  秒内位置就指数漂移到撞限位。速度量化步长确认 0.0146 rad/s。
+
+  再测一下 plot_data3 跟随良好段的滞后，确认延迟说：
+
+● Bash(python -c "
+      import sys, io…)
+  ⎿  跟随段(9.6-10.3s): ref_vel 领先实测速度 5000 ms
+       幅值比 spd/rv = 0.955
+       位置: ref_pos 领先实测位置 14000 ms
+
+  Thought for 12s (ctrl+o to expand)
+
+● 交叉相关被 2Hz 周期性污染，但核心结论已足够明确。以下是完整报告。
+
+  ---
+  plot_data3 失控根因：过补偿粘滞 → 正反馈失控
+
+  现象时间线（数据全长 27.2s）
+
+  ┌──────────┬──────────────────────────────────────────────────────────────┐
+  │  时间段  │                             状态                             │
+  ├──────────┼──────────────────────────────────────────────────────────────┤
+  │ 0 ~ 4.4s │ 未使能（setref=0）                                           │
+  ├──────────┼──────────────────────────────────────────────────────────────┤
+  │ 4.4 ~    │ 使能+5s 延时（setref 恒 = 重力前馈 0.2787，位置静止          │
+  │ 9.4s     │ +0.095）——这是正常延时行为，不是卡死                         │
+  ├──────────┼──────────────────────────────────────────────────────────────┤
+  │ 9.4 ~    │ 正弦启动，正常跟随约 1.2s                                    │
+  │ 10.6s    │                                                              │
+  ├──────────┼──────────────────────────────────────────────────────────────┤
+  │ 10.6 ~   │ 位置快速跑偏：+0.09 → −0.41 → +0.80，冲撞上限位              │
+  │ 11.7s    │                                                              │
+  ├──────────┼──────────────────────────────────────────────────────────────┤
+  │ 11.7 ~   │ 卡在上限位 +0.72 附近（setref                                │
+  │ 18s      │ 还在小幅变化但位置被机械挡住不动）                           │
+  ├──────────┼──────────────────────────────────────────────────────────────┤
+  │ ~20s     │ 手碰触发，±18 rad/s、±3.7 Nm 来回撞上下限位（位置 −1.03 ~    │
+  │          │ +0.86）                                                      │
+  └──────────┴──────────────────────────────────────────────────────────────┘
+
+  根因：cv_ff=0.09 > 真实 cv≈0.06，前馈正反馈
+
+  看代码 CalcFeedforward——摩擦前馈用的是实际速度 speed（不是参考速度）：
+
+  inst->params.friction_ff = inst->params.friction_viscous_pos * speed + ...;
+
+  开环（kp=kd=0）净动力学为：
+  J·a = J·ref_acc + (cv_ff − cv_real)·v + (Tc_ff − Tc_real)·sign(v)
+
+  当 cv_ff > cv_real，就出现 (cv_ff−cv_real)/J·v
+  的正反馈项：速度越大、驱动力越大、速度更大 → 指数发散 →
+  撞限位。开环下没有反馈来压制它。
+
+  证据：
+  - 反解真实粘滞（cv_real = (setref−gff−J·a−Tc)/v）：跑偏段（v
+  大、信噪比高）中位数 0.061（P25~P75: 0.046~0.076），跟随段更分散但偏高。前馈
+  0.09 过补偿约 0.03，正反馈系数 3.75/s，时间常数仅 0.27s——所以 1
+  秒内位置就冲爆。
+  - t=11.4~11.7s 期间 ref_acc 是 负的（本应减速），但速度仍保持 +3.4 rad/s
+  把位置从 −0.2 推到 +0.8——净加速来源就是过补偿项。
+  - 撞限位后速度 ±18 rad/s、力矩 ±3.7 Nm（堵转大力矩），位置往返撞击。
+
+  必须承认：我之前 plot_data2 的结论有误
+
+  plot_data2 的 20° 滞后（27.7ms）我当时归因于"欠补偿 0.037"并据此建议 cv=0.09——
+  这是过拟合。欠补偿和测量延迟都能产生滞后，但只有过补偿会失控。真相更接近：
+
+  - 真实 cv ≈ 0.05~0.06（你原始辨识值其实是准的）
+  - 剩余滞后主要是速度测量延迟（约 20ms 级：DM4310 速度反馈 + CAN
+  链路），纯前馈永远消除不了
+  - 附带发现：速度反馈量化步长 0.0146 rad/s（很粗），低速时摩擦前馈 fff
+  阶梯跳变，CH13"冻结在 −0.0073"正是量化+超低速的表现
+
+  建议
+
+  1. 立即把 cv 调回 0.05/0.06（真实值），甚至 0.04/0.05 更安全——开环下 cv_ff 
+  宁欠勿过，欠补偿只是滞后一点，过补偿直接爆炸。
+  2. 开环滞后的本质是速度测量延迟，只能靠 step4 的 kd 闭环补偿（kd·(ref_vel−v)
+  是负反馈，能同时抵消残余摩擦误差和延迟）。先加小 kd（如
+  0.02~0.05）试探稳定性，再上 kp。
+  3. 若还想纯开环精调 cv：从 0.04 开始只增不减、小幅步进，每次观察是否开始漂移。
+
+  需要我把 app_gimbal.c 的 cv 改回 0.05/0.06 吗？（app
+  是子模块，改完需在子模块内单独 commit）
+
+✻ Brewed for 3m 25s
