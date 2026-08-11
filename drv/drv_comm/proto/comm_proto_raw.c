@@ -28,7 +28,7 @@ static int8_t CommProtoRawUnpack(CommProto *self, const uint8_t *data)
     if (self == NULL || data == NULL)
         return -1;
     if (self->on_frame)
-        self->on_frame(self, data); /* 空协议：data 即完整 payload */
+        self->on_frame(data); /* 空协议：data 即完整 payload */
     return 0;
 }
 

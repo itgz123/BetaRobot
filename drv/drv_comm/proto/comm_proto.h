@@ -5,7 +5,7 @@
  * 职责：把"任意长度数据单元"抽象为"payload 打包/解包"的统一通道。
  *   - 发送：vtable->pack(payload) 把 payload 打包进 tx_buff（+协议开销），
  *           再由 ProtoSend 交给 media 发送
- *   - 接收：unpack(data) 解包一段数据，出完整 payload 后调 on_frame 回调（引擎挂接）
+ *   - 接收：unpack(data) 解包一段数据，出完整 payload 后调 on_frame 回调（CommConfig 挂接）
  *   - 长度模型：固定长度，payload 大小编译期确定（DEF 宏写入），接口不显式传 len
  * 基类不感知介质物理限制（属 media 层），不解析 payload 内容（属引擎/应用）。
  */
@@ -33,8 +33,10 @@ typedef enum : uint8_t
 
 typedef struct CommProto CommProto;
 
-/* 出帧回调：解出一条完整 payload 时调用（引擎挂接） */
-typedef void (*ProtoFrameCallback)(CommProto *proto, const uint8_t *payload);
+/* 出帧回调：解出一条完整 payload 时调用。
+ * @note 不带 proto 参数：每个 comm 实例通过 CommConfig.on_frame 传入自己
+ *       的函数，天然知道是哪条对话来的，无需靠 proto 指针区分 */
+typedef void (*ProtoFrameCallback)(const uint8_t *payload);
 
 /* 虚函数表（派生结构体首成员为 vtable，drv_motor_base 约定） */
 typedef struct
@@ -54,7 +56,7 @@ struct CommProto
     uint16_t tx_buff_size;           /* 发送缓冲大小（= payload_size + 协议开销） */
     void *parent;                    /* 指向 comm 实例 */
     void *media;                     /* 指向 media 实例（发送用） */
-    ProtoFrameCallback on_frame;     /* 出帧回调（引擎挂） */
+    ProtoFrameCallback on_frame;     /* 出帧回调（CommConfig 挂接） */
 };
 
 /* 公共接口 */
