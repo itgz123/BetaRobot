@@ -23,11 +23,6 @@ typedef struct
 #define COMM_INSTANCE_RX_PROTO(inst) ((CommProto *)((inst)->rx_proto))
 #define COMM_INSTANCE_TX_PROTO(inst) ((CommProto *)((inst)->tx_proto))
 
-/* 挂载表容量（默认值，可被 app_cfg.h 覆盖） */
-#ifndef COMM_LINK_NUM
-#define COMM_LINK_NUM 16 /* media↔proto 挂载表容量 */
-#endif
-
 /**
  * @brief comm 运行时配置（CommConfig 传入；可重入，可反复调用修改）
  */
@@ -43,8 +38,9 @@ typedef struct
  * @retval 0 成功；-1 失败（参数非法 / 后端注册失败 / 类型未支持）
  *
  * @note 完成三步：1) media 后端注册（USART 内部做 USARTRegister，防重复注册）；
- *       2) proto 后端 Init（挂 vtable）；3) 接线分发（media 接管接收钩子 +
- *       proto 接管出帧钩子 + 建挂载）。介质参数与出帧回调由 CommConfig 配置。
+ *       2) 接收/发送协议后端 Init（挂 vtable）；3) 接线：media 接管接收钩子 +
+ *       建立 media→comm 反向指针（接收时经 media->parent 反查 rx_proto 解包）。
+ *       介质参数与出帧回调由 CommConfig 配置。
  */
 int8_t CommRegister(CommInstance *inst);
 
