@@ -2,9 +2,9 @@
  * @file comm_media.c
  * @brief 通信框架-硬件层（Media）基类实现
  *
- * MediaHandleRx 只负责"收到数据 → 触发 rx_cb"（引擎设置）。
- * 引擎在 rx_cb 里遍历 media->proto_list 逐个喂协议——协议分发是引擎的职责，
- * 这样 media 基类零依赖、可独立编译，与协议层完全解耦。
+ * MediaHandleRx 只负责"收到数据 → 触发 rx_cb"（comm 层设置）。
+ * 接收分发是 comm 层的职责（按 unpack_mode 分流），media 基类零依赖、
+ * 可独立编译，与协议层完全解耦。
  */
 
 #include "comm_media.h"
@@ -18,10 +18,10 @@ void MediaHandleRx(CommMedia *media, const uint8_t *data)
         return;
     if (media->rx_cb)
     {
-        media->rx_cb(media, data); /* 引擎挂的钩子：喂协议/写队列 */
+        media->rx_cb(media, data); /* comm 层挂的钩子：分流解包 */
         return;
     }
-    /* 未挂接收钩子：丢弃（引擎应设置 rx_cb） */
+    /* 未挂接收钩子：丢弃（comm 层应设置 rx_cb） */
     LOGWARNING("[media] rx_cb not set, drop");
 }
 

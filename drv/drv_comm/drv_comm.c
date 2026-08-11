@@ -23,19 +23,45 @@
 
 #ifdef DRV_COMM_USED
 
+/* 从 CommInstance 取介质/协议基类指针（void* 指向派生实例，首成员即基类） */
+#define COMM_INSTANCE_MEDIA(inst) ((CommMedia *)((inst)->media))
+#define COMM_INSTANCE_RX_PROTO(inst) ((CommProto *)((inst)->rx_proto))
+#define COMM_INSTANCE_TX_PROTO(inst) ((CommProto *)((inst)->tx_proto))
+
 /*------------- 内部函数实现 -------------*/
+
+/**
+ * @brief 接收数据入队（UNPACK_IN_TASK 模式：不阻塞中断）
+ * @todo 完整实现：接收队列（bsp_freertos）+ 共享 RX 任务解包（下一轮）
+ */
+static void CommRxPush(CommInstance *inst, const uint8_t *data)
+{
+    (void)inst;
+    (void)data;
+}
 
 /**
  * @brief 接收分发钩子（挂到 media->rx_cb）
  * @note 经 media->parent（CommRegister 建立的反向指针）反查所属 comm 实例，
- *       直接喂给该实例的接收协议解包——一个 media 只属于一个 comm，无需挂载表。
+ *       按编译期配置的解包位置分流：ISR 直解 / 搬入队列由 RX 任务解包。
+ *       一个 media 只属于一个 comm，无需挂载表。
  */
 static void CommMediaRxHook(CommMedia *media, const uint8_t *data)
 {
     CommInstance *inst = (CommInstance *)media->parent;
     if (inst == NULL || inst->rx_proto == NULL)
         return;
-    ProtoUnpack(COMM_INSTANCE_RX_PROTO(inst), data);
+
+    switch (inst->unpack_mode)
+    {
+    case UNPACK_IN_TASK:
+        CommRxPush(inst, data); /* 搬入接收队列，由 RX 任务解包（待实现） */
+        break;
+    case UNPACK_IN_ISR:
+    default:
+        ProtoUnpack(COMM_INSTANCE_RX_PROTO(inst), data); /* ISR 直解 */
+        break;
+    }
 }
 
 /*------------- 外部接口实现 -------------*/
