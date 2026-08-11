@@ -6,11 +6,14 @@
  *   - CommRegister（不可重入）：media 后端注册 → proto 挂 vtable → 接线分发
  *   - CommConfig  （可重入）  ：介质参数 + 出帧回调（均可反复修改）
  *
+ * 一条 comm = 一个双向对话：接收协议(rx_proto)与发送协议(tx_proto)分离，
+ * 各自 payload 大小可不同（编译期确定，DEF 宏写入）。
+ *
  * 分发链路（原独立 engine 层收编到本层，删除了纯冗余的抽象）：
  *   接收：bsp ISR → media 适配钩子 → MediaHandleRx → CommMediaRxHook
- *         → 遍历挂载表 → ProtoUnpack → 出帧 → CommProtoFrameHook
+ *         → 遍历挂载表 → rx_proto unpack → 出帧 → CommProtoFrameHook
  *         → 消费者表匹配 → 消费回调
- *   发送：CommSend → ProtoSend（proto->media 由 DEF 宏绑定）→ MediaSend
+ *   发送：CommSend → tx_proto pack → MediaSend（tx_proto->media 由 DEF 宏绑定）
  */
 
 #include "drv_comm.h"
@@ -114,13 +117,15 @@ static int8_t CommSetConsumer(CommProto *proto, ProtoFrameCallback cb)
 int8_t CommRegister(CommInstance *inst)
 {
     CommMedia *media;
-    CommProto *proto;
+    CommProto *rx_proto;
+    CommProto *tx_proto;
 
-    if (inst == NULL || inst->media == NULL || inst->proto == NULL)
+    if (inst == NULL || inst->media == NULL || inst->rx_proto == NULL || inst->tx_proto == NULL)
         return -1;
 
     media = COMM_INSTANCE_MEDIA(inst);
-    proto = COMM_INSTANCE_PROTO(inst);
+    rx_proto = COMM_INSTANCE_RX_PROTO(inst);
+    tx_proto = COMM_INSTANCE_TX_PROTO(inst);
 
     /* 1. media 后端注册（不可重入：USART 内部做 bsp USARTRegister 防重复注册）
      * @note 按 inst->media_type 分发，不能用 media->type：DEF 宏静态定义时
@@ -135,31 +140,41 @@ int8_t CommRegister(CommInstance *inst)
         return -1; /* 介质类型未支持 */
     }
 
-    /* 2. proto 后端初始化（挂 vtable），按 inst->proto_type 分发
+    /* 2. 接收/发送协议后端初始化（各自挂 vtable），按类型分发
      * @note 同上，避免用未初始化的基类字段 */
-    switch (inst->proto_type)
+    switch (inst->rx_proto_type)
     {
     case PROTO_RAW:
-        if (CommProtoRawInit((CommProtoRaw *)inst->proto) != 0)
+        if (CommProtoRawInit((CommProtoRaw *)inst->rx_proto) != 0)
             return -1;
         break;
     default:
-        return -1; /* 协议类型未支持 */
+        return -1; /* 接收协议类型未支持 */
+    }
+    switch (inst->tx_proto_type)
+    {
+    case PROTO_RAW:
+        if (CommProtoRawInit((CommProtoRaw *)inst->tx_proto) != 0)
+            return -1;
+        break;
+    default:
+        return -1; /* 发送协议类型未支持 */
     }
 
-    /* 3. 接线分发：media 接管接收钩子 → proto 接管出帧钩子 → 建挂载
-     * @note 挂载表静态零初始化，无需 EngineInit */
+    /* 3. 接线分发：media 接管接收钩子 → rx_proto 接管出帧钩子 → 建挂载
+     * @note 只挂接收协议（发送协议不参与接收分发）；挂载表静态零初始化 */
     media->rx_cb = CommMediaRxHook;
-    proto->on_frame = CommProtoFrameHook;
+    rx_proto->on_frame = CommProtoFrameHook;
     if (s_link_cnt >= COMM_LINK_NUM)
         return -1;
     s_links[s_link_cnt].media = media;
-    s_links[s_link_cnt].proto = proto;
+    s_links[s_link_cnt].proto = rx_proto;
     s_link_cnt++;
 
     /* 建立反向指针：media/proto 回指所属 comm 实例 */
     media->parent = inst;
-    proto->parent = inst;
+    rx_proto->parent = inst;
+    tx_proto->parent = inst;
     inst->inited = 1;
     return 0;
 }
@@ -185,10 +200,10 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
         }
     }
 
-    /* 2. 出帧消费回调（可重入：按 proto 覆盖式注册，运行期可修改） */
+    /* 2. 出帧消费回调（可重入：按接收协议覆盖式注册，运行期可修改） */
     if (cfg->on_frame != NULL)
     {
-        if (CommSetConsumer(COMM_INSTANCE_PROTO(inst), cfg->on_frame) != 0)
+        if (CommSetConsumer(COMM_INSTANCE_RX_PROTO(inst), cfg->on_frame) != 0)
             return -1;
     }
     return 0;
@@ -196,10 +211,10 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
 
 int8_t CommSend(CommInstance *inst, const uint8_t *payload)
 {
-    if (inst == NULL || inst->proto == NULL || payload == NULL)
+    if (inst == NULL || inst->tx_proto == NULL || payload == NULL)
         return -1;
-    /* proto->media 由 COMM_DEF 宏静态绑定，直接经该协议打包并发送 */
-    return ProtoSend((CommProto *)inst->proto, payload);
+    /* 发送协议->media 由 COMM_DEF 宏静态绑定，直接经该协议打包并发送 */
+    return ProtoSend((CommProto *)inst->tx_proto, payload);
 }
 
 #endif /* DRV_COMM_USED */
