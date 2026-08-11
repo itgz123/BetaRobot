@@ -9,10 +9,10 @@
  * 一条 comm = 一个双向对话：接收协议(rx_proto)与发送协议(tx_proto)分离，
  * 各自 payload 大小可不同（编译期确定，DEF 宏写入）。
  *
- * 分发链路：
+ * 分发链路（无挂载表：media 收到数据 → 经 media->parent 反查所属 comm 实例）：
  *   接收：bsp ISR → media 适配钩子 → MediaHandleRx → CommMediaRxHook
- *         → 遍历挂载表 → rx_proto unpack → 出帧 → on_frame（业务回调，
- *         由 CommConfig 直接挂到 rx_proto->on_frame，无需中间分发层）
+ *         → media->parent 反查 comm → rx_proto unpack → 出帧 → on_frame
+ *         （业务回调由 CommConfig 直接挂到 rx_proto->on_frame）
  *   发送：CommSend → tx_proto pack → MediaSend（tx_proto->media 由 DEF 宏绑定）
  */
 
@@ -23,40 +23,19 @@
 
 #ifdef DRV_COMM_USED
 
-/*------------- 内部结构 -------------*/
-
-/* media↔proto 挂载表（接收分发用：media 收到数据 → 喂给挂载的 proto） */
-typedef struct
-{
-    CommMedia *media; /* 介质基类指针 */
-    CommProto *proto; /* 协议基类指针 */
-} CommLink_s;
-
-/*------------- 静态实例 -------------*/
-
-static CommLink_s s_links[COMM_LINK_NUM];
-static uint8_t s_link_cnt = 0;
-
-/*------------- 内部函数声明 -------------*/
-
-static void CommMediaRxHook(CommMedia *media, const uint8_t *data);
-
 /*------------- 内部函数实现 -------------*/
 
 /**
  * @brief 接收分发钩子（挂到 media->rx_cb）
- * @note 遍历该 media 挂载的所有 proto 逐个喂解包；
- *       各协议靠自身帧校验拒绝不属于自己的字节。
+ * @note 经 media->parent（CommRegister 建立的反向指针）反查所属 comm 实例，
+ *       直接喂给该实例的接收协议解包——一个 media 只属于一个 comm，无需挂载表。
  */
 static void CommMediaRxHook(CommMedia *media, const uint8_t *data)
 {
-    for (uint8_t i = 0; i < s_link_cnt; i++)
-    {
-        if (s_links[i].media == media)
-        {
-            ProtoUnpack(s_links[i].proto, data);
-        }
-    }
+    CommInstance *inst = (CommInstance *)media->parent;
+    if (inst == NULL || inst->rx_proto == NULL)
+        return;
+    ProtoUnpack(COMM_INSTANCE_RX_PROTO(inst), data);
 }
 
 /*------------- 外部接口实现 -------------*/
@@ -108,18 +87,11 @@ int8_t CommRegister(CommInstance *inst)
         return -1; /* 发送协议类型未支持 */
     }
 
-    /* 3. 接线分发：media 接管接收钩子 → 建挂载
-     * @note 只挂接收协议（发送协议不参与接收分发）；挂载表静态零初始化。
-     *       出帧回调 on_frame 由 CommConfig 挂到 rx_proto，本阶段置 NULL 即可。 */
+    /* 3. 接线：media 接管接收钩子；出帧回调由 CommConfig 挂到 rx_proto->on_frame */
     media->rx_cb = CommMediaRxHook;
     rx_proto->on_frame = NULL;
-    if (s_link_cnt >= COMM_LINK_NUM)
-        return -1;
-    s_links[s_link_cnt].media = media;
-    s_links[s_link_cnt].proto = rx_proto;
-    s_link_cnt++;
 
-    /* 建立反向指针：media/proto 回指所属 comm 实例 */
+    /* 建立反向指针：media/proto 回指所属 comm 实例（接收分发据此反查 rx_proto） */
     media->parent = inst;
     rx_proto->parent = inst;
     tx_proto->parent = inst;
