@@ -9,8 +9,6 @@
 
 typedef struct
 {
-    uint8_t sender_id;            // 发送者id（运行期 CommConfig 配置）
-    uint8_t receiver_id;          // 接收者id（运行期 CommConfig 配置）
     MediaType_e media_type;       // 介质类型（定义时写入）
     ProtocolType_e rx_proto_type; // 接收协议类型（定义时写入）
     ProtocolType_e tx_proto_type; // 发送协议类型（定义时写入）
