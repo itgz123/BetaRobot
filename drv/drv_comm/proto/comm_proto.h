@@ -4,7 +4,7 @@
  *
  * 职责：把"任意长度数据单元"抽象为"payload 打包/解包"的统一通道。
  *   - 发送：vtable->pack(payload) 把 payload 打包进 tx_buff（+协议开销），
- *           再由 ProtoSend 交给 media 发送
+ *           交由 comm 顶层（CommSend）经 MediaSend 发出
  *   - 接收：unpack(data) 解包一段数据，出完整 payload 后调 on_frame 回调（CommConfig 挂接）
  *   - 长度模型：固定长度，payload 大小编译期确定（DEF 宏写入），接口不显式传 len
  * 基类不感知介质物理限制（属 media 层），不解析 payload 内容（属引擎/应用）。
@@ -59,9 +59,7 @@ struct CommProto
     ProtoFrameCallback on_frame;     /* 出帧回调（CommConfig 挂接） */
 };
 
-/* 公共接口 */
-int8_t ProtoSend(CommProto *self, const uint8_t *payload); /* 打包并发送 */
-
+/* 公共接口（static inline，判空 + vtable 分发；发送的"打包+发介质"由 comm 层统一） */
 static inline int8_t ProtoPack(CommProto *self, const uint8_t *payload)
 {
     if (!self || !self->vtable || !self->vtable->pack)
