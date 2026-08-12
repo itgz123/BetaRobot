@@ -46,6 +46,11 @@ static void MediaUsartRxHook(USARTInstance *usart)
     CommMedia *media = (CommMedia *)usart->parent; /* DRV 层设置的反向指针 */
     if (media == NULL)
         return;
+    /* 固定长度模型：UART 无分包，一帧 = 整个接收缓冲（rx_buff_size）。
+     * DMA+IDLE 下 rx_len 运行时才知，可能 < rx_buff_size（IDLE 提前触发）；
+     * 长度不对直接丢，不回调上层——协议层拿到的永远是完整一帧 */
+    if (usart->rx_len != usart->rx_buff_size)
+        return;
     MediaHandleRx(media, usart->rx_buff);
 }
 
