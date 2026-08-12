@@ -156,10 +156,23 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
 
 int8_t CommSend(CommInstance *inst, const uint8_t *payload)
 {
+    CommProto *tx_proto;
+    CommMedia *media;
+
     if (inst == NULL || inst->tx_proto == NULL || payload == NULL)
         return -1;
-    /* 发送协议->media 由 COMM_DEF 宏静态绑定，直接经该协议打包并发送 */
-    return ProtoSend((CommProto *)inst->tx_proto, payload);
+
+    /* 打包（vtable->pack，payload → tx_buff）→ 经绑定的 media 发出
+     * @note 发送协议->media 由 COMM_DEF 宏静态绑定（tx_proto->media），
+     *       打包+发送统一由 comm 层完成，proto 只负责打/解包 */
+    tx_proto = (CommProto *)inst->tx_proto;
+    if (ProtoPack(tx_proto, payload) != 0)
+        return -1;
+
+    media = (CommMedia *)tx_proto->media;
+    if (media == NULL)
+        return -1;
+    return MediaSend(media, tx_proto->tx_buff);
 }
 
 #endif /* DRV_COMM_USED */

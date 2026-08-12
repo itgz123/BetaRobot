@@ -16,7 +16,6 @@ set(MODULE_SOURCES
     drv_comm/drv_comm.c
     drv_comm/media/comm_media.c
     drv_comm/media/comm_media_usart.c
-    drv_comm/proto/comm_proto.c
     drv_comm/proto/comm_proto_raw.c
     # comm结束
 )
