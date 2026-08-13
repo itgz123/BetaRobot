@@ -33,8 +33,13 @@ static const CommMediaVTable_s s_usart_vtable = {
  * 分包后端（CAN/USB）需用状态机标志 + 发送完成回调续发，此处不需要。 */
 static int8_t MediaUsartSend(CommMedia *media, const uint8_t *data)
 {
-    USARTInstance *usart = (USARTInstance *)media->media;
-    if (media == NULL || usart == NULL || data == NULL || media->tx_buff_size == 0)
+    USARTInstance *usart;
+
+    /* 先判空再解引用（media==NULL 时不能先访问 media->media） */
+    if (media == NULL || data == NULL || media->tx_buff_size == 0)
+        return -1;
+    usart = (USARTInstance *)media->media;
+    if (usart == NULL)
         return -1;
     memcpy(media->tx_buff, data, media->tx_buff_size);
     return USARTTransmit(usart, media->tx_buff, media->tx_buff_size, MEDIA_USART_TX_TIMEOUT_MS);

@@ -84,34 +84,36 @@ int8_t CommSend(CommInstance *inst, const uint8_t *payload);
  * @brief 静态定义一条通信（对话）：双向，收发协议与内容可不同
  * @param name            实例名称
  * @param media_type_     介质类型（token 拼接 COMM_##media_type_##_DEF）
- * @param rx_proto_type_  接收协议类型（token 拼接 COMM_##rx_proto_type_##_DEF）
- * @param tx_proto_type_  发送协议类型（token 拼接 COMM_##tx_proto_type_##_DEF）
+ * @param rx_proto_       接收协议名 token：拼接 COMM_##rx_proto_##_DEF（协议 DEF 宏）、
+ *                        PROTO_##rx_proto_（协议类型 id）、PROTO_##rx_proto_##_OVERHEAD（开销）
+ * @param tx_proto_       发送协议名 token（同上三件套）
  * @param rx_size         接收 payload 大小（media rx 缓冲 = rx_size + 协议开销）
  * @param tx_size         发送 payload 大小（media tx 缓冲 = tx_size + 协议开销）
  * @param unpack_mode_    接收解包位置（UNPACK_IN_ISR 直解 / UNPACK_IN_TASK 入队解包）
  *
- * @note 只定义编译期必须确定的量；运行期参数（介质配置 / 回调）
- *       由 CommRegister / CommConfig 配置。
+ * @note 协议名 token 内置为 RAW / CUSTOM；app 自定义协议（id >= PROTO_USER）需：
+ *       1) app 层定义协议头（DEF 宏 + 开销宏 + 类型 id + Init + 后端描述符）；
+ *       2) CommRegister 前调用 CommProtoRegisterBackend 登记；3) 此处传自定义 token。
  * @example
- *   COMM_DEF(cmd_comm, MEDIA_USART, PROTO_RAW, PROTO_RAW, 8, 16, UNPACK_IN_ISR);
+ *   COMM_DEF(cmd_comm, MEDIA_USART, RAW, RAW, 8, 16, UNPACK_IN_ISR);
  */
-#define COMM_DEF(name, media_type_, rx_proto_type_, tx_proto_type_, rx_size, tx_size, unpack_mode_) \
-    COMM_##media_type_##_DEF(name##_media,                                                          \
-                             (rx_size) + COMM_PROTO_OVERHEAD(rx_proto_type_),                       \
-                             (tx_size) + COMM_PROTO_OVERHEAD(tx_proto_type_));                      \
-    COMM_##rx_proto_type_##_DEF(name##_rx_proto, name##_media, rx_size);                            \
-    COMM_##tx_proto_type_##_DEF(name##_tx_proto, name##_media, tx_size);                            \
-    static uint8_t name##_tx_buff[(tx_size) + COMM_PROTO_OVERHEAD(tx_proto_type_)] = {0};           \
-    CommInstance name = {                                                                           \
-        .media_type = media_type_,                                                                  \
-        .rx_proto_type = rx_proto_type_,                                                            \
-        .tx_proto_type = tx_proto_type_,                                                            \
-        .unpack_mode = unpack_mode_,                                                                \
-        .media = &name##_media,                                                                     \
-        .rx_proto = &name##_rx_proto,                                                               \
-        .tx_proto = &name##_tx_proto,                                                               \
-        .tx_buff = name##_tx_buff,                                                                  \
-        .inited = 0,                                                                                \
+#define COMM_DEF(name, media_type_, rx_proto_, tx_proto_, rx_size, tx_size, unpack_mode_) \
+    COMM_##media_type_##_DEF(name##_media,                                                \
+                             (rx_size) + PROTO_##rx_proto_##_OVERHEAD,                    \
+                             (tx_size) + PROTO_##tx_proto_##_OVERHEAD);                   \
+    COMM_PROTO_##rx_proto_##_DEF(name##_rx_proto, name##_media, rx_size);                 \
+    COMM_PROTO_##tx_proto_##_DEF(name##_tx_proto, name##_media, tx_size);                 \
+    static uint8_t name##_tx_buff[(tx_size) + PROTO_##tx_proto_##_OVERHEAD] = {0};        \
+    CommInstance name = {                                                                 \
+        .media_type = media_type_,                                                        \
+        .rx_proto_type = PROTO_##rx_proto_,                                               \
+        .tx_proto_type = PROTO_##tx_proto_,                                               \
+        .unpack_mode = unpack_mode_,                                                      \
+        .media = &name##_media,                                                           \
+        .rx_proto = &name##_rx_proto,                                                     \
+        .tx_proto = &name##_tx_proto,                                                     \
+        .tx_buff = name##_tx_buff,                                                        \
+        .inited = 0,                                                                      \
     }
 
 #endif /* DRV_COMM_H */
