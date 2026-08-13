@@ -11,7 +11,8 @@
  *       step3: 固定频率正弦波位置设定值，kp,kd设置为0，检查辨识效果
  *       step4: 先调kd，再调kp，需要抗外界干扰（kp不能单独非零）
  *       step5: 正常控制
- * @note 这个文件轻量封装，只操作MotorVTable_s中的setref函数，其他的app层手动调用
+ * @note 这个文件轻量封装，不直接操作电机：AxisMitLiteCalculate 接收反馈数据、计算并返回 setref，
+ *       由 app 层手动调用 motor.set_ref 设置力矩
  * @note drv\drv_axis_lite\identify_axis_mit_lite.py可以辨识参数
  */
 
@@ -29,7 +30,6 @@
  *============================================*/
 typedef struct
 {
-    MotorVTableSimple_s motor;          // 电机接口 (set_ref/get_data)，app 定义
     AxisLiteStage_e stage;              // 控制阶段
     AxisLiteParams_s params;            // 轴参数
     ChirpParam_s chirp_params;          // 扫频参数
@@ -49,7 +49,6 @@ typedef struct
  *============================================*/
 typedef struct
 {
-    MotorVTableSimple_s motor;          // 电机接口 (set_ref/get_data)
     AxisLiteStage_e stage;              // 控制阶段
     uint32_t delay_ms;                  // 延时时间 (ms)
     AxisLiteParams_s params;            // 轴参数
@@ -68,14 +67,18 @@ typedef struct
 /**
  * @brief 初始化轴控制实例
  * @param inst 实例指针
- * @param cfg 配置结构体指针
+ * @param cfg 配置结构体指针（只读）
  * @return 0: 成功, -1: 失败
  */
-int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, AxisMitLite_Init_Config_s *cfg);
+int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, const AxisMitLite_Init_Config_s *cfg);
 
 /**
- * @brief 计算控制输出并调用 motor.set_ref
+ * @brief 计算控制输出，返回 setref 力矩值（不调用 motor.set_ref，由 app 手动设置）
  * @param inst 实例指针
+ * @param mdata 电机反馈数据指针（位置/速度/力矩，只读）
+ * @return setref 最终发送给电机的力矩值 (Nm)
+ * @note 反馈数据坐标系由 app 决定：mdata 应提供与 params.gear_ratio 匹配的电机侧数据，
+ *       内部按 angle = angle/gear 换算到输出侧；若 app 直接给输出侧数据请将 gear_ratio 置 1
  * @note setref =（重力前馈 + 惯量前馈 + 摩擦前馈） + （kp * 位置误差 + kd * 速度误差）
  * @note 启用 AxisMitVofaLiteSetChannelUsed 时，自动设定 12 个 VOFA 调试通道：
  *       CH1-CH3: 反馈量（轴侧，经 gear_ratio 转换）
@@ -99,6 +102,6 @@ int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, AxisMitLite_Init_Config_s *cfg
  *
  *       ch12: setref值，最终发送给电机的力矩值 (Nm)
  */
-void AxisMitLiteCalculate(AxisMitLiteInstance *inst);
+float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const MotorData_s *mdata);
 
 #endif // !DRV_AXIS_MIT_LITE_H

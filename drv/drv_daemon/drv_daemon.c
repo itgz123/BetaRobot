@@ -14,6 +14,7 @@ static uint8_t s_idx = 0;
 // 蜂鸣器鸣叫声音表格
 const uint8_t voice_map[DAEMON_FAULT_NUM][12] = {0};
 static uint8_t buzzer_flag = 0; // TODO:这个之后用位域实现
+static uint8_t all_daemon_is_online = 1;
 
 PWM_INSTANCE_DEF(buzzer_pwm);
 
@@ -86,6 +87,7 @@ void DaemonTask(void)
 {
     DaemonInstance *dins;
     buzzer_flag = 0; // 刷新，避免上一轮循环影响
+    uint8_t all_daemon_is_online_temp = 1;
 
     for (size_t i = 0; i < s_idx; ++i)
     {
@@ -101,6 +103,7 @@ void DaemonTask(void)
         }
         else
         {
+            all_daemon_is_online_temp = 0; // 只要有一个掉线就标志为0
             switch (dins->fault_action)
             {
             case DAEMON_FAULT_BUZZER_SHORT:
@@ -129,6 +132,14 @@ void DaemonTask(void)
                 dins->callback(dins->owner_id);
             }
         }
+    }
+    if (0 == all_daemon_is_online_temp)
+    {
+        all_daemon_is_online = 0;
+    }
+    else if (1 == all_daemon_is_online_temp)
+    {
+        all_daemon_is_online = 1;
     }
 
     PWMSetDutyRatio(&buzzer_pwm, (buzzer_flag / 2.0f));
@@ -162,7 +173,7 @@ void DaemonInit(void)
 
 #if (DEVELOPMENT_BOARD == DM_MC02) || (DEVELOPMENT_BOARD == DJI_C) || (DEVELOPMENT_BOARD == DJI_A)
     PWMRegister(&buzzer_pwm);
-    PWM_Config_s pwm_cfg = { .tim_e = TIM_BUZZER };
+    PWM_Config_s pwm_cfg = {.tim_e = TIM_BUZZER};
     PWMConfig(&buzzer_pwm, &pwm_cfg);
 #else
 #error "without config buzzer"
