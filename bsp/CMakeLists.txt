@@ -5,6 +5,7 @@ set(MODULE_SOURCES
     bsp_uart_log/bsp_uart_log.c
     bsp_math/bsp_math.c
     bsp_crc/bsp_crc.c
+    bsp_crc/bsp_crc_tables.c
     bsp_spi/bsp_spi.c
     bsp_tim/bsp_tim.c
     bsp_usart/bsp_usart.c
