@@ -9,11 +9,10 @@
  * 一条 comm = 一个双向对话：接收协议(rx_proto)与发送协议(tx_proto)分离，
  * 各自 payload 大小可不同（编译期确定，DEF 宏写入）。
  *
- * 分发链路（无挂载表：media 收到数据 → 经 media->parent 反查所属 comm 实例）：
- *   接收：bsp ISR → media 适配钩子 → MediaHandleRx → CommMediaRxHook
- *         → media->parent 反查 comm → rx_proto unpack → 出帧 → on_frame
- *         （业务回调由 CommConfig 直接挂到 rx_proto->on_frame）
- *   发送：CommSend → tx_proto pack → MediaSend（tx_proto->media 由 DEF 宏绑定）
+ * 接收链（无挂载表，跳过多余中转）：
+ *   bsp ISR → media 适配钩子（长度校验）→ CommMediaRxHook → media->parent 反查 comm
+ *     → rx_proto unpack → 出帧 → on_frame（业务回调由 CommConfig 挂到 rx_proto->on_frame）
+ * 发送：CommSend → tx_proto pack（写 comm 打包缓冲）→ MediaSend（拷入 media 缓冲发出）
  */
 
 #include "drv_comm.h"
@@ -41,25 +40,32 @@ static void CommRxPush(CommInstance *inst, const uint8_t *data)
 }
 
 /**
- * @brief 接收分发钩子（挂到 media->rx_cb）
+ * @brief comm 层接收统一入口（media 后端适配钩子直接调用）
  * @note 经 media->parent（CommRegister 建立的反向指针）反查所属 comm 实例，
  *       按编译期配置的解包位置分流：ISR 直解 / 搬入队列由 RX 任务解包。
  *       一个 media 只属于一个 comm，无需挂载表。
  */
-static void CommMediaRxHook(CommMedia *media, const uint8_t *data)
+void CommMediaRxHook(CommMedia *media, const uint8_t *data)
 {
     CommInstance *inst = (CommInstance *)media->parent;
+    CommProto *rx_proto;
+    const uint8_t *payload;
+
     if (inst == NULL || inst->rx_proto == NULL)
         return;
+    rx_proto = COMM_INSTANCE_RX_PROTO(inst);
 
     switch (inst->unpack_mode)
     {
     case UNPACK_IN_TASK:
-        CommRxPush(inst, data); /* 搬入接收队列，由 RX 任务解包（待实现） */
+        CommRxPush(inst, data); /* 搬入接收队列，由 RX 任务解包+回调（待实现） */
         break;
     case UNPACK_IN_ISR:
     default:
-        ProtoUnpack(COMM_INSTANCE_RX_PROTO(inst), data); /* ISR 直解 */
+        /* ISR 直解：unpack 只解包，出帧回调由 comm 层统一调 */
+        payload = ProtoUnpack(rx_proto, data);
+        if (payload && rx_proto->on_frame)
+            rx_proto->on_frame(payload);
         break;
     }
 }
@@ -113,8 +119,8 @@ int8_t CommRegister(CommInstance *inst)
         return -1; /* 发送协议类型未支持 */
     }
 
-    /* 3. 接线：media 接管接收钩子；出帧回调由 CommConfig 挂到 rx_proto->on_frame */
-    media->rx_cb = CommMediaRxHook;
+    /* 3. 接线：出帧回调由 CommConfig 挂到 rx_proto->on_frame；
+     *    接收分发经 media->parent 反查（media 适配钩子直接调 CommMediaRxHook） */
     rx_proto->on_frame = NULL;
 
     /* 建立反向指针：media/proto 回指所属 comm 实例（接收分发据此反查 rx_proto） */

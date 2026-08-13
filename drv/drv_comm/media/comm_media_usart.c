@@ -5,13 +5,14 @@
  * 发送：USARTTransmit，按 bsp 实例 tx_mode 执行；
  *       阻塞模式整帧发完，IT/DMA 异步发送（timeout 仅用于等待就绪）。
  * 接收：HAL_UARTEx_RxEventCallback（DMA+IDLE）→ bsp rx_callback → 适配钩子
- *       MediaUsartRxHook → MediaHandleRx → 引擎 rx_cb。
+ *       MediaUsartRxHook → CommMediaRxHook（comm 层接收入口）。
  *
- * @note bsp 在接收回调后立即 memset(rx_buff) 并重启接收，因此 rx_cb
+ * @note bsp 在接收回调后立即 memset(rx_buff) 并重启接收，因此接收处理
  *       必须在回调上下文内同步消费或 memcpy 走，不能延迟引用 rx_buff。
  */
 
 #include "comm_media_usart.h"
+#include "drv_comm.h" /* CommMediaRxHook：comm 层接收入口 */
 #include <string.h>
 
 #ifdef DRV_COMM_USED
@@ -40,7 +41,7 @@ static int8_t MediaUsartSend(CommMedia *media, const uint8_t *data)
     return 0;
 }
 
-/* bsp 接收适配钩子：收完一段数据，从 bsp 实例读数据交给 media 基类 */
+/* bsp 接收适配钩子：收完一段数据，长度校验后直接交给 comm 层接收入口 */
 static void MediaUsartRxHook(USARTInstance *usart)
 {
     CommMedia *media = (CommMedia *)usart->parent; /* DRV 层设置的反向指针 */
@@ -51,7 +52,7 @@ static void MediaUsartRxHook(USARTInstance *usart)
      * 长度不对直接丢，不回调上层——协议层拿到的永远是完整一帧 */
     if (usart->rx_len != usart->rx_buff_size)
         return;
-    MediaHandleRx(media, usart->rx_buff);
+    CommMediaRxHook(media, usart->rx_buff); /* 跳过 media 基类，直连 comm */
 }
 
 int8_t MediaUsartRegister(CommMediaUsart *media)
@@ -70,8 +71,7 @@ int8_t MediaUsartRegister(CommMediaUsart *media)
 
     media->base.vtable = &s_usart_vtable;
     media->base.type = MEDIA_USART;
-    media->base.rx_cb = NULL;  /* 引擎层挂接收分发钩子 */
-    media->base.parent = NULL; /* 引擎层挂所属 CommInstance */
+    media->base.parent = NULL; /* comm 层挂所属 CommInstance */
 
     usart->parent = media; /* 反向指针：适配钩子据此取回 media */
     return 0;
@@ -92,7 +92,7 @@ int8_t MediaUsartConfig(CommMediaUsart *media, USART_Config_s *cfg)
         return -1;
 
     /* USARTConfig 会写入 config->rx_callback；强制接管为适配钩子，
-     * 保证接收统一进 MediaHandleRx → rx_cb（引擎挂接） */
+     * 保证接收统一进 comm 层接收入口（CommMediaRxHook） */
     usart->rx_callback = MediaUsartRxHook;
     return 0;
 }

@@ -4,7 +4,8 @@
  *
  * 职责：把物理介质抽象为"可发送任意长度数据单元"的统一通道。
  *   - 发送：vtable->send(data)，data 任意长度数据单元
- *   - 接收：后端适配钩子把收到的数据单元交给 MediaHandleRx → rx_cb 分发
+ *   - 接收：后端适配钩子把收到的数据单元直接交给 comm 层接收入口
+ *           （CommMediaRxHook，经 parent 反查），media 基类不做接收分发
  *   - 归属：一个 media 只属于一个 comm 实例（经 parent 反查）
  * 基类不解析内容（SOF/CRC/comm_id 属协议层），不感知介质物理限制（属后端）。
  */
@@ -26,9 +27,6 @@ typedef enum : uint8_t
 
 typedef struct CommMedia CommMedia;
 
-/* 统一接收回调：收到一条完整数据单元时调用（comm 层挂接收钩子） */
-typedef void (*MediaRxCallback)(CommMedia *media, const uint8_t *data);
-
 /* 虚函数表（派生结构体首成员为 vtable，drv_motor_base 约定） */
 typedef struct
 {
@@ -42,13 +40,11 @@ struct CommMedia
     MediaType_e type;                /* 介质类型 */
     uint8_t *tx_buff;                /* 发送缓冲（MediaSend 从 comm 打包缓冲拷入后发出；DMA 异步发送须常驻） */
     uint16_t tx_buff_size;           /* 发送缓冲大小（= tx payload + 协议开销） */
-    MediaRxCallback rx_cb;           /* 接收钩子（comm 层挂 CommMediaRxHook） */
-    void *parent;                    /* 指向 comm 实例 */
+    void *parent;                    /* 指向 comm 实例（接收分发经此反查） */
     void *media;                     /* 指向 bsp 实例 */
 };
 
 /* 公共接口 */
-void MediaHandleRx(CommMedia *media, const uint8_t *data); /* 统一接收分发（后端适配钩子调用） */
-int8_t MediaSend(CommMedia *media, const uint8_t *data);   /* 统一发送分发（拷贝 data → media->tx_buff 后发出；分包后端用状态机+发送完成回调续发） */
+int8_t MediaSend(CommMedia *media, const uint8_t *data); /* 统一发送分发（拷贝 data → media->tx_buff 后发出；分包后端用状态机+发送完成回调续发） */
 
 #endif /* COMM_MEDIA_H */

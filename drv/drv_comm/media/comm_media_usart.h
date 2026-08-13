@@ -5,7 +5,7 @@
  * 把 bsp_usart 包装成统一"任意长度数据单元"通道：
  *   - 发送：vtable->send → 拷贝 comm 打包缓冲到 media->tx_buff → USARTTransmit
  *           （按 bsp 实例 tx_mode：BLOCK/IT/DMA）
- *   - 接收：bsp DMA+IDLE 收完一段 → 适配钩子 → MediaHandleRx → comm 层 rx_cb
+ *   - 接收：bsp DMA+IDLE 收完一段 → 适配钩子 → CommMediaRxHook（comm 层接收入口）
  *
  * @note COMM_DEF 通过 token 拼接 COMM_##media_type_##_DEF 分发到本宏。
  */
@@ -64,7 +64,7 @@ int8_t MediaUsartRegister(CommMediaUsart *media);
  *
  * @note 内部调 bsp USARTConfig（启动 DMA 接收）；USARTConfig 会写入
  *       config->rx_callback，本函数随后强制接管为适配钩子 MediaUsartRxHook，
- *       保证接收统一进 MediaHandleRx → rx_cb（引擎挂接），业务不直接走 bsp 回调。
+ *       保证接收统一进 comm 层接收入口（CommMediaRxHook），业务不直接走 bsp 回调。
  */
 int8_t MediaUsartConfig(CommMediaUsart *media, USART_Config_s *cfg);
 

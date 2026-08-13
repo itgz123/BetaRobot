@@ -22,13 +22,12 @@ static int8_t CommProtoRawPack(CommProto *self, const uint8_t *payload, uint8_t 
     return 0;
 }
 
-static int8_t CommProtoRawUnpack(CommProto *self, const uint8_t *data)
+/* 只解包：空协议 data 即完整 payload，直接返回（on_frame 由 comm 层统一调） */
+static const uint8_t *CommProtoRawUnpack(CommProto *self, const uint8_t *data)
 {
     if (self == NULL || data == NULL)
-        return -1;
-    if (self->on_frame)
-        self->on_frame(data); /* 空协议：data 即完整 payload */
-    return 0;
+        return NULL;
+    return data; /* 长度已由 media 后端校验，拿到的总是完整一帧 */
 }
 
 static void CommProtoRawReset(CommProto *self)
