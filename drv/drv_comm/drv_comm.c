@@ -19,6 +19,7 @@
 // 各后端 Register/Init（token 拼接分发的具体实现在这里按类型调用）
 #include "comm_media_usart.h"
 #include "comm_proto_raw.h"
+#include "comm_proto_custom.h"
 
 #ifdef DRV_COMM_USED
 
@@ -78,14 +79,12 @@ int8_t CommRegister(CommInstance *inst)
 {
     CommMedia *media;
     CommProto *rx_proto;
-    CommProto *tx_proto;
 
     if (inst == NULL || inst->media == NULL || inst->rx_proto == NULL || inst->tx_proto == NULL)
         return -1;
 
     media = COMM_INSTANCE_MEDIA(inst);
     rx_proto = COMM_INSTANCE_RX_PROTO(inst);
-    tx_proto = COMM_INSTANCE_TX_PROTO(inst);
 
     /* 1. media 后端注册（不可重入：USART 内部做 bsp USARTRegister 防重复注册）
      * @note 按 inst->media_type 分发，不能用 media->type：DEF 宏静态定义时
@@ -108,6 +107,10 @@ int8_t CommRegister(CommInstance *inst)
         if (CommProtoRawInit((CommProtoRaw *)inst->rx_proto) != 0)
             return -1;
         break;
+    case PROTO_CUSTOM:
+        if (CommProtoCustomInit((CommProtoCustom *)inst->rx_proto) != 0)
+            return -1;
+        break;
     default:
         return -1; /* 接收协议类型未支持 */
     }
@@ -115,6 +118,10 @@ int8_t CommRegister(CommInstance *inst)
     {
     case PROTO_RAW:
         if (CommProtoRawInit((CommProtoRaw *)inst->tx_proto) != 0)
+            return -1;
+        break;
+    case PROTO_CUSTOM:
+        if (CommProtoCustomInit((CommProtoCustom *)inst->tx_proto) != 0)
             return -1;
         break;
     default:
