@@ -35,8 +35,11 @@ typedef enum : uint8_t
 typedef struct CommProto CommProto;
 
 /* 出帧回调：解出一条完整 payload 时调用。
- * @note 不带 proto 参数：每个 comm 实例通过 CommConfig.on_frame 传入自己
- *       的函数，天然知道是哪条对话来的，无需靠 proto 指针区分 */
+ * @param payload 解出的完整 payload 指针
+ * @note 1) 不带 proto 参数：每个 comm 实例通过 CommConfig.on_frame 传入自己
+ *          的函数，天然知道是哪条对话来的，无需靠 proto 指针区分。
+ *       2) payload 生命周期：UNPACK_IN_ISR 下指向接收缓冲，回调返回后即被
+ *          bsp 清空并重启接收——必须同步消费（解析/拷贝），不可保存指针异步用。 */
 typedef void (*ProtoFrameCallback)(const uint8_t *payload);
 
 /* 虚函数表（派生结构体首成员为 vtable，drv_motor_base 约定） */

@@ -62,7 +62,9 @@ void CommMediaRxHook(CommMedia *media, const uint8_t *data)
         break;
     case UNPACK_IN_ISR:
     default:
-        /* ISR 直解：unpack 只解包，出帧回调由 comm 层统一调 */
+        /* ISR 直解：unpack 只解包，出帧回调由 comm 层统一调。
+         * @warning payload 指向接收缓冲，回调返回后即被 bsp 清零——
+         *          on_frame 必须同步消费，不可保存指针异步使用 */
         payload = ProtoUnpack(rx_proto, data);
         if (payload && rx_proto->on_frame)
             rx_proto->on_frame(payload);

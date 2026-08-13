@@ -37,8 +37,7 @@ static int8_t MediaUsartSend(CommMedia *media, const uint8_t *data)
     if (media == NULL || usart == NULL || data == NULL || media->tx_buff_size == 0)
         return -1;
     memcpy(media->tx_buff, data, media->tx_buff_size);
-    USARTTransmit(usart, media->tx_buff, media->tx_buff_size, MEDIA_USART_TX_TIMEOUT_MS);
-    return 0;
+    return USARTTransmit(usart, media->tx_buff, media->tx_buff_size, MEDIA_USART_TX_TIMEOUT_MS);
 }
 
 /* bsp 接收适配钩子：收完一段数据，长度校验后直接交给 comm 层接收入口 */

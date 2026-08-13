@@ -31,8 +31,7 @@ typedef struct
     void *media;                  // 介质派生实例指针（首成员为 CommMedia 基类）
     void *rx_proto;               // 接收协议派生实例指针（首成员为 CommProto 基类）
     void *tx_proto;               // 发送协议派生实例指针（首成员为 CommProto 基类）
-    uint8_t *tx_buff;             // 发送打包缓冲（COMM_DEF 静态定义，协议分包写入）
-    uint16_t tx_buff_size;        // 发送打包缓冲大小（= tx_size + 协议开销）
+    uint8_t *tx_buff;             // 发送打包缓冲（COMM_DEF 静态定义，协议分包写入；大小以 media->tx_buff_size 为准）
     uint8_t inited;               // 初始化标志（CommRegister 置位）
 } CommInstance;
 
@@ -112,7 +111,6 @@ int8_t CommSend(CommInstance *inst, const uint8_t *payload);
         .rx_proto = &name##_rx_proto,                                                               \
         .tx_proto = &name##_tx_proto,                                                               \
         .tx_buff = name##_tx_buff,                                                                  \
-        .tx_buff_size = (tx_size) + COMM_PROTO_OVERHEAD(tx_proto_type_),                            \
         .inited = 0,                                                                                \
     }
 
