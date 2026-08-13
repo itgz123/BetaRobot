@@ -162,17 +162,18 @@ int8_t CommSend(CommInstance *inst, const uint8_t *payload)
     if (inst == NULL || inst->tx_proto == NULL || payload == NULL)
         return -1;
 
-    /* 打包（vtable->pack，payload → tx_buff）→ 经绑定的 media 发出
-     * @note 发送协议->media 由 COMM_DEF 宏静态绑定（tx_proto->media），
-     *       打包+发送统一由 comm 层完成，proto 只负责打/解包 */
+    /* 打包（vtable->pack，payload → inst->tx_buff）→ 拷贝到 media 缓冲发出
+     * @note 发送协议->media 由 COMM_DEF 宏静态绑定（tx_proto->media）。
+     *       MediaSend 把 comm 打包缓冲拷入 media->tx_buff：media 缓冲常驻，
+     *       DMA 异步发送期间数据不失效；分包后端用状态机+发送完成回调续发。 */
     tx_proto = (CommProto *)inst->tx_proto;
-    if (ProtoPack(tx_proto, payload) != 0)
+    if (inst->tx_buff == NULL || ProtoPack(tx_proto, payload, inst->tx_buff) != 0)
         return -1;
 
     media = (CommMedia *)tx_proto->media;
-    if (media == NULL)
+    if (media == NULL || media->tx_buff == NULL)
         return -1;
-    return MediaSend(media, tx_proto->tx_buff);
+    return MediaSend(media, inst->tx_buff);
 }
 
 #endif /* DRV_COMM_USED */

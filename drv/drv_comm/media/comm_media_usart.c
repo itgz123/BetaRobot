@@ -27,16 +27,16 @@ static const CommMediaVTable_s s_usart_vtable = {
     .send = MediaUsartSend,
 };
 
-/* vtable 发送实现：拷入自有发送缓冲再发送（UART 字节流无需分包，长度 = tx_buff_size） */
+/* vtable 发送实现：UART 无分包，一帧 = 整个缓冲。
+ * 拷贝 comm 打包缓冲 → media->tx_buff（DMA 异步发送期间须常驻）后整帧发出。
+ * 分包后端（CAN/USB）需用状态机标志 + 发送完成回调续发，此处不需要。 */
 static int8_t MediaUsartSend(CommMedia *media, const uint8_t *data)
 {
-    CommMediaUsart *usart_media = (CommMediaUsart *)media;
     USARTInstance *usart = (USARTInstance *)media->media;
-    if (usart_media == NULL || usart == NULL || data == NULL || usart_media->tx_buff_size == 0)
+    if (media == NULL || usart == NULL || data == NULL || media->tx_buff_size == 0)
         return -1;
-
-    memcpy(usart_media->tx_buff, data, usart_media->tx_buff_size);
-    USARTTransmit(usart, usart_media->tx_buff, usart_media->tx_buff_size, MEDIA_USART_TX_TIMEOUT_MS);
+    memcpy(media->tx_buff, data, media->tx_buff_size);
+    USARTTransmit(usart, media->tx_buff, media->tx_buff_size, MEDIA_USART_TX_TIMEOUT_MS);
     return 0;
 }
 
@@ -58,7 +58,7 @@ int8_t MediaUsartRegister(CommMediaUsart *media)
 {
     USARTInstance *usart;
 
-    if (media == NULL || media->tx_buff == NULL)
+    if (media == NULL || media->base.tx_buff == NULL)
         return -1;
     usart = (USARTInstance *)media->base.media; /* COMM_MEDIA_USART_DEF 已绑定 */
     if (usart == NULL)

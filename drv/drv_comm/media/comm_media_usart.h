@@ -3,8 +3,9 @@
  * @brief 通信框架-硬件层（Media）UART 后端
  *
  * 把 bsp_usart 包装成统一"任意长度数据单元"通道：
- *   - 发送：vtable->send → USARTTransmit（按 bsp 实例 tx_mode：BLOCK/IT/DMA）
- *   - 接收：bsp DMA+IDLE 收完一段 → 适配钩子 → MediaHandleRx → 引擎 rx_cb
+ *   - 发送：vtable->send → 拷贝 comm 打包缓冲到 media->tx_buff → USARTTransmit
+ *           （按 bsp 实例 tx_mode：BLOCK/IT/DMA）
+ *   - 接收：bsp DMA+IDLE 收完一段 → 适配钩子 → MediaHandleRx → comm 层 rx_cb
  *
  * @note COMM_DEF 通过 token 拼接 COMM_##media_type_##_DEF 分发到本宏。
  */
@@ -21,9 +22,7 @@
 /* UART 介质派生结构体（首成员必须为 CommMedia 基类，vtable 约定） */
 typedef struct
 {
-    CommMedia base;        /* 基类（首成员） */
-    uint8_t *tx_buff;      /* 发送缓冲区（上层打包数据写入处，适配 DMA 异步发送） */
-    uint16_t tx_buff_size; /* 发送缓冲区大小 */
+    CommMedia base; /* 基类（首成员；发送缓冲 tx_buff/tx_buff_size 在基类，供协议分包直接写入） */
 } CommMediaUsart;
 
 /**
@@ -44,8 +43,8 @@ typedef struct
     static uint8_t name##_tx_buff[tx_buff_sz] DMA_RAM = {0}; \
     static CommMediaUsart name = {                           \
         .base.media = &name##_usart,                         \
-        .tx_buff = name##_tx_buff,                           \
-        .tx_buff_size = tx_buff_sz}
+        .base.tx_buff = name##_tx_buff,                      \
+        .base.tx_buff_size = tx_buff_sz}
 
 /**
  * @brief 注册 UART 介质后端（不可重入：仅可调用一次）
