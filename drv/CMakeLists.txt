@@ -3,6 +3,7 @@ set(MODULE_SOURCES
     drv_pid/drv_pid.c
     drv_chassis/drv_chassis_position_lite.c
     drv_sbus/drv_sbus.c
+    drv_dbus/drv_dbus.c
     drv_bmi088/drv_bmi088.c
     drv_bmi088/drv_bmi088_heater.c
     drv_daemon/drv_daemon.c
@@ -10,6 +11,7 @@ set(MODULE_SOURCES
     drv_vofa/drv_vofa.c
     drv_motor/drv_djimotor/drv_djimotor.c
     drv_motor/drv_dmmotor/drv_dmmotor.c
+    drv_motor/drv_rsmotor/drv_rsmotor.c
     drv_axis_lite/drv_axis_mit_lite.c
     drv_mit/drv_mit.c
     # comm开始
@@ -28,11 +30,13 @@ set(MODULE_INCLUDE_DIRS
     drv_chassis
     drv_pid
     drv_sbus
+    drv_dbus
     drv_daemon
     drv_vofa
     drv_motor
     drv_motor/drv_djimotor
     drv_motor/drv_dmmotor
+    drv_motor/drv_rsmotor
     drv_axis_lite
     drv_mahony
     drv_mit
