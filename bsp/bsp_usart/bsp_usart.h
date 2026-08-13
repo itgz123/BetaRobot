@@ -108,12 +108,13 @@ int8_t USARTConfig(USARTInstance *instance, const USART_Config_s *config);
  * @param data 发送数据指针
  * @param len 数据长度
  * @param timeout_ms 超时时间（毫秒）
+ * @retval 0 成功；-1 失败（参数非法 / 等待就绪超时 / HAL 发送失败）
  * @note 阻塞模式：timeout_ms 传递给 HAL_UART_Transmit
  *       IT/DMA模式：
  *         - timeout_ms == 0: 只检查一次状态，忙碌时立即返回
  *         - timeout_ms > 0:  while 循环等待，直到就绪或超时
  */
-void USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len, uint32_t timeout_ms);
+int8_t USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len, uint32_t timeout_ms);
 
 /**
  * @brief 重新启动接收

@@ -16,13 +16,6 @@
 #include "bsp_uart_log.h"
 #include "string.h"
 
-/*------------- 私有类型定义 --------------*/
-
-/**
- * @brief 发送函数指针类型（统一4参数，IT/DMA忽略timeout）
- */
-typedef void (*UART_TransmitFunc)(UART_HandleTypeDef *, uint8_t *, uint16_t, uint32_t);
-
 /*------------- 私有变量 --------------*/
 static uint8_t s_usart_idx = 0;
 #if UART_INSTANCE_NUM > 0
@@ -59,28 +52,27 @@ static USARTInstance *USARTFindInstanceByHandle(UART_HandleTypeDef *huart)
     return NULL;
 }
 
-/**
- * @brief 发送函数指针数组
- * @note IT/DMA模式的timeout参数被忽略
- */
-static const UART_TransmitFunc s_usart_transmit_funcs[] = {
-    [USART_BLOCK_MODE] = (UART_TransmitFunc)HAL_UART_Transmit,
-    [USART_IT_MODE] = (UART_TransmitFunc)HAL_UART_Transmit_IT,
-    [USART_DMA_MODE] = (UART_TransmitFunc)HAL_UART_Transmit_DMA,
-};
-
 /*------------- HAL回调函数重写 --------------*/
 
 /**
  * @brief DMA/IDLE中断回调函数
  * @param huart 发生中断的串口句柄
  * @param Size 此次接收到的数据量
+ *
+ * @note circular DMA 在收满（DMA TC）触发本回调时已自动回卷：若对端帧间
+ *       无间隔连发下一帧，DMA 会继续写入 rx_buff[0..]，覆盖当前帧开头。
+ *       因此回调入口先 HAL_UART_DMAStop（停 DMA + 停 UART；其内部 Abort
+ *       回调为空，DMA TC 中断上下文内调用无重入），数据稳定后再读取/处理，
+ *       最后统一由 USARTRestartReceive 重启接收。
  */
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
     USARTInstance *instance = USARTFindInstanceByHandle(huart);
     if (instance != NULL)
     {
+        // 先停住接收：防 circular DMA 回卷在对端连发时覆盖 rx_buff[0..]
+        HAL_UART_DMAStop(huart);
+
         // 保存接收长度
         instance->rx_len = Size;
 
@@ -199,12 +191,12 @@ int8_t USARTConfig(USARTInstance *instance, const USART_Config_s *config)
     return 0;
 }
 
-void USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len, uint32_t timeout_ms)
+int8_t USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len, uint32_t timeout_ms)
 {
     if (instance == NULL || data == NULL || len == 0)
     {
         LOGWARNING("[bsp_usart] Invalid transmit parameters!");
-        return;
+        return -1;
     }
 
     // IT/DMA模式需要等待发送状态就绪
@@ -218,12 +210,31 @@ void USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len, uint32_
             if ((DWT_GetTimeUs() - start_time) > timeout_us)
             {
                 LOGWARNING("[bsp_usart] UART busy timeout (uart_e=%d)", instance->uart_e);
-                return;
+                return -1;
             }
         }
     }
 
-    s_usart_transmit_funcs[instance->tx_mode](instance->handle, data, len, timeout_ms);
+    // 按模式分派（BLOCK 传 timeout；IT/DMA 无 timeout 参数，按原签名调用，避免函数指针强转的未定义行为）
+    switch (instance->tx_mode)
+    {
+    case USART_BLOCK_MODE:
+        if (HAL_UART_Transmit(instance->handle, data, len, timeout_ms) != HAL_OK)
+            return -1;
+        break;
+    case USART_IT_MODE:
+        if (HAL_UART_Transmit_IT(instance->handle, data, len) != HAL_OK)
+            return -1;
+        break;
+    case USART_DMA_MODE:
+        if (HAL_UART_Transmit_DMA(instance->handle, data, len) != HAL_OK)
+            return -1;
+        break;
+    default:
+        LOGWARNING("[bsp_usart] Invalid tx_mode=%d!", instance->tx_mode);
+        return -1;
+    }
+    return 0;
 }
 
 void USARTRestartReceive(USARTInstance *instance)

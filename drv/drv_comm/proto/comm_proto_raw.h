@@ -4,7 +4,7 @@
  *
  * 最简单的协议：payload 占 100%，无帧头/长度域/校验/comm_id 等任何开销。
  *   - 发送：pack 即 memcpy（payload 直接是整帧）
- *   - 接收：unpack 收到的数据就是完整 payload，直接回调 on_frame
+ *   - 接收：unpack 收到的数据就是完整 payload，直接返回（on_frame 由 comm 层统一调）
  *
  * @note 长度模型固定：payload_size 编译期确定，收发同长。
  * @note COMM_DEF 通过 token 拼接 COMM_##proto_type_##_DEF 分发到本宏。

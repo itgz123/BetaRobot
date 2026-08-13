@@ -4,7 +4,7 @@
  *
  * 空协议：payload 占 100%，无任何协议开销。
  *   - pack：payload 直接拷入 tx_buff（= 整帧，长度 = payload_size）
- *   - unpack：data 即完整 payload（固定长度），直接调 on_frame 回调
+ *   - unpack：data 即完整 payload（固定长度），直接返回（on_frame 由 comm 层统一调）
  *   - reset：无状态，空操作
  */
 
