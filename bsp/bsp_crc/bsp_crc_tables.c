@@ -7,7 +7,7 @@
 #include "bsp_crc_tables.h"
 #include "app_cfg.h"
 
-#ifdef BSP_CRC_USED
+#ifdef BSP_CRC_TABLES_USED
 
 /* 查表 (poly=0x00000007, width=8, refin=0) */
 const uint32_t BSP_CRC_TABLE_CRC8[256] = {
@@ -337,4 +337,4 @@ const BSP_CRC_Table_t BSP_CRC_TBL_CRC32 = {
     .table = BSP_CRC_TABLE_CRC32,
 };
 
-#endif /* BSP_CRC_USED */
+#endif /* BSP_CRC_TABLES_USED */

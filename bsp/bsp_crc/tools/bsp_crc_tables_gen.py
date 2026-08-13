@@ -81,7 +81,8 @@ ALGOS = [
 
 
 def build():
-    out_dir = os.path.dirname(os.path.abspath(__file__))
+    # 输出到 bsp_crc/（脚本位于 bsp_crc/tools/ 下，取上级目录）
+    out_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
     # 自校验：逐算法用生成的表算 check 向量
     tables = {}          # 表名 -> [256] 表值
@@ -139,7 +140,7 @@ def build():
     lines_c.append('#include "bsp_crc_tables.h"')
     lines_c.append('#include "app_cfg.h"')
     lines_c.append("")
-    lines_c.append("#ifdef BSP_CRC_USED")
+    lines_c.append("#ifdef BSP_CRC_TABLES_USED")
     lines_c.append("")
 
     for tname, vals in tables.items():
@@ -168,7 +169,7 @@ def build():
         lines_c.append("};")
         lines_c.append("")
 
-    lines_c.append("#endif /* BSP_CRC_USED */")
+    lines_c.append("#endif /* BSP_CRC_TABLES_USED */")
     lines_c.append("")
 
     h_path = os.path.join(out_dir, "bsp_crc_tables.h")
