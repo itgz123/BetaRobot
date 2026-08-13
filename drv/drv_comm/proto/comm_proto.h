@@ -5,7 +5,8 @@
  * 职责：把"任意长度数据单元"抽象为"payload 打包/解包"的统一通道。
  *   - 发送：vtable->pack(payload, out_buff) 把 payload 打包进 out_buff
  *           （comm 层 CommSend 提供的打包缓冲，再由 MediaSend 拷入 media->tx_buff 发出）
- *   - 接收：unpack(data) 解包一段数据，出完整 payload 后调 on_frame 回调（CommConfig 挂接）
+ *   - 接收：unpack(data) 只解包，返回解出的 payload 指针（NULL 丢弃）；
+ *           调用 on_frame 由 comm 层统一控制（CommMediaRxHook 按 unpack_mode 分流）
  *   - 长度模型：固定长度，payload 大小编译期确定（DEF 宏写入），接口不显式传 len
  * 基类不感知介质物理限制（属 media 层），不解析 payload 内容（属引擎/应用）。
  */
@@ -42,7 +43,7 @@ typedef void (*ProtoFrameCallback)(const uint8_t *payload);
 typedef struct
 {
     int8_t (*pack)(CommProto *self, const uint8_t *payload, uint8_t *out_buff); /* 打包 payload → out_buff */
-    int8_t (*unpack)(CommProto *self, const uint8_t *data);                     /* 喂一段数据，解包后调 on_frame */
+    const uint8_t *(*unpack)(CommProto *self, const uint8_t *data);             /* 只解包：返回解出的 payload 指针，NULL 丢弃 */
     void (*reset)(CommProto *self);                                             /* 重置解包状态 */
 } CommProtoVTable_s;
 
@@ -57,26 +58,9 @@ struct CommProto
     ProtoFrameCallback on_frame;     /* 出帧回调（CommConfig 挂接） */
 };
 
-/* 公共接口（static inline，判空 + vtable 分发；发送的"打包+发介质"由 comm 层统一） */
-static inline int8_t ProtoPack(CommProto *self, const uint8_t *payload, uint8_t *out_buff)
-{
-    if (!self || !self->vtable || !self->vtable->pack)
-        return -1;
-    return self->vtable->pack(self, payload, out_buff);
-}
-
-static inline int8_t ProtoUnpack(CommProto *self, const uint8_t *data)
-{
-    if (!self || !self->vtable || !self->vtable->unpack)
-        return -1;
-    return self->vtable->unpack(self, data);
-}
-
-static inline void ProtoReset(CommProto *self)
-{
-    if (!self || !self->vtable || !self->vtable->reset)
-        return;
-    self->vtable->reset(self);
-}
+/* 公共接口（vtable 分发封装，实现见 comm_proto.c） */
+int8_t ProtoPack(CommProto *self, const uint8_t *payload, uint8_t *out_buff);
+const uint8_t *ProtoUnpack(CommProto *self, const uint8_t *data);
+void ProtoReset(CommProto *self);
 
 #endif /* COMM_PROTO_H */

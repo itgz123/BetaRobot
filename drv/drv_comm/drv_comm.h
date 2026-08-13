@@ -14,6 +14,14 @@ typedef enum : uint8_t
     UNPACK_IN_TASK = 1, /* 搬入接收队列，由 RX 任务解包（不阻塞中断） */
 } UnpackMode_e;
 
+/**
+ * @brief media 接收统一入口（media 后端适配钩子直接调用）
+ * @param media CommMedia 指针（经 media->parent 反查所属 CommInstance）
+ * @param data  收到的完整数据单元指针（长度已由后端校验，协议层拿到的总是完整一帧）
+ * @note 跳过 media 基类分发：接收链 = bsp → media 子类钩子 → 本函数 → rx_proto unpack。
+ */
+void CommMediaRxHook(CommMedia *media, const uint8_t *data);
+
 typedef struct
 {
     MediaType_e media_type;       // 介质类型（定义时写入）
