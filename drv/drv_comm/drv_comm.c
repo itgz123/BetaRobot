@@ -16,10 +16,8 @@
  */
 
 #include "drv_comm.h"
-// 各后端 Register/Init（token 拼接分发的具体实现在这里按类型调用）
+// 介质后端 Register/Config（协议后端经注册表 CommProtoBackendFind 分发，见 CommRegister）
 #include "comm_media_usart.h"
-#include "comm_proto_raw.h"
-#include "comm_proto_custom.h"
 
 #ifdef DRV_COMM_USED
 
@@ -99,33 +97,17 @@ int8_t CommRegister(CommInstance *inst)
         return -1; /* 介质类型未支持 */
     }
 
-    /* 2. 接收/发送协议后端初始化（各自挂 vtable），按类型分发
-     * @note 同上，避免用未初始化的基类字段 */
-    switch (inst->rx_proto_type)
+    /* 2. 接收/发送协议后端初始化：查注册表（内置 RAW/CUSTOM + app 自定义统一分发）
+     * @note 同上，避免用未初始化的基类字段；app 自定义协议须先 CommProtoRegisterBackend */
     {
-    case PROTO_RAW:
-        if (CommProtoRawInit((CommProtoRaw *)inst->rx_proto) != 0)
+        const CommProtoBackend_t *be = CommProtoBackendFind(inst->rx_proto_type);
+        if (be == NULL || be->init(inst->rx_proto) != 0)
             return -1;
-        break;
-    case PROTO_CUSTOM:
-        if (CommProtoCustomInit((CommProtoCustom *)inst->rx_proto) != 0)
-            return -1;
-        break;
-    default:
-        return -1; /* 接收协议类型未支持 */
     }
-    switch (inst->tx_proto_type)
     {
-    case PROTO_RAW:
-        if (CommProtoRawInit((CommProtoRaw *)inst->tx_proto) != 0)
+        const CommProtoBackend_t *be = CommProtoBackendFind(inst->tx_proto_type);
+        if (be == NULL || be->init(inst->tx_proto) != 0)
             return -1;
-        break;
-    case PROTO_CUSTOM:
-        if (CommProtoCustomInit((CommProtoCustom *)inst->tx_proto) != 0)
-            return -1;
-        break;
-    default:
-        return -1; /* 发送协议类型未支持 */
     }
 
     /* 3. 接线：出帧回调由 CommConfig 挂到 rx_proto->on_frame；

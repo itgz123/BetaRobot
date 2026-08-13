@@ -99,7 +99,7 @@ static void CustomReset(CommProto *self)
     if (self == NULL)
         return;
     p->tx_seq = 0;
-    p->rx_last_seq = 0;
+    p->rx_last_seq = 0xFF; /* 0xFF+1 回卷=0：重置后首帧 seq=0 视为正常新帧而非重帧 */
     p->lost_frames = 0;
 }
 
@@ -109,7 +109,7 @@ int8_t CommProtoCustomInit(CommProtoCustom *proto)
         return -1;
     proto->base.vtable = &s_custom_vtable;
     proto->tx_seq = 0;
-    proto->rx_last_seq = 0;
+    proto->rx_last_seq = 0xFF; /* 0xFF+1 回卷=0：首帧 seq=0 视为正常新帧而非重帧 */
     proto->lost_frames = 0;
     return 0;
 }

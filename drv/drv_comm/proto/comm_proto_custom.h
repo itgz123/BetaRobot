@@ -8,7 +8,8 @@
  *
  * 帧序列（seq）检测：
  *   - 发送：pack 时 seq 自增（uint8_t，255→0 回卷）
- *   - 接收：unpack 时校验
+ *   - 接收：unpack 时校验（rx_last_seq 初始 0xFF：0xFF+1 回卷=0，故首帧 seq=0
+ *           被当作正常新帧接收，不会被误判为重帧而丢弃）
  *       seq == 上次 + 1 → 正常新帧，接受
  *       seq == 上次      → 重帧，丢弃（返回 NULL）
  *       seq 跳号         → 丢帧，累计 lost_frames 后仍接受当前帧
