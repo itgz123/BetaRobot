@@ -1,6 +1,17 @@
 /**
  * @file bsp_crc.c
- * @brief BSP层CRC计算封装实现（纯软件实现）
+ * @brief BSP层CRC计算封装实现（逐位直接计算 / 查表驱动）
+ *
+ * 算法语义（crcmod 对齐，经标准 check 向量验证）：
+ *   - 直接计算 BSP_CRC_Direct：逐位，支持 7/8/16/32 位
+ *       * 7 位（CRC-7/MMC）：width+1 位（8 位）寄存器逐位，多项式左移 1 位，结果取高 7 位
+ *       * 8/16/32 位：reverse_in=0 用非反射逐位（MSB-first，输入放寄存器高位左移），
+ *         =1 用反射逐位（LSB-first 右移，内部取反射多项式）
+ *   - 查表 BSP_CRC_TableCalc：每字节 1 次查表替代 8 次位循环，表可为 Flash const 或 RAM 生成
+ *   - reverse_in != reverse_out 时结果按位反转（RefOut），始终与 xor_out 异或后返回
+ *
+ * Flash 内置表见 bsp_crc_tables.c（bsp_crc_tables_gen.py 生成），与本文件的 BSP_CRC_GenTable
+ * 逐位逻辑完全一致，二者可混用。
  */
 
 #include "bsp_crc.h"
@@ -8,201 +19,174 @@
 
 #ifdef BSP_CRC_USED
 
-#include <string.h>
-
-/*============================================
- *              CRC 接口实现
- *============================================*/
-
-uint8_t BSP_CRC7(const uint8_t *data, uint32_t len, uint8_t init_val)
+/* 位反转：把 value 的低 width 位整体反转（RefIn 反射多项式 / RefOut 反射结果用） */
+static uint32_t CRC_BitReflect(uint32_t value, uint8_t width)
 {
-    if (data == NULL || len == 0)
-    {
-        return init_val;
-    }
+    uint32_t reflected = 0;
 
-    /* CRC-7/MMC */
-    uint8_t crc = init_val;
-    for (uint32_t i = 0; i < len; i++)
+    for (uint8_t i = 0; i < width; i++)
     {
-        crc ^= data[i];
-        for (uint8_t j = 0; j < 8; j++)
-        {
-            if (crc & 0x80)
-                crc = (crc << 1) ^ 0x12; /* x^7 + x^3 + 1 */
-            else
-                crc <<= 1;
-        }
+        reflected = (reflected << 1) | (value & 1u);
+        value >>= 1;
     }
-    return crc & 0x7F;
+    return reflected;
 }
 
-uint8_t BSP_CRC8(const uint8_t *data, uint32_t len, uint8_t init_val)
+/**
+ * @brief 逐位直接计算（可算任意算法，兜底层，无需表）
+ * @see BSP_CRC_Direct
+ */
+uint32_t BSP_CRC_Direct(const BSP_CRC_Algo_t *algo, const uint8_t *data, uint32_t len)
 {
-    if (data == NULL || len == 0)
-    {
-        return init_val;
-    }
+    uint32_t width;
+    uint32_t mask;
+    uint32_t crc;
+    uint32_t poly;
 
-    /* CRC-8/MAXIM */
-    uint8_t crc = init_val;
-    for (uint32_t i = 0; i < len; i++)
-    {
-        crc ^= data[i];
-        for (uint8_t j = 0; j < 8; j++)
-        {
-            if (crc & 0x80)
-                crc = (crc << 1) ^ 0x31; /* x^8 + x^5 + x^4 + 1 */
-            else
-                crc <<= 1;
-        }
-    }
-    return crc;
-}
-
-uint16_t BSP_CRC16(const uint8_t *data, uint32_t len, uint16_t init_val)
-{
-    if (data == NULL || len == 0)
-    {
-        return init_val;
-    }
-
-    /* CRC-16/CCITT */
-    uint16_t crc = init_val;
-    for (uint32_t i = 0; i < len; i++)
-    {
-        crc ^= (uint16_t)data[i] << 8;
-        for (uint8_t j = 0; j < 8; j++)
-        {
-            if (crc & 0x8000)
-                crc = (crc << 1) ^ 0x1021; /* x^16 + x^12 + x^5 + 1 */
-            else
-                crc <<= 1;
-        }
-    }
-    return crc;
-}
-
-uint32_t BSP_CRC32(const uint8_t *data, uint32_t len, uint32_t init_val)
-{
-    if (data == NULL || len == 0)
-    {
-        return init_val;
-    }
-
-    /* CRC-32 */
-    uint32_t crc = init_val;
-    for (uint32_t i = 0; i < len; i++)
-    {
-        crc ^= data[i];
-        for (uint8_t j = 0; j < 8; j++)
-        {
-            if (crc & 1)
-                crc = (crc >> 1) ^ 0xEDB88320; /* CRC-32多项式 */
-            else
-                crc >>= 1;
-        }
-    }
-    return crc ^ 0xFFFFFFFF;
-}
-
-uint32_t BSP_CRC_Custom(const BSP_CRC_Config_t *config, const uint8_t *data, uint32_t len)
-{
-    if (config == NULL || data == NULL || len == 0)
-    {
+    if (algo == NULL || data == NULL)
         return 0;
-    }
 
-    uint32_t crc = config->init_value;
-    uint8_t poly_size = config->poly_size;
+    width = algo->poly_size;
+    if (width != 7 && width != 8 && width != 16 && width != 32)
+        return 0; /* 非法宽度 */
+    mask = (width >= 32) ? 0xFFFFFFFFu : ((1u << width) - 1u);
 
-    for (uint32_t i = 0; i < len; i++)
+    if (width == 7)
     {
-        uint8_t byte = data[i];
-
-        if (config->reverse_in)
+        /* CRC-7：width+1 位（8 位）寄存器逐位，多项式左移 1 位参与运算，结果取高 7 位 */
+        crc = algo->init_value & 0x7F;
+        poly = (algo->poly & 0x7F) << 1;
+        for (uint32_t i = 0; i < len; i++)
         {
-            byte = ((byte & 0xF0) >> 4) | ((byte & 0x0F) << 4);
-            byte = ((byte & 0xCC) >> 2) | ((byte & 0x33) << 2);
-            byte = ((byte & 0xAA) >> 1) | ((byte & 0x55) << 1);
+            crc ^= data[i];
+            for (uint8_t bit = 0; bit < 8; bit++)
+                crc = (crc & 0x80) ? (uint32_t)(((crc << 1) ^ poly) & 0xFF) : (uint32_t)((crc << 1) & 0xFF);
         }
-
-        switch (poly_size)
-        {
-        case 7:
-            crc ^= (uint32_t)byte;
-            for (uint8_t j = 0; j < 8; j++)
-            {
-                if (crc & 0x40)
-                    crc = (crc << 1) ^ config->poly;
-                else
-                    crc <<= 1;
-            }
-            crc &= 0x7F;
-            break;
-
-        case 8:
-            crc ^= (uint32_t)byte;
-            for (uint8_t j = 0; j < 8; j++)
-            {
-                if (crc & 0x80)
-                    crc = (crc << 1) ^ config->poly;
-                else
-                    crc <<= 1;
-            }
-            crc &= 0xFF;
-            break;
-
-        case 16:
-            crc ^= (uint32_t)byte << 8;
-            for (uint8_t j = 0; j < 8; j++)
-            {
-                if (crc & 0x8000)
-                    crc = (crc << 1) ^ config->poly;
-                else
-                    crc <<= 1;
-            }
-            crc &= 0xFFFF;
-            break;
-
-        case 32:
-            crc ^= (uint32_t)byte << 24;
-            for (uint8_t j = 0; j < 8; j++)
-            {
-                if (crc & 0x80000000)
-                    crc = (crc << 1) ^ config->poly;
-                else
-                    crc <<= 1;
-            }
-            break;
-
-        default:
-            break;
-        }
+        crc = (crc >> 1) & 0x7F;
     }
-
-    if (config->reverse_out)
+    else if (algo->reverse_in)
     {
-        if (poly_size <= 8)
+        /* 反射逐位：LSB-first，寄存器右移，使用反射多项式 */
+        poly = CRC_BitReflect(algo->poly & mask, (uint8_t)width);
+        crc = algo->init_value & mask;
+        for (uint32_t i = 0; i < len; i++)
         {
-            uint8_t tmp = (uint8_t)crc;
-            tmp = ((tmp & 0xF0) >> 4) | ((tmp & 0x0F) << 4);
-            tmp = ((tmp & 0xCC) >> 2) | ((tmp & 0x33) << 2);
-            tmp = ((tmp & 0xAA) >> 1) | ((tmp & 0x55) << 1);
-            crc = tmp;
+            crc ^= data[i];
+            for (uint8_t bit = 0; bit < 8; bit++)
+                crc = (crc & 1u) ? (uint32_t)((crc >> 1) ^ poly) : (crc >> 1);
+            crc &= mask;
         }
-        else if (poly_size <= 16)
+    }
+    else
+    {
+        /* 非反射逐位：MSB-first，输入字节放寄存器高位，左移 */
+        poly = algo->poly & mask;
+        crc = algo->init_value & mask;
+        for (uint32_t i = 0; i < len; i++)
         {
-            uint16_t tmp = (uint16_t)crc;
-            tmp = ((tmp & 0xFF00) >> 8) | ((tmp & 0x00FF) << 8);
-            tmp = ((tmp & 0xF0F0) >> 4) | ((tmp & 0x0F0F) << 4);
-            tmp = ((tmp & 0xCCCC) >> 2) | ((tmp & 0x3333) << 2);
-            tmp = ((tmp & 0xAAAA) >> 1) | ((tmp & 0x5555) << 1);
-            crc = tmp;
+            crc ^= data[i] << (width - 8);
+            for (uint8_t bit = 0; bit < 8; bit++)
+                crc = (crc & (1u << (width - 1))) ? (uint32_t)(((crc << 1) ^ poly) & mask) : (uint32_t)((crc << 1) & mask);
         }
     }
 
-    return crc;
+    /* 输出反转（RefOut）：refin 与 refout 不同向时结果按位反转（crcmod 语义） */
+    if (algo->reverse_in != algo->reverse_out)
+        crc = CRC_BitReflect(crc, (uint8_t)width);
+
+    /* 结果异或（XorOut） */
+    return (crc ^ algo->xor_out) & mask;
+}
+
+/**
+ * @brief 生成 256 项查表到 table[256]（RAM）
+ * @see BSP_CRC_GenTable
+ */
+int8_t BSP_CRC_GenTable(const BSP_CRC_Algo_t *algo, uint32_t table[256])
+{
+    uint32_t width;
+    uint32_t poly;
+
+    /* 校验表与算法匹配：仅 8/16/32 位支持逐字节查表（7 位须走 BSP_CRC_Direct） */
+    if (algo == NULL || table == NULL)
+        return -1;
+    width = algo->poly_size;
+    if (width != 8 && width != 16 && width != 32)
+        return -1;
+
+    poly = algo->poly & ((width >= 32) ? 0xFFFFFFFFu : ((1u << width) - 1u));
+    if (algo->reverse_in)
+        poly = CRC_BitReflect(poly, (uint8_t)width);
+
+    for (uint32_t i = 0; i < 256; i++)
+    {
+        uint32_t crc;
+
+        if (algo->reverse_in)
+        {
+            /* 反射表：i 作为 8 位输入，LSB-first 右移 8 次 */
+            crc = i;
+            for (uint8_t bit = 0; bit < 8; bit++)
+                crc = (crc & 1u) ? (uint32_t)((crc >> 1) ^ poly) : (crc >> 1);
+        }
+        else
+        {
+            /* 非反射表：i 放寄存器高位，MSB-first 左移 8 次 */
+            crc = i << (width - 8);
+            for (uint8_t bit = 0; bit < 8; bit++)
+                crc = (crc & (1u << (width - 1))) ? (uint32_t)(((crc << 1) ^ poly)) : (uint32_t)(crc << 1);
+        }
+        table[i] = crc;
+    }
+    return 0;
+}
+
+/**
+ * @brief 通用查表计算（Flash 表或 RAM 生成表通用）
+ * @see BSP_CRC_TableCalc
+ */
+uint32_t BSP_CRC_TableCalc(const BSP_CRC_Table_t *tbl, const uint8_t *data, uint32_t len)
+{
+    const BSP_CRC_Algo_t *algo;
+    const uint32_t *table;
+    uint32_t width;
+    uint32_t mask;
+    uint32_t crc;
+
+    if (tbl == NULL || tbl->algo == NULL || tbl->table == NULL || data == NULL)
+        return 0;
+
+    algo = tbl->algo;
+    width = algo->poly_size;
+
+    /* 7 位/非法宽度不支持查表：自动降级为逐位直接计算 */
+    if (width == 7 || (width != 8 && width != 16 && width != 32))
+        return BSP_CRC_Direct(algo, data, len);
+
+    table = tbl->table;
+    mask = (width >= 32) ? 0xFFFFFFFFu : ((1u << width) - 1u);
+
+    crc = algo->init_value & mask;
+    if (algo->reverse_in)
+    {
+        /* 反射表：每字节 1 次查表（LSB-first） */
+        for (uint32_t i = 0; i < len; i++)
+            crc = (crc >> 8) ^ table[(crc ^ data[i]) & 0xFFu];
+    }
+    else
+    {
+        /* 非反射表：每字节 1 次查表（MSB-first） */
+        for (uint32_t i = 0; i < len; i++)
+            crc = (crc << 8) ^ table[((crc >> (width - 8)) ^ data[i]) & 0xFFu];
+    }
+    crc &= mask;
+
+    /* 输出反转（RefOut）：refin 与 refout 不同向时结果按位反转（crcmod 语义） */
+    if (algo->reverse_in != algo->reverse_out)
+        crc = CRC_BitReflect(crc, (uint8_t)width);
+
+    /* 结果异或（XorOut） */
+    return (crc ^ algo->xor_out) & mask;
 }
 
 #endif /* BSP_CRC_USED */
