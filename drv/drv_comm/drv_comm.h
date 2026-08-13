@@ -23,6 +23,8 @@ typedef struct
     void *media;                  // 介质派生实例指针（首成员为 CommMedia 基类）
     void *rx_proto;               // 接收协议派生实例指针（首成员为 CommProto 基类）
     void *tx_proto;               // 发送协议派生实例指针（首成员为 CommProto 基类）
+    uint8_t *tx_buff;             // 发送打包缓冲（COMM_DEF 静态定义，协议分包写入）
+    uint16_t tx_buff_size;        // 发送打包缓冲大小（= tx_size + 协议开销）
     uint8_t inited;               // 初始化标志（CommRegister 置位）
 } CommInstance;
 
@@ -60,12 +62,14 @@ int8_t CommRegister(CommInstance *inst);
 int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg);
 
 /**
- * @brief 统一发送：经该实例的发送协议打包后由绑定的 media 发出
+ * @brief 统一发送：协议打包到 comm 打包缓冲 → MediaSend 拷入 media 缓冲发出
  * @param inst    CommInstance 指针（须已 CommRegister）
  * @param payload 待发送 payload 指针（长度 = tx_payload_size，编译期确定）
  * @retval 0 成功；-1 失败（参数非法 / 打包或发送失败）
  *
- * @note tx_proto->media 由 COMM_DEF 宏静态绑定，直接走发送协议的 pack → media 发出。
+ * @note 分包在 comm 层完成（vtable->pack 写 inst->tx_buff）；MediaSend 把
+ *       打包缓冲拷入 media 常驻发送缓冲（DMA 异步发送期间不失效）后发出。
+ *       分包后端（CAN/USB）用状态机标志 + 发送完成回调续发。
  */
 int8_t CommSend(CommInstance *inst, const uint8_t *payload);
 
@@ -90,6 +94,7 @@ int8_t CommSend(CommInstance *inst, const uint8_t *payload);
                              (tx_size) + COMM_PROTO_OVERHEAD(tx_proto_type_));                      \
     COMM_##rx_proto_type_##_DEF(name##_rx_proto, name##_media, rx_size);                            \
     COMM_##tx_proto_type_##_DEF(name##_tx_proto, name##_media, tx_size);                            \
+    static uint8_t name##_tx_buff[(tx_size) + COMM_PROTO_OVERHEAD(tx_proto_type_)] = {0};           \
     CommInstance name = {                                                                           \
         .media_type = media_type_,                                                                  \
         .rx_proto_type = rx_proto_type_,                                                            \
@@ -98,6 +103,8 @@ int8_t CommSend(CommInstance *inst, const uint8_t *payload);
         .media = &name##_media,                                                                     \
         .rx_proto = &name##_rx_proto,                                                               \
         .tx_proto = &name##_tx_proto,                                                               \
+        .tx_buff = name##_tx_buff,                                                                  \
+        .tx_buff_size = (tx_size) + COMM_PROTO_OVERHEAD(tx_proto_type_),                            \
         .inited = 0,                                                                                \
     }
 

@@ -13,13 +13,12 @@
 
 #ifdef DRV_COMM_USED
 
-static int8_t CommProtoRawPack(CommProto *self, const uint8_t *payload)
+static int8_t CommProtoRawPack(CommProto *self, const uint8_t *payload, uint8_t *out_buff)
 {
-    CommProtoRaw *raw = (CommProtoRaw *)self;
-
-    if (raw == NULL || payload == NULL || raw->base.payload_size == 0)
+    if (self == NULL || payload == NULL || out_buff == NULL || self->payload_size == 0)
         return -1;
-    memcpy(raw->base.tx_buff, payload, raw->base.payload_size);
+    /* 空协议无开销：payload 直接拷入 comm 层打包缓冲（整帧） */
+    memcpy(out_buff, payload, self->payload_size);
     return 0;
 }
 
@@ -45,7 +44,7 @@ static const CommProtoVTable_s s_raw_vtable = {
 
 int8_t CommProtoRawInit(CommProtoRaw *proto)
 {
-    if (proto == NULL || proto->base.tx_buff == NULL)
+    if (proto == NULL || proto->base.media == NULL)
         return -1;
     proto->base.vtable = &s_raw_vtable;
     return 0;
