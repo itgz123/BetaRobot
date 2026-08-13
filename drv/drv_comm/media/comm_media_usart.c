@@ -69,7 +69,6 @@ int8_t MediaUsartRegister(CommMediaUsart *media)
         return -1;
 
     media->base.vtable = &s_usart_vtable;
-    media->base.type = MEDIA_USART;
     media->base.parent = NULL; /* comm 层挂所属 CommInstance */
 
     usart->parent = media; /* 反向指针：适配钩子据此取回 media */
