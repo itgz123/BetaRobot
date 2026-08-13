@@ -37,7 +37,6 @@ typedef struct
  */
 #define COMM_PROTO_RAW_DEF(name, media_, payload_sz) \
     static CommProtoRaw name = {                     \
-        .base.type = PROTO_RAW,                      \
         .base.payload_size = payload_sz,             \
         .base.media = (void *)&media_} /* 尾部无分号，调用处加 */
 

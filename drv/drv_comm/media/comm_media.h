@@ -37,7 +37,6 @@ typedef struct
 struct CommMedia
 {
     const CommMediaVTable_s *vtable; /* 必须首成员 */
-    MediaType_e type;                /* 介质类型 */
     uint8_t *tx_buff;                /* 发送缓冲（MediaSend 从 comm 打包缓冲拷入后发出；DMA 异步发送须常驻） */
     uint16_t tx_buff_size;           /* 发送缓冲大小（= tx payload + 协议开销） */
     void *parent;                    /* 指向 comm 实例（接收分发经此反查） */

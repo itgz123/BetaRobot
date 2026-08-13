@@ -125,10 +125,8 @@ int8_t CommRegister(CommInstance *inst)
      *    接收分发经 media->parent 反查（media 适配钩子直接调 CommMediaRxHook） */
     rx_proto->on_frame = NULL;
 
-    /* 建立反向指针：media/proto 回指所属 comm 实例（接收分发据此反查 rx_proto） */
+    /* 建立反向指针：media 回指所属 comm 实例（接收分发据此反查 rx_proto） */
     media->parent = inst;
-    rx_proto->parent = inst;
-    tx_proto->parent = inst;
     inst->inited = 1;
     return 0;
 }

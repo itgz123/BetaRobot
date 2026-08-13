@@ -54,9 +54,7 @@ typedef struct
 struct CommProto
 {
     const CommProtoVTable_s *vtable; /* 必须首成员 */
-    ProtocolType_e type;             /* 协议类型 */
     uint16_t payload_size;           /* payload 长度（编译期确定，DEF 宏写入） */
-    void *parent;                    /* 指向 comm 实例 */
     void *media;                     /* 指向 media 实例（发送用，MediaSend 定位后端） */
     ProtoFrameCallback on_frame;     /* 出帧回调（CommConfig 挂接） */
 };
