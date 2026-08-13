@@ -25,12 +25,15 @@ typedef enum : uint8_t
     PROTO_CUSTOM,  /* 自定义帧协议（预留） */
 } ProtocolType_e;
 
-/* 每个协议定义自己的开销宏（字节）：整帧长度 = payload_size + 开销 */
-#define PROTO_RAW_OVERHEAD 0 /* 空协议：无帧头/长度域/校验，payload 占 100% */
+/* 每个协议定义自己的开销宏（字节）：整帧长度 = payload_size + 开销
+ * @note PROTO_CUSTOM 开销 = 帧头 + seq + CRC8 + 帧尾，见 comm_proto_custom.h 帧格式 */
+#define PROTO_RAW_OVERHEAD 0    /* 空协议：无帧头/长度域/校验，payload 占 100% */
+#define PROTO_CUSTOM_OVERHEAD 4 /* 自定义帧协议：帧头(1) + seq(1) + CRC8(1) + 帧尾(1) */
 
 /* 按协议类型取开销（COMM_DEF 推算 media rx/tx 缓冲大小用；新协议在枚举加类型并在此补开销） */
-#define COMM_PROTO_OVERHEAD(proto_type_) \
-    ((proto_type_) == PROTO_RAW ? PROTO_RAW_OVERHEAD : 0)
+#define COMM_PROTO_OVERHEAD(proto_type_)                                                                     \
+    ((proto_type_) == PROTO_RAW ? PROTO_RAW_OVERHEAD : (proto_type_) == PROTO_CUSTOM ? PROTO_CUSTOM_OVERHEAD \
+                                                                                     : 0)
 
 typedef struct CommProto CommProto;
 
