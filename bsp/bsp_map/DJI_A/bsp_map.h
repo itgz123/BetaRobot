@@ -185,8 +185,6 @@ typedef enum
 #define ENCODER_INSTANCE_NUM 0
 #define ADC_INSTANCE_NUM 11
 #define DAC_INSTANCE_NUM 2
-#define USB_INSTANCE_NUM 1
-
 /*============================================
  *              extern 声明
  *============================================*/
