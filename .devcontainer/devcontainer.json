@@ -1,0 +1,35 @@
+{
+  "name": "BetaRobot Dev (Debian 13)",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "containerUser": "vscode",
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true,
+  "workspaceFolder": "/workspaces/BetaRobot",
+  "runArgs": ["--privileged"],
+  "remoteEnv": {
+    "GIT_SSH_COMMAND": "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "cortex-debug.openocdPath": "/usr/bin/openocd",
+        "cortex-debug.armToolchainPath": "/opt/arm-gnu-toolchain/bin",
+        "C_Cpp.default.intelliSenseMode": "linux-gcc-arm",
+        "cmake.configureOnOpen": true
+      },
+      "extensions": [
+        "jeff-hykin.better-cpp-syntax",
+        "ms-vscode.cpptools-extension-pack",
+        "hars.cppsnippets",
+        "ms-ceintl.vscode-language-pack-zh-hans",
+        "ms-vscode.cmake-tools",
+        "marus25.cortex-debug",
+        "mcu-debug.rtos-views"
+      ]
+    }
+  },
+  "postCreateCommand": "bash -c 'if [ ! -f user_cfg.h ]; then cp user_cfg.h.example user_cfg.h; echo \"created user_cfg.h\"; fi && git submodule update --init --recursive'",
+  "postStartCommand": "sudo chmod 666 /dev/bus/usb/*/* /dev/hidraw* 2>/dev/null || true"
+}
