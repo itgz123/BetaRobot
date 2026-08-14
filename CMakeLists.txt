@@ -188,13 +188,11 @@ load_cubemx_vars("${CUBEMX_CMAKE}" "${HAL_DIR}")
 # 整理 HAL 源文件、头文件和宏定义
 ######################################
 normalize_paths(HAL_DRIVER_SOURCES ${STM32_Drivers_Src})
-normalize_paths(HAL_USB_LIBRARY_SOURCES ${USB_Device_Library_Src})
 normalize_paths(HAL_FREERTOS_SOURCES ${FreeRTOS_Src})
 normalize_paths(HAL_INCLUDE_PATHS ${MX_Include_Dirs})
 
 set(HAL_C_SOURCES
     ${HAL_DRIVER_SOURCES}
-    ${HAL_USB_LIBRARY_SOURCES}
     ${HAL_FREERTOS_SOURCES}
 )
 
