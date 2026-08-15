@@ -8,6 +8,7 @@
 #include "i2c.h"
 #include "adc.h"
 #include "dac.h"
+#include "usb_otg.h"
 #include "bsp.h"
 
 void BSPInit();
@@ -68,6 +69,10 @@ typedef struct
     DAC_HandleTypeDef *handle;
     uint32_t channel;
 } DAC_Map_t;
+typedef struct
+{
+    PCD_HandleTypeDef *handle;
+} USB_Map_t;
 
 /*============================================
  *              板载资源枚举
@@ -172,6 +177,14 @@ typedef enum
     DAC_2,
     DAC_NUM_MAX
 } BoardDAC_e;
+typedef enum
+{
+    USB_FS = 0, /* 不与 CMSIS 宏 USB_OTG_FS 冲突 */
+    USB_NUM_MAX
+} BoardUSB_e;
+
+/* app 层统一引用入口（每块板映射到自己的 USB 外设枚举） */
+#define USB_MAIN USB_FS
 
 /*============================================
  *              逻辑实例数量配置
@@ -196,5 +209,6 @@ extern const SPI_Map_t spi_map[];
 extern const I2C_Map_t i2c_map[];
 extern const ADC_Map_t adc_map[];
 extern const DAC_Map_t dac_map[];
+extern const USB_Map_t usb_map[];
 
 #endif /* __DJI_A_BSP_MAP_H */

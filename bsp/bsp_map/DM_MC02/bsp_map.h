@@ -7,6 +7,7 @@
 #include "i2c.h"
 #include "adc.h"
 #include "fdcan.h"
+#include "usb_otg.h"
 #include "bsp.h"
 
 void BSPInit();
@@ -62,6 +63,10 @@ typedef struct
     ADC_HandleTypeDef *handle;
     uint32_t channel;
 } ADC_Map_t;
+typedef struct
+{
+    PCD_HandleTypeDef *handle;
+} USB_Map_t;
 
 /*============================================
  *              板载资源枚举
@@ -129,6 +134,14 @@ typedef enum
     ADC_BAT = 0,
     ADC_NUM_MAX
 } BoardADC_e;
+typedef enum
+{
+    USB_HS = 0, /* 不与 CMSIS 宏 USB_OTG_HS 冲突 */
+    USB_NUM_MAX
+} BoardUSB_e;
+
+/* app 层统一引用入口（每块板映射到自己的 USB 外设枚举） */
+#define USB_MAIN USB_HS
 
 #define VOLTAGE_TRANFER 0.00055389404296875f
 
@@ -153,5 +166,6 @@ extern const CAN_Map_t can_map[];
 extern const SPI_Map_t spi_map[];
 extern const I2C_Map_t i2c_map[];
 extern const ADC_Map_t adc_map[];
+extern const USB_Map_t usb_map[];
 
 #endif /* __DM_MC02_BSP_MAP_H */
