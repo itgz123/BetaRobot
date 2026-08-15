@@ -14,6 +14,18 @@ set(MODULE_SOURCES
     bsp_adc/bsp_adc.c
     bsp_can/bsp_can.c
     bsp_freertos/bsp_freertos.c
+    # usb开始
+    bsp_usb/bsp_usb.c
+    bsp_usb/core/bsp_usb_core.c
+    bsp_usb/core/bsp_usb_ep.c
+    bsp_usb/core/bsp_usb_ring.c
+    bsp_usb/desc/bsp_usb_desc_dev.c
+    bsp_usb/desc/bsp_usb_desc_cfg.c
+    bsp_usb/desc/bsp_usb_desc_cdc.c
+    bsp_usb/desc/bsp_usb_desc_str.c
+    bsp_usb/cdc/bsp_usb_cdc.c
+    # bsp_usb/hid/bsp_usb_hid_kbd.c  # TODO[HID停用]：Windows 复合设备 HID 枚举问题暂缓，恢复时取消注释
+    # usb结束
 )
 
 # bsp 层头文件路径
@@ -32,4 +44,11 @@ set(MODULE_INCLUDE_DIRS
     bsp_adc
     bsp_can
     bsp_freertos
+    # usb开始
+    bsp_usb
+    bsp_usb/core
+    bsp_usb/desc
+    bsp_usb/cdc
+    # bsp_usb/hid  # TODO[HID停用]：恢复时取消注释
+    # usb结束
 )
