@@ -76,7 +76,11 @@ read_define(APP_NAME "${CMAKE_SOURCE_DIR}/user_cfg.h" APP_NAME)
 set(APP_DIR "${CMAKE_SOURCE_DIR}/app/${APP_NAME}")
 
 if(NOT EXISTS "${APP_DIR}/CMakeLists.txt")
-    message(FATAL_ERROR "App ${APP_NAME} is not initialized or has no CMakeLists.txt: ${APP_DIR}")
+    message(FATAL_ERROR
+        "App ${APP_NAME} is not initialized: ${APP_DIR}\n"
+        "  app 是独立 git 仓库（主仓库不追踪）。请先拉取：\n"
+        "    bash scripts/setup_apps.sh\n"
+        "  或在 app/ 下单独 clone 该 app 仓库到 ${APP_NAME}")
 endif()
 
 ######################################
@@ -99,7 +103,7 @@ if(NOT EXISTS "${HAL_DIR}")
         "HAL_CONFIG_NAME '${HAL_CONFIG_NAME}' → directory not found:\n"
         "  ${HAL_DIR}\n"
         "  Possible reasons:\n"
-        "  1. Submodule not initialized: run 'git submodule update --init'\n"
+        "  1. CubeMX config was not committed to the repo: need cubemx/${HAL_CONFIG_NAME}/\n"
         "  2. Typo in app/${APP_NAME}/app_cfg.h HAL_CONFIG_NAME\n"
         "  3. Missing CubeMX config: need to create cubemx/${HAL_CONFIG_NAME}/")
 endif()
