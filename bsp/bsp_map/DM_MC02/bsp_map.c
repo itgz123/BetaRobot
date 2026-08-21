@@ -47,6 +47,108 @@ const CAN_Map_t can_map[CAN_NUM_MAX] = {
     [CAN_3] = {&hfdcan3},
 };
 
+/*============================================
+ *              CAN 外设重配置表
+ *============================================*/
+/* 各 FDCAN 重配置结构体（覆盖 CubeMX 初始化）。
+ * 注意：RxFifo0/1ElmtSize 与 TxElmtSize 当前为 8 字节 → 外设跑经典 CAN；
+ *       要实际跑 64 字节 FD 帧需把对应字段改为 FDCAN_DATA_BYTES_64。 */
+static const HalCan_FDCAN_Config_s s_fdcan1_cfg = {
+    .frame_format = FDCAN_FRAME_CLASSIC,
+    .mode = FDCAN_MODE_NORMAL,
+    .auto_retransmission = ENABLE,
+    .transmit_pause = DISABLE,
+    .protocol_exception = ENABLE,
+    .nominal_prescaler = 12,
+    .nominal_sync_jump_width = 1,
+    .nominal_time_seg1 = 7,
+    .nominal_time_seg2 = 2,
+    .data_prescaler = 1,
+    .data_sync_jump_width = 1,
+    .data_time_seg1 = 1,
+    .data_time_seg2 = 1,
+    .message_ram_offset = 0, /* FDCAN1 */
+    .std_filters_nbr = 16,
+    .ext_filters_nbr = 16,
+    .rx_fifo0_elmts_nbr = 16,
+    .rx_fifo0_elmt_size = FDCAN_DATA_BYTES_8,
+    .rx_fifo1_elmts_nbr = 16,
+    .rx_fifo1_elmt_size = FDCAN_DATA_BYTES_8,
+    .rx_buffers_nbr = 0,
+    .rx_buffer_size = FDCAN_DATA_BYTES_8,
+    .tx_events_nbr = 16,
+    .tx_buffers_nbr = 16,
+    .tx_fifo_queue_elmts_nbr = 16,
+    .tx_fifo_queue_mode = FDCAN_TX_FIFO_OPERATION,
+    .tx_elmt_size = FDCAN_DATA_BYTES_8,
+};
+
+static const HalCan_FDCAN_Config_s s_fdcan2_cfg = {
+    .frame_format = FDCAN_FRAME_CLASSIC,
+    .mode = FDCAN_MODE_NORMAL,
+    .auto_retransmission = ENABLE,
+    .transmit_pause = DISABLE,
+    .protocol_exception = ENABLE,
+    .nominal_prescaler = 12,
+    .nominal_sync_jump_width = 1,
+    .nominal_time_seg1 = 7,
+    .nominal_time_seg2 = 2,
+    .data_prescaler = 1,
+    .data_sync_jump_width = 1,
+    .data_time_seg1 = 1,
+    .data_time_seg2 = 1,
+    .message_ram_offset = 710, /* FDCAN2 */
+    .std_filters_nbr = 16,
+    .ext_filters_nbr = 16,
+    .rx_fifo0_elmts_nbr = 16,
+    .rx_fifo0_elmt_size = FDCAN_DATA_BYTES_8,
+    .rx_fifo1_elmts_nbr = 16,
+    .rx_fifo1_elmt_size = FDCAN_DATA_BYTES_8,
+    .rx_buffers_nbr = 0,
+    .rx_buffer_size = FDCAN_DATA_BYTES_8,
+    .tx_events_nbr = 16,
+    .tx_buffers_nbr = 16,
+    .tx_fifo_queue_elmts_nbr = 16,
+    .tx_fifo_queue_mode = FDCAN_TX_FIFO_OPERATION,
+    .tx_elmt_size = FDCAN_DATA_BYTES_8,
+};
+
+static const HalCan_FDCAN_Config_s s_fdcan3_cfg = {
+    .frame_format = FDCAN_FRAME_CLASSIC,
+    .mode = FDCAN_MODE_NORMAL,
+    .auto_retransmission = ENABLE,
+    .transmit_pause = DISABLE,
+    .protocol_exception = ENABLE,
+    .nominal_prescaler = 12,
+    .nominal_sync_jump_width = 1,
+    .nominal_time_seg1 = 7,
+    .nominal_time_seg2 = 2,
+    .data_prescaler = 1,
+    .data_sync_jump_width = 1,
+    .data_time_seg1 = 1,
+    .data_time_seg2 = 1,
+    .message_ram_offset = 1420, /* FDCAN3 */
+    .std_filters_nbr = 16,
+    .ext_filters_nbr = 16,
+    .rx_fifo0_elmts_nbr = 16,
+    .rx_fifo0_elmt_size = FDCAN_DATA_BYTES_8,
+    .rx_fifo1_elmts_nbr = 16,
+    .rx_fifo1_elmt_size = FDCAN_DATA_BYTES_8,
+    .rx_buffers_nbr = 0,
+    .rx_buffer_size = FDCAN_DATA_BYTES_8,
+    .tx_events_nbr = 16,
+    .tx_buffers_nbr = 16,
+    .tx_fifo_queue_elmts_nbr = 16,
+    .tx_fifo_queue_mode = FDCAN_TX_FIFO_OPERATION,
+    .tx_elmt_size = FDCAN_DATA_BYTES_8,
+};
+
+const HalCan_FDCAN_Config_s *can_cfg_map[CAN_NUM_MAX] = {
+    [CAN_1] = &s_fdcan1_cfg,
+    [CAN_2] = &s_fdcan2_cfg,
+    [CAN_3] = &s_fdcan3_cfg,
+};
+
 const SPI_Map_t spi_map[SPI_NUM_MAX] = {
     [SPI_LCD_1] = {&hspi1},
     [SPI_BMI088] = {&hspi2},
@@ -67,3 +169,4 @@ BSP_STATIC_ASSERT_MAP_SIZE(can_map, CAN_NUM_MAX);
 BSP_STATIC_ASSERT_MAP_SIZE(spi_map, SPI_NUM_MAX);
 BSP_STATIC_ASSERT_MAP_SIZE(i2c_map, I2C_NUM_MAX);
 BSP_STATIC_ASSERT_MAP_SIZE(adc_map, ADC_NUM_MAX);
+BSP_STATIC_ASSERT_MAP_SIZE(can_cfg_map, CAN_NUM_MAX);

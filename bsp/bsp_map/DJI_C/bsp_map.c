@@ -41,6 +41,29 @@ const CAN_Map_t can_map[CAN_NUM_MAX] = {
     [CAN_2] = {&hcan2},
 };
 
+/*============================================
+ *              CAN 外设重配置表
+ *============================================*/
+/* 各 BxCAN 重配置结构体（覆盖 CubeMX 初始化），两路共用同一份配置 */
+static const HalCan_CAN_Config_s s_can_cfg = {
+    .prescaler = 3,
+    .mode = CAN_MODE_NORMAL,
+    .sync_jump_width = CAN_SJW_1TQ,
+    .time_seg1 = CAN_BS1_10TQ,
+    .time_seg2 = CAN_BS2_3TQ,
+    .time_triggered_mode = DISABLE,
+    .auto_bus_off = ENABLE,
+    .auto_wake_up = DISABLE,
+    .auto_retransmission = ENABLE,
+    .receive_fifo_locked = DISABLE,
+    .transmit_fifo_priority = ENABLE,
+};
+
+const HalCan_CAN_Config_s *can_cfg_map[CAN_NUM_MAX] = {
+    [CAN_1] = &s_can_cfg,
+    [CAN_2] = &s_can_cfg,
+};
+
 const SPI_Map_t spi_map[SPI_NUM_MAX] = {
     [SPI_BMI088] = {&hspi1},
     [SPI_EX_2] = {&hspi2},
@@ -62,3 +85,4 @@ BSP_STATIC_ASSERT_MAP_SIZE(can_map, CAN_NUM_MAX);
 BSP_STATIC_ASSERT_MAP_SIZE(spi_map, SPI_NUM_MAX);
 BSP_STATIC_ASSERT_MAP_SIZE(i2c_map, I2C_NUM_MAX);
 BSP_STATIC_ASSERT_MAP_SIZE(adc_map, ADC_NUM_MAX);
+BSP_STATIC_ASSERT_MAP_SIZE(can_cfg_map, CAN_NUM_MAX);
