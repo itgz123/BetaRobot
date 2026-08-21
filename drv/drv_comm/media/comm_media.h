@@ -23,6 +23,7 @@ typedef enum : uint8_t
     MEDIA_CAN = 0,
     MEDIA_USART,
     MEDIA_USB,
+    MEDIA_USB_SIMPLE, /* USB(CDC) 短帧免序号版：整帧 ≤ 63B 免分包序号单包透传；> 63B 行为同 MEDIA_USB */
 } MediaType_e;
 
 typedef struct CommMedia CommMedia;
