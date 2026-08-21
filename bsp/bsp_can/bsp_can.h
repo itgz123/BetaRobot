@@ -72,6 +72,7 @@ typedef struct
 {
     BoardCAN_e can_e;                          // 板载CAN枚举（用于查找硬件映射）
     uint32_t tx_id;                            // 发送标准ID；CAN_ID_UNUSED(-1) 表示不发送
+    uint8_t tx_len;                            // 发送数据长度（1~8）；0 表示默认8
     CANFilterMode_e filter_mode;               // 过滤器模式（掩码/列表）
     uint32_t rx_id_list[4];                    // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
     uint32_t rx_mask;                          // 掩码模式：掩码值（列表模式不使用）
@@ -103,23 +104,17 @@ int8_t CANRegister(CANInstance *instance);
 /**
  * @brief 配置CAN实例（可重复调用）
  * @param instance CAN实例指针
- * @param config   运行时配置结构体指针（can_e/tx_id/filter/rx/callback）
+ * @param config   运行时配置结构体指针（can_e/tx_id/tx_len/filter/rx/callback）
  * @retval 0 成功
  * @retval -1 失败（参数非法）
  *
  * @note 填充硬件映射，设置运行时参数并配置硬件滤波器/启动CAN。
+ *       发送长度由 config->tx_len 指定（0 表示默认 8 字节）。
  *       不修改 static 管理数组。
  *       可重复调用以重新配置硬件参数。
  *       要求在 CANRegister 之后调用。
  */
 int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config);
-
-/**
- * @brief 设置发送DLC长度（1~8）
- * @param instance CAN实例
- * @param length 数据长度（字节）
- */
-void CANSetDLC(CANInstance *instance, uint8_t length);
 
 /**
  * @brief 发送CAN消息（发送数据来自 instance->tx_buff）
