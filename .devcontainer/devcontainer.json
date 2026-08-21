@@ -30,6 +30,6 @@
       ]
     }
   },
-  "postCreateCommand": "bash -c 'if [ ! -f user_cfg.h ]; then cp user_cfg.h.example user_cfg.h; echo \"created user_cfg.h\"; fi && git submodule update --init --recursive'",
+  "postCreateCommand": "bash -c 'if [ ! -f user_cfg.h ]; then cp user_cfg.h.example user_cfg.h; echo \"created user_cfg.h\"; fi && bash scripts/setup_apps.sh'",
   "postStartCommand": "sudo chmod 666 /dev/bus/usb/*/* /dev/hidraw* 2>/dev/null || true"
 }

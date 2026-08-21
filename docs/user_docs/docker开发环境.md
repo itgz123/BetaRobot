@@ -8,14 +8,14 @@
 
 - Linux（Debian/Ubuntu/Fedora 均可）、已安装 Docker Engine
 - VSCode 安装 "Dev Containers" 扩展（`ms-vscode-remote.remote-containers`）
-- 本机 SSH 已配置可访问 GitHub（用于拉取 app 子模块），或已启动 ssh-agent 并加载密钥
+- 本机 SSH 已配置可访问 GitHub（用于拉取独立 app 仓库），或已启动 ssh-agent 并加载密钥
 
 ### 使用步骤
 
-1. 克隆仓库：`git clone --recurse-submodules git@github.com:itgz123/BetaRobot.git`
+1. 克隆主仓库：`git clone git@github.com:itgz123/BetaRobot.git`（app 是独立仓库，由下一步自动拉取）
 2. VSCode 打开仓库根目录 → 右下角弹窗选 "Reopen in Container"（或命令面板：Dev Containers: Reopen in Container）
 3. 首次构建自动完成：apt 安装工具 + 下载 ARM 工具链 15.3.rel1 到 `/opt/arm-gnu-toolchain`（需联网，约 300~400 MB）
-4. 自动初始化：复制 `user_cfg.h.example` → `user_cfg.h`，并执行 `git submodule update --init --recursive`
+4. 自动初始化：复制 `user_cfg.h.example` → `user_cfg.h`，并执行 `scripts/setup_apps.sh` 拉取独立 app 仓库到 `app/`
 5. 之后操作与 Windows 完全一致：`Ctrl+Shift+B` 编译；任务面板选 "download dap" / "DAP-link RTT"；`F5` 调试
 
 ### 容器内常用命令
@@ -40,8 +40,8 @@ cmake --build build/Debug --target rtt_connect    # 启动 RTT 日志（telnet 8
 - 容器内 CMake 报 `CMakeCache.txt ... is different than the directory ...`：
   这是宿主机（或其他环境）已用不同路径构建过 `build/` 目录导致。执行
   `cmake -E rm -rf build/Debug` 后重新 `cmake --preset Debug` 即可
-- 子模块拉取失败（ssh-agent 未转发）：容器内执行
+- app 仓库拉取失败（ssh-agent 未转发）：容器内执行
   `git config --global url."https://github.com/".insteadOf "git@github.com:"` 后重新执行
-  `git submodule update --init --recursive`
+  `bash scripts/setup_apps.sh`
 - 想用文档站点任务：容器内 `sudo apt-get install -y nodejs npm` 后运行 "start docs"
 - 非 1000 宿主 UID：改 `.devcontainer/Dockerfile` 顶部 `USER_UID`/`USER_GID`（或依赖 `updateRemoteUserUID` 自动对齐）
