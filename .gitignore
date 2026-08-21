@@ -6,8 +6,7 @@ __pycache__/
 betawave_user.py
 
 # 独立 app 仓库（各自独立 git 管理，主仓库不追踪，clone 后需单独拉取）
-/app/half_rudder_chassis/
-/app/half_rudder_gimbal/
+/app/
 
 # VitePress 文档站点
 docs/node_modules/
