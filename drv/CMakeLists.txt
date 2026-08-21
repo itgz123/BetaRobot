@@ -20,6 +20,8 @@ set(MODULE_SOURCES
     drv_comm/media/comm_media_usart.c
     drv_comm/media/comm_media_usb.c
     drv_comm/media/comm_media_usb_simple.c
+    drv_comm/media/comm_media_can_pkt0.c
+    drv_comm/media/comm_media_can_idseq.c
     drv_comm/proto/comm_proto.c
     drv_comm/proto/comm_proto_raw.c
     drv_comm/proto/comm_proto_custom.c

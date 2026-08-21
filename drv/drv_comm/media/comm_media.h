@@ -20,10 +20,12 @@
 /* 介质类型枚举（COMM_DEF / 后端 Config 用） */
 typedef enum : uint8_t
 {
-    MEDIA_CAN = 0,
+    MEDIA_CAN = 0, /* 旧占位：无实现；保留为 0 使未初始化 media_type 落 default 大声失败 */
     MEDIA_USART,
     MEDIA_USB,
     MEDIA_USB_SIMPLE, /* USB(CDC) 短帧免序号版：整帧 ≤ 63B 免分包序号单包透传；> 63B 行为同 MEDIA_USB */
+    MEDIA_CAN_PKT0,   /* 经典 CAN 8B 分包：data[0]=分包序号，data[1..7]=数据片 */
+    MEDIA_CAN_IDSEQ,  /* 经典 CAN 8B 分包：CAN ID 低 seq_bits 位为分包序号（ID = base_id + seq） */
 } MediaType_e;
 
 typedef struct CommMedia CommMedia;
