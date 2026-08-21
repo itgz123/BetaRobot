@@ -57,6 +57,7 @@ typedef struct
 {
     void (*rx_callback)(struct USBInstance *); /* 接收完成回调（可为 NULL）*/
     void (*tx_callback)(struct USBInstance *); /* 发送完成回调（可为 NULL）*/
+    void *parent;                              /* 父实例指针（经 USBConfig 写入实例；可为 NULL）*/
 } USB_Config_s;
 
 /*------------- 实例定义宏 --------------*/

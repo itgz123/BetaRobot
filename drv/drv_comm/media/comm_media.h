@@ -37,13 +37,11 @@ typedef struct
 struct CommMedia
 {
     const CommMediaVTable_s *vtable; /* 必须首成员 */
-    uint8_t *tx_buff;                /* 发送缓冲（MediaSend 从 comm 打包缓冲拷入后发出；DMA 异步发送须常驻） */
-    uint16_t tx_buff_size;           /* 发送缓冲大小（= tx payload + 协议开销） */
     void *parent;                    /* 指向 comm 实例（接收分发经此反查） */
     void *media;                     /* 指向 bsp 实例 */
 };
 
 /* 公共接口 */
-int8_t MediaSend(CommMedia *media, const uint8_t *data); /* 统一发送分发（拷贝 data → media->tx_buff 后发出；分包后端用状态机+发送完成回调续发） */
+int8_t MediaSend(CommMedia *media, const uint8_t *data); /* 统一发送分发（vtable 转发；发送缓冲/长度由各后端自持：USART 拷入自持 staging，USB 直接引用 data 分包） */
 
 #endif /* COMM_MEDIA_H */
