@@ -117,8 +117,10 @@ function(import_module module_dir result_sources result_includes)
     set(${result_includes} ${${result_includes}} PARENT_SCOPE)
 endfunction()
 
-# 导入 app/bsp/drv 模块
+# 导入 app/hal/bsp/drv 模块
+# 注意：hal 模块变量名不能用 HAL_INCLUDE_PATHS / HAL_C_SOURCES（已被下方 CubeMX 变量占用）
 import_module("${APP_DIR}" APP_SOURCE_FILES APP_INCLUDE_PATHS)
+import_module("${CMAKE_SOURCE_DIR}/hal" HAL_MODULE_SOURCES HAL_MODULE_INCLUDE_PATHS)
 import_module("${CMAKE_SOURCE_DIR}/bsp" BSP_SOURCE_FILES BSP_INCLUDE_PATHS)
 import_module("${CMAKE_SOURCE_DIR}/drv" DRV_SOURCE_FILES DRV_INCLUDE_PATHS)
 
@@ -247,6 +249,7 @@ set(LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/cubemx/board_config/${BOARD}/${LD_SCRIPT}
 ######################################
 set(PROJECT_SOURCES
     ${HAL_C_SOURCES}
+    ${HAL_MODULE_SOURCES}
     ${APP_SOURCE_FILES}
     ${BSP_SOURCE_FILES}
     ${DRV_SOURCE_FILES}
@@ -278,6 +281,7 @@ target_compile_definitions(${TARGET_NAME} PRIVATE
 target_include_directories(${TARGET_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${APP_INCLUDE_PATHS}
+    ${HAL_MODULE_INCLUDE_PATHS}
     ${BSP_INCLUDE_PATHS}
     ${DRV_INCLUDE_PATHS}
     ${HAL_INCLUDE_PATHS}

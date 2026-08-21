@@ -2,7 +2,8 @@
  * @file bsp_can.h
  * @brief CAN驱动封装，提供实例管理和回调分发功能
  *
- * @note 硬件配置（波特率/滤波器容量/中断/DMA/FD模式等）由 CubeMX 负责，BSP 层只管理实例
+ * @note 硬件配置（波特率/滤波器容量/中断/DMA/FD模式等）由 CubeMX 负责，BSP 层只管理实例。
+ *       需要覆盖 CubeMX 硬件参数时，由 hal_can 层在 bsp_map 的 can_cfg_map 中逐路配置。
  */
 
 #ifndef __BSP_CAN_H
@@ -27,6 +28,25 @@
 /*------------- 类型定义 --------------*/
 
 /**
+ * @brief CAN帧ID类型枚举
+ */
+typedef enum : uint8_t
+{
+    CAN_FRAME_ID_STD = 0, // 标准帧 ID（11-bit）
+    CAN_FRAME_ID_EXT = 1  // 扩展帧 ID（29-bit）
+} CANFrameIdType_e;
+
+/**
+ * @brief CAN帧格式枚举（仅 FDCAN 支持 FD 帧）
+ */
+typedef enum : uint8_t
+{
+    CAN_FRAME_FORMAT_CLASSIC = 0, // 经典 CAN（最大 8 字节）
+    CAN_FRAME_FORMAT_FD = 1,      // FD 帧（无 BRS，最大 64 字节）
+    CAN_FRAME_FORMAT_FD_BRS = 2   // FD 帧（带 BRS，最大 64 字节）
+} CANFrameFormat_e;
+
+/**
  * @brief CAN过滤器模式枚举
  */
 typedef enum : uint8_t
@@ -43,14 +63,17 @@ typedef struct CANInstance
     void *parent;                              // 父实例指针（由 DRV 层设置）
     BoardCAN_e can_e;                          // 板载CAN枚举（Config时查找映射）
     CAN_Map_t map;                             // CAN映射（Config时自动填充）
-    uint32_t tx_id;                            // 发送标准ID；CAN_ID_UNUSED(-1) 表示不发送
+    uint32_t tx_id;                            // 发送ID；CAN_ID_UNUSED(-1) 表示不发送
+    CANFrameIdType_e tx_id_type;               // 发送ID类型（标准/扩展）
+    CANFrameFormat_e tx_frame_format;          // 发送帧格式（经典/FD/FD_BRS）
     CANFilterMode_e filter_mode;               // 过滤器模式（掩码/列表）
     uint8_t rx_id_count;                       // 列表模式下有效接收ID数量（Config时自动计算）
     uint32_t rx_id_list[4];                    // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
     uint32_t rx_mask;                          // 掩码模式：掩码值（列表模式不使用）
+    CANFrameIdType_e rx_id_type;               // 接收ID类型（标准/扩展）
     uint32_t rx_id_matched;                    // 实际匹配到的ID（回调中使用）
-    uint8_t tx_buff[8];                        // 发送缓存
-    uint8_t rx_buff[8];                        // 接收缓存
+    uint8_t tx_buff[64];                       // 发送缓存（最大64字节，FD帧）
+    uint8_t rx_buff[64];                       // 接收缓存（最大64字节，FD帧）
     uint8_t rx_len;                            // 接收长度（字节）
     void (*rx_callback)(struct CANInstance *); // 接收完成回调
 #if BSP_CAN_IP == BSP_CAN_IP_FDCAN
@@ -67,15 +90,20 @@ typedef struct CANInstance
  * @brief CAN 运行时配置结构体（仅用于 CANConfig）
  * @note 统一掩码模式和列表模式，通过 filter_mode 区分
  * @note rx_id_count 会根据 rx_id_list 自动计算，无需用户填写
+ * @note 新增字段 tx_id_type/tx_frame_format/rx_id_type 默认值 0 = 标准帧/经典 CAN，
+ *       现有 drv_motor 调用（designated initializer）零改动兼容
  */
 typedef struct
 {
     BoardCAN_e can_e;                          // 板载CAN枚举（用于查找硬件映射）
-    uint32_t tx_id;                            // 发送标准ID；CAN_ID_UNUSED(-1) 表示不发送
-    uint8_t tx_len;                            // 发送数据长度（1~8）；0 表示默认8
+    uint32_t tx_id;                            // 发送ID；CAN_ID_UNUSED(-1) 表示不发送
+    CANFrameIdType_e tx_id_type;               // 发送ID类型（标准/扩展），0=标准
+    CANFrameFormat_e tx_frame_format;          // 发送帧格式（经典/FD/FD_BRS），0=经典
+    uint8_t tx_len;                            // 发送数据长度（1~64，仅合法尺寸）；0 表示默认8
     CANFilterMode_e filter_mode;               // 过滤器模式（掩码/列表）
     uint32_t rx_id_list[4];                    // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
     uint32_t rx_mask;                          // 掩码模式：掩码值（列表模式不使用）
+    CANFrameIdType_e rx_id_type;               // 接收ID类型（标准/扩展），0=标准
     void (*rx_callback)(struct CANInstance *); // 接收完成回调（可为NULL）
 } CAN_Config_s;
 
@@ -104,12 +132,14 @@ int8_t CANRegister(CANInstance *instance);
 /**
  * @brief 配置CAN实例（可重复调用）
  * @param instance CAN实例指针
- * @param config   运行时配置结构体指针（can_e/tx_id/tx_len/filter/rx/callback）
+ * @param config   运行时配置结构体指针（can_e/tx_id/tx_id_type/tx_frame_format/tx_len/filter/rx/rx_id_type/callback）
  * @retval 0 成功
  * @retval -1 失败（参数非法）
  *
  * @note 填充硬件映射，设置运行时参数并配置硬件滤波器/启动CAN。
  *       发送长度由 config->tx_len 指定（0 表示默认 8 字节）。
+ *       tx_id_type/rx_id_type 选择标准(0)/扩展(1)帧；tx_frame_format 选择经典(0)/FD(1)/FD_BRS(2)。
+ *       tx_len>8 必须配 FD/FD_BRS；BxCAN 不支持 FD 帧。
  *       不修改 static 管理数组。
  *       可重复调用以重新配置硬件参数。
  *       要求在 CANRegister 之后调用。
