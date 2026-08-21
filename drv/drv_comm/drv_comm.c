@@ -19,6 +19,7 @@
 // 介质后端 Register/Config（协议后端经注册表 CommProtoBackendFind 分发，见 CommRegister）
 #include "comm_media_usart.h"
 #include "comm_media_usb.h"
+#include "comm_media_usb_simple.h"
 
 #ifdef DRV_COMM_USED
 
@@ -98,6 +99,10 @@ int8_t CommRegister(CommInstance *inst)
         if (MediaUsbRegister((CommMediaUsb *)inst->media) != 0)
             return -1;
         break;
+    case MEDIA_USB_SIMPLE:
+        if (MediaUsbSimpleRegister((CommMediaUsbSimple *)inst->media) != 0)
+            return -1;
+        break;
     default:
         return -1; /* 介质类型未支持 */
     }
@@ -145,6 +150,10 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
         break;
     case MEDIA_USB:
         if (MediaUsbConfig((CommMediaUsb *)inst->media, (USB_Config_s *)cfg->media_cfg) != 0)
+            return -1;
+        break;
+    case MEDIA_USB_SIMPLE:
+        if (MediaUsbSimpleConfig((CommMediaUsbSimple *)inst->media, (USB_Config_s *)cfg->media_cfg) != 0)
             return -1;
         break;
     default:
