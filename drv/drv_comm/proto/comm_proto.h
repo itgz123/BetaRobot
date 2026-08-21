@@ -4,7 +4,7 @@
  *
  * 职责：把"任意长度数据单元"抽象为"payload 打包/解包"的统一通道。
  *   - 发送：vtable->pack(payload, out_buff) 把 payload 打包进 out_buff
- *           （comm 层 CommSend 提供的打包缓冲，再由 MediaSend 拷入 media->tx_buff 发出）
+ *           （comm 层 CommSend 提供的打包缓冲，再由 MediaSend 交给 media 后端发出）
  *   - 接收：unpack(data) 只解包，返回解出的 payload 指针（NULL 丢弃）；
  *           调用 on_frame 由 comm 层统一控制（CommMediaRxHook 按 unpack_mode 分流）
  *   - 长度模型：固定长度，payload 大小编译期确定（DEF 宏写入），接口不显式传 len

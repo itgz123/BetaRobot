@@ -22,7 +22,9 @@
 /* UART 介质派生结构体（首成员必须为 CommMedia 基类，vtable 约定） */
 typedef struct
 {
-    CommMedia base; /* 基类（首成员；发送缓冲 tx_buff/tx_buff_size 在基类，供协议分包直接写入） */
+    CommMedia base;        /* 基类（首成员） */
+    uint8_t *tx_buff;      /* 发送 staging 缓冲（协议分包写入；DMA 异步发送期间须常驻） */
+    uint16_t tx_buff_size; /* 发送缓冲大小（= tx payload + 协议开销，DEF 宏写入） */
 } CommMediaUsart;
 
 /**
@@ -43,8 +45,8 @@ typedef struct
     static uint8_t name##_tx_buff[tx_buff_sz] DMA_RAM = {0}; \
     static CommMediaUsart name = {                           \
         .base.media = &name##_usart,                         \
-        .base.tx_buff = name##_tx_buff,                      \
-        .base.tx_buff_size = tx_buff_sz}
+        .tx_buff = name##_tx_buff,                           \
+        .tx_buff_size = tx_buff_sz}
 
 /**
  * @brief 注册 UART 介质后端（不可重入：仅可调用一次）

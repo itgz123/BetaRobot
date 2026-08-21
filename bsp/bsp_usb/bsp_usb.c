@@ -156,10 +156,10 @@ int8_t USBConfig(USBInstance *instance, const USB_Config_s *config)
     }
     BSP_RETURN_IF_TRUE_LOG(!found, -1, LOGERROR("[bsp_usb] Instance not registered!"));
 
-    /* 设置回调 */
+    /* 设置回调与反向指针 */
     instance->rx_callback = config->rx_callback;
     instance->tx_callback = config->tx_callback;
-    instance->parent = NULL; /* DRV 层后续可设置 */
+    instance->parent = config->parent; /* 反向指针：DRV 层传入 media 实例（可为 NULL）*/
 
     LOGINFO("[bsp_usb] USB VCP configured");
     return 0;

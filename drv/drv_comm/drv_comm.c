@@ -18,6 +18,7 @@
 #include "drv_comm.h"
 // 介质后端 Register/Config（协议后端经注册表 CommProtoBackendFind 分发，见 CommRegister）
 #include "comm_media_usart.h"
+#include "comm_media_usb.h"
 
 #ifdef DRV_COMM_USED
 
@@ -93,6 +94,10 @@ int8_t CommRegister(CommInstance *inst)
         if (MediaUsartRegister((CommMediaUsart *)inst->media) != 0)
             return -1;
         break;
+    case MEDIA_USB:
+        if (MediaUsbRegister((CommMediaUsb *)inst->media) != 0)
+            return -1;
+        break;
     default:
         return -1; /* 介质类型未支持 */
     }
@@ -127,18 +132,23 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
     if (!inst->inited)
         return -1; /* 须先 CommRegister */
 
-    /* 1. 介质参数（media_cfg 非空才下发；可重入，运行期可改波特率/发送模式等） */
-    if (cfg->media_cfg != NULL)
+    /* 1. 介质参数（USART 需 media_cfg 非空才下发；USB 无运行期参数但须挂接收钩子）
+     *    @note USB 的 MediaUsbConfig 内部强制接管接收回调，media_cfg 可为 NULL */
+    switch (inst->media_type)
     {
-        switch (inst->media_type)
+    case MEDIA_USART:
+        if (cfg->media_cfg != NULL)
         {
-        case MEDIA_USART:
             if (MediaUsartConfig((CommMediaUsart *)inst->media, (USART_Config_s *)cfg->media_cfg) != 0)
                 return -1;
-            break;
-        default:
-            return -1; /* 介质类型未支持 */
         }
+        break;
+    case MEDIA_USB:
+        if (MediaUsbConfig((CommMediaUsb *)inst->media, (USB_Config_s *)cfg->media_cfg) != 0)
+            return -1;
+        break;
+    default:
+        return -1; /* 介质类型未支持 */
     }
 
     /* 2. 出帧消费回调（可重入：直接覆盖 rx_proto->on_frame，运行期可修改） */
@@ -157,16 +167,16 @@ int8_t CommSend(CommInstance *inst, const uint8_t *payload)
     if (inst == NULL || inst->tx_proto == NULL || payload == NULL)
         return -1;
 
-    /* 打包（vtable->pack，payload → inst->tx_buff）→ 拷贝到 media 缓冲发出
+    /* 打包（vtable->pack，payload → inst->tx_buff）→ media 后端发出
      * @note 发送协议->media 由 COMM_DEF 宏静态绑定（tx_proto->media）。
-     *       MediaSend 把 comm 打包缓冲拷入 media->tx_buff：media 缓冲常驻，
-     *       DMA 异步发送期间数据不失效；分包后端用状态机+发送完成回调续发。 */
+     *       MediaSend 把 comm 打包缓冲 data 交给后端：USART 拷入自持 staging
+     *       （DMA 异步发送期间不失效）；USB 直接引用 data 分包（本函数运行期间有效）。 */
     tx_proto = (CommProto *)inst->tx_proto;
     if (inst->tx_buff == NULL || ProtoPack(tx_proto, payload, inst->tx_buff) != 0)
         return -1;
 
     media = (CommMedia *)tx_proto->media;
-    if (media == NULL || media->tx_buff == NULL)
+    if (media == NULL)
         return -1;
     return MediaSend(media, inst->tx_buff);
 }

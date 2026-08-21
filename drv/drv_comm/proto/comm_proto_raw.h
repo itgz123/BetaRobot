@@ -27,10 +27,10 @@ typedef struct
  * @brief 静态定义空协议实例
  * @param name         实例名称
  * @param media_       media 实例（发送用，指向 CommMedia 派生实例）
- * @param payload_size payload 长度（编译期确定；空协议无开销，整帧 = payload 直接写 media->tx_buff）
+ * @param payload_size payload 长度（编译期确定；空协议无开销，整帧 = payload 直接写发送缓冲）
  *
- * @note media_ 以指针绑定，运行时无需另传；发送缓冲由 media 提供（media->tx_buff），
- *       协议分包直接写入。vtable 由 CommProtoRawInit 挂接。
+ * @note media_ 以指针绑定，运行时无需另传；发送缓冲由 comm 层提供（inst->tx_buff，
+ *       COMM_DEF 静态定义），协议打包直接写入。vtable 由 CommProtoRawInit 挂接。
  *
  * @example
  *   COMM_PROTO_RAW_DEF(proto_comm, uart_comm, 32);

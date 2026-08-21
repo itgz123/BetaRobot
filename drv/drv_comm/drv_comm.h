@@ -31,7 +31,7 @@ typedef struct
     void *media;                  // 介质派生实例指针（首成员为 CommMedia 基类）
     void *rx_proto;               // 接收协议派生实例指针（首成员为 CommProto 基类）
     void *tx_proto;               // 发送协议派生实例指针（首成员为 CommProto 基类）
-    uint8_t *tx_buff;             // 发送打包缓冲（COMM_DEF 静态定义，协议分包写入；大小以 media->tx_buff_size 为准）
+    uint8_t *tx_buff;             // 发送打包缓冲（COMM_DEF 静态定义，协议分包写入；大小 = tx_size + 协议开销）
     uint8_t inited;               // 初始化标志（CommRegister 置位）
 } CommInstance;
 
@@ -75,8 +75,8 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg);
  * @retval 0 成功；-1 失败（参数非法 / 打包或发送失败）
  *
  * @note 分包在 comm 层完成（vtable->pack 写 inst->tx_buff）；MediaSend 把
- *       打包缓冲拷入 media 常驻发送缓冲（DMA 异步发送期间不失效）后发出。
- *       分包后端（CAN/USB）用状态机标志 + 发送完成回调续发。
+ *       打包缓冲交给 media 后端发出（USART 拷入自持 staging 缓冲 DMA 发送；
+ *       USB 直接引用 data 分包，无拷贝）。
  */
 int8_t CommSend(CommInstance *inst, const uint8_t *payload);
 
