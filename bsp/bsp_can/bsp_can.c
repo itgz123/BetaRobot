@@ -466,6 +466,14 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
     instance->rx_mask = config->rx_mask;
     instance->rx_callback = config->rx_callback;
 
+    // 检查发送长度（0 表示默认 8，1~8 为实际长度）
+    if (config->tx_len > 8U)
+    {
+        LOGERROR("[bsp_can] Invalid tx_len=%d, must be 0~8 (0=default 8)", config->tx_len);
+        return -1;
+    }
+    uint8_t tx_len = (config->tx_len == 0U) ? 8U : config->tx_len;
+
     // 检查tx_id范围（-1 表示不发送）
     if (instance->tx_id != CAN_ID_UNUSED && instance->tx_id > 0x7FF)
     {
@@ -590,7 +598,7 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
         instance->tx_header.Identifier = instance->tx_id;
         instance->tx_header.IdType = FDCAN_STANDARD_ID;
         instance->tx_header.TxFrameType = FDCAN_DATA_FRAME;
-        instance->tx_header.DataLength = FDCAN_DLC_BYTES_8;
+        instance->tx_header.DataLength = CANLengthToFdcanDlc(tx_len);
         instance->tx_header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
         instance->tx_header.BitRateSwitch = FDCAN_BRS_OFF;
         instance->tx_header.FDFormat = FDCAN_CLASSIC_CAN;
@@ -613,7 +621,7 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
         instance->tx_header.StdId = instance->tx_id;
         instance->tx_header.IDE = CAN_ID_STD;
         instance->tx_header.RTR = CAN_RTR_DATA;
-        instance->tx_header.DLC = 8;
+        instance->tx_header.DLC = tx_len;
         // ExtId 和 TransmitGlobalTime 已被 memset 清零
     }
 
@@ -650,27 +658,6 @@ int8_t CANRegister(CANInstance *instance)
     s_can_instance[s_can_idx++] = instance;
     LOGINFO("[bsp_can] CAN instance registered, idx=%d", s_can_idx - 1);
     return 0;
-}
-
-void CANSetDLC(CANInstance *instance, uint8_t length)
-{
-    if (instance == NULL)
-    {
-        LOGWARNING("[bsp_can] CANSetDLC: instance is NULL!");
-        return;
-    }
-
-    if (length == 0U || length > 8U)
-    {
-        LOGWARNING("[bsp_can] CANSetDLC: invalid length=%d, only 1~8 is allowed", length);
-        return;
-    }
-
-#if BSP_CAN_IP == BSP_CAN_IP_FDCAN
-    instance->tx_header.DataLength = CANLengthToFdcanDlc(length);
-#else
-    instance->tx_header.DLC = length;
-#endif
 }
 
 uint8_t CANTransmit(CANInstance *instance, uint32_t timeout_ms)
