@@ -20,6 +20,8 @@
 #include "comm_media_usart.h"
 #include "comm_media_usb.h"
 #include "comm_media_usb_simple.h"
+#include "comm_media_can_pkt0.h"
+#include "comm_media_can_idseq.h"
 
 #ifdef DRV_COMM_USED
 
@@ -87,8 +89,8 @@ int8_t CommRegister(CommInstance *inst)
     rx_proto = COMM_INSTANCE_RX_PROTO(inst);
 
     /* 1. media 后端注册（不可重入：USART 内部做 bsp USARTRegister 防重复注册）
-     * @note 按 inst->media_type 分发，不能用 media->type：DEF 宏静态定义时
-     *       尚未写入，默认 0 会误判为 MEDIA_CAN */
+     * @note 按 inst->media_type 分发：COMM_DEF 静态定义时写入 media_type，
+     *       不能用 media->type（CommMedia 基类无 type 字段，仅 vtable/parent/media） */
     switch (inst->media_type)
     {
     case MEDIA_USART:
@@ -101,6 +103,14 @@ int8_t CommRegister(CommInstance *inst)
         break;
     case MEDIA_USB_SIMPLE:
         if (MediaUsbSimpleRegister((CommMediaUsbSimple *)inst->media) != 0)
+            return -1;
+        break;
+    case MEDIA_CAN_PKT0:
+        if (MediaCanPkt0Register((CommMediaCanPkt0 *)inst->media) != 0)
+            return -1;
+        break;
+    case MEDIA_CAN_IDSEQ:
+        if (MediaCanIdseqRegister((CommMediaCanIdseq *)inst->media) != 0)
             return -1;
         break;
     default:
@@ -154,6 +164,16 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
         break;
     case MEDIA_USB_SIMPLE:
         if (MediaUsbSimpleConfig((CommMediaUsbSimple *)inst->media, (USB_Config_s *)cfg->media_cfg) != 0)
+            return -1;
+        break;
+    case MEDIA_CAN_PKT0:
+        /* CAN 的 media_cfg 必填（NULL 由后端 Config 拒绝），并强制接管接收回调 */
+        if (MediaCanPkt0Config((CommMediaCanPkt0 *)inst->media, (CommMediaCanPkt0Config_s *)cfg->media_cfg) != 0)
+            return -1;
+        break;
+    case MEDIA_CAN_IDSEQ:
+        /* CAN 的 media_cfg 必填（NULL 由后端 Config 拒绝），并强制接管接收回调 */
+        if (MediaCanIdseqConfig((CommMediaCanIdseq *)inst->media, (CommMediaCanIdseqConfig_s *)cfg->media_cfg) != 0)
             return -1;
         break;
     default:
