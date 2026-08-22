@@ -36,9 +36,6 @@ typedef struct
     SineParam_s sine_params;            // 正弦参数
     MultiSineParam_s multi_sine_params; // 多正弦叠加参数
     MITInstance mit;                    // MIT控制器实例
-    float *ref_position;                // 外部位置设定 (rad)
-    float *ref_speed;                   // 外部速度设定 (rad/s)
-    float *ref_acceleration;            // 外部加速度设定 (rad/s²)
     uint32_t delay_ms;                  // 延时时间 (ms)
     uint64_t init_time_us;              // 初始化时间戳 (us)
     uint8_t init_flag;                  // init_time_us 初始化标志，0=未初始化
@@ -76,6 +73,7 @@ int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, const AxisMitLite_Init_Config_
  * @brief 计算控制输出，返回 setref 力矩值（不调用 motor.set_ref，由 app 手动设置）
  * @param inst 实例指针
  * @param mdata 电机反馈数据指针（位置/速度/力矩，只读）
+ * @param ref 外部设定值指针（位置/速度/加速度，仅 NORMAL 阶段使用，只读）
  * @return setref 最终发送给电机的力矩值 (Nm)
  * @note 反馈数据坐标系由 app 决定：mdata 应提供与 params.gear_ratio 匹配的电机侧数据，
  *       内部按 angle = angle/gear 换算到输出侧；若 app 直接给输出侧数据请将 gear_ratio 置 1
@@ -102,6 +100,6 @@ int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, const AxisMitLite_Init_Config_
  *
  *       ch12: setref值，最终发送给电机的力矩值 (Nm)
  */
-float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const MotorData_s *mdata);
+float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const MotorData_s *mdata, const AxisMitLiteRef_s *ref);
 
 #endif // !DRV_AXIS_MIT_LITE_H

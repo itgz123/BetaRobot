@@ -129,9 +129,9 @@ static inline float GenerateMultiSineTorque(const MultiSineParam_s *params, floa
     return params->amplitude * sum;
 }
 
-float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const MotorData_s *mdata)
+float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const MotorData_s *mdata, const AxisMitLiteRef_s *ref)
 {
-    if (inst == NULL || mdata == NULL)
+    if (inst == NULL || mdata == NULL || ref == NULL)
     {
         return 0.0f;
     }
@@ -265,9 +265,9 @@ float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const MotorData_s *mdata)
 
     case AXIS_LITE_STAGE_NORMAL:
     {
-        ref_pos = SafeGetRef(inst->ref_position, angle);    // rad
-        ref_vel = SafeGetRef(inst->ref_speed, 0.0f);        // rad/s
-        ref_acc = SafeGetRef(inst->ref_acceleration, 0.0f); // rad/s²
+        ref_pos = SafeGetRef(&ref->position, angle);    // rad
+        ref_vel = SafeGetRef(&ref->speed, 0.0f);        // rad/s
+        ref_acc = SafeGetRef(&ref->acceleration, 0.0f); // rad/s²
 
         CalcFeedforward(inst, ref_acc, speed);
 
