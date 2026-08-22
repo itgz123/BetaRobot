@@ -81,4 +81,14 @@ typedef struct
     uint8_t num_freqs; // 正弦波数量
 } MultiSineParam_s;
 
+/*============================================
+ *              外部设定值结构体
+ *============================================*/
+typedef struct
+{
+    float position;     // 外部位置设定 (rad)
+    float speed;        // 外部速度设定 (rad/s)
+    float acceleration; // 外部加速度设定 (rad/s²)
+} AxisMitLiteRef_s;
+
 #endif // !DRV_AXIS_LITE_DEF_H
