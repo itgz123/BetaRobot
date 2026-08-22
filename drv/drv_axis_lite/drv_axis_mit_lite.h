@@ -39,6 +39,7 @@ typedef struct
     uint32_t delay_ms;                  // 延时时间 (ms)
     uint64_t init_time_us;              // 初始化时间戳 (us)
     uint8_t init_flag;                  // init_time_us 初始化标志，0=未初始化
+    uint8_t vofa_enable;                // VOFA 调试输出使能，1=写 12 通道（多轴实例仅一个置 1）
 } AxisMitLiteInstance;
 
 /*============================================
@@ -48,6 +49,7 @@ typedef struct
 {
     AxisLiteStage_e stage;              // 控制阶段
     uint32_t delay_ms;                  // 延时时间 (ms)
+    uint8_t vofa_enable;                // VOFA 调试输出使能，1=写 12 通道（多轴实例仅一个置 1）
     AxisLiteParams_s params;            // 轴参数
     SineParam_s sine_params;            // 正弦参数
     ChirpParam_s chirp_params;          // 扫频参数
@@ -78,7 +80,7 @@ int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, const AxisMitLite_Init_Config_
  * @note 反馈数据坐标系由 app 决定：mdata 应提供与 params.gear_ratio 匹配的电机侧数据，
  *       内部按 angle = angle/gear 换算到输出侧；若 app 直接给输出侧数据请将 gear_ratio 置 1
  * @note setref =（重力前馈 + 惯量前馈 + 摩擦前馈） + （kp * 位置误差 + kd * 速度误差）
- * @note 启用 AxisMitVofaLiteSetChannelUsed 时，自动设定 12 个 VOFA 调试通道：
+ * @note 当实例 vofa_enable 置 1 时，自动设定 12 个 VOFA 调试通道：
  *       CH1-CH3: 反馈量（轴侧，经 gear_ratio 转换）
  *       ch1:  position       — 反馈位置 (rad)
  *       ch2:  speed          — 反馈速度 (rad/s)
