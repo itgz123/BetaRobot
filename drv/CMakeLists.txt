@@ -13,6 +13,7 @@ set(MODULE_SOURCES
     drv_motor/drv_dmmotor/drv_dmmotor.c
     drv_motor/drv_rsmotor/drv_rsmotor.c
     drv_axis_lite/drv_axis_mit_lite.c
+    drv_planner/drv_planner.c
     drv_mit/drv_mit.c
     # comm开始
     drv_comm/drv_comm.c
@@ -42,6 +43,7 @@ set(MODULE_INCLUDE_DIRS
     drv_motor/drv_dmmotor
     drv_motor/drv_rsmotor
     drv_axis_lite
+    drv_planner
     drv_mahony
     drv_mit
     # comm开始
