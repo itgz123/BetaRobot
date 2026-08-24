@@ -40,6 +40,10 @@ typedef struct
     uint64_t init_time_us;              // 初始化时间戳 (us)
     uint8_t init_flag;                  // init_time_us 初始化标志，0=未初始化
     uint8_t vofa_enable;                // VOFA 调试输出使能，1=写 12 通道（多轴实例仅一个置 1）
+    float tune_base_angle;              // TUNE 阶段正弦参考基准角度 (rad)，延时结束时记录
+    float error_normalize_range;        // 位置误差归一化范围 (rad)，0=不启用
+    uint8_t error_normalize_enable;     // 归一化使能
+    uint8_t tune_base_flag;             // 基准角度已记录标志，0=未记录
 } AxisMitLiteInstance;
 
 /*============================================
@@ -55,8 +59,12 @@ typedef struct
     ChirpParam_s chirp_params;          // 扫频参数
     MultiSineParam_s multi_sine_params; // 多正弦叠加参数
     // MIT控制器参数
-    float kp; // 位置增益 (Nm/rad)
-    float kd; // 速度增益
+    float kp;                    // 位置增益 (Nm/rad)
+    float kd;                    // 速度增益
+    float error_normalize_range; // 位置误差归一化范围 (rad)，0=不启用
+    // 环绕轴(WRAP)设 2π：误差取最短路径 wrap 到 [-π, π)，边界处不跳变
+    // 限幅轴(LIMITED)设 0 或 2π 均可（误差本就在范围内，归一化恒等）
+    uint8_t error_normalize_enable; // 归一化使能
 } AxisMitLite_Init_Config_s;
 
 /*============================================

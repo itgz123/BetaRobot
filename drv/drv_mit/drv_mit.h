@@ -36,6 +36,7 @@ typedef struct
      *       使用 BSP_Math_WrapAngle 实现
      */
     float error_normalize_range;
+    uint8_t error_normalize_enable; // 归一化使能
 } MIT_Init_Config_s;
 
 /*------------- 类型定义 --------------*/
@@ -66,6 +67,8 @@ typedef struct MITInstance
     float feedforward;  // 前馈值
 
     float output; // 总输出
+
+    uint8_t error_normalize_enable; // 归一化使能
 } MITInstance;
 
 /*------------- 外部接口声明 --------------*/
