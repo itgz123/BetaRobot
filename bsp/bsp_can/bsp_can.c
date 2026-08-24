@@ -292,9 +292,9 @@ static HAL_StatusTypeDef CANFdcanInitIfNeeded(FDCAN_HandleTypeDef *handle)
         return HAL_ERROR;
     }
 
-    // 配置中断线分配：FIFO0+错误 -> IT0, FIFO1 -> IT1
+    // 配置中断线分配：FIFO0+TX完成+错误 -> IT0, FIFO1 -> IT1
     // 注意：HAL_FDCAN_ConfigInterruptLines 是覆盖式调用，需将同一中断线的所有中断源合并
-    uint32_t line0_ints = FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_BUS_OFF | FDCAN_IT_ERROR_WARNING | FDCAN_IT_ERROR_PASSIVE;
+    uint32_t line0_ints = FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_TX_FIFO_EMPTY | FDCAN_IT_BUS_OFF | FDCAN_IT_ERROR_WARNING | FDCAN_IT_ERROR_PASSIVE;
     if (HAL_FDCAN_ConfigInterruptLines(handle, line0_ints, FDCAN_INTERRUPT_LINE0) != HAL_OK)
     {
         return HAL_ERROR;
@@ -717,6 +717,7 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
     instance->rx_mask = config->rx_mask;
     instance->rx_id_type = config->rx_id_type;
     instance->rx_callback = config->rx_callback;
+    instance->tx_complete_callback = config->tx_complete_callback;
 
     // 校验帧类型/格式枚举合法性
     if (instance->tx_id_type != CAN_FRAME_ID_STD && instance->tx_id_type != CAN_FRAME_ID_EXT)
@@ -1007,6 +1008,15 @@ uint8_t CANTransmit(CANInstance *instance, uint32_t timeout_ms)
         LOGWARNING("[bsp_can] FDCAN add tx message failed (can_e=%d, tx_id=0x%lX)", instance->can_e, instance->tx_id);
         return 0;
     }
+
+    // 需要发送完成回调时，激活 Tx FIFO Empty 通知（每次发送都重新激活：
+    // HAL 在 FIFO 变空触发回调后会自动清除该中断使能位）。
+    // 注意：多实例共用同一 FDCAN 时，FIFO 全空触发一次，分发遍历所有实例，
+    //       因此同一时刻最多一帧在途的异步分包发送者都能正确收到回调。
+    if (instance->tx_complete_callback != NULL)
+    {
+        (void)HAL_FDCAN_ActivateNotification(instance->map.handle, FDCAN_IT_TX_FIFO_EMPTY, 0);
+    }
 #else
     while (HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle) == 0U)
     {
@@ -1021,6 +1031,12 @@ uint8_t CANTransmit(CANInstance *instance, uint32_t timeout_ms)
     {
         LOGWARNING("[bsp_can] CAN add tx message failed (can_e=%d, tx_id=0x%lX)", instance->can_e, instance->tx_id);
         return 0;
+    }
+
+    // 需要发送完成回调时，激活 Mailbox Empty 通知（按 mailbox 区分回调实例）
+    if (instance->tx_complete_callback != NULL)
+    {
+        (void)HAL_CAN_ActivateNotification(instance->map.handle, CAN_IT_TX_MAILBOX_EMPTY);
     }
 #endif
 
@@ -1054,6 +1070,19 @@ void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
     if ((RxFifo1ITs & FDCAN_IT_RX_FIFO1_NEW_MESSAGE) != 0U)
     {
         CANDispatchFdcanMessage(hfdcan, FDCAN_RX_FIFO1);
+    }
+}
+
+/* FDCAN Tx FIFO 全空中断：FIFO 中所有帧已发出。分发到共享该外设的所有实例。
+ * @note 本层只负责分发，不感知"发的是哪一帧"——media 异步分包发送者每次只提交
+ *       一包、等此回调后再提交下一包，故 FIFO 全空即意味着自己上一包已发送完成。 */
+void HAL_FDCAN_TxFifoEmptyCallback(FDCAN_HandleTypeDef *hfdcan)
+{
+    for (uint8_t i = 0; i < s_can_idx; i++)
+    {
+        CANInstance *instance = s_can_instance[i];
+        if (instance->map.handle == hfdcan && instance->tx_complete_callback != NULL)
+            instance->tx_complete_callback(instance);
     }
 }
 
@@ -1094,6 +1123,34 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
     CANDispatchBxcanMessage(hcan, CAN_RX_FIFO1);
+}
+
+/* BxCAN mailbox 发送完成分发：按 mailbox 索引匹配实例，调用其发送完成回调。
+ * @note media 异步分包发送者每次只提交一包、等此回调后再提交下一包，
+ *       回调按 instance->tx_mailbox 精确命中该实例（一次一包在途）。 */
+static void CANDispatchBxcanTxComplete(CAN_HandleTypeDef *hcan, uint32_t tx_mailbox)
+{
+    for (uint8_t i = 0; i < s_can_idx; i++)
+    {
+        CANInstance *instance = s_can_instance[i];
+        if (instance->map.handle == hcan && instance->tx_mailbox == tx_mailbox && instance->tx_complete_callback != NULL)
+            instance->tx_complete_callback(instance);
+    }
+}
+
+void HAL_CAN_TxMailbox0CompleteCallback(CAN_HandleTypeDef *hcan)
+{
+    CANDispatchBxcanTxComplete(hcan, CAN_TX_MAILBOX0);
+}
+
+void HAL_CAN_TxMailbox1CompleteCallback(CAN_HandleTypeDef *hcan)
+{
+    CANDispatchBxcanTxComplete(hcan, CAN_TX_MAILBOX1);
+}
+
+void HAL_CAN_TxMailbox2CompleteCallback(CAN_HandleTypeDef *hcan)
+{
+    CANDispatchBxcanTxComplete(hcan, CAN_TX_MAILBOX2);
 }
 
 void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)

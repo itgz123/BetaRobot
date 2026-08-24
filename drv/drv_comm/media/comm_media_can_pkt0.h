@@ -58,11 +58,15 @@ typedef struct
 /* CAN 介质派生结构体（首成员必须为 CommMedia 基类，vtable 约定） */
 typedef struct
 {
-    CommMedia base;        /* 基类（首成员；发送不持 staging 缓冲，MediaCanPkt0Send 直接引用 comm 打包缓冲 data） */
+    CommMedia base;        /* 基类（首成员） */
     uint8_t *rx_buff;      /* 接收累积缓冲（完整协议帧，不含分包序号；DEF 宏静态绑定，大小 = rx_buff_sz） */
+    uint8_t *tx_buff;      /* 发送 staging 缓冲（完整协议帧，不含分包序号；DEF 宏静态绑定，大小 = tx_buff_sz；
+                            * MediaCanPkt0Send 先整帧拷入此处，再逐包异步发出） */
     uint16_t rx_frame_len; /* 完整协议帧长（不含分包序号）= rx_buff_sz（DEF 宏写入；接收累积目标） */
     uint16_t tx_frame_len; /* 完整协议帧长（不含分包序号）= tx_buff_sz（DEF 宏写入；发送分包依据） */
     uint16_t rx_cnt;       /* 已累积字节数（0..rx_frame_len，上交后归零） */
+    uint16_t tx_sent;      /* 已发送字节位置（0..tx_frame_len；异步分包推进依据，发完一帧回到 tx_frame_len） */
+    uint8_t tx_active;     /* 异步分包发送进行中（1 = 上一帧尚未全部发出，拒绝新 Send 重入） */
     uint8_t rx_expect_pkt; /* 期望接收的下一分包序号（帧内 0 起递增；错位说明丢包，丢帧重同步） */
     uint32_t lost_frames;  /* 丢帧计数（分包错位/帧中途丢包累加） */
     uint32_t timeout_ms;   /* CANTransmit 超时（Config 写入；0 使用默认） */
@@ -75,9 +79,11 @@ typedef struct
  * @param tx_buff_sz  协议帧长（= tx_size + 协议开销；发送分包依据，写入 tx_frame_len）
  *
  * @note 展开定义 name##_can（CANInstance）、name##_rx_buff（完整协议帧接收缓冲，
- *       不含分包序号）与 name（CommMediaCanPkt0），并绑定 base.media。发送不持
- *       staging 缓冲：MediaCanPkt0Send 直接引用 comm 打包缓冲（data 在本函数运行期间
- *       有效）。缓冲放普通 RAM（CAN 无 DMA）。
+ *       不含分包序号）、name##_tx_buff（完整协议帧发送 staging 缓冲，异步分包期间
+ *       保数据不失效）与 name（CommMediaCanPkt0），并绑定 base.media。
+ *       MediaCanPkt0Send 先整帧拷入 tx_buff，发第一包后返回，剩余包在
+ *       CAN 发送完成回调（bsp tx_complete_callback）中逐包续发。
+ *       缓冲放普通 RAM（CAN 无 DMA）。
  *
  * @example
  *   COMM_MEDIA_CAN_PKT0_DEF(can_comm_media, 16, 16); 协议帧 16B，帧长 > 7B 时自动分包
@@ -85,9 +91,11 @@ typedef struct
 #define COMM_MEDIA_CAN_PKT0_DEF(name, rx_buff_sz, tx_buff_sz) \
     CAN_INSTANCE_DEF(name##_can);                             \
     static uint8_t name##_rx_buff[(rx_buff_sz)] = {0};        \
+    static uint8_t name##_tx_buff[(tx_buff_sz)] = {0};        \
     static CommMediaCanPkt0 name = {                          \
         .base.media = &name##_can,                            \
         .rx_buff = name##_rx_buff,                            \
+        .tx_buff = name##_tx_buff,                            \
         .rx_frame_len = (rx_buff_sz),                         \
         .tx_frame_len = (tx_buff_sz)}
 
