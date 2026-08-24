@@ -51,8 +51,11 @@ const CAN_Map_t can_map[CAN_NUM_MAX] = {
  *              CAN 外设重配置表
  *============================================*/
 /* 各 FDCAN 重配置结构体（覆盖 CubeMX 初始化）。
- * 注意：RxFifo0/1ElmtSize 与 TxElmtSize 当前为 8 字节 → 外设跑经典 CAN；
- *       要实际跑 64 字节 FD 帧需把对应字段改为 FDCAN_DATA_BYTES_64。 */
+ * 警告：RxFifo0/1ElmtSize 与 TxElmtSize 当前为 8 字节 → 外设跑经典 CAN，
+ *       无法收发 >8 字节的 FD 帧（配置了 tx_len>8 的实例会被 CANConfig 拒绝）。
+ *       要实际跑 FD 帧，必须同步把 rx_fifo0_elmt_size / rx_fifo1_elmt_size /
+ *       tx_elmt_size 改为 FDCAN_DATA_BYTES_64，且 FDCAN3 共三路共享 Message RAM，
+ *       增大元素尺寸后需重新核算 message_ram_offset 是否溢出 2560 字。 */
 static const HalCan_FDCAN_Config_s s_fdcan1_cfg = {
     .frame_format = FDCAN_FRAME_CLASSIC,
     .mode = FDCAN_MODE_NORMAL,
