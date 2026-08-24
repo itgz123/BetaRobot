@@ -38,6 +38,10 @@ typedef enum : uint8_t
 
 /**
  * @brief CAN帧格式枚举（仅 FDCAN 支持 FD 帧）
+ * @note  设计限制：FD/FD_BRS 帧的实际收发长度受外设 Rx/Tx 元素尺寸限制
+ *        （bsp_map 的 can_cfg_map：rx_fifo0/1_elmt_size、tx_elmt_size，当前均为
+ *         FDCAN_DATA_BYTES_8 = 经典 CAN）。若未相应加大元素尺寸，
+ *         >8 字节的 FD 帧无法正确收发，CANConfig 会对超 TxElmtSize 的 tx_len 直接报错。
  */
 typedef enum : uint8_t
 {
@@ -141,7 +145,8 @@ int8_t CANRegister(CANInstance *instance);
  *       tx_id_type/rx_id_type 选择标准(0)/扩展(1)帧；tx_frame_format 选择经典(0)/FD(1)/FD_BRS(2)。
  *       tx_len>8 必须配 FD/FD_BRS；BxCAN 不支持 FD 帧。
  *       不修改 static 管理数组。
- *       可重复调用以重新配置硬件参数。
+ *       注意：每个实例仅应调用一次。过滤器索引（s_can*_filter_idx / s_fdcan*_filter_idx）
+ *       只增不重置，重复调用会重复消耗过滤器 bank/索引，最终报 "filter index overflow" 错误。
  *       要求在 CANRegister 之后调用。
  */
 int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config);

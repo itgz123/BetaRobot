@@ -273,7 +273,6 @@ static HAL_StatusTypeDef CANFdcanInitIfNeeded(FDCAN_HandleTypeDef *handle)
 
     if (s_can_started[can_idx])
         return HAL_OK;
-    s_can_started[can_idx] = 1;
 
     // 首次启动该CAN外设时，先执行 hal_can 重配置（覆盖 CubeMX，若 bsp_map 配置存在）。
     // 注意：HAL_FDCAN_Init 会清空分配区 Message RAM 并重写 SIDFC/XIDFC 基址，
@@ -314,6 +313,10 @@ static HAL_StatusTypeDef CANFdcanInitIfNeeded(FDCAN_HandleTypeDef *handle)
     {
         return HAL_ERROR;
     }
+
+    // 全部启动步骤（reconfig/全局过滤/中断线/Start/通知）成功后才标记已启动；
+    // 任一步失败都不置位，允许下次 CANConfig 重试完整初始化。
+    s_can_started[can_idx] = 1;
 
     return HAL_OK;
 }
@@ -515,7 +518,9 @@ static HAL_StatusTypeDef CANBxcanAddFilter(CANInstance *instance)
         // HAL库16位过滤器寄存器映射：
         // FR1 = (FilterMaskIdLow << 16) | FilterIdLow → 第1ID在FilterIdLow，第2ID在FilterMaskIdLow
         // FR2 = (FilterMaskIdHigh << 16) | FilterIdHigh → 第3ID在FilterIdHigh，第4ID在FilterMaskIdHigh
-        // CAN_ID_UNUSED 槽位配置为 0（不匹配有效ID）
+        // 注意：16位槽位无法"禁用"，CAN_ID_UNUSED 槽位填 0 会匹配标准帧 ID=0。
+        //       若总线存在 ID=0 的标准帧会误通过硬件过滤，但软件分发按 rx_id_count
+        //       二次匹配会将其丢弃，仅多一次中断，不影响正确性。
         filter.FilterMode = CAN_FILTERMODE_IDLIST;
         filter.FilterIdLow = (instance->rx_id_list[0] != CAN_ID_UNUSED && instance->rx_id_list[0] <= 0x7FF)
                                  ? (instance->rx_id_list[0] & 0x7FFU) << 5
@@ -565,7 +570,6 @@ static HAL_StatusTypeDef CANBxcanStartIfNeeded(CAN_HandleTypeDef *handle)
 
     if (s_can_started[can_idx])
         return HAL_OK;
-    s_can_started[can_idx] = 1;
 
     // 首次启动该CAN外设时，先执行 hal_can 重配置（覆盖 CubeMX，若 bsp_map 配置存在）
     if (can_cfg_map[can_idx] != NULL)
@@ -586,6 +590,9 @@ static HAL_StatusTypeDef CANBxcanStartIfNeeded(CAN_HandleTypeDef *handle)
     {
         return HAL_ERROR;
     }
+
+    // 全部启动步骤（reconfig/Start/通知）成功后才标记已启动，失败可重试完整初始化
+    s_can_started[can_idx] = 1;
 
     return HAL_OK;
 }
@@ -798,13 +805,22 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
     }
 
 #if BSP_CAN_IP == BSP_CAN_IP_FDCAN
-    // FDCAN：检查发送长度不超过外设 Tx 元素尺寸（hal_can 重配置后可能已变化）
+    // FDCAN：检查发送长度不超过外设 Tx 元素尺寸。
+    // 优先用 can_cfg_map 的重配置值（CANFdcanInitIfNeeded 重配置后会覆盖 handle->Init.TxElmtSize），
+    // 配置不存在时退回当前 handle->Init 值（CubeMX）。若直接用重配置前的 handle->Init 值，
+    // 当用户仅加大 can_cfg_map 元素尺寸而 CubeMX 未同步时，会误拒合法的 FD 配置。
+    // 警告：若 tx_len 超过最终 TxElmtSize，HAL_FDCAN_AddMessageToTxFifoQ 内部 FDCAN_CopyMessageToRAM
+    //       会按 tx_len 越界写 Message RAM（内存破坏），因此这里直接拒绝配置而非仅警告。
     if (tx_len > 8U)
     {
-        uint8_t elmt_bytes = CANFdcanElmtSizeToBytes(instance->map.handle->Init.TxElmtSize);
+        uint32_t elmt_size = (can_cfg_map[instance->can_e] != NULL)
+                                 ? can_cfg_map[instance->can_e]->tx_elmt_size
+                                 : instance->map.handle->Init.TxElmtSize;
+        uint8_t elmt_bytes = CANFdcanElmtSizeToBytes(elmt_size);
         if (tx_len > elmt_bytes)
         {
-            LOGWARNING("[bsp_can] tx_len=%d exceeds FDCAN TxElmtSize=%d bytes (can_e=%d)", tx_len, elmt_bytes, instance->can_e);
+            LOGERROR("[bsp_can] tx_len=%d exceeds FDCAN TxElmtSize=%d bytes (can_e=%d)", tx_len, elmt_bytes, instance->can_e);
+            return -1;
         }
     }
 #endif
@@ -1053,15 +1069,16 @@ void HAL_FDCAN_ErrorCallback(FDCAN_HandleTypeDef *hfdcan)
 
 void HAL_FDCAN_ErrorStatusCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t ErrorStatusITs)
 {
+    // 三个错误状态标志可同时置位（如 Bus-off 同时伴随 Warning/Passive），须用独立 if 分别记录
     if (ErrorStatusITs & FDCAN_IT_BUS_OFF)
     {
         LOGERROR("[bsp_can] FDCAN Bus-off!");
     }
-    else if (ErrorStatusITs & FDCAN_IT_ERROR_PASSIVE)
+    if (ErrorStatusITs & FDCAN_IT_ERROR_PASSIVE)
     {
         LOGWARNING("[bsp_can] FDCAN Error Passive!");
     }
-    else if (ErrorStatusITs & FDCAN_IT_ERROR_WARNING)
+    if (ErrorStatusITs & FDCAN_IT_ERROR_WARNING)
     {
         LOGWARNING("[bsp_can] FDCAN Error Warning!");
     }
