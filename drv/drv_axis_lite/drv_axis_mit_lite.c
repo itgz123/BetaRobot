@@ -41,12 +41,24 @@ int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, const AxisMitLite_Init_Config_
     // 初始化多正弦叠加参数
     inst->multi_sine_params = cfg->multi_sine_params;
 
+    // 初始化TUNE基准（延时结束后按当前位置记录）
+    inst->tune_base_angle = 0.0f;
+    inst->tune_base_flag = 0;
+
+    // 保存误差归一化配置到实例
+    inst->error_normalize_range = cfg->error_normalize_range;
+    inst->error_normalize_enable = cfg->error_normalize_enable;
+
     // 初始化MIT控制器
+    // error_normalize_range: 环绕轴(WRAP)设 2π，位置误差取最短路径 wrap 到 [-π, π)，边界不跳变
+    // error_normalize_enable: 归一化使能，0=不启用，1=启用（range>0 且 enable 同时满足才生效）
     MIT_Init_Config_s mit_cfg = {
         .kp = cfg->kp,
         .kd = cfg->kd,
         .out_max = FLT_MAX,
         .out_min = -FLT_MAX,
+        .error_normalize_range = cfg->error_normalize_range,
+        .error_normalize_enable = cfg->error_normalize_enable,
     };
     MITInit(&inst->mit, &mit_cfg);
 
@@ -247,10 +259,20 @@ float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const MotorData_s *mdata, 
     case AXIS_LITE_STAGE_TUNE:
     {
         float t = CalcTimeSinceDelay(inst, now_us); // s
-        float A = inst->sine_params.amplitude;      // rad
-        float w = M_2PI * inst->sine_params.freq;   // rad/s
 
-        ref_pos = A * BSP_Math_Sin(w * t);          // rad
+        // 首次进入 TUNE（延时结束后）记录当前角度作为正弦参考中心
+        // 环绕轴角度归一化到 ±π，以当前位置为基准可避免起始误差过大导致 kp 饱和
+        if (!inst->tune_base_flag)
+        {
+            inst->tune_base_angle = angle;
+            inst->tune_base_flag = 1;
+        }
+
+        float A = inst->sine_params.amplitude;    // rad
+        float w = M_2PI * inst->sine_params.freq; // rad/s
+        float base = inst->tune_base_angle;
+
+        ref_pos = base + A * BSP_Math_Sin(w * t);   // rad
         ref_vel = A * w * BSP_Math_Cos(w * t);      // rad/s
         ref_acc = -A * w * w * BSP_Math_Sin(w * t); // rad/s²
 
