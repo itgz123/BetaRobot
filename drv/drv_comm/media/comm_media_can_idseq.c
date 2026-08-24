@@ -12,8 +12,10 @@
  *       因此接收处理必须在回调上下文内同步 memcpy 累积，不能延迟引用 can->rx_buff。
  * @note 分包序号在 CAN ID 中，不进入协议内容；接收重组到固定协议帧长
  *       （rx_frame_len）即完成一帧（无末包标志，收发编译期约定帧长）。
- * @note 本后端不持有发送 staging 缓冲：MediaCanIdseqSend 直接引用 comm 打包缓冲 data，
- *       因 CANTransmit 同步拷入外设缓冲，data 在本函数运行期间有效即可。
+ * @note 发送为异步分包：MediaCanIdseqSend 先整帧拷入自持 staging 缓冲 m->tx_buff，
+ *       发送第一包后即返回（tx_sent 记录已发位置），后续包由 CAN 发送完成回调
+ *       （bsp tx_complete_callback → MediaCanIdseqTxHook）逐包续发，发完清 tx_active。
+ *       CANTransmit 同步等 mailbox/Tx FIFO 空间并拷入外设缓冲，故回调内续发不会覆盖已排队帧。
  */
 
 #include "comm_media_can_idseq.h"
@@ -23,6 +25,8 @@
 #ifdef DRV_COMM_USED
 
 static int8_t MediaCanIdseqSend(CommMedia *media, const uint8_t *data);
+static int8_t MediaCanIdseqSendNext(CommMediaCanIdseq *m);
+static void MediaCanIdseqTxHook(CANInstance *can);
 static void MediaCanIdseqRxHook(CANInstance *can);
 static void MediaCanIdseqFrameComplete(CommMediaCanIdseq *m);
 
@@ -54,43 +58,77 @@ static const CommMediaVTable_s s_can_idseq_vtable = {
     .send = MediaCanIdseqSend,
 };
 
-/* vtable 发送实现：整帧协议帧按 8B/片分包发送，每包 ID = base_id + seq。
- * 1) data = comm 打包缓冲（本函数运行期间一直有效），直接引用整帧，无需拷贝
- * 2) 循环切片：每片 ≤ 8B，seq 从 0 起递增（该片在整个帧的第几包）
- * 3) 每包单独 CANTransmit（≤8B，DLC=chunk；末包短帧不补零，接收端用 rx_len 量度）
- * @note CANTransmit 同步阻塞等 mailbox/Tx FIFO，超时返回 0 → 本函数返回 -1（CommSend 得 -1）。
- *       中途失败不重发：已发部分由接收端序号错位丢帧重同步。 */
+/* vtable 发送实现：整帧协议帧按 8B/片异步分包发送，每包 ID = base_id + seq。
+ * 1) 整帧拷入自持 staging 缓冲 m->tx_buff（comm 打包缓冲 data 在 CommSend 返回后即失效，
+ *    而后续分包在 CAN 发送完成回调中续发，必须拷贝保数据）
+ * 2) 发第一包（8B，seq=0）后返回，tx_sent 记录已发位置
+ * 3) 剩余包由 MediaCanIdseqTxHook（bsp tx_complete_callback）逐包续发
+ * @note tx_active=1 表示上一帧尚未发完，此时拒绝新 Send（丢帧不覆盖）。
+ * @note 中途某包发送失败则中止：已发部分由接收端序号错位丢帧重同步。 */
 static int8_t MediaCanIdseqSend(CommMedia *media, const uint8_t *data)
 {
     CommMediaCanIdseq *m = (CommMediaCanIdseq *)media;
     CANInstance *can;
-    uint16_t remain;
-    uint32_t pkt_idx = 0;
 
     /* 先判空再解引用（m==NULL 时不能先访问 m->base.media） */
-    if (m == NULL || data == NULL || m->tx_frame_len == 0)
+    if (m == NULL || data == NULL || m->tx_frame_len == 0 || m->tx_buff == NULL)
         return -1;
     can = (CANInstance *)m->base.media;
     if (can == NULL)
         return -1;
 
-    /* 分包发送：整帧 = data，tx_frame_len > 8B 时拆成多包，seq = 该片在整个帧的第几包（0 起） */
-    remain = m->tx_frame_len;
-    while (remain > 0)
-    {
-        uint8_t chunk = (remain > CAN_MEDIA_FRAME_MAX) ? CAN_MEDIA_FRAME_MAX : (uint8_t)remain;
+    if (m->tx_active)
+        return -1; /* 上一帧仍在异步分包发送中，拒绝重入 */
 
-        memcpy(can->tx_buff, &data[m->tx_frame_len - remain], chunk);
-        can->tx_id = m->base_id + pkt_idx; /* 过 CANTransmit 的 tx_id 校验 */
-        CommMediaCanIdseqSetId(can, m->base_id + pkt_idx, m->id_type);
-        CommMediaCanIdseqSetDlc(can, chunk);
-        if (CANTransmit(can, m->timeout_ms) != 1)
-            return -1; /* 发送失败或超时：中止分包（已发部分接收端丢帧重同步） */
-        remain -= chunk;
-        pkt_idx++;
+    memcpy(m->tx_buff, data, m->tx_frame_len); /* 整帧拷入自持缓冲（异步续发期间不失效） */
+    m->tx_sent = 0;
+    m->tx_active = 1;
+
+    if (MediaCanIdseqSendNext(m) != 0)
+    {
+        m->tx_active = 0; /* 首包发送失败：中止 */
+        return -1;
     }
-    can->tx_id = m->base_id; /* 循环后恢复基址（实例专属，整洁性） */
     return 0;
+}
+
+/* 提交下一分包：从 tx_sent 起切 ≤8B 一片，ID = base_id + seq（seq = 已发片数）。
+ * @retval 0 成功提交一片；1 整帧已发完（无待发数据）；-1 发送失败/超时 */
+static int8_t MediaCanIdseqSendNext(CommMediaCanIdseq *m)
+{
+    CANInstance *can = (CANInstance *)m->base.media;
+    uint16_t remain;
+    uint8_t chunk;
+    uint32_t pkt_idx;
+
+    remain = m->tx_frame_len - m->tx_sent;
+    if (remain == 0)
+        return 1; /* 整帧已发完 */
+
+    chunk = (remain > CAN_MEDIA_FRAME_MAX) ? CAN_MEDIA_FRAME_MAX : (uint8_t)remain;
+    pkt_idx = m->tx_sent / CAN_MEDIA_FRAME_MAX; /* 该片在整个帧的第几包（0 起） */
+
+    memcpy(can->tx_buff, &m->tx_buff[m->tx_sent], chunk);
+    can->tx_id = m->base_id + pkt_idx; /* 过 CANTransmit 的 tx_id 校验 */
+    CommMediaCanIdseqSetId(can, m->base_id + pkt_idx, m->id_type);
+    CommMediaCanIdseqSetDlc(can, chunk);
+    if (CANTransmit(can, m->timeout_ms) != 1)
+        return -1; /* 发送失败或超时：中止分包（已发部分接收端丢帧重同步） */
+
+    m->tx_sent += chunk; /* 记录发送到哪个位置 */
+    return 0;
+}
+
+/* bsp 发送完成适配钩子（tx_complete_callback）：续发下一分包，直至整帧发完清 tx_active。
+ * @note 在 CAN 中断上下文执行；CANTransmit 同步等 mailbox/FIFO 空间（上一片已发完必有空间）。 */
+static void MediaCanIdseqTxHook(CANInstance *can)
+{
+    CommMediaCanIdseq *m = (CommMediaCanIdseq *)can->parent; /* media 层设置的反向指针 */
+
+    if (m == NULL)
+        return;
+    if (MediaCanIdseqSendNext(m) != 0)
+        m->tx_active = 0; /* 发完(1) 或失败(-1)：结束本轮异步发送 */
 }
 
 /* 重组出一整帧（rx_cnt 已达 rx_frame_len）：上交 comm 层并复位累积 */
@@ -156,7 +194,7 @@ int8_t MediaCanIdseqRegister(CommMediaCanIdseq *media)
 {
     CANInstance *can;
 
-    if (media == NULL || media->rx_buff == NULL)
+    if (media == NULL || media->rx_buff == NULL || media->tx_buff == NULL)
         return -1;
     if (media->rx_frame_len == 0 || media->tx_frame_len == 0)
         return -1; /* 收发协议帧长须非 0 */
@@ -174,10 +212,12 @@ int8_t MediaCanIdseqRegister(CommMediaCanIdseq *media)
 
     can->parent = media; /* 反向指针：适配钩子据此取回 media */
 
-    /* 清接收累积与分包序号状态（初始：期望首包 seq=0） */
+    /* 清接收累积与分包序号状态（初始：期望首包 seq=0）及发送异步状态 */
     media->rx_cnt = 0;
     media->rx_expect_pkt = 0;
     media->lost_frames = 0;
+    media->tx_sent = 0;
+    media->tx_active = 0;
     return 0;
 }
 
@@ -229,7 +269,8 @@ int8_t MediaCanIdseqConfig(CommMediaCanIdseq *media, CommMediaCanIdseqConfig_s *
         .rx_id_list = {cfg->base_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},
         .rx_mask = rx_mask,
         .rx_id_type = cfg->id_type,
-        .rx_callback = MediaCanIdseqRxHook, /* 保证接收统一进 comm 层接收入口 */
+        .rx_callback = MediaCanIdseqRxHook,          /* 保证接收统一进 comm 层接收入口 */
+        .tx_complete_callback = MediaCanIdseqTxHook, /* 发送完成回调：续发下一分包 */
     };
 
     if (CANConfig(can, &can_cfg) != 0)

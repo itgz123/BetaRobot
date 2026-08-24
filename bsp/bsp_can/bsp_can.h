@@ -64,22 +64,23 @@ typedef enum : uint8_t
  */
 typedef struct CANInstance
 {
-    void *parent;                              // 父实例指针（由 DRV 层设置）
-    BoardCAN_e can_e;                          // 板载CAN枚举（Config时查找映射）
-    CAN_Map_t map;                             // CAN映射（Config时自动填充）
-    uint32_t tx_id;                            // 发送ID；CAN_ID_UNUSED(-1) 表示不发送
-    CANFrameIdType_e tx_id_type;               // 发送ID类型（标准/扩展）
-    CANFrameFormat_e tx_frame_format;          // 发送帧格式（经典/FD/FD_BRS）
-    CANFilterMode_e filter_mode;               // 过滤器模式（掩码/列表）
-    uint8_t rx_id_count;                       // 列表模式下有效接收ID数量（Config时自动计算）
-    uint32_t rx_id_list[4];                    // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
-    uint32_t rx_mask;                          // 掩码模式：掩码值（列表模式不使用）
-    CANFrameIdType_e rx_id_type;               // 接收ID类型（标准/扩展）
-    uint32_t rx_id_matched;                    // 实际匹配到的ID（回调中使用）
-    uint8_t tx_buff[64];                       // 发送缓存（最大64字节，FD帧）
-    uint8_t rx_buff[64];                       // 接收缓存（最大64字节，FD帧）
-    uint8_t rx_len;                            // 接收长度（字节）
-    void (*rx_callback)(struct CANInstance *); // 接收完成回调
+    void *parent;                                       // 父实例指针（由 DRV 层设置）
+    BoardCAN_e can_e;                                   // 板载CAN枚举（Config时查找映射）
+    CAN_Map_t map;                                      // CAN映射（Config时自动填充）
+    uint32_t tx_id;                                     // 发送ID；CAN_ID_UNUSED(-1) 表示不发送
+    CANFrameIdType_e tx_id_type;                        // 发送ID类型（标准/扩展）
+    CANFrameFormat_e tx_frame_format;                   // 发送帧格式（经典/FD/FD_BRS）
+    CANFilterMode_e filter_mode;                        // 过滤器模式（掩码/列表）
+    uint8_t rx_id_count;                                // 列表模式下有效接收ID数量（Config时自动计算）
+    uint32_t rx_id_list[4];                             // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
+    uint32_t rx_mask;                                   // 掩码模式：掩码值（列表模式不使用）
+    CANFrameIdType_e rx_id_type;                        // 接收ID类型（标准/扩展）
+    uint32_t rx_id_matched;                             // 实际匹配到的ID（回调中使用）
+    uint8_t tx_buff[64];                                // 发送缓存（最大64字节，FD帧）
+    uint8_t rx_buff[64];                                // 接收缓存（最大64字节，FD帧）
+    uint8_t rx_len;                                     // 接收长度（字节）
+    void (*rx_callback)(struct CANInstance *);          // 接收完成回调
+    void (*tx_complete_callback)(struct CANInstance *); // 发送完成回调（一帧从硬件发出后调用；NULL 不启用）
 #if BSP_CAN_IP == BSP_CAN_IP_FDCAN
     FDCAN_TxHeaderTypeDef tx_header; // FDCAN发送头
 #else
@@ -99,16 +100,17 @@ typedef struct CANInstance
  */
 typedef struct
 {
-    BoardCAN_e can_e;                          // 板载CAN枚举（用于查找硬件映射）
-    uint32_t tx_id;                            // 发送ID；CAN_ID_UNUSED(-1) 表示不发送
-    CANFrameIdType_e tx_id_type;               // 发送ID类型（标准/扩展），0=标准
-    CANFrameFormat_e tx_frame_format;          // 发送帧格式（经典/FD/FD_BRS），0=经典
-    uint8_t tx_len;                            // 发送数据长度（1~64，仅合法尺寸）；0 表示默认8
-    CANFilterMode_e filter_mode;               // 过滤器模式（掩码/列表）
-    uint32_t rx_id_list[4];                    // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
-    uint32_t rx_mask;                          // 掩码模式：掩码值（列表模式不使用）
-    CANFrameIdType_e rx_id_type;               // 接收ID类型（标准/扩展），0=标准
-    void (*rx_callback)(struct CANInstance *); // 接收完成回调（可为NULL）
+    BoardCAN_e can_e;                                   // 板载CAN枚举（用于查找硬件映射）
+    uint32_t tx_id;                                     // 发送ID；CAN_ID_UNUSED(-1) 表示不发送
+    CANFrameIdType_e tx_id_type;                        // 发送ID类型（标准/扩展），0=标准
+    CANFrameFormat_e tx_frame_format;                   // 发送帧格式（经典/FD/FD_BRS），0=经典
+    uint8_t tx_len;                                     // 发送数据长度（1~64，仅合法尺寸）；0 表示默认8
+    CANFilterMode_e filter_mode;                        // 过滤器模式（掩码/列表）
+    uint32_t rx_id_list[4];                             // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
+    uint32_t rx_mask;                                   // 掩码模式：掩码值（列表模式不使用）
+    CANFrameIdType_e rx_id_type;                        // 接收ID类型（标准/扩展），0=标准
+    void (*rx_callback)(struct CANInstance *);          // 接收完成回调（可为NULL）
+    void (*tx_complete_callback)(struct CANInstance *); // 发送完成回调（一帧发出后调用；可为NULL）
 } CAN_Config_s;
 
 /*------------- 实例定义宏 --------------*/
