@@ -12,7 +12,8 @@ set(MODULE_SOURCES
     bsp_tim/bsp_tim.c
     bsp_usart/bsp_usart.c
     bsp_adc/bsp_adc.c
-    bsp_can/bsp_can.c
+    bsp_can/bsp_fdcan.c
+    bsp_can/bsp_bxcan.c
     bsp_freertos/bsp_freertos.c
     bsp_usb/bsp_usb.c
 )
