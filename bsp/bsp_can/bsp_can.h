@@ -28,13 +28,58 @@
 /*------------- 类型定义 --------------*/
 
 /**
- * @brief CAN帧ID类型枚举
+ * @brief CAN帧类型枚举（位标志，按位或组合）
+ * @note  四个维度位可自由组合，常用组合：
+ *        标准数据帧 = CAN_FRAME_STANDARD | CAN_FRAME_DATA
+ *        扩展数据帧 = CAN_FRAME_EXTENDED | CAN_FRAME_DATA
+ *        标准远程帧 = CAN_FRAME_STANDARD | CAN_FRAME_REMOTE
+ *        扩展远程帧 = CAN_FRAME_EXTENDED | CAN_FRAME_REMOTE
+ *        未显式设置的维度默认标准帧 + 数据帧（CANConfig 归一化）。
  */
 typedef enum : uint8_t
 {
-    CAN_FRAME_ID_STD = 0, // 标准帧 ID（11-bit）
-    CAN_FRAME_ID_EXT = 1  // 扩展帧 ID（29-bit）
-} CANFrameIdType_e;
+    CAN_FRAME_STANDARD = 0x01, // 标准帧 ID（11-bit）
+    CAN_FRAME_EXTENDED = 0x02, // 扩展帧 ID（29-bit）
+    CAN_FRAME_DATA = 0x04,     // 数据帧
+    CAN_FRAME_REMOTE = 0x08,   // 远程帧（RTR，无数据载荷，DLC 表示请求长度）
+} CANFrameType_e;
+
+/*------------- 帧类型工具函数 --------------*/
+
+/**
+ * @brief 帧类型归一化：未设置的维度补默认（ID 默认标准帧，帧类型默认数据帧）
+ * @note  用于 CANConfig 对 tx_frame_type/rx_frame_type 做向后兼容归一化，
+ *        现有调用方（designated initializer 不设置该字段，值 0）零改动兼容为标准数据帧。
+ */
+static inline CANFrameType_e CANFrameTypeNormalize(CANFrameType_e t)
+{
+    if (((uint8_t)t & (CAN_FRAME_STANDARD | CAN_FRAME_EXTENDED)) == 0U)
+    {
+        t = (CANFrameType_e)((uint8_t)t | CAN_FRAME_STANDARD);
+    }
+    if (((uint8_t)t & (CAN_FRAME_DATA | CAN_FRAME_REMOTE)) == 0U)
+    {
+        t = (CANFrameType_e)((uint8_t)t | CAN_FRAME_DATA);
+    }
+    return t;
+}
+
+/**
+ * @brief 帧类型合法性校验（应在归一化后调用）
+ * @retval 1 合法；0 非法（ID 维度/帧类型维度恰好各一位，且无多余位）
+ */
+static inline uint8_t CANFrameTypeIsValid(CANFrameType_e t)
+{
+    uint8_t v = (uint8_t)t;
+    if ((v & ~(CAN_FRAME_STANDARD | CAN_FRAME_EXTENDED | CAN_FRAME_DATA | CAN_FRAME_REMOTE)) != 0U)
+    {
+        return 0;
+    }
+    uint8_t id_bits = v & (CAN_FRAME_STANDARD | CAN_FRAME_EXTENDED);
+    uint8_t frame_bits = v & (CAN_FRAME_DATA | CAN_FRAME_REMOTE);
+    return (id_bits == CAN_FRAME_STANDARD || id_bits == CAN_FRAME_EXTENDED) &&
+           (frame_bits == CAN_FRAME_DATA || frame_bits == CAN_FRAME_REMOTE);
+}
 
 /**
  * @brief CAN帧格式枚举（仅 FDCAN 支持 FD 帧）
@@ -68,14 +113,15 @@ typedef struct CANInstance
     BoardCAN_e can_e;                                   // 板载CAN枚举（Config时查找映射）
     CAN_Map_t map;                                      // CAN映射（Config时自动填充）
     uint32_t tx_id;                                     // 发送ID；CAN_ID_UNUSED(-1) 表示不发送
-    CANFrameIdType_e tx_id_type;                        // 发送ID类型（标准/扩展）
+    CANFrameType_e tx_frame_type;                       // 发送帧类型（位组合：ID类型|数据/远程）
     CANFrameFormat_e tx_frame_format;                   // 发送帧格式（经典/FD/FD_BRS）
     CANFilterMode_e filter_mode;                        // 过滤器模式（掩码/列表）
     uint8_t rx_id_count;                                // 列表模式下有效接收ID数量（Config时自动计算）
     uint32_t rx_id_list[4];                             // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
     uint32_t rx_mask;                                   // 掩码模式：掩码值（列表模式不使用）
-    CANFrameIdType_e rx_id_type;                        // 接收ID类型（标准/扩展）
+    CANFrameType_e rx_frame_type;                       // 接收订阅帧类型（位组合：ID类型|数据/远程）
     uint32_t rx_id_matched;                             // 实际匹配到的ID（回调中使用）
+    CANFrameType_e rx_frame_type_matched;               // 实际接收到的帧类型（位组合，分发时填充）
     uint8_t tx_buff[64];                                // 发送缓存（最大64字节，FD帧）
     uint8_t rx_buff[64];                                // 接收缓存（最大64字节，FD帧）
     uint8_t rx_len;                                     // 接收长度（字节）
@@ -95,20 +141,20 @@ typedef struct CANInstance
  * @brief CAN 运行时配置结构体（仅用于 CANConfig）
  * @note 统一掩码模式和列表模式，通过 filter_mode 区分
  * @note rx_id_count 会根据 rx_id_list 自动计算，无需用户填写
- * @note 新增字段 tx_id_type/tx_frame_format/rx_id_type 默认值 0 = 标准帧/经典 CAN，
+ * @note tx_frame_type/rx_frame_type 为位组合（见 CANFrameType_e），0 = 标准数据帧（归一化）；
  *       现有 drv_motor 调用（designated initializer）零改动兼容
  */
 typedef struct
 {
     BoardCAN_e can_e;                                   // 板载CAN枚举（用于查找硬件映射）
     uint32_t tx_id;                                     // 发送ID；CAN_ID_UNUSED(-1) 表示不发送
-    CANFrameIdType_e tx_id_type;                        // 发送ID类型（标准/扩展），0=标准
+    CANFrameType_e tx_frame_type;                       // 发送帧类型（位组合：ID类型|数据/远程），0=标准数据帧
     CANFrameFormat_e tx_frame_format;                   // 发送帧格式（经典/FD/FD_BRS），0=经典
     uint8_t tx_len;                                     // 发送数据长度（1~64，仅合法尺寸）；0 表示默认8
     CANFilterMode_e filter_mode;                        // 过滤器模式（掩码/列表）
     uint32_t rx_id_list[4];                             // 接收ID列表；CAN_ID_UNUSED(-1) 表示该槽位无效
     uint32_t rx_mask;                                   // 掩码模式：掩码值（列表模式不使用）
-    CANFrameIdType_e rx_id_type;                        // 接收ID类型（标准/扩展），0=标准
+    CANFrameType_e rx_frame_type;                       // 接收订阅帧类型（位组合：ID类型|数据/远程），0=标准数据帧
     void (*rx_callback)(struct CANInstance *);          // 接收完成回调（可为NULL）
     void (*tx_complete_callback)(struct CANInstance *); // 发送完成回调（一帧发出后调用；可为NULL）
 } CAN_Config_s;
@@ -138,13 +184,13 @@ int8_t CANRegister(CANInstance *instance);
 /**
  * @brief 配置CAN实例（可重复调用）
  * @param instance CAN实例指针
- * @param config   运行时配置结构体指针（can_e/tx_id/tx_id_type/tx_frame_format/tx_len/filter/rx/rx_id_type/callback）
+ * @param config   运行时配置结构体指针（can_e/tx_id/tx_frame_type/tx_frame_format/tx_len/filter/rx/rx_frame_type/callback）
  * @retval 0 成功
  * @retval -1 失败（参数非法）
  *
  * @note 填充硬件映射，设置运行时参数并配置硬件滤波器/启动CAN。
  *       发送长度由 config->tx_len 指定（0 表示默认 8 字节）。
- *       tx_id_type/rx_id_type 选择标准(0)/扩展(1)帧；tx_frame_format 选择经典(0)/FD(1)/FD_BRS(2)。
+ *       tx_frame_type/rx_frame_type 为位组合（标准|数据 等，见 CANFrameType_e）；tx_frame_format 选择经典(0)/FD(1)/FD_BRS(2)。
  *       tx_len>8 必须配 FD/FD_BRS；BxCAN 不支持 FD 帧。
  *       不修改 static 管理数组。
  *       注意：每个实例仅应调用一次。过滤器索引（s_can*_filter_idx / s_fdcan*_filter_idx）
