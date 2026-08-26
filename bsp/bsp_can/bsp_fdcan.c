@@ -181,7 +181,7 @@ static HAL_StatusTypeDef CANFdcanAddFilter(CANInstance *instance)
     filter.IsCalibrationMsg = 0;
 
     // 标准/扩展帧是两套独立过滤器列表（基址由 SIDFC/XIDFC 分别管理）
-    if (instance->rx_id_type == CAN_FRAME_ID_EXT)
+    if (instance->rx_frame_type & CAN_FRAME_EXTENDED)
     {
         filter.IdType = FDCAN_EXTENDED_ID;
         filter_idx = &s_fdcan_ext_filter_idx[instance->can_e];
@@ -340,9 +340,13 @@ static void CANDispatchFdcanMessage(FDCAN_HandleTypeDef *hfdcan, uint32_t fifo)
                 continue;
             }
 
-            // 帧类型匹配：标准/扩展必须一致（防标准实例命中等值扩展帧）
-            if ((rx_header.IdType == FDCAN_EXTENDED_ID && instance->rx_id_type != CAN_FRAME_ID_EXT) ||
-                (rx_header.IdType == FDCAN_STANDARD_ID && instance->rx_id_type != CAN_FRAME_ID_STD))
+            // 帧类型匹配：ID 类型（标准/扩展）必须一致（防标准实例命中等值扩展帧）
+            if (((instance->rx_frame_type & CAN_FRAME_EXTENDED) != 0U) != (rx_header.IdType == FDCAN_EXTENDED_ID))
+            {
+                continue;
+            }
+            // 帧类型位匹配：订阅须包含实际收到的帧类型（数据/远程）
+            if ((instance->rx_frame_type & (rx_header.RxFrameType == FDCAN_REMOTE_FRAME ? CAN_FRAME_REMOTE : CAN_FRAME_DATA)) == 0U)
             {
                 continue;
             }
@@ -384,6 +388,9 @@ static void CANDispatchFdcanMessage(FDCAN_HandleTypeDef *hfdcan, uint32_t fifo)
 
             if (matched)
             {
+                // 记录实际帧类型（位组合），回调中可用 instance->rx_frame_type_matched 区分
+                instance->rx_frame_type_matched = (CANFrameType_e)(((rx_header.IdType == FDCAN_EXTENDED_ID) ? CAN_FRAME_EXTENDED : CAN_FRAME_STANDARD) |
+                                                                   ((rx_header.RxFrameType == FDCAN_REMOTE_FRAME) ? CAN_FRAME_REMOTE : CAN_FRAME_DATA));
                 uint8_t rx_len = CANFdcanDlcToLength(rx_header.DataLength);
                 if (rx_len > sizeof(instance->rx_buff))
                 {
@@ -391,7 +398,11 @@ static void CANDispatchFdcanMessage(FDCAN_HandleTypeDef *hfdcan, uint32_t fifo)
                 }
 
                 instance->rx_len = rx_len;
-                memcpy(instance->rx_buff, rx_data, rx_len);
+                // 远程帧无数据载荷：rx_len 为请求的数据长度，rx_buff 不填充
+                if (rx_header.RxFrameType != FDCAN_REMOTE_FRAME)
+                {
+                    memcpy(instance->rx_buff, rx_data, rx_len);
+                }
 
                 if (instance->rx_callback != NULL)
                 {
@@ -423,31 +434,40 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
 
     // 将配置拷贝到实例
     instance->tx_id = config->tx_id;
-    instance->tx_id_type = config->tx_id_type;
+    instance->tx_frame_type = config->tx_frame_type;
     instance->tx_frame_format = config->tx_frame_format;
     instance->filter_mode = config->filter_mode;
     memcpy(instance->rx_id_list, config->rx_id_list, sizeof(config->rx_id_list));
     instance->rx_mask = config->rx_mask;
-    instance->rx_id_type = config->rx_id_type;
+    instance->rx_frame_type = config->rx_frame_type;
     instance->rx_callback = config->rx_callback;
     instance->tx_complete_callback = config->tx_complete_callback;
 
-    // 校验帧类型/格式枚举合法性
-    if (instance->tx_id_type != CAN_FRAME_ID_STD && instance->tx_id_type != CAN_FRAME_ID_EXT)
+    // 归一化帧类型（未设置维度默认标准帧+数据帧）并校验合法性
+    instance->tx_frame_type = CANFrameTypeNormalize(instance->tx_frame_type);
+    if (!CANFrameTypeIsValid(instance->tx_frame_type))
     {
-        LOGERROR("[bsp_can] Invalid tx_id_type=%d", instance->tx_id_type);
+        LOGERROR("[bsp_can] Invalid tx_frame_type=0x%X", instance->tx_frame_type);
         return -1;
     }
-    if (instance->rx_id_type != CAN_FRAME_ID_STD && instance->rx_id_type != CAN_FRAME_ID_EXT)
+    instance->rx_frame_type = CANFrameTypeNormalize(instance->rx_frame_type);
+    if (!CANFrameTypeIsValid(instance->rx_frame_type))
     {
-        LOGERROR("[bsp_can] Invalid rx_id_type=%d", instance->rx_id_type);
+        LOGERROR("[bsp_can] Invalid rx_frame_type=0x%X", instance->rx_frame_type);
         return -1;
     }
+    // 校验帧格式枚举合法性
     if (instance->tx_frame_format != CAN_FRAME_FORMAT_CLASSIC &&
         instance->tx_frame_format != CAN_FRAME_FORMAT_FD &&
         instance->tx_frame_format != CAN_FRAME_FORMAT_FD_BRS)
     {
         LOGERROR("[bsp_can] Invalid tx_frame_format=%d", instance->tx_frame_format);
+        return -1;
+    }
+    // CAN FD 规范不支持远程帧：RTR 只能配经典 CAN
+    if ((instance->tx_frame_type & CAN_FRAME_REMOTE) != 0U && instance->tx_frame_format != CAN_FRAME_FORMAT_CLASSIC)
+    {
+        LOGERROR("[bsp_can] RTR (remote frame) requires CLASSIC format, got tx_frame_format=%d", instance->tx_frame_format);
         return -1;
     }
 
@@ -466,13 +486,13 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
         return -1;
     }
     // 各 ID 范围上限取决于帧类型
-    uint32_t tx_id_max = (instance->tx_id_type == CAN_FRAME_ID_EXT) ? 0x1FFFFFFFU : 0x7FFU;
-    uint32_t rx_id_max = (instance->rx_id_type == CAN_FRAME_ID_EXT) ? 0x1FFFFFFFU : 0x7FFU;
+    uint32_t tx_id_max = (instance->tx_frame_type & CAN_FRAME_EXTENDED) ? 0x1FFFFFFFU : 0x7FFU;
+    uint32_t rx_id_max = (instance->rx_frame_type & CAN_FRAME_EXTENDED) ? 0x1FFFFFFFU : 0x7FFU;
 
     // 检查tx_id范围（-1 表示不发送）
     if (instance->tx_id != CAN_ID_UNUSED && instance->tx_id > tx_id_max)
     {
-        LOGERROR("[bsp_can] Invalid tx_id=0x%lX, must be <= 0x%lX for %s frames", instance->tx_id, tx_id_max, instance->tx_id_type == CAN_FRAME_ID_EXT ? "extended" : "standard");
+        LOGERROR("[bsp_can] Invalid tx_id=0x%lX, must be <= 0x%lX for %s frames", instance->tx_id, tx_id_max, (instance->tx_frame_type & CAN_FRAME_EXTENDED) ? "extended" : "standard");
         return -1;
     }
 
@@ -498,7 +518,7 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
     {
         if (instance->rx_id_list[i] != CAN_ID_UNUSED && instance->rx_id_list[i] > rx_id_max)
         {
-            LOGERROR("[bsp_can] Invalid rx_id_list[%d]=0x%lX, must be <= 0x%lX for %s frames", i, instance->rx_id_list[i], rx_id_max, instance->rx_id_type == CAN_FRAME_ID_EXT ? "extended" : "standard");
+            LOGERROR("[bsp_can] Invalid rx_id_list[%d]=0x%lX, must be <= 0x%lX for %s frames", i, instance->rx_id_list[i], rx_id_max, (instance->rx_frame_type & CAN_FRAME_EXTENDED) ? "extended" : "standard");
             return -1;
         }
     }
@@ -506,7 +526,7 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
     // 检查掩码范围
     if (instance->rx_mask > rx_id_max)
     {
-        LOGERROR("[bsp_can] Invalid rx_mask=0x%lX, must be <= 0x%lX for %s frames", instance->rx_mask, rx_id_max, instance->rx_id_type == CAN_FRAME_ID_EXT ? "extended" : "standard");
+        LOGERROR("[bsp_can] Invalid rx_mask=0x%lX, must be <= 0x%lX for %s frames", instance->rx_mask, rx_id_max, (instance->rx_frame_type & CAN_FRAME_EXTENDED) ? "extended" : "standard");
         return -1;
     }
 
@@ -609,8 +629,8 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
     if (instance->tx_id != CAN_ID_UNUSED)
     {
         instance->tx_header.Identifier = instance->tx_id;
-        instance->tx_header.IdType = (instance->tx_id_type == CAN_FRAME_ID_EXT) ? FDCAN_EXTENDED_ID : FDCAN_STANDARD_ID;
-        instance->tx_header.TxFrameType = FDCAN_DATA_FRAME;
+        instance->tx_header.IdType = (instance->tx_frame_type & CAN_FRAME_EXTENDED) ? FDCAN_EXTENDED_ID : FDCAN_STANDARD_ID;
+        instance->tx_header.TxFrameType = (instance->tx_frame_type & CAN_FRAME_REMOTE) ? FDCAN_REMOTE_FRAME : FDCAN_DATA_FRAME;
         instance->tx_header.DataLength = CANLengthToFdcanDlc(tx_len);
         instance->tx_header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
         instance->tx_header.BitRateSwitch = (instance->tx_frame_format == CAN_FRAME_FORMAT_FD_BRS) ? FDCAN_BRS_ON : FDCAN_BRS_OFF;
