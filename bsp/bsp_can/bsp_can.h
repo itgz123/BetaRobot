@@ -9,6 +9,7 @@
 #include "stdint.h"
 
 #define CAN_TX_MAILBOX_FREE_BASE 50
+#define CAN_ID_UNUSED ((uint32_t)0xFFFFFFFF)
 
 typedef struct CANInstance CANInstance;
 typedef enum : uint8_t
@@ -22,9 +23,9 @@ typedef enum : uint8_t
 
 typedef enum : uint8_t
 {
-    CAN_FILTER_MODE_MASK = 0, // 掩码匹配：(id & start_id_mask) == end_id_mask。
-    CAN_FILTER_MODE_LIST = 1, // 列表模式（最多4个精确ID）
-    CAN_FILTER_MODE_RANGE = 2 // 区间匹配：start_id_mask <= id <= end_id_mask。
+    CAN_FILTER_MODE_MASK = 0, // 掩码匹配：(id & id0) == (id1 & id0) 命中。Mask: (id & id0) == (id1 & id0).
+    CAN_FILTER_MODE_LIST = 1, // 精确ID列表：id0、id1 两个精确ID（id1=CAN_ID_UNUSED 未用，仅匹配 id0）。List: two exact IDs.
+    CAN_FILTER_MODE_RANGE = 2 // 区间匹配：id0 <= id <= id1 命中。Range: id0 <= id <= id1.
 } CAN_Filter_Mode_e;
 
 typedef enum : uint8_t
@@ -44,32 +45,38 @@ typedef struct
 } CAN_Pack_s;
 
 /**
- * @brief CAN软件过滤器（每个实例一个；硬过滤全通，收帧后按此匹配分发）
+ * @brief CAN软件过滤器（每个实例可配置多个，存放在 filters[] 数组，数量为 filter_num；硬过滤全通，收帧后按此匹配分发）
+ * @note id0/id1 按模式取值：
+ *       - MASK : id0 = 掩码，id1 = 匹配值；(id & id0) == (id1 & id0) 命中
+ *       - LIST : id0、id1 = 两个精确ID（id1 = CAN_ID_UNUSED 表示未用，仅匹配 id0）
+ *       - RANGE: id0 = 区间下限，id1 = 区间上限；id0 <= id <= id1 命中
  */
 typedef struct CAN_Filter_s
 {
     CAN_Filter_Mode_e mode;                                                 // 过滤模式。Filter mode.
-    uint32_t start_id_mask;                                                 // 起始 ID 或掩码（MASK:掩码 / RANGE:区间下限）。Start ID or mask.
-    uint32_t end_id_mask;                                                   // 结束 ID 或匹配值（MASK:匹配值 / RANGE:区间上限）。End ID or match value.
-    CAN_Frame_Type_e frame_type;                                            // 帧类型。Frame type.
-    void (*callback)(struct CANInstance *instance, const CAN_Pack_s *pack); // 接收回调（帧匹配后调用；可为 NULL）。Callback function.
+    uint32_t id0;                                                           // MASK:掩码 / LIST:精确ID1 / RANGE:区间下限。Mask / exact ID1 / range lower bound.
+    uint32_t id1;                                                           // MASK:匹配值 / LIST:精确ID2 / RANGE:区间上限。Match value / exact ID2 / range upper bound.
+    CAN_Frame_Type_e frame_type;                                            // 帧类型过滤（仅接收该类型帧）。Frame type filter.
+    void (*callback)(struct CANInstance *instance, const CAN_Pack_s *pack); // 接收回调（匹配后调用；NULL 不接收）。Callback.
 } CAN_Filter_s;
 
 typedef struct
 {
-    BoardCAN_e can_e;     // 板载CAN枚举（用于查找硬件映射）
-    CAN_Mode_Type_e mode; // 工作模式
-    void *parent;         // 父实例指针（由 DRV 层设置）
-    CAN_Filter_s filter;  // 软件过滤器（硬过滤全通后由软件匹配分发；回调可为 NULL）
+    BoardCAN_e can_e;      // 板载CAN枚举（用于查找硬件映射）
+    CAN_Mode_Type_e mode;  // 工作模式
+    void *parent;          // 父实例指针（由 DRV 层设置）
+    CAN_Filter_s *filters; // 软件过滤器数组（硬过滤全通后由软件匹配分发；可为 NULL）
+    uint8_t filter_num;    // 过滤器数量
 } CAN_Config_s;
 
 struct CANInstance
 {
-    BoardCAN_e can_e;     // 板载CAN枚举（Config时查找映射）
-    CAN_Map_t map;        // CAN映射（Config时自动填充）
-    CAN_Mode_Type_e mode; // 工作模式
-    void *parent;         // 父实例指针（由 DRV 层设置）
-    CAN_Filter_s filter;  // 软件过滤器（Config时写入）
+    BoardCAN_e can_e;      // 板载CAN枚举（Config时查找映射）
+    CAN_Map_t map;         // CAN映射（Config时自动填充）
+    CAN_Mode_Type_e mode;  // 工作模式
+    void *parent;          // 父实例指针（由 DRV 层设置）
+    CAN_Filter_s *filters; // 软件过滤器数组（Config时写入，指向 config 中的数组）
+    uint8_t filter_num;    // 过滤器数量（Config时写入）
     // void (*tx_complete_callback)(struct CANInstance *); // 发送完成回调（一帧从硬件发出后调用；NULL 不启用）
 
 #if BSP_CAN_IP == BSP_CAN_IP_FDCAN

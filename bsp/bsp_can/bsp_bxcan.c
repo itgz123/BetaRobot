@@ -66,24 +66,16 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
     instance->map = can_map[instance->can_e];
     BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, -1, LOGERROR("[bsp_can] CAN handle is NULL, check bsp_map mapping!"));
 
-    // 重复注册检查（同一 handle 不能重复注册）
-    for (uint8_t i = 0; i < s_can_idx; i++)
-    {
-        if (s_can_instance[i] == instance)
-            continue;
-        if (s_can_instance[i]->map.handle == instance->map.handle)
-        {
-            LOGERROR("[bsp_can] Same CAN handle already registered!");
-            return -1;
-        }
-    }
+    // 一个 handle 允许多个实例共享（如不同 ID 分组各占一个实例），无需防重
+    BSP_RETURN_IF_TRUE_LOG(config->filter_num > 0 && config->filters == NULL, -1, LOGERROR("[bsp_can] filters is NULL but filter_num=%d!", config->filter_num));
 
     // F4 BxCAN 仅支持经典 CAN（FD 帧需 H7 FDCAN），非 CLASSIC 一律拒绝
     BSP_RETURN_IF_TRUE_LOG(config->mode != CAN_FRAME_FORMAT_CLASSIC, -1, LOGERROR("[bsp_can] BxCAN only supports CLASSIC frame format (mode=%d)!", config->mode));
 
     instance->mode = config->mode;
     instance->parent = config->parent;
-    instance->filter = config->filter; // 软件过滤器（结构体拷贝）
+    instance->filters = config->filters; // 软件过滤器数组（Config 时写入，指向 config 中的数组）
+    instance->filter_num = config->filter_num;
 
     // 首次配置：硬过滤全通 + 启动外设 + 使能接收中断（HAL_CAN_Start 后 State: READY → LISTENING）
     if (instance->map.handle->State == HAL_CAN_STATE_READY)
@@ -185,6 +177,96 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack)
     // 再次查询剩余邮箱数：返回值 = 基值 + 剩余数（0/1/2/3 → 50/51/52/53）
     free_level = HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle);
     return (int8_t)(CAN_TX_MAILBOX_FREE_BASE + free_level);
+}
+
+/*------------- 私有函数：接收过滤 --------------*/
+
+/**
+ * @brief 软件过滤器匹配（硬过滤全通，实际过滤在此进行）
+ * @note 三种模式对 id0/id1 的语义：
+ *       MASK : (id & id0) == (id1 & id0) 命中
+ *       LIST : id == id0 || id == id1（id1 = CAN_ID_UNUSED = 0xFFFFFFFF 表示未用，仅匹配 id0）
+ *       RANGE: id0 <= id <= id1 命中
+ */
+static uint8_t CAN_FilterMatch(const CAN_Filter_s *filter, const CAN_Pack_s *pack)
+{
+    if (filter->frame_type != pack->frame_type)
+        return 0;
+
+    switch (filter->mode)
+    {
+    case CAN_FILTER_MODE_MASK:
+        return (pack->id & filter->id0) == (filter->id1 & filter->id0);
+    case CAN_FILTER_MODE_LIST:
+        if (pack->id == filter->id0)
+            return 1;
+        return (filter->id1 != CAN_ID_UNUSED) && (pack->id == filter->id1);
+    case CAN_FILTER_MODE_RANGE:
+        return (pack->id >= filter->id0) && (pack->id <= filter->id1);
+    default:
+        return 0;
+    }
+}
+
+/**
+ * @brief 接收处理：解析 HAL 报文头为 CAN_Pack_s，并按软件过滤器分发
+ * @param hcan 硬件句柄
+ * @param fifo 接收 FIFO（CAN_RX_FIFO0 / CAN_RX_FIFO1）
+ */
+static void CAN_ReceiveHandler(CAN_HandleTypeDef *hcan, uint32_t fifo)
+{
+    CAN_RxHeaderTypeDef rx_header;
+    uint8_t rx_data[8];
+    CAN_Pack_s pack = {0};
+    uint8_t i;
+
+    if (HAL_CAN_GetRxMessage(hcan, fifo, &rx_header, rx_data) != HAL_OK)
+        return;
+
+    // HAL 报文头 -> CAN_Pack_s
+    pack.id = (rx_header.IDE == CAN_ID_EXT) ? rx_header.ExtId : rx_header.StdId;
+    pack.len = rx_header.DLC;
+    for (i = 0; i < pack.len; i++)
+        pack.data[i] = rx_data[i];
+    if (rx_header.RTR == CAN_RTR_REMOTE)
+        pack.frame_type = (rx_header.IDE == CAN_ID_EXT) ? CAN_EXTENDED_REMOTE_FRAME : CAN_STANDARD_REMOTE_FRAME;
+    else
+        pack.frame_type = (rx_header.IDE == CAN_ID_EXT) ? CAN_EXTENDED_DATA_FRAME : CAN_STANDARD_DATA_FRAME;
+
+    // 软件过滤分发：遍历本 CAN 上已注册实例，逐个匹配实例内的过滤器数组
+    for (i = 0; i < s_can_idx; i++)
+    {
+        CANInstance *inst = s_can_instance[i];
+        uint8_t j;
+
+        if (inst->map.handle != hcan)
+            continue;
+        for (j = 0; j < inst->filter_num; j++)
+        {
+            CAN_Filter_s *f = &inst->filters[j];
+
+            if (f->callback == NULL)
+                continue;
+            if (CAN_FilterMatch(f, &pack))
+                f->callback(inst, &pack);
+        }
+    }
+}
+
+/**
+ * @brief FIFO0 接收中断回调（CAN1 报文进入）
+ */
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+{
+    CAN_ReceiveHandler(hcan, CAN_RX_FIFO0);
+}
+
+/**
+ * @brief FIFO1 接收中断回调（CAN2 报文进入）
+ */
+void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
+{
+    CAN_ReceiveHandler(hcan, CAN_RX_FIFO1);
 }
 
 #endif /* BSP_CAN_IP == BSP_CAN_IP_BXCAN */
