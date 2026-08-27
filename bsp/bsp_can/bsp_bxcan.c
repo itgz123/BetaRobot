@@ -87,9 +87,70 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
     return 0;
 }
 
+/**
+ * @brief 发送一帧CAN数据
+ * @param instance CAN实例
+ * @param pack     数据包（id / frame_type / len / data）
+ * @retval 50~53 发送成功，返回值 = CAN_TX_MAILBOX_FREE_BASE + 剩余空闲邮箱数（0/1/2/3）
+ * @retval -1 参数非法 / 长度超限 / 帧类型非法 / 邮箱全满 / 加入邮箱失败
+ */
 int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack)
 {
-    return -1; /* TODO: 后续实现 */
+    uint8_t free_level;
+
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_can] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, -1, LOGERROR("[bsp_can] CAN handle is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(pack == NULL, -1, LOGERROR("[bsp_can] Pack is NULL!"));
+
+    // 长度校验：经典 CAN 单帧最大 8 字节
+    BSP_RETURN_IF_TRUE_LOG(pack->len > 8, -1, LOGERROR("[bsp_can] Length %d exceeds classic CAN max (8)!", pack->len));
+
+    // 错误帧为虚拟事件，不可发送
+    BSP_RETURN_IF_TRUE_LOG(pack->frame_type == CAN_ERROR_FRAME, -1, LOGERROR("[bsp_can] Error frame is a virtual event, cannot transmit!"));
+
+    // 由帧类型填充发送头（IDE/RTR/ID）
+    switch (pack->frame_type)
+    {
+    case CAN_STANDARD_DATA_FRAME:
+        instance->tx_header.IDE = CAN_ID_STD;
+        instance->tx_header.RTR = CAN_RTR_DATA;
+        instance->tx_header.StdId = pack->id;
+        break;
+    case CAN_EXTENDED_DATA_FRAME:
+        instance->tx_header.IDE = CAN_ID_EXT;
+        instance->tx_header.RTR = CAN_RTR_DATA;
+        instance->tx_header.ExtId = pack->id;
+        break;
+    case CAN_STANDARD_REMOTE_FRAME:
+        instance->tx_header.IDE = CAN_ID_STD;
+        instance->tx_header.RTR = CAN_RTR_REMOTE;
+        instance->tx_header.StdId = pack->id;
+        break;
+    case CAN_EXTENDED_REMOTE_FRAME:
+        instance->tx_header.IDE = CAN_ID_EXT;
+        instance->tx_header.RTR = CAN_RTR_REMOTE;
+        instance->tx_header.ExtId = pack->id;
+        break;
+    default:
+        LOGERROR("[bsp_can] Invalid frame_type=%d!", pack->frame_type);
+        return -1;
+    }
+    instance->tx_header.DLC = pack->len;
+
+    // 邮箱空闲检查：三个发送邮箱全满则拒绝
+    free_level = HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle);
+    BSP_RETURN_IF_TRUE_LOG(free_level == 0, -1, LOGERROR("[bsp_can] TX mailboxes full!"));
+
+    // 加入发送邮箱
+    if (HAL_CAN_AddTxMessage(instance->map.handle, &instance->tx_header, pack->data, &instance->tx_mailbox) != HAL_OK)
+    {
+        LOGERROR("[bsp_can] HAL_CAN_AddTxMessage failed!");
+        return -1;
+    }
+
+    // 再次查询剩余邮箱数：返回值 = 基值 + 剩余数（0/1/2/3 → 50/51/52/53）
+    free_level = HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle);
+    return (int8_t)(CAN_TX_MAILBOX_FREE_BASE + free_level);
 }
 
 #endif /* BSP_CAN_IP == BSP_CAN_IP_BXCAN */

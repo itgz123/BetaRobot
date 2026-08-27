@@ -8,6 +8,8 @@
 #include "main.h"
 #include "stdint.h"
 
+#define CAN_TX_MAILBOX_FREE_BASE 50
+
 typedef enum : uint8_t
 {
     CAN_STANDARD_DATA_FRAME = 0,   // 标准数据帧（11-bit ID）。Standard data frame (11-bit ID).
@@ -93,6 +95,12 @@ typedef struct CANInstance
  */
 int8_t CANRegister(CANInstance *instance);
 int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config);
+
+/**
+ * @brief CANTransmit 成功返回基值
+ * @note 发送成功时返回 基值 + 剩余空闲邮箱数（0/1/2/3 → 50/51/52/53）；
+ *       失败返回 -1。
+ */
 int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack);
 // int8_t CANSetFilter(CANInstance *instance, const CAN_Filter_Config_s *config);
 
