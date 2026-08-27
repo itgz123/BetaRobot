@@ -83,6 +83,40 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
 
     instance->mode = config->mode;
     instance->parent = config->parent;
+    instance->filter = config->filter; // 软件过滤器（结构体拷贝）
+
+    // 首次配置：硬过滤全通 + 启动外设 + 使能接收中断（HAL_CAN_Start 后 State: READY → LISTENING）
+    if (instance->map.handle->State == HAL_CAN_STATE_READY)
+    {
+        CAN_FilterTypeDef hw_filter = {0};
+        uint32_t rx_it;
+
+        hw_filter.FilterIdHigh = 0;
+        hw_filter.FilterIdLow = 0;
+        hw_filter.FilterMode = CAN_FILTERMODE_IDMASK;  // 掩码模式
+        hw_filter.FilterScale = CAN_FILTERSCALE_32BIT; // 32位
+        hw_filter.FilterMaskIdHigh = 0;
+        hw_filter.FilterMaskIdLow = 0; // 掩码全 0 = 全通过
+        hw_filter.FilterActivation = ENABLE;
+
+        // CAN1 用 bank 0..13/FIFO0，CAN2 用 bank 14..27/FIFO1（SlaveStartFilterBank=14）
+        if (instance->map.handle->Instance == CAN1)
+        {
+            hw_filter.FilterBank = 0;
+            hw_filter.FilterFIFOAssignment = CAN_RX_FIFO0;
+            rx_it = CAN_IT_RX_FIFO0_MSG_PENDING;
+        }
+        else
+        {
+            hw_filter.FilterBank = 14;
+            hw_filter.FilterFIFOAssignment = CAN_RX_FIFO1;
+            rx_it = CAN_IT_RX_FIFO1_MSG_PENDING;
+        }
+
+        BSP_RETURN_IF_TRUE_LOG(HAL_CAN_ConfigFilter(instance->map.handle, &hw_filter) != HAL_OK, -1, LOGERROR("[bsp_can] HAL_CAN_ConfigFilter failed!"));
+        BSP_RETURN_IF_TRUE_LOG(HAL_CAN_Start(instance->map.handle) != HAL_OK, -1, LOGERROR("[bsp_can] HAL_CAN_Start failed!"));
+        BSP_RETURN_IF_TRUE_LOG(HAL_CAN_ActivateNotification(instance->map.handle, rx_it) != HAL_OK, -1, LOGERROR("[bsp_can] HAL_CAN_ActivateNotification failed!"));
+    }
 
     return 0;
 }
