@@ -10,6 +10,7 @@
 
 #define CAN_TX_MAILBOX_FREE_BASE 50
 
+typedef struct CANInstance CANInstance;
 typedef enum : uint8_t
 {
     CAN_STANDARD_DATA_FRAME = 0,   // 标准数据帧（11-bit ID）。Standard data frame (11-bit ID).
@@ -42,13 +43,16 @@ typedef struct
     uint8_t data[64];            // 数据载荷。Data payload.
 } CAN_Pack_s;
 
+/**
+ * @brief CAN软件过滤器（每个实例一个；硬过滤全通，收帧后按此匹配分发）
+ */
 typedef struct CAN_Filter_s
 {
-    CAN_Filter_Mode_e mode;                  // 过滤模式。Filter mode.
-    uint32_t start_id_mask;                  // 起始 ID 或掩码。Start ID or mask.
-    uint32_t end_id_mask;                    // 结束 ID 或匹配值。End ID or match value.
-    CAN_Frame_Type_e frame_type;             // 帧类型。Frame type.
-    void (*callback)(struct CAN_Filter_s *); // 回调函数。Callback function.
+    CAN_Filter_Mode_e mode;                                                 // 过滤模式。Filter mode.
+    uint32_t start_id_mask;                                                 // 起始 ID 或掩码（MASK:掩码 / RANGE:区间下限）。Start ID or mask.
+    uint32_t end_id_mask;                                                   // 结束 ID 或匹配值（MASK:匹配值 / RANGE:区间上限）。End ID or match value.
+    CAN_Frame_Type_e frame_type;                                            // 帧类型。Frame type.
+    void (*callback)(struct CANInstance *instance, const CAN_Pack_s *pack); // 接收回调（帧匹配后调用；可为 NULL）。Callback function.
 } CAN_Filter_s;
 
 typedef struct
@@ -56,16 +60,17 @@ typedef struct
     BoardCAN_e can_e;     // 板载CAN枚举（用于查找硬件映射）
     CAN_Mode_Type_e mode; // 工作模式
     void *parent;         // 父实例指针（由 DRV 层设置）
+    CAN_Filter_s filter;  // 软件过滤器（硬过滤全通后由软件匹配分发；回调可为 NULL）
 } CAN_Config_s;
 
-typedef struct CANInstance
+struct CANInstance
 {
     BoardCAN_e can_e;     // 板载CAN枚举（Config时查找映射）
     CAN_Map_t map;        // CAN映射（Config时自动填充）
     CAN_Mode_Type_e mode; // 工作模式
     void *parent;         // 父实例指针（由 DRV 层设置）
+    CAN_Filter_s filter;  // 软件过滤器（Config时写入）
     // void (*tx_complete_callback)(struct CANInstance *); // 发送完成回调（一帧从硬件发出后调用；NULL 不启用）
-    // 过滤器
 
 #if BSP_CAN_IP == BSP_CAN_IP_FDCAN
     FDCAN_TxHeaderTypeDef tx_header; // FDCAN发送头
@@ -73,7 +78,7 @@ typedef struct CANInstance
     CAN_TxHeaderTypeDef tx_header; // CAN发送头
     uint32_t tx_mailbox;           // BxCAN发送邮箱索引
 #endif
-} CANInstance;
+};
 
 /*------------- 实例定义宏 --------------*/
 
@@ -102,7 +107,6 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config);
  *       失败返回 -1。
  */
 int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack);
-// int8_t CANSetFilter(CANInstance *instance, const CAN_Filter_Config_s *config);
 
 #endif // BSP_CAN_MODULE_ENABLED
 
