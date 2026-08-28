@@ -24,6 +24,49 @@ static CANInstance *s_can_instance[CAN_INSTANCE_NUM] = {NULL};
 static CANInstance **s_can_instance = NULL;
 #endif
 
+// 发送溯源表：每个 CAN 的每个邮箱当前属于哪个实例（发送完成回调据此回调）
+static CANInstance *s_can_tx_owner[CAN_NUM_MAX][CAN_TX_MAILBOX_NUM] = {{NULL}};
+
+/*------------- 私有函数：发送溯源 --------------*/
+
+/**
+ * @brief HAL 邮箱位掩码（CAN_TX_MAILBOX0/1/2 = 1/2/4）→ 索引（0/1/2）
+ */
+static uint8_t CAN_MailboxIndex(uint32_t mailbox)
+{
+    if (mailbox == CAN_TX_MAILBOX0)
+        return 0;
+    if (mailbox == CAN_TX_MAILBOX1)
+        return 1;
+    return 2; /* CAN_TX_MAILBOX2 */
+}
+
+/**
+ * @brief 发送完成处理：查溯源表，调用所属实例的发送完成回调
+ * @param hcan       硬件句柄
+ * @param mailbox_idx 邮箱索引（0/1/2）
+ */
+static void CAN_TxCompleteHandler(CAN_HandleTypeDef *hcan, uint8_t mailbox_idx)
+{
+    uint8_t can_idx;
+    CANInstance *inst;
+
+    // hcan → can_e 索引（CAN_1/CAN_2）
+    for (can_idx = 0; can_idx < CAN_NUM_MAX; can_idx++)
+    {
+        if (can_map[can_idx].handle == hcan)
+            break;
+    }
+    if (can_idx >= CAN_NUM_MAX)
+        return;
+
+    // 先清槽再回调：回调内可能立即再次发送并复用同一邮箱
+    inst = s_can_tx_owner[can_idx][mailbox_idx];
+    s_can_tx_owner[can_idx][mailbox_idx] = NULL;
+    if (inst != NULL && inst->tx_complete_callback != NULL)
+        inst->tx_complete_callback(inst, mailbox_idx);
+}
+
 /*------------- 外部接口实现 --------------*/
 
 /**
@@ -76,12 +119,13 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
     instance->parent = config->parent;
     instance->filters = config->filters; // 软件过滤器数组（Config 时写入，指向 config 中的数组）
     instance->filter_num = config->filter_num;
+    instance->tx_complete_callback = config->tx_complete_callback;
 
-    // 首次配置：硬过滤全通 + 启动外设 + 使能接收中断（HAL_CAN_Start 后 State: READY → LISTENING）
+    // 首次配置：硬过滤全通 + 启动外设 + 使能接收/发送中断（HAL_CAN_Start 后 State: READY → LISTENING）
     if (instance->map.handle->State == HAL_CAN_STATE_READY)
     {
         CAN_FilterTypeDef hw_filter = {0};
-        uint32_t rx_it;
+        uint32_t it_mask;
 
         hw_filter.FilterIdHigh = 0;
         hw_filter.FilterIdLow = 0;
@@ -96,18 +140,21 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
         {
             hw_filter.FilterBank = 0;
             hw_filter.FilterFIFOAssignment = CAN_RX_FIFO0;
-            rx_it = CAN_IT_RX_FIFO0_MSG_PENDING;
+            it_mask = CAN_IT_RX_FIFO0_MSG_PENDING;
         }
         else
         {
             hw_filter.FilterBank = 14;
             hw_filter.FilterFIFOAssignment = CAN_RX_FIFO1;
-            rx_it = CAN_IT_RX_FIFO1_MSG_PENDING;
+            it_mask = CAN_IT_RX_FIFO1_MSG_PENDING;
         }
+
+        // 发送邮箱空中断：邮箱发完释放时触发，发送完成回调查表溯源需要
+        it_mask |= CAN_IT_TX_MAILBOX_EMPTY;
 
         BSP_RETURN_IF_TRUE_LOG(HAL_CAN_ConfigFilter(instance->map.handle, &hw_filter) != HAL_OK, -1, LOGERROR("[bsp_can] HAL_CAN_ConfigFilter failed!"));
         BSP_RETURN_IF_TRUE_LOG(HAL_CAN_Start(instance->map.handle) != HAL_OK, -1, LOGERROR("[bsp_can] HAL_CAN_Start failed!"));
-        BSP_RETURN_IF_TRUE_LOG(HAL_CAN_ActivateNotification(instance->map.handle, rx_it) != HAL_OK, -1, LOGERROR("[bsp_can] HAL_CAN_ActivateNotification failed!"));
+        BSP_RETURN_IF_TRUE_LOG(HAL_CAN_ActivateNotification(instance->map.handle, it_mask) != HAL_OK, -1, LOGERROR("[bsp_can] HAL_CAN_ActivateNotification failed!"));
     }
 
     return 0;
@@ -115,14 +162,18 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
 
 /**
  * @brief 发送一帧CAN数据
- * @param instance CAN实例
- * @param pack     数据包（id / frame_type / len / data）
- * @retval 50~53 发送成功，返回值 = CAN_TX_MAILBOX_FREE_BASE + 剩余空闲邮箱数（0/1/2/3）
- * @retval -1 参数非法 / 长度超限 / 帧类型非法 / 邮箱全满 / 加入邮箱失败
+ * @param instance      CAN实例
+ * @param pack          数据包（id / frame_type / len / data）
+ * @param tx_mailbox    出参：本次发送使用的邮箱索引（0/1/2，对应 HAL CAN_TX_MAILBOX0/1/2）；可为 NULL
+ * @param tx_free_level 出参：发送后剩余空闲邮箱数（0~CAN_TX_MAILBOX_NUM）；可为 NULL
+ * @retval 0  发送成功
+ * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / 邮箱全满 / 加入邮箱失败）
  */
-int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack)
+int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_mailbox, uint32_t *tx_free_level)
 {
-    uint8_t free_level;
+    CAN_TxHeaderTypeDef tx_header = {0};
+    uint32_t mailbox;
+    uint32_t free_level;
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_can] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, -1, LOGERROR("[bsp_can] CAN handle is NULL!"));
@@ -138,45 +189,52 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack)
     switch (pack->frame_type)
     {
     case CAN_STANDARD_DATA_FRAME:
-        instance->tx_header.IDE = CAN_ID_STD;
-        instance->tx_header.RTR = CAN_RTR_DATA;
-        instance->tx_header.StdId = pack->id;
+        tx_header.IDE = CAN_ID_STD;
+        tx_header.RTR = CAN_RTR_DATA;
+        tx_header.StdId = pack->id;
         break;
     case CAN_EXTENDED_DATA_FRAME:
-        instance->tx_header.IDE = CAN_ID_EXT;
-        instance->tx_header.RTR = CAN_RTR_DATA;
-        instance->tx_header.ExtId = pack->id;
+        tx_header.IDE = CAN_ID_EXT;
+        tx_header.RTR = CAN_RTR_DATA;
+        tx_header.ExtId = pack->id;
         break;
     case CAN_STANDARD_REMOTE_FRAME:
-        instance->tx_header.IDE = CAN_ID_STD;
-        instance->tx_header.RTR = CAN_RTR_REMOTE;
-        instance->tx_header.StdId = pack->id;
+        tx_header.IDE = CAN_ID_STD;
+        tx_header.RTR = CAN_RTR_REMOTE;
+        tx_header.StdId = pack->id;
         break;
     case CAN_EXTENDED_REMOTE_FRAME:
-        instance->tx_header.IDE = CAN_ID_EXT;
-        instance->tx_header.RTR = CAN_RTR_REMOTE;
-        instance->tx_header.ExtId = pack->id;
+        tx_header.IDE = CAN_ID_EXT;
+        tx_header.RTR = CAN_RTR_REMOTE;
+        tx_header.ExtId = pack->id;
         break;
     default:
         LOGERROR("[bsp_can] Invalid frame_type=%d!", pack->frame_type);
         return -1;
     }
-    instance->tx_header.DLC = pack->len;
+    tx_header.DLC = pack->len;
 
     // 邮箱空闲检查：三个发送邮箱全满则拒绝
     free_level = HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle);
     BSP_RETURN_IF_TRUE_LOG(free_level == 0, -1, LOGERROR("[bsp_can] TX mailboxes full!"));
 
     // 加入发送邮箱
-    if (HAL_CAN_AddTxMessage(instance->map.handle, &instance->tx_header, pack->data, &instance->tx_mailbox) != HAL_OK)
+    if (HAL_CAN_AddTxMessage(instance->map.handle, &tx_header, pack->data, &mailbox) != HAL_OK)
     {
         LOGERROR("[bsp_can] HAL_CAN_AddTxMessage failed!");
         return -1;
     }
 
-    // 再次查询剩余邮箱数：返回值 = 基值 + 剩余数（0/1/2/3 → 50/51/52/53）
-    free_level = HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle);
-    return (int8_t)(CAN_TX_MAILBOX_FREE_BASE + free_level);
+    // 溯源：记录该邮箱当前属于哪个实例（发送完成回调据此调用其回调）
+    s_can_tx_owner[instance->can_e][CAN_MailboxIndex(mailbox)] = instance;
+
+    // 出参：使用的邮箱索引 + 发送后剩余空闲邮箱数
+    if (tx_mailbox != NULL)
+        *tx_mailbox = CAN_MailboxIndex(mailbox);
+    if (tx_free_level != NULL)
+        *tx_free_level = HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle);
+
+    return 0;
 }
 
 /*------------- 私有函数：接收过滤 --------------*/
@@ -267,6 +325,32 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
     CAN_ReceiveHandler(hcan, CAN_RX_FIFO1);
+}
+
+/*------------- 发送完成回调（邮箱发完释放时触发，由 CANConfig 激活 CAN_IT_TX_MAILBOX_EMPTY） --------------*/
+
+/**
+ * @brief 发送邮箱0完成回调
+ */
+void HAL_CAN_TxMailbox0CompleteCallback(CAN_HandleTypeDef *hcan)
+{
+    CAN_TxCompleteHandler(hcan, 0);
+}
+
+/**
+ * @brief 发送邮箱1完成回调
+ */
+void HAL_CAN_TxMailbox1CompleteCallback(CAN_HandleTypeDef *hcan)
+{
+    CAN_TxCompleteHandler(hcan, 1);
+}
+
+/**
+ * @brief 发送邮箱2完成回调
+ */
+void HAL_CAN_TxMailbox2CompleteCallback(CAN_HandleTypeDef *hcan)
+{
+    CAN_TxCompleteHandler(hcan, 2);
 }
 
 #endif /* BSP_CAN_IP == BSP_CAN_IP_BXCAN */
