@@ -107,10 +107,12 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config);
  * @brief 发送一帧CAN数据
  * @param instance      CAN实例
  * @param pack          数据包（id / frame_type / len / data）
- * @param tx_mailbox    出参：本次发送使用的邮箱索引（0/1/2，对应 HAL CAN_TX_MAILBOX0/1/2）；可为 NULL
- * @param tx_free_level 出参：发送后剩余空闲邮箱数（0~CAN_TX_MAILBOX_NUM）；可为 NULL
+ * @param tx_mailbox    出参：本次发送的发送标记（BxCAN=邮箱索引 0~2 / FDCAN=MessageMarker 0~15，
+ *                      发送完成回调据此与发送帧对应）；可为 NULL
+ * @param tx_free_level 出参：发送后剩余可发送数（BxCAN=空闲邮箱数 0~CAN_TX_MAILBOX_NUM /
+ *                      FDCAN=Tx FIFO/Queue 空闲元素数）；可为 NULL
  * @retval 0  发送成功
- * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / 邮箱全满 / 加入邮箱失败）
+ * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / 发送资源全满 / 加入发送资源失败）
  */
 int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_mailbox, uint32_t *tx_free_level);
 
