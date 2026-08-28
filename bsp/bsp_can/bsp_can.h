@@ -9,6 +9,7 @@
 #include "stdint.h"
 
 #define CAN_TX_MAILBOX_FREE_BASE 50
+#define CAN_TX_MAILBOX_NUM 3 // BxCAN 每个 CAN 的发送邮箱数量
 #define CAN_ID_UNUSED ((uint32_t)0xFFFFFFFF)
 
 typedef struct CANInstance CANInstance;
@@ -62,29 +63,23 @@ typedef struct CAN_Filter_s
 
 typedef struct
 {
-    BoardCAN_e can_e;      // 板载CAN枚举（用于查找硬件映射）
-    CAN_Mode_Type_e mode;  // 工作模式
-    void *parent;          // 父实例指针（由 DRV 层设置）
-    CAN_Filter_s *filters; // 软件过滤器数组（硬过滤全通后由软件匹配分发；可为 NULL）
-    uint8_t filter_num;    // 过滤器数量
+    BoardCAN_e can_e;                                                                // 板载CAN枚举（用于查找硬件映射）
+    CAN_Mode_Type_e mode;                                                            // 工作模式
+    void *parent;                                                                    // 父实例指针（由 DRV 层设置）
+    CAN_Filter_s *filters;                                                           // 软件过滤器数组（硬过滤全通后由软件匹配分发；可为 NULL）
+    uint8_t filter_num;                                                              // 过滤器数量
+    void (*tx_complete_callback)(struct CANInstance *instance, uint32_t tx_mailbox); // 发送完成回调（一帧从硬件发出后调用；NULL 不启用）
 } CAN_Config_s;
 
 struct CANInstance
 {
-    BoardCAN_e can_e;      // 板载CAN枚举（Config时查找映射）
-    CAN_Map_t map;         // CAN映射（Config时自动填充）
-    CAN_Mode_Type_e mode;  // 工作模式
-    void *parent;          // 父实例指针（由 DRV 层设置）
-    CAN_Filter_s *filters; // 软件过滤器数组（Config时写入，指向 config 中的数组）
-    uint8_t filter_num;    // 过滤器数量（Config时写入）
-    // void (*tx_complete_callback)(struct CANInstance *); // 发送完成回调（一帧从硬件发出后调用；NULL 不启用）
-
-#if BSP_CAN_IP == BSP_CAN_IP_FDCAN
-    FDCAN_TxHeaderTypeDef tx_header; // FDCAN发送头
-#else
-    CAN_TxHeaderTypeDef tx_header; // CAN发送头
-    uint32_t tx_mailbox;           // BxCAN发送邮箱索引
-#endif
+    BoardCAN_e can_e;                                                                // 板载CAN枚举（Config时查找映射）
+    CAN_Map_t map;                                                                   // CAN映射（Config时自动填充）
+    CAN_Mode_Type_e mode;                                                            // 工作模式
+    void *parent;                                                                    // 父实例指针（由 DRV 层设置）
+    CAN_Filter_s *filters;                                                           // 软件过滤器数组（Config时写入，指向 config 中的数组）
+    uint8_t filter_num;                                                              // 过滤器数量（Config时写入）
+    void (*tx_complete_callback)(struct CANInstance *instance, uint32_t tx_mailbox); // 发送完成回调（一帧从硬件发出后调用；NULL 不启用）
 };
 
 /*------------- 实例定义宏 --------------*/
@@ -109,11 +104,15 @@ int8_t CANRegister(CANInstance *instance);
 int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config);
 
 /**
- * @brief CANTransmit 成功返回基值
- * @note 发送成功时返回 基值 + 剩余空闲邮箱数（0/1/2/3 → 50/51/52/53）；
- *       失败返回 -1。
+ * @brief 发送一帧CAN数据
+ * @param instance      CAN实例
+ * @param pack          数据包（id / frame_type / len / data）
+ * @param tx_mailbox    出参：本次发送使用的邮箱索引（0/1/2，对应 HAL CAN_TX_MAILBOX0/1/2）；可为 NULL
+ * @param tx_free_level 出参：发送后剩余空闲邮箱数（0~CAN_TX_MAILBOX_NUM）；可为 NULL
+ * @retval 0  发送成功
+ * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / 邮箱全满 / 加入邮箱失败）
  */
-int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack);
+int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_mailbox, uint32_t *tx_free_level);
 
 #endif // BSP_CAN_MODULE_ENABLED
 
