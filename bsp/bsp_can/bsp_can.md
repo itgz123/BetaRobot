@@ -176,3 +176,26 @@ len>64 由 `FDCAN_BytesToDlc()` 返回 -1 兜底。
 
 - 后续扩展：参考 `ignore/完善bsp,hal_can/bsp_can/` 中按优先级（BUS_OFF > PASSIVE > WARNING > LEC）分发虚拟错误帧
   （`CANErrorID_e`）给订阅者的机制。
+
+## 5. CAN 接收过滤：标准 ID LIST 模式查表加速
+
+接收分发默认是双重循环线性扫描（实例 × filter），最坏 O(实例数×过滤器数)。当同一 CAN 上大量
+LIST 模式（精确 ID）标准帧 filter 时可用查表加速：按标准 ID（0~0x7FF）直接索引命中实例，O(该实例 filter 数)。
+
+- **开关**：`app_cfg.h` 定义 `BSP_CAN_LIST_LUT_USED`（关闭则注释掉该行，走纯循环判断，语义不变）。
+- **数据结构**：`CANInstance *s_*_list_lut[CAN_NUM_MAX][0x800]`（每 CAN 2048 个槽，槽存"该标准 ID 的
+  LIST filter 所属实例指针"）。**登记时机**：CANConfig 时直接把实例指针写进对应 ID 槽位——无构建、
+  无 dirty 标志，天然支持增量注册/重配置改 ID。
+- **调试辅助**：`volatile uint8_t s_*_list_lut_used[CAN_NUM_MAX]`——该 CAN 是否已有查表槽位被登记
+  （Register 覆盖槽位时置 1，只增不清），调试器直接 Watch 确认查表路径是否生效。
+- **内存**：每 CAN 指针数组 2048×4B ≈ 8KB。F4（2 CAN）≈16KB，H7（3 CAN）≈24KB，由该宏控制是否编译。
+- **覆盖范围**：只加速「标准帧 + LIST 模式」且 ID 合法的 filter——id0 必填（≤0x7FF）、id1 可空
+  （CAN_ID_UNUSED 表示仅匹配 id0）；**任一真实 ID >0x7FF 属配置非法，整条 filter 跳过不入表**（LOGWARNING 告警）。
+  id0==id1 或 id1=CAN_ID_UNUSED 只落一个槽，id0≠id1 两个都落。扩展帧 LIST / MASK / RANGE 不入表，走循环兜底。
+- **分发（单入口，`#if/#else` 二选一）**：收帧后一次分发调用——LUT 启用时走 `*_ListLutDispatch`
+  （先查表回调 LIST 标准帧，再循环兜底 MASK/RANGE/扩展/未登记，循环内跳过已由查表处理的 LIST 标准帧）；
+  未启用时走 `*_LoopDispatch`（完整循环，全模式）。两函数互斥编译、互不传参，无重复回调。
+- **语义**：NULL callback 不入表；同实例多 filter 同 ID（含 STD_DATA/STD_REMOTE 区分）查表扫描该实例
+  全部触发（frame_type 二次校验）；重配置改 ID 后旧 ID 残留槽无害（分发以该实例当前 filters 为权威）。
+- **差异**：LIST 回调始终先于循环 filter（查表在前，回调集合与循环路径一致）；**同 (CAN, ID) 被多个
+  实例注册时后注册者优先**（槽被覆盖，前注册者的该 filter 不再回调，属配置冲突需自行避免）。
