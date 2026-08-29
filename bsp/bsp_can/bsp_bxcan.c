@@ -169,7 +169,7 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
  * @retval 0  发送成功
  * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / 邮箱全满 / 加入邮箱失败）
  */
-int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint8_t *tx_mailbox, uint8_t *tx_free_level)
+int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_mailbox, uint8_t *tx_free_level)
 {
     CAN_TxHeaderTypeDef tx_header = {0};
     uint32_t mailbox;

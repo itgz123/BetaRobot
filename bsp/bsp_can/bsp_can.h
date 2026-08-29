@@ -136,7 +136,7 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config);
  * @retval 0  发送成功
  * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / 发送资源全满 / 加入发送资源失败）
  */
-int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint8_t *tx_mailbox, uint8_t *tx_free_level);
+int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_mailbox, uint8_t *tx_free_level);
 
 #endif // BSP_CAN_MODULE_ENABLED
 
