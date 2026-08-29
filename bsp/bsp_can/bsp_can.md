@@ -123,3 +123,56 @@ len>64 由 `FDCAN_BytesToDlc()` 返回 -1 兜底。
 | Transmit Fifo Priority            | Enable  | 和fdcan的fifo保持一致                                                                                                                    |
 
 ## 4. can 的状态：错误码，错误计数等使用方式
+
+当前实现只做「错误上报 + 总线恢复」，尚未上虚拟错误帧/错误码分发（错误码之后再说）：
+
+- **FDCAN (H7)**：`HAL_FDCAN_ErrorStatusCallback()` 读 `FDCAN_ProtocolStatusTypeDef`（`BusOff`/`ErrorPassive`/`Warning`/
+  `LastErrorCode`/`DataLastErrorCode`），bus-off 清 `CCCR.INIT` 触发硬件自动恢复，三个状态独立 if 打日志。
+  另注意：FDCAN 的 `HAL_FDCAN_ErrorCallback` 是**无参数回调**（不是"死代码"）——IRQHandler 末尾在
+  `hfdcan->ErrorCode != HAL_FDCAN_ERROR_NONE` 时调用一次，但错误位信息不在回调参数里，而在 `hfdcan->ErrorCode`
+  **粘滞位**：错误位（PEA/PED/ELO/WDI/ARA/RAM_ACCESS）由 IRQHandler 各分支 `ErrorCode |= 位` 累积，置位后保持不清，
+  软件必须显式清零；不清零则只要 ErrorCode 非零，每次进 IRQHandler 都会重复触发 ErrorCallback（"非零即上报"而非"新增才上报"）。
+  其中 `FDCAN_IT_RAM_ACCESS_FAILURE`（Message RAM 访问失败，配置级严重故障）已使能，并在 Rx/错误回调里
+  采样计数 + `CLEAR_BIT` 清零（`err_ram_access`，读→计数→清 是处理粘滞位的标准姿势）；
+  PEA/PED/ELO/WDI/ARA 因**未使能**对应 IT，IRQHandler 的 Errors 分支（`IR & MASK & IE`）为 0，不进 ErrorCode，
+  不会粘滞；其中 PEA/PED 协议错误由 `err_event`（ECR.CEL 差值）覆盖，不单独使能 IT（避免位错误中断风暴）。
+- **BxCAN (F4)**：`HAL_CAN_ErrorCallback()` 用 `HAL_CAN_GetError()` 读错误位（BOF/EPV/EWG/STF/FOR/ACK/BR/BD/CRC），
+  从 `ESR` 提取 TEC（`>>16 & 0xFF`）/ REC（`>>24 & 0xFF`，REC 硬件 8 位，早期误用 `0x7F` 已修正）打日志，
+  `HAL_CAN_ResetError()` 清软件标志。为使能丢帧统计，F4 中断增加了 `CAN_IT_RX_FIFO0/1_FULL` 与
+  `CAN_IT_RX_FIFO0/1_OVERRUN`（FULL 进 `HAL_CAN_RxFifo0/1FullCallback` 计数；overrun 在错误回调经 `RX_FOV0/1` 计数）。
+
+### 状态变量（调试用，调试器直接 Watch）
+
+每个外设各有一个独立的 `volatile` 全局结构体数组，字段按该外设可获取的信息源设计（**两者刻意不一致**，
+纯给调试看，不参与对外接口）。计数只增不清，需要清零可在调试器里直接写 0。与 `bsp_assert` 的系统断言计数互补
+（assert 管初始化/调用错误，这里管总线运行状态）。
+
+**H7 (FDCAN)** — `s_fdcan_status[can_e]`（类型 `CAN_FdcanStatus_s`，定义于 `bsp_fdcan.c`）：
+
+| 字段                                                  | 含义                                                            |
+| ----------------------------------------------------- | --------------------------------------------------------------- |
+| `tx_ok` / `tx_fail`                                   | 发送完成次数（TxEventFifo 弹事件）/ CANTransmit 返回 -1 次数    |
+| `rx_ok` / `rx_full` / `rx_lost`                       | 收帧成功 / RxFIFO0 满事件 / RxFIFO0 丢报文（MESSAGE_LOST）      |
+| `tx_event_lost`                                       | TxEventFifo 满/丢失次数（溯源表可能丢回调）                     |
+| `err_bus_off` / `err_passive` / `err_warning`         | 对应错误状态进入次数                                            |
+| `err_event`                                           | 硬件累计错误事件数（ECR.CEL 差值累加，饱和 255 取增量不受影响） |
+| `err_ram_access`                                      | Message RAM 访问失败次数（IR.IRA，配置级严重故障）              |
+| `bus_off` / `error_passive` / `error_warning` / `lec` | 最近一次采样的 PSR 状态位 / 上次错误码                          |
+| `tec` / `rec`                                         | 错误计数器（ECR.TEC / REC）                                     |
+| `tx_free` / `rx_fifo0_fill`                           | 发送后空闲元素数 / 收帧入口 FIFO 填充数（突发深度）             |
+
+**F4 (BxCAN)** — `s_bxcan_status[can_e]`（类型 `CAN_BxcanStatus_s`，定义于 `bsp_bxcan.c`）：
+
+| 字段                                                  | 含义                                                         |
+| ----------------------------------------------------- | ------------------------------------------------------------ |
+| `tx_ok` / `tx_fail`                                   | 发送完成次数（邮箱 complete 回调）/ CANTransmit 返回 -1 次数 |
+| `rx_ok` / `rx_full` / `rx_lost`                       | 收帧成功 / RxFIFO0/1 满事件 / overrun 丢帧（FOV0/FOV1）      |
+| `err_bus_off` / `err_passive` / `err_warning`         | 对应错误状态进入次数                                         |
+| `err_protocol`                                        | 协议错误次数（LEC: STF/FOR/ACK/BR/BD/CRC）                   |
+| `err_tx`                                              | 发送错误次数（仲裁丢失/发送错误 ALST/TERR）                  |
+| `bus_off` / `error_passive` / `error_warning` / `lec` | 最近一次采样的 ESR 状态位 / 上次错误码                       |
+| `tec` / `rec`                                         | 错误计数器（ESR.TEC / REC）                                  |
+| `tx_free` / `rx_fifo0_fill` / `rx_fifo1_fill`         | 空闲邮箱数 / 两个 RX FIFO 填充数                             |
+
+- 后续扩展：参考 `ignore/完善bsp,hal_can/bsp_can/` 中按优先级（BUS_OFF > PASSIVE > WARNING > LEC）分发虚拟错误帧
+  （`CANErrorID_e`）给订阅者的机制。
