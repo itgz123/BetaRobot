@@ -129,14 +129,16 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config);
  * @brief 发送一帧CAN数据
  * @param instance      CAN实例
  * @param pack          数据包（id / frame_type / len / data）
+ * @param timeout_ms    发送资源等待超时（ms）：BxCAN 邮箱 / FDCAN Tx FIFO 满时最多等待其空闲，
+ *                      等待期间不抢占；传 0 表示不等待，资源满立即返回失败
  * @param tx_mailbox    出参：本次发送的发送标记（BxCAN=邮箱索引 0~2 / FDCAN=MessageMarker 0~31，
  *                      发送完成回调据此与发送帧对应）；可为 NULL
  * @param tx_free_level 出参：发送后剩余可发送数（BxCAN=空闲邮箱数 0~CAN_TX_MAILBOX_NUM /
  *                      FDCAN=Tx FIFO 空闲元素数）；可为 NULL
  * @retval 0  发送成功
- * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / 发送资源全满 / 加入发送资源失败）
+ * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / 发送资源等待超时 / 加入发送资源失败）
  */
-int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_mailbox, uint8_t *tx_free_level);
+int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeout_ms, uint32_t *tx_mailbox, uint8_t *tx_free_level);
 
 #endif // BSP_CAN_MODULE_ENABLED
 

@@ -15,6 +15,7 @@
 
 #include "bsp_assert.h"
 #include "bsp_uart_log.h"
+#include "bsp_dwt.h"
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_can_idx = 0;
@@ -26,6 +27,9 @@ static CANInstance **s_can_instance = NULL;
 
 // 发送溯源表：每个 CAN 的每个邮箱当前属于哪个实例（发送完成回调据此回调）
 static CANInstance *s_can_tx_owner[CAN_NUM_MAX][CAN_TX_MAILBOX_NUM] = {{NULL}};
+
+// 外设启动标志：全部初始化步骤成功后才置位。HAL State 中途失败后无法据此重试，必须用独立标志兜底
+static uint8_t s_can_started[CAN_NUM_MAX] = {0};
 
 /*------------- 私有函数：发送溯源 --------------*/
 
@@ -121,11 +125,20 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
     instance->filter_num = config->filter_num;
     instance->tx_complete_callback = config->tx_complete_callback;
 
-    // 首次配置：硬过滤全通 + 启动外设 + 使能接收/发送中断（HAL_CAN_Start 后 State: READY → LISTENING）
-    if (instance->map.handle->State == HAL_CAN_STATE_READY)
+    // 首次配置：硬过滤全通 + 启动外设 + 使能接收/发送/错误中断（全部成功后才置位 s_can_started）
+    // 用独立标志而非 HAL State 判断：任一步失败返回后，重试 CANConfig 会重走完整初始化（见下 Stop 归一）
+    if (!s_can_started[instance->can_e])
     {
         CAN_FilterTypeDef hw_filter = {0};
         uint32_t it_mask;
+
+        // 上次中途失败可能停在 LISTENING（Start 已成功、后续步骤失败）：先停回 READY，
+        // 否则 ConfigFilter/Start 等 READY 门控的 HAL 调用会再次失败，重试永远不成功
+        if (instance->map.handle->State == HAL_CAN_STATE_LISTENING)
+        {
+            BSP_RETURN_IF_TRUE_LOG(HAL_CAN_Stop(instance->map.handle) != HAL_OK, -1,
+                                   LOGERROR("[bsp_can] CAN Stop failed, can't retry init (can_e=%d)!", instance->can_e));
+        }
 
         hw_filter.FilterIdHigh = 0;
         hw_filter.FilterIdLow = 0;
@@ -155,6 +168,9 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
         BSP_RETURN_IF_TRUE_LOG(HAL_CAN_ConfigFilter(instance->map.handle, &hw_filter) != HAL_OK, -1, LOGERROR("[bsp_can] HAL_CAN_ConfigFilter failed!"));
         BSP_RETURN_IF_TRUE_LOG(HAL_CAN_Start(instance->map.handle) != HAL_OK, -1, LOGERROR("[bsp_can] HAL_CAN_Start failed!"));
         BSP_RETURN_IF_TRUE_LOG(HAL_CAN_ActivateNotification(instance->map.handle, it_mask) != HAL_OK, -1, LOGERROR("[bsp_can] HAL_CAN_ActivateNotification failed!"));
+
+        // 全部初始化步骤成功后才置位：任一步失败返回，标志保持 0，下次 CANConfig 可完整重试
+        s_can_started[instance->can_e] = 1;
     }
 
     return 0;
@@ -164,16 +180,16 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
  * @brief 发送一帧CAN数据
  * @param instance      CAN实例
  * @param pack          数据包（id / frame_type / len / data）
+ * @param timeout_ms    发送资源等待超时（ms）：三个邮箱全满时最多等待其空闲；传 0 表示不等待，满即失败
  * @param tx_mailbox    出参：本次发送使用的邮箱索引（0/1/2，对应 HAL CAN_TX_MAILBOX0/1/2）；可为 NULL
  * @param tx_free_level 出参：发送后剩余空闲邮箱数（0~CAN_TX_MAILBOX_NUM）；可为 NULL
  * @retval 0  发送成功
- * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / 邮箱全满 / 加入邮箱失败）
+ * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / 等待邮箱超时 / 加入邮箱失败）
  */
-int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_mailbox, uint8_t *tx_free_level)
+int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeout_ms, uint32_t *tx_mailbox, uint8_t *tx_free_level)
 {
     CAN_TxHeaderTypeDef tx_header = {0};
     uint32_t mailbox;
-    uint32_t free_level;
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_can] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, -1, LOGERROR("[bsp_can] CAN handle is NULL!"));
@@ -211,9 +227,30 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_m
     }
     tx_header.DLC = pack->len;
 
-    // 邮箱空闲检查：三个发送邮箱全满则拒绝
-    free_level = HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle);
-    BSP_RETURN_IF_TRUE_LOG(free_level == 0, -1, LOGERROR("[bsp_can] TX mailboxes full!"));
+    // 邮箱空闲等待：三个发送邮箱全满则轮询等待其释放（timeout_ms 上限，0 表示不等待、满即失败）。
+    // 无总线信号/对端离线时邮箱持续被占满（帧发不出去），不能死等，超时返回失败
+    if (HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle) == 0)
+    {
+        if (timeout_ms == 0)
+        {
+            LOGERROR("[bsp_can] TX mailboxes full!");
+            return -1;
+        }
+        else
+        {
+            uint64_t start_time = DWT_GetTimeUs();
+            uint64_t timeout_us = (uint64_t)timeout_ms * 1000;
+
+            while (HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle) == 0)
+            {
+                if ((DWT_GetTimeUs() - start_time) > timeout_us)
+                {
+                    LOGWARNING("[bsp_can] CAN TX mailbox timeout (can_e=%d, id=0x%lX)!", instance->can_e, (unsigned long)pack->id);
+                    return -1;
+                }
+            }
+        }
+    }
 
     // 加入发送邮箱
     if (HAL_CAN_AddTxMessage(instance->map.handle, &tx_header, pack->data, &mailbox) != HAL_OK)
