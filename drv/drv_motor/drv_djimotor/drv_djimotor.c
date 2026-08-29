@@ -133,10 +133,11 @@ const static MotorVTable_s s_dji_motor_vtable = {
 /**
  * @brief DJI电机接收回调函数（ISR 上下文 — 最小化工作）
  * @param can CAN实例指针
+ * @param pack 收到的 CAN 数据帧（ID 已由过滤器匹配）
  * @note 仅 memcpy 原始字节 + 时间戳 + flip 双缓冲 + 喂狗。
  *       所有数据处理移到 DJIMotor_GetData。
  */
-static void DJIMotorRxCallback(CANInstance *can)
+static void DJIMotorRxCallback(CANInstance *can, const CAN_Pack_s *pack)
 {
     if (!can || !can->parent)
         return;
@@ -145,7 +146,7 @@ static void DJIMotorRxCallback(CANInstance *can)
 
     /* 写入当前 ISR 缓冲区 */
     uint8_t idx = motor->base.raw_frame_idx;
-    memcpy(motor->base.raw_frames[idx].bytes, can->rx_buff, 8);
+    memcpy(motor->base.raw_frames[idx].bytes, pack->data, 8);
     motor->base.raw_frames[idx].timestamp_us = DWT_GetTimeUs();
 
     /* flip 双缓冲索引 */
@@ -377,16 +378,24 @@ int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
     if (1 == s_send_groups[can_e][group_idx].motor_init_flag[motor_idx_in_group])
         return -1;
 
-    // 配置 CAN 滤波器（tx_id, rx_id, callback）
+    // 保存发送 ID（分组发送按 tx_id 分帧；旧 can->tx_id 移入实例）
+    inst->tx_id = tx_id;
+
+    // 配置 CAN 滤波器（rx_id 接收回调 + 工作模式 CLASSIC）
     if (inst->base.can)
     {
+        inst->base.can_filter.mode = CAN_FILTER_MODE_LIST;
+        inst->base.can_filter.id0 = rx_id;
+        inst->base.can_filter.id1 = CAN_ID_UNUSED;
+        inst->base.can_filter.frame_type = CAN_STANDARD_DATA_FRAME;
+        inst->base.can_filter.callback = DJIMotorRxCallback;
+
         CAN_Config_s can_cfg = {
             .can_e = cfg->can_e,
-            .tx_id = tx_id,
-            .filter_mode = CAN_FILTER_MODE_LIST,
-            .rx_id_list = {rx_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},
-            .rx_mask = 0,
-            .rx_callback = DJIMotorRxCallback,
+            .mode = CAN_FRAME_FORMAT_CLASSIC,
+            .parent = inst, /* 必须：CANConfig 会覆盖 parent，不设则回调取 can->parent 失效 */
+            .filters = &inst->base.can_filter,
+            .filter_num = 1,
         };
         if (CANConfig(inst->base.can, &can_cfg) != 0)
             return -1;
@@ -594,7 +603,6 @@ void DJIMotor_SetRef(void *inst, float ref)
     motor->base.controller.ref = ref;
 }
 
-
 void DJIMotor_Send(void *inst)
 {
     if (!inst)
@@ -632,7 +640,7 @@ void DJIMotor_Send(void *inst)
     {
         if (group->motor_init_flag[i] && group->motors[i] && group->motors[i]->base.can)
         {
-            uint16_t id = group->motors[i]->base.can->tx_id;
+            uint16_t id = group->motors[i]->tx_id;
             uint8_t found = 0;
             for (int j = 0; j < tx_id_count; j++)
             {
@@ -657,7 +665,8 @@ void DJIMotor_Send(void *inst)
     {
         uint16_t current_tx_id = tx_ids[t];
         CANInstance *tx_can = tx_cans[t];
-        DJIMotorCanFrame_u *frame = (DJIMotorCanFrame_u *)tx_can->tx_buff;
+        CAN_Pack_s pack = {.id = current_tx_id, .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
+        DJIMotorCanFrame_u *frame = (DJIMotorCanFrame_u *)pack.data;
 
         for (int i = 0; i < 4; i++)
         {
@@ -665,7 +674,7 @@ void DJIMotor_Send(void *inst)
             DJIMotorInstance *m = group->motors[i];
             // 只有匹配当前 tx_id 的电机才填充数据
             if (group->motor_init_flag[i] && m && m->base.enable &&
-                m->base.can && m->base.can->tx_id == current_tx_id)
+                m->base.can && m->tx_id == current_tx_id)
             {
                 // 根据电机型号限幅到电流原始值范围
                 uint16_t current_max = dji_motor_params[m->base.model].current_max;
@@ -677,7 +686,7 @@ void DJIMotor_Send(void *inst)
             frame->raw[i * 2 + 1] = (uint8_t)(cur & 0xFF);
         }
 
-        CANTransmit(tx_can, CAN_TRANSMIT_TIMEOUT);
+        CANTransmit(tx_can, &pack, CAN_TRANSMIT_TIMEOUT, NULL, NULL);
     }
 }
 

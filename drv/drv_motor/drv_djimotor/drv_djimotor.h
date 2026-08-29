@@ -74,6 +74,7 @@ struct DJIMotorInstance
 
     /* DJI 基本属性 */
     uint8_t motor_id; // 电机 ID (1-8)
+    uint16_t tx_id;   // 发送 ID（分组发送按 tx_id 分帧；旧 can->tx_id 移入实例）
 
     /* 转矩常数 */
     float torque_constant;     // 转矩常数 (Nm/A)
