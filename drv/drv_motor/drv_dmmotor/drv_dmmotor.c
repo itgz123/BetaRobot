@@ -101,9 +101,10 @@ void DMMotor_SendModeCmd(void *inst, uint8_t cmd)
         return;
 
     CANInstance *can = motor->base.can;
-    memset(can->tx_buff, 0xFF, 7);
-    can->tx_buff[7] = cmd;
-    CANTransmit(can, CAN_TRANSMIT_TIMEOUT);
+    CAN_Pack_s pack = {.id = motor->can_id, .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
+    memset(pack.data, 0xFF, 7);
+    pack.data[7] = cmd;
+    CANTransmit(can, &pack, CAN_TRANSMIT_TIMEOUT, NULL, NULL);
 }
 
 /*============================================
@@ -126,7 +127,7 @@ void DMMotor_SendModeCmd(void *inst, uint8_t cmd)
  *   D[6]：MOS温度 (°C)
  *   D[7]：线圈温度 (°C)
  */
-static void DMMotorRxCallback(CANInstance *can)
+static void DMMotorRxCallback(CANInstance *can, const CAN_Pack_s *pack)
 {
     if (!can || !can->parent)
         return;
@@ -135,7 +136,7 @@ static void DMMotorRxCallback(CANInstance *can)
 
     /* 写入当前 ISR 缓冲区 */
     uint8_t idx = motor->base.raw_frame_idx;
-    memcpy(motor->base.raw_frames[idx].bytes, can->rx_buff, 8);
+    memcpy(motor->base.raw_frames[idx].bytes, pack->data, 8);
     motor->base.raw_frames[idx].timestamp_us = DWT_GetTimeUs();
 
     /* flip 双缓冲索引 */
@@ -363,16 +364,21 @@ int8_t DMMotorConfig(DMMotorInstance *inst, DMMotor_Config_s *cfg)
     if (cfg->model >= DM_MODEL_NUM)
         return -1;
 
-    /* 配置 CAN 滤波器（tx_id=can_id, rx_id=master_id） */
+    /* 配置 CAN 滤波器（tx_id=can_id 逐帧指定, rx_id=master_id 接收回调, 工作模式 CLASSIC） */
     if (inst->base.can)
     {
+        inst->base.can_filter.mode = CAN_FILTER_MODE_LIST;
+        inst->base.can_filter.id0 = cfg->master_id;
+        inst->base.can_filter.id1 = CAN_ID_UNUSED;
+        inst->base.can_filter.frame_type = CAN_STANDARD_DATA_FRAME;
+        inst->base.can_filter.callback = DMMotorRxCallback;
+
         CAN_Config_s can_cfg = {
             .can_e = cfg->can_e,
-            .tx_id = cfg->can_id,
-            .filter_mode = CAN_FILTER_MODE_LIST,
-            .rx_id_list = {cfg->master_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},
-            .rx_mask = 0,
-            .rx_callback = DMMotorRxCallback,
+            .mode = CAN_FRAME_FORMAT_CLASSIC,
+            .parent = inst, /* 必须：CANConfig 会覆盖 parent，不设则回调取 can->parent 失效 */
+            .filters = &inst->base.can_filter,
+            .filter_num = 1,
         };
         if (CANConfig(inst->base.can, &can_cfg) != 0)
             return -1;
@@ -649,8 +655,9 @@ void DMMotor_Send(void *inst)
                                      motor->proto_map.t_to_uint_scale,
                                      motor->proto_map.t_range);
 
-    /* 使用控制帧联合体打包 */
-    DM_ControlFrame_u *cf = (DM_ControlFrame_u *)motor->base.can->tx_buff;
+    /* 使用控制帧联合体打包（ID 逐帧指定 = can_id） */
+    CAN_Pack_s pack = {.id = motor->can_id, .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
+    DM_ControlFrame_u *cf = (DM_ControlFrame_u *)pack.data;
     cf->parts.p_des_be = (uint16_t)((p_des >> 8) | ((p_des & 0xFF) << 8));
     cf->parts.v_des_hi = (uint8_t)(v_des >> 4);
     cf->parts.v_des_lo_and_kp_hi = (uint8_t)(((v_des & 0xF) << 4) | ((kp >> 8) & 0xF));
@@ -659,7 +666,7 @@ void DMMotor_Send(void *inst)
     cf->parts.kd_lo_and_tff_hi = (uint8_t)(((kd & 0xF) << 4) | ((t_ff >> 8) & 0xF));
     cf->parts.tff_lo = (uint8_t)(t_ff & 0xFF);
 
-    CANTransmit(motor->base.can, CAN_TRANSMIT_TIMEOUT);
+    CANTransmit(motor->base.can, &pack, CAN_TRANSMIT_TIMEOUT, NULL, NULL);
 }
 
 #endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */

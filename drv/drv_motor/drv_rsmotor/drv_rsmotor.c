@@ -109,9 +109,10 @@ void RSMotor_SendModeCmd(void *inst, uint8_t cmd)
         return;
 
     CANInstance *can = motor->base.can;
-    memset(can->tx_buff, 0xFF, 7);
-    can->tx_buff[7] = cmd;
-    CANTransmit(can, CAN_TRANSMIT_TIMEOUT);
+    CAN_Pack_s pack = {.id = motor->can_id, .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
+    memset(pack.data, 0xFF, 7);
+    pack.data[7] = cmd;
+    CANTransmit(can, &pack, CAN_TRANSMIT_TIMEOUT, NULL, NULL);
 }
 
 /*============================================
@@ -137,10 +138,11 @@ void RSMotor_ChangeCanID(void *inst, uint16_t can_id)
         return;
 
     CANInstance *can = motor->base.can;
-    memset(can->tx_buff, 0xFF, 6);          // 前 6 字节固定 0xFF
-    can->tx_buff[6] = (uint8_t)can_id;      // Byte6 = 新电机 id
-    can->tx_buff[7] = RS_CMD_CHANGE_CAN_ID; // Byte7 = 指令7 (0xFA)
-    CANTransmit(can, CAN_TRANSMIT_TIMEOUT);
+    CAN_Pack_s pack = {.id = motor->can_id, .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
+    memset(pack.data, 0xFF, 6);          // 前 6 字节固定 0xFF
+    pack.data[6] = (uint8_t)can_id;      // Byte6 = 新电机 id
+    pack.data[7] = RS_CMD_CHANGE_CAN_ID; // Byte7 = 指令7 (0xFA)
+    CANTransmit(can, &pack, CAN_TRANSMIT_TIMEOUT, NULL, NULL);
 }
 
 void RSMotor_ChangeMasterCanID(void *inst, uint16_t can_id)
@@ -153,10 +155,11 @@ void RSMotor_ChangeMasterCanID(void *inst, uint16_t can_id)
         return;
 
     CANInstance *can = motor->base.can;
-    memset(can->tx_buff, 0xFF, 6);             // 前 6 字节固定 0xFF
-    can->tx_buff[6] = (uint8_t)can_id;         // Byte6 = 新主机 id
-    can->tx_buff[7] = RS_CMD_CHANGE_MASTER_ID; // Byte7 = 指令9 (0x01)
-    CANTransmit(can, CAN_TRANSMIT_TIMEOUT);
+    CAN_Pack_s pack = {.id = motor->can_id, .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
+    memset(pack.data, 0xFF, 6);             // 前 6 字节固定 0xFF
+    pack.data[6] = (uint8_t)can_id;         // Byte6 = 新主机 id
+    pack.data[7] = RS_CMD_CHANGE_MASTER_ID; // Byte7 = 指令9 (0x01)
+    CANTransmit(can, &pack, CAN_TRANSMIT_TIMEOUT, NULL, NULL);
 }
 
 /*============================================
@@ -179,7 +182,7 @@ void RSMotor_ChangeMasterCanID(void *inst, uint16_t can_id)
  *   D[6]：bits[7:6]=模式状态, bit[5]=故障, bit[4]=预警, bits[3:0]=绕组温度高4位
  *   D[7]：绕组温度低8位 TEMP[7:0]（= ℃×10）
  */
-static void RSMotorRxCallback(CANInstance *can)
+static void RSMotorRxCallback(CANInstance *can, const CAN_Pack_s *pack)
 {
     if (!can || !can->parent)
         return;
@@ -188,7 +191,7 @@ static void RSMotorRxCallback(CANInstance *can)
 
     /* 写入当前 ISR 缓冲区 */
     uint8_t idx = motor->base.raw_frame_idx;
-    memcpy(motor->base.raw_frames[idx].bytes, can->rx_buff, 8);
+    memcpy(motor->base.raw_frames[idx].bytes, pack->data, 8);
     motor->base.raw_frames[idx].timestamp_us = DWT_GetTimeUs();
 
     /* flip 双缓冲索引 */
@@ -420,16 +423,21 @@ int8_t RSMotorConfig(RSMotorInstance *inst, RSMotor_Config_s *cfg)
     if (cfg->model >= RS_MODEL_NUM)
         return -1;
 
-    /* 配置 CAN 滤波器（tx_id=can_id, rx_id=master_id） */
+    /* 配置 CAN 滤波器（tx_id=can_id 逐帧指定, rx_id=master_id 接收回调, 工作模式 CLASSIC） */
     if (inst->base.can)
     {
+        inst->base.can_filter.mode = CAN_FILTER_MODE_LIST;
+        inst->base.can_filter.id0 = cfg->master_id;
+        inst->base.can_filter.id1 = CAN_ID_UNUSED;
+        inst->base.can_filter.frame_type = CAN_STANDARD_DATA_FRAME;
+        inst->base.can_filter.callback = RSMotorRxCallback;
+
         CAN_Config_s can_cfg = {
             .can_e = cfg->can_e,
-            .tx_id = cfg->can_id,
-            .filter_mode = CAN_FILTER_MODE_LIST,
-            .rx_id_list = {cfg->master_id, CAN_ID_UNUSED, CAN_ID_UNUSED, CAN_ID_UNUSED},
-            .rx_mask = 0,
-            .rx_callback = RSMotorRxCallback,
+            .mode = CAN_FRAME_FORMAT_CLASSIC,
+            .parent = inst, /* 必须：CANConfig 会覆盖 parent，不设则回调取 can->parent 失效 */
+            .filters = &inst->base.can_filter,
+            .filter_num = 1,
         };
         if (CANConfig(inst->base.can, &can_cfg) != 0)
             return -1;
@@ -707,8 +715,9 @@ void RSMotor_Send(void *inst)
                                      motor->proto_map.t_to_uint_scale,
                                      motor->proto_map.t_range);
 
-    /* 使用控制帧联合体打包 */
-    RS_ControlFrame_u *cf = (RS_ControlFrame_u *)motor->base.can->tx_buff;
+    /* 使用控制帧联合体打包（ID 逐帧指定 = can_id） */
+    CAN_Pack_s pack = {.id = motor->can_id, .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
+    RS_ControlFrame_u *cf = (RS_ControlFrame_u *)pack.data;
     cf->parts.p_des_be = (uint16_t)((p_des >> 8) | ((p_des & 0xFF) << 8));
     cf->parts.v_des_hi = (uint8_t)(v_des >> 4);
     cf->parts.v_des_lo_and_kp_hi = (uint8_t)(((v_des & 0xF) << 4) | ((kp >> 8) & 0xF));
@@ -717,7 +726,7 @@ void RSMotor_Send(void *inst)
     cf->parts.kd_lo_and_tff_hi = (uint8_t)(((kd & 0xF) << 4) | ((t_ff >> 8) & 0xF));
     cf->parts.tff_lo = (uint8_t)(t_ff & 0xFF);
 
-    CANTransmit(motor->base.can, CAN_TRANSMIT_TIMEOUT);
+    CANTransmit(motor->base.can, &pack, CAN_TRANSMIT_TIMEOUT, NULL, NULL);
 }
 
 #endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */

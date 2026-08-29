@@ -51,116 +51,116 @@ HAL_StatusTypeDef HalCanReconfigureFdcan(FDCAN_HandleTypeDef *hfdcan, const FDCA
     }
 
     /* 参数范围校验（HAL assert_param 在此工程为空操作，必须自行校验） */
-    if ((init->frame_format != FDCAN_FRAME_CLASSIC) &&
-        (init->frame_format != FDCAN_FRAME_FD_NO_BRS) &&
-        (init->frame_format != FDCAN_FRAME_FD_BRS))
+    if ((init->FrameFormat != FDCAN_FRAME_CLASSIC) &&
+        (init->FrameFormat != FDCAN_FRAME_FD_NO_BRS) &&
+        (init->FrameFormat != FDCAN_FRAME_FD_BRS))
     {
         return HAL_ERROR;
     }
-    if ((init->mode != FDCAN_MODE_NORMAL) &&
-        (init->mode != FDCAN_MODE_RESTRICTED_OPERATION) &&
-        (init->mode != FDCAN_MODE_BUS_MONITORING) &&
-        (init->mode != FDCAN_MODE_INTERNAL_LOOPBACK) &&
-        (init->mode != FDCAN_MODE_EXTERNAL_LOOPBACK))
+    if ((init->Mode != FDCAN_MODE_NORMAL) &&
+        (init->Mode != FDCAN_MODE_RESTRICTED_OPERATION) &&
+        (init->Mode != FDCAN_MODE_BUS_MONITORING) &&
+        (init->Mode != FDCAN_MODE_INTERNAL_LOOPBACK) &&
+        (init->Mode != FDCAN_MODE_EXTERNAL_LOOPBACK))
     {
         return HAL_ERROR;
     }
-    if (!HalCanIsValidFunctionalState(init->auto_retransmission) ||
-        !HalCanIsValidFunctionalState(init->transmit_pause) ||
-        !HalCanIsValidFunctionalState(init->protocol_exception))
-    {
-        return HAL_ERROR;
-    }
-
-    if ((init->nominal_prescaler < 1U) || (init->nominal_prescaler > 512U) ||
-        (init->nominal_sync_jump_width < 1U) || (init->nominal_sync_jump_width > 128U) ||
-        (init->nominal_time_seg1 < 1U) || (init->nominal_time_seg1 > 256U) ||
-        (init->nominal_time_seg2 < 1U) || (init->nominal_time_seg2 > 128U))
-    {
-        return HAL_ERROR;
-    }
-    if ((init->data_prescaler < 1U) || (init->data_prescaler > 32U) ||
-        (init->data_sync_jump_width < 1U) || (init->data_sync_jump_width > 16U) ||
-        (init->data_time_seg1 < 1U) || (init->data_time_seg1 > 32U) ||
-        (init->data_time_seg2 < 1U) || (init->data_time_seg2 > 16U))
+    if (!HalCanIsValidFunctionalState(init->AutoRetransmission) ||
+        !HalCanIsValidFunctionalState(init->TransmitPause) ||
+        !HalCanIsValidFunctionalState(init->ProtocolException))
     {
         return HAL_ERROR;
     }
 
-    if (init->message_ram_offset > 2560U) /* H723 FDCAN Message RAM 共 2560 字 */
+    if ((init->NominalPrescaler < 1U) || (init->NominalPrescaler > 512U) ||
+        (init->NominalSyncJumpWidth < 1U) || (init->NominalSyncJumpWidth > 128U) ||
+        (init->NominalTimeSeg1 < 1U) || (init->NominalTimeSeg1 > 256U) ||
+        (init->NominalTimeSeg2 < 1U) || (init->NominalTimeSeg2 > 128U))
     {
         return HAL_ERROR;
     }
-    if ((init->std_filters_nbr > 128U) || (init->ext_filters_nbr > 64U))
+    if ((init->DataPrescaler < 1U) || (init->DataPrescaler > 32U) ||
+        (init->DataSyncJumpWidth < 1U) || (init->DataSyncJumpWidth > 16U) ||
+        (init->DataTimeSeg1 < 1U) || (init->DataTimeSeg1 > 32U) ||
+        (init->DataTimeSeg2 < 1U) || (init->DataTimeSeg2 > 16U))
     {
         return HAL_ERROR;
     }
-    if ((init->rx_fifo0_elmts_nbr > 64U) || (init->rx_fifo1_elmts_nbr > 64U) ||
-        (init->rx_buffers_nbr > 64U))
+
+    if (init->MessageRAMOffset > 2560U) /* H723 FDCAN Message RAM 共 2560 字 */
     {
         return HAL_ERROR;
     }
-    if ((init->tx_events_nbr > 32U) ||
-        ((init->tx_buffers_nbr + init->tx_fifo_queue_elmts_nbr) > 32U))
+    if ((init->StdFiltersNbr > 128U) || (init->ExtFiltersNbr > 64U))
     {
         return HAL_ERROR;
     }
-    if ((init->rx_fifo0_elmts_nbr > 0U) && !HalCanIsValidFdcanDataSize(init->rx_fifo0_elmt_size))
+    if ((init->RxFifo0ElmtsNbr > 64U) || (init->RxFifo1ElmtsNbr > 64U) ||
+        (init->RxBuffersNbr > 64U))
     {
         return HAL_ERROR;
     }
-    if ((init->rx_fifo1_elmts_nbr > 0U) && !HalCanIsValidFdcanDataSize(init->rx_fifo1_elmt_size))
+    if ((init->TxEventsNbr > 32U) ||
+        ((init->TxBuffersNbr + init->TxFifoQueueElmtsNbr) > 32U))
     {
         return HAL_ERROR;
     }
-    if ((init->rx_buffers_nbr > 0U) && !HalCanIsValidFdcanDataSize(init->rx_buffer_size))
+    if ((init->RxFifo0ElmtsNbr > 0U) && !HalCanIsValidFdcanDataSize(init->RxFifo0ElmtSize))
     {
         return HAL_ERROR;
     }
-    if ((init->tx_buffers_nbr + init->tx_fifo_queue_elmts_nbr) > 0U)
+    if ((init->RxFifo1ElmtsNbr > 0U) && !HalCanIsValidFdcanDataSize(init->RxFifo1ElmtSize))
     {
-        if (!HalCanIsValidFdcanDataSize(init->tx_elmt_size))
+        return HAL_ERROR;
+    }
+    if ((init->RxBuffersNbr > 0U) && !HalCanIsValidFdcanDataSize(init->RxBufferSize))
+    {
+        return HAL_ERROR;
+    }
+    if ((init->TxBuffersNbr + init->TxFifoQueueElmtsNbr) > 0U)
+    {
+        if (!HalCanIsValidFdcanDataSize(init->TxElmtSize))
         {
             return HAL_ERROR;
         }
     }
-    if ((init->tx_fifo_queue_mode != FDCAN_TX_FIFO_OPERATION) &&
-        (init->tx_fifo_queue_mode != FDCAN_TX_QUEUE_OPERATION))
+    if ((init->TxFifoQueueMode != FDCAN_TX_FIFO_OPERATION) &&
+        (init->TxFifoQueueMode != FDCAN_TX_QUEUE_OPERATION))
     {
         return HAL_ERROR;
     }
 
     /* 逐字段覆盖 CubeMX 初始化的配置 */
-    hfdcan->Init.FrameFormat = init->frame_format;
-    hfdcan->Init.Mode = init->mode;
-    hfdcan->Init.AutoRetransmission = init->auto_retransmission;
-    hfdcan->Init.TransmitPause = init->transmit_pause;
-    hfdcan->Init.ProtocolException = init->protocol_exception;
+    hfdcan->Init.FrameFormat = init->FrameFormat;
+    hfdcan->Init.Mode = init->Mode;
+    hfdcan->Init.AutoRetransmission = init->AutoRetransmission;
+    hfdcan->Init.TransmitPause = init->TransmitPause;
+    hfdcan->Init.ProtocolException = init->ProtocolException;
 
-    hfdcan->Init.NominalPrescaler = init->nominal_prescaler;
-    hfdcan->Init.NominalSyncJumpWidth = init->nominal_sync_jump_width;
-    hfdcan->Init.NominalTimeSeg1 = init->nominal_time_seg1;
-    hfdcan->Init.NominalTimeSeg2 = init->nominal_time_seg2;
+    hfdcan->Init.NominalPrescaler = init->NominalPrescaler;
+    hfdcan->Init.NominalSyncJumpWidth = init->NominalSyncJumpWidth;
+    hfdcan->Init.NominalTimeSeg1 = init->NominalTimeSeg1;
+    hfdcan->Init.NominalTimeSeg2 = init->NominalTimeSeg2;
 
-    hfdcan->Init.DataPrescaler = init->data_prescaler;
-    hfdcan->Init.DataSyncJumpWidth = init->data_sync_jump_width;
-    hfdcan->Init.DataTimeSeg1 = init->data_time_seg1;
-    hfdcan->Init.DataTimeSeg2 = init->data_time_seg2;
+    hfdcan->Init.DataPrescaler = init->DataPrescaler;
+    hfdcan->Init.DataSyncJumpWidth = init->DataSyncJumpWidth;
+    hfdcan->Init.DataTimeSeg1 = init->DataTimeSeg1;
+    hfdcan->Init.DataTimeSeg2 = init->DataTimeSeg2;
 
-    hfdcan->Init.MessageRAMOffset = init->message_ram_offset;
-    hfdcan->Init.StdFiltersNbr = init->std_filters_nbr;
-    hfdcan->Init.ExtFiltersNbr = init->ext_filters_nbr;
-    hfdcan->Init.RxFifo0ElmtsNbr = init->rx_fifo0_elmts_nbr;
-    hfdcan->Init.RxFifo0ElmtSize = init->rx_fifo0_elmt_size;
-    hfdcan->Init.RxFifo1ElmtsNbr = init->rx_fifo1_elmts_nbr;
-    hfdcan->Init.RxFifo1ElmtSize = init->rx_fifo1_elmt_size;
-    hfdcan->Init.RxBuffersNbr = init->rx_buffers_nbr;
-    hfdcan->Init.RxBufferSize = init->rx_buffer_size;
-    hfdcan->Init.TxEventsNbr = init->tx_events_nbr;
-    hfdcan->Init.TxBuffersNbr = init->tx_buffers_nbr;
-    hfdcan->Init.TxFifoQueueElmtsNbr = init->tx_fifo_queue_elmts_nbr;
-    hfdcan->Init.TxFifoQueueMode = init->tx_fifo_queue_mode;
-    hfdcan->Init.TxElmtSize = init->tx_elmt_size;
+    hfdcan->Init.MessageRAMOffset = init->MessageRAMOffset;
+    hfdcan->Init.StdFiltersNbr = init->StdFiltersNbr;
+    hfdcan->Init.ExtFiltersNbr = init->ExtFiltersNbr;
+    hfdcan->Init.RxFifo0ElmtsNbr = init->RxFifo0ElmtsNbr;
+    hfdcan->Init.RxFifo0ElmtSize = init->RxFifo0ElmtSize;
+    hfdcan->Init.RxFifo1ElmtsNbr = init->RxFifo1ElmtsNbr;
+    hfdcan->Init.RxFifo1ElmtSize = init->RxFifo1ElmtSize;
+    hfdcan->Init.RxBuffersNbr = init->RxBuffersNbr;
+    hfdcan->Init.RxBufferSize = init->RxBufferSize;
+    hfdcan->Init.TxEventsNbr = init->TxEventsNbr;
+    hfdcan->Init.TxBuffersNbr = init->TxBuffersNbr;
+    hfdcan->Init.TxFifoQueueElmtsNbr = init->TxFifoQueueElmtsNbr;
+    hfdcan->Init.TxFifoQueueMode = init->TxFifoQueueMode;
+    hfdcan->Init.TxElmtSize = init->TxElmtSize;
 
     /* 重新初始化外设（State=READY 不会重跑 MspInit；会重写 Message RAM 布局） */
     return HAL_FDCAN_Init(hfdcan);
@@ -180,49 +180,49 @@ HAL_StatusTypeDef HalCanReconfigureBxcan(CAN_HandleTypeDef *hcan, const CAN_Init
     }
 
     /* 参数范围校验（HAL assert_param 在此工程为空操作，必须自行校验） */
-    if ((init->mode != CAN_MODE_NORMAL) &&
-        (init->mode != CAN_MODE_LOOPBACK) &&
-        (init->mode != CAN_MODE_SILENT) &&
-        (init->mode != CAN_MODE_SILENT_LOOPBACK))
+    if ((init->Mode != CAN_MODE_NORMAL) &&
+        (init->Mode != CAN_MODE_LOOPBACK) &&
+        (init->Mode != CAN_MODE_SILENT) &&
+        (init->Mode != CAN_MODE_SILENT_LOOPBACK))
     {
         return HAL_ERROR;
     }
-    if ((init->sync_jump_width != CAN_SJW_1TQ) &&
-        (init->sync_jump_width != CAN_SJW_2TQ) &&
-        (init->sync_jump_width != CAN_SJW_4TQ))
+    if ((init->SyncJumpWidth != CAN_SJW_1TQ) &&
+        (init->SyncJumpWidth != CAN_SJW_2TQ) &&
+        (init->SyncJumpWidth != CAN_SJW_4TQ))
     {
         return HAL_ERROR;
     }
-    if ((init->time_seg1 > CAN_BS1_16TQ) || (init->time_seg2 > CAN_BS2_8TQ))
+    if ((init->TimeSeg1 > CAN_BS1_16TQ) || (init->TimeSeg2 > CAN_BS2_8TQ))
     {
         return HAL_ERROR;
     }
-    if ((init->prescaler < 1U) || (init->prescaler > 1024U))
+    if ((init->Prescaler < 1U) || (init->Prescaler > 1024U))
     {
         return HAL_ERROR;
     }
-    if (!HalCanIsValidFunctionalState(init->time_triggered_mode) ||
-        !HalCanIsValidFunctionalState(init->auto_bus_off) ||
-        !HalCanIsValidFunctionalState(init->auto_wake_up) ||
-        !HalCanIsValidFunctionalState(init->auto_retransmission) ||
-        !HalCanIsValidFunctionalState(init->receive_fifo_locked) ||
-        !HalCanIsValidFunctionalState(init->transmit_fifo_priority))
+    if (!HalCanIsValidFunctionalState(init->TimeTriggeredMode) ||
+        !HalCanIsValidFunctionalState(init->AutoBusOff) ||
+        !HalCanIsValidFunctionalState(init->AutoWakeUp) ||
+        !HalCanIsValidFunctionalState(init->AutoRetransmission) ||
+        !HalCanIsValidFunctionalState(init->ReceiveFifoLocked) ||
+        !HalCanIsValidFunctionalState(init->TransmitFifoPriority))
     {
         return HAL_ERROR;
     }
 
     /* 逐字段覆盖 CubeMX 初始化的配置 */
-    hcan->Init.Prescaler = init->prescaler;
-    hcan->Init.Mode = init->mode;
-    hcan->Init.SyncJumpWidth = init->sync_jump_width;
-    hcan->Init.TimeSeg1 = init->time_seg1;
-    hcan->Init.TimeSeg2 = init->time_seg2;
-    hcan->Init.TimeTriggeredMode = init->time_triggered_mode;
-    hcan->Init.AutoBusOff = init->auto_bus_off;
-    hcan->Init.AutoWakeUp = init->auto_wake_up;
-    hcan->Init.AutoRetransmission = init->auto_retransmission;
-    hcan->Init.ReceiveFifoLocked = init->receive_fifo_locked;
-    hcan->Init.TransmitFifoPriority = init->transmit_fifo_priority;
+    hcan->Init.Prescaler = init->Prescaler;
+    hcan->Init.Mode = init->Mode;
+    hcan->Init.SyncJumpWidth = init->SyncJumpWidth;
+    hcan->Init.TimeSeg1 = init->TimeSeg1;
+    hcan->Init.TimeSeg2 = init->TimeSeg2;
+    hcan->Init.TimeTriggeredMode = init->TimeTriggeredMode;
+    hcan->Init.AutoBusOff = init->AutoBusOff;
+    hcan->Init.AutoWakeUp = init->AutoWakeUp;
+    hcan->Init.AutoRetransmission = init->AutoRetransmission;
+    hcan->Init.ReceiveFifoLocked = init->ReceiveFifoLocked;
+    hcan->Init.TransmitFifoPriority = init->TransmitFifoPriority;
 
     /* 重新初始化外设（State=READY 不会重跑 MspInit） */
     return HAL_CAN_Init(hcan);

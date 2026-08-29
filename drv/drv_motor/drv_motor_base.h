@@ -273,8 +273,9 @@ typedef struct
     MotorDataAll_s data_all;
 
     /* 统一接口 */
-    CANInstance *can;       // CAN 实例指针
-    DaemonInstance *daemon; // 守护进程实例
+    CANInstance *can;        // CAN 实例指针
+    CAN_Filter_s can_filter; // CAN 接收过滤器
+    DaemonInstance *daemon;  // 守护进程实例
 } MotorBase_s;
 
 /*============================================
