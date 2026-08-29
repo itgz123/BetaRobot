@@ -12,14 +12,34 @@
 #define CAN_TX_MAILBOX_NUM 3 // BxCAN 每个 CAN 的发送邮箱数量
 #define CAN_ID_UNUSED ((uint32_t)0xFFFFFFFF)
 
-typedef struct CANInstance CANInstance;
+/* 对于fdcan硬件和bxcan硬件的统一接口，以下CAN_Frame_Type_e和CAN_Mode_Type_e枚举的相关兼容性
+ * bxcan:
+ *     CANConfig配置CAN_Mode_Type_e时：
+ *         只有CAN_Mode_Type_e==CAN_FRAME_FORMAT_CLASSIC才不报错
+ *     发送的pack：
+ *         CAN_Frame_Type_e的5种都支持
+ *     接收过滤器：
+ *         CAN_Frame_Type_e的5种都支持
+ * fdcan:
+ *     CANConfig配置CAN_Mode_Type_e时：
+ *         只有一下3种情况允许
+ *         1. (CANInstance.mode==CAN_FRAME_FORMAT_FD_BRS)&&(FDCAN_HandleTypeDef.Init.FrameFormat==CAN_FRAME_FORMAT_FD_BRS)
+ *         2. (CANInstance.mode==CAN_FRAME_FORMAT_FD)&&((FDCAN_HandleTypeDef.Init.FrameFormat==CAN_FRAME_FORMAT_FD)||(FDCAN_HandleTypeDef.Init.FrameFormat==CAN_FRAME_FORMAT_FD_BRS))
+ *         3. CANInstance.mode==CAN_FRAME_FORMAT_CLASSIC
+ *     发送的pack：
+ *         CAN_FRAME_FORMAT_CLASSIC模式下CAN_Frame_Type_e的5种都支持
+ *         CAN_FRAME_FORMAT_FD/FD_BRS下CAN_STANDARD_REMOTE_FRAME和CAN_EXTENDED_REMOTE_FRAME报错
+ *     接收过滤器：
+ *         CAN_FRAME_FORMAT_CLASSIC模式下CAN_Frame_Type_e的5种都支持
+ *         CAN_FRAME_FORMAT_FD/FD_BRS下CAN_STANDARD_REMOTE_FRAME和CAN_EXTENDED_REMOTE_FRAME报错
+ */
+
 typedef enum : uint8_t
 {
     CAN_STANDARD_DATA_FRAME = 0,   // 标准数据帧（11-bit ID）。Standard data frame (11-bit ID).
     CAN_EXTENDED_DATA_FRAME = 1,   // 扩展数据帧（29-bit ID）。Extended data frame (29-bit ID).
     CAN_STANDARD_REMOTE_FRAME = 2, // 标准远程帧。Standard remote frame.
     CAN_EXTENDED_REMOTE_FRAME = 3, // 扩展远程帧。Extended remote frame.
-    CAN_ERROR_FRAME = 4,           // 错误帧（虚拟事件）。Error frame (virtual event).
 } CAN_Frame_Type_e;
 
 typedef enum : uint8_t
@@ -35,6 +55,8 @@ typedef enum : uint8_t
     CAN_FRAME_FORMAT_FD = 1,      // FD 帧（无 BRS，最大 64 字节）
     CAN_FRAME_FORMAT_FD_BRS = 2   // FD 帧（带 BRS，最大 64 字节）
 } CAN_Mode_Type_e;
+
+typedef struct CANInstance CANInstance;
 
 // 不管bxcan还是fdcan，都用这个
 typedef struct
@@ -107,14 +129,14 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config);
  * @brief 发送一帧CAN数据
  * @param instance      CAN实例
  * @param pack          数据包（id / frame_type / len / data）
- * @param tx_mailbox    出参：本次发送的发送标记（BxCAN=邮箱索引 0~2 / FDCAN=MessageMarker 0~15，
+ * @param tx_mailbox    出参：本次发送的发送标记（BxCAN=邮箱索引 0~2 / FDCAN=MessageMarker 0~31，
  *                      发送完成回调据此与发送帧对应）；可为 NULL
  * @param tx_free_level 出参：发送后剩余可发送数（BxCAN=空闲邮箱数 0~CAN_TX_MAILBOX_NUM /
- *                      FDCAN=Tx FIFO/Queue 空闲元素数）；可为 NULL
+ *                      FDCAN=Tx FIFO 空闲元素数）；可为 NULL
  * @retval 0  发送成功
  * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / 发送资源全满 / 加入发送资源失败）
  */
-int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_mailbox, uint32_t *tx_free_level);
+int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint8_t *tx_mailbox, uint8_t *tx_free_level);
 
 #endif // BSP_CAN_MODULE_ENABLED
 
