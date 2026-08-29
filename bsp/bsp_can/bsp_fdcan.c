@@ -57,8 +57,10 @@ static uint8_t FDCAN_HcanToIndex(const FDCAN_HandleTypeDef *hfdcan)
 
 /**
  * @brief 字节数 → DLC 码（FD 帧按不小于 len 的档位取整）
+ * @retval >=0 DLC 码（0~15）
+ * @retval -1  len > 64，超出 FD 上限（兜底；正常流程 CANTransmit 入口已校验，此处防御非法 DLC 写入）
  */
-static uint32_t FDCAN_BytesToDlc(uint8_t len)
+static int32_t FDCAN_BytesToDlc(uint8_t len)
 {
     if (len <= 8)
         return len; // DLC 0~8 与字节数一致
@@ -74,7 +76,9 @@ static uint32_t FDCAN_BytesToDlc(uint8_t len)
         return FDCAN_DLC_BYTES_32;
     if (len <= 48)
         return FDCAN_DLC_BYTES_48;
-    return FDCAN_DLC_BYTES_64;
+    if (len <= 64)
+        return FDCAN_DLC_BYTES_64;
+    return -1;
 }
 
 /**
@@ -210,6 +214,7 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
     {
         FDCAN_InitTypeDef *init = &hfdcan->Init;
         uint32_t active_it = 0;
+        uint32_t line0_ints = 0;
 
         // 发送统一接口走 Tx FIFO（AddMessageToTxFifoQ + GetTxFifoFreeLevel），需 CubeMX 配置
         BSP_RETURN_IF_TRUE_LOG(init->TxFifoQueueElmtsNbr == 0, -1, LOGERROR("[bsp_can] TxFifoQueueElmtsNbr=0! 统一接口发送走 Tx FIFO，请用 CubeMX 配置（TxFifoQueueElmtsNbr>0）"));
@@ -219,6 +224,15 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
         BSP_RETURN_IF_TRUE_LOG(init->RxFifo0ElmtsNbr == 0, -1, LOGERROR("[bsp_can] RxFifo0ElmtsNbr=0! 接收走 Rx FIFO0，请用 CubeMX 配置（RxFifo0ElmtsNbr>0）"));
         BSP_RETURN_IF_TRUE_LOG(HAL_FDCAN_ConfigGlobalFilter(hfdcan, FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE) != HAL_OK,
                                -1, LOGERROR("[bsp_can] HAL_FDCAN_ConfigGlobalFilter failed!"));
+
+        // 显式配置中断线：当前使能的接收/发送事件中断源全部映射到 IT0（对应 FDCANx_IT0_IRQn）
+        // 注意：HAL_FDCAN_ConfigInterruptLines 是覆盖式调用，需将同一中断线的所有中断源合并
+        line0_ints |= FDCAN_IT_RX_FIFO0_NEW_MESSAGE;
+        // 发送完成溯源：Tx Event FIFO + MessageMarker（需 CubeMX 配置 TxEventsNbr>0；FULL/LOST 用于检测溯源丢失）
+        if (init->TxEventsNbr > 0)
+            line0_ints |= FDCAN_IT_TX_EVT_FIFO_NEW_DATA | FDCAN_IT_TX_EVT_FIFO_FULL | FDCAN_IT_TX_EVT_FIFO_ELT_LOST;
+        BSP_RETURN_IF_TRUE_LOG(HAL_FDCAN_ConfigInterruptLines(hfdcan, line0_ints, FDCAN_INTERRUPT_LINE0) != HAL_OK,
+                               -1, LOGERROR("[bsp_can] HAL_FDCAN_ConfigInterruptLines failed!"));
 
         // 只使能 Rx FIFO0 新报文中断
         active_it |= FDCAN_IT_RX_FIFO0_NEW_MESSAGE;
@@ -242,7 +256,7 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
  * @retval 0  发送成功
  * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / FIFO 满 / marker 占满 / 加入 FIFO 失败）
  */
-int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint8_t *tx_mailbox, uint8_t *tx_free_level)
+int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_mailbox, uint8_t *tx_free_level)
 {
     FDCAN_HandleTypeDef *hfdcan;
     FDCAN_TxHeaderTypeDef tx_header = {0};
@@ -250,6 +264,7 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint8_t *tx_ma
     uint32_t marker = 0;
     uint8_t can_idx;
     uint8_t use_tx_event;
+    int32_t dlc;
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_can] Instance is NULL!"));
     hfdcan = instance->map.handle;
@@ -310,7 +325,14 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint8_t *tx_ma
         tx_header.BitRateSwitch = FDCAN_BRS_OFF;
     }
     tx_header.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-    tx_header.DataLength = FDCAN_BytesToDlc(pack->len);
+    // len>64 兜底（正常流程入口已校验，此处防御非法 DLC 写入）
+    dlc = FDCAN_BytesToDlc(pack->len);
+    if (dlc < 0)
+    {
+        LOGERROR("[bsp_can] Length %d exceeds FD max (64)!", pack->len);
+        return -1;
+    }
+    tx_header.DataLength = (uint32_t)dlc;
 
     can_idx = instance->can_e;
     use_tx_event = (hfdcan->Init.TxEventsNbr > 0) ? 1 : 0; // Tx Event FIFO 使能才可溯源

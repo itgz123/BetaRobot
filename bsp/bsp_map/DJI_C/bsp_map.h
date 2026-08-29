@@ -8,7 +8,6 @@
 #include "i2c.h"
 #include "adc.h"
 #include "bsp.h"
-#include "hal_can.h"
 
 void BSPInit();
 
@@ -152,7 +151,5 @@ extern const SPI_Map_t spi_map[];
 extern const I2C_Map_t i2c_map[];
 extern const ADC_Map_t adc_map[];
 
-/* CAN 外设重配置表：每路 CAN 一个配置指针，NULL=不重配置（沿用 CubeMX 初始化） */
-extern const HalCan_CAN_Config_s *can_cfg_map[CAN_NUM_MAX];
 
 #endif /* __DJI_C_BSP_MAP_H */
