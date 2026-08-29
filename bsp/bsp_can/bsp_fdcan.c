@@ -4,9 +4,9 @@
  *
  * @note 与 bsp_bxcan.c 共用统一接口（CANRegister / CANConfig / CANTransmit）。
  *       发送/接收机制跟随 CubeMX 配置（首次配置时读 hfdcan->Init 自动适配）：
- *         - 接收：Rx FIFO0/1 / Rx Buffer 按配置使能对应中断，硬过滤全通（全局过滤），收帧后软件过滤分发
- *         - 发送：Tx FIFO/Queue（HAL_FDCAN_AddMessageToTxFifoQ），tx_free_level = 剩余可发送元素数
- *         - 发送完成：Tx Event FIFO + MessageMarker（4-bit，0~15）溯源，对应 BxCAN 的邮箱索引
+ *         - 接收：Rx FIFO0（全局过滤全通，只走 Rx FIFO），收帧后软件过滤分发
+ *         - 发送：Tx FIFO（HAL_FDCAN_AddMessageToTxFifoQ），tx_free_level = 剩余可发送元素数
+ *         - 发送完成：Tx Event FIFO + MessageMarker（8-bit，池 0~31）溯源，对应 BxCAN 的邮箱索引
  *       本文件仅在 BSP_CAN_IP == BSP_CAN_IP_FDCAN 时编译。
  */
 
@@ -21,7 +21,7 @@
 #include "bsp_uart_log.h"
 
 /*------------- 私有宏 --------------*/
-#define FDCAN_TX_MARKER_NUM 16 // MessageMarker 为 4-bit（0~15），对应 BxCAN 的 3 个邮箱索引
+#define FDCAN_TX_MARKER_NUM 32 // MessageMarker 为 0~31，对应 BxCAN 的 3 个邮箱索引（TxEventsNbr=32 和 TxFifoQueueElmtsNbr=32都是32）
 
 /* DLC 码（0~15）→ 实际字节数（与 HAL 内部 DLCtoBytes 表一致） */
 static const uint8_t s_fdcan_dlc_bytes[16] = {
@@ -77,6 +77,26 @@ static uint32_t FDCAN_BytesToDlc(uint8_t len)
     return FDCAN_DLC_BYTES_64;
 }
 
+/**
+ * @brief 帧类型与工作模式兼容性检查（FD 帧格式没有 RTR 位，不存在远程帧）
+ * @param mode       实例工作模式（CAN_Mode_Type_e）
+ * @param frame_type 帧类型（CAN_Frame_Type_e）
+ * @retval 0  兼容
+ * @retval -1 不兼容：非经典模式下出现远程帧
+ * @note 经典模式（CAN_FRAME_FORMAT_CLASSIC）允许远程帧；FD/FD_BRS 模式拒绝远程帧。
+ */
+static int8_t FDCAN_CheckFrameTypeCompatible(CAN_Mode_Type_e mode, CAN_Frame_Type_e frame_type)
+{
+    if (mode == CAN_FRAME_FORMAT_CLASSIC)
+        return 0;
+    if (frame_type == CAN_STANDARD_REMOTE_FRAME || frame_type == CAN_EXTENDED_REMOTE_FRAME)
+    {
+        LOGERROR("[bsp_can] FD 模式(mode=%d)不支持远程帧(frame_type=%d)，FD 帧格式无 RTR 位!", mode, frame_type);
+        return -1;
+    }
+    return 0;
+}
+
 /*------------- 私有函数：发送溯源 --------------*/
 
 /**
@@ -102,7 +122,7 @@ static int8_t FDCAN_AllocMarker(uint8_t can_idx, CANInstance *instance, uint32_t
 /**
  * @brief 发送完成处理：查溯源表，调用所属实例的发送完成回调
  * @param can_idx can_e 索引
- * @param marker  MessageMarker（0~15）
+ * @param marker  MessageMarker（0~31）
  */
 static void FDCAN_TxCompleteHandler(uint8_t can_idx, uint32_t marker)
 {
@@ -174,45 +194,34 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
     instance->filter_num = config->filter_num;
     instance->tx_complete_callback = config->tx_complete_callback;
 
-    // 模式与 CubeMX FrameFormat 兼容性检查（FD 实例需要控制器支持 FD）
-    if (instance->mode != CAN_FRAME_FORMAT_CLASSIC && hfdcan->Init.FrameFormat == FDCAN_FRAME_CLASSIC)
-        BSP_RETURN_IF_TRUE_LOG(1, -1, LOGERROR("[bsp_can] 实例模式为 FD 但 hfdcan FrameFormat=CLASSIC（CubeMX 配置），发送 FD 帧会失败!"));
+    // 模式与 CubeMX FrameFormat 兼容性检查：
+    //  - 非 CLASSIC 实例需控制器启用 FD（CubeMX FrameFormat != CLASSIC，硬件 FDOE=1），否则 FD 帧发送失败
+    //  - FD_BRS 实例还需控制器启用 BRS（CubeMX FrameFormat == FD_BRS，硬件 BRSE=1），否则数据段时序/8 Mbps 不生效
+    if (instance->mode != CAN_FRAME_FORMAT_CLASSIC)
+    {
+        BSP_RETURN_IF_TRUE_LOG(hfdcan->Init.FrameFormat == FDCAN_FRAME_CLASSIC, -1,
+                               LOGERROR("[bsp_can] 实例模式为 FD(mode=%d) 但 hfdcan FrameFormat=CLASSIC（CubeMX 配置），控制器未启用 FD!", instance->mode));
+        BSP_RETURN_IF_TRUE_LOG(instance->mode == CAN_FRAME_FORMAT_FD_BRS && hfdcan->Init.FrameFormat != FDCAN_FRAME_FD_BRS, -1,
+                               LOGERROR("[bsp_can] 实例模式为 FD_BRS 但 hfdcan FrameFormat != FD_BRS（CubeMX 配置），控制器未启用 BRS，8 Mbps 数据段时序不会生效!"));
+    }
 
     // 首次配置：硬过滤全通 + 启动外设 + 使能接收/发送中断（HAL_FDCAN_Start 后 State: READY → BUSY）
     if (hfdcan->State == HAL_FDCAN_STATE_READY)
     {
         FDCAN_InitTypeDef *init = &hfdcan->Init;
         uint32_t active_it = 0;
-        uint32_t non_match_std, non_match_ext;
 
-        // 发送统一接口走 Tx FIFO/Queue（AddMessageToTxFifoQ + GetTxFifoFreeLevel），需 CubeMX 配置
-        BSP_RETURN_IF_TRUE_LOG(init->TxFifoQueueElmtsNbr == 0, -1, LOGERROR("[bsp_can] TxFifoQueueElmtsNbr=0! 统一接口发送走 Tx FIFO/Queue，请用 CubeMX 配置（TxFifoQueueElmtsNbr>0）"));
+        // 发送统一接口走 Tx FIFO（AddMessageToTxFifoQ + GetTxFifoFreeLevel），需 CubeMX 配置
+        BSP_RETURN_IF_TRUE_LOG(init->TxFifoQueueElmtsNbr == 0, -1, LOGERROR("[bsp_can] TxFifoQueueElmtsNbr=0! 统一接口发送走 Tx FIFO，请用 CubeMX 配置（TxFifoQueueElmtsNbr>0）"));
+        BSP_RETURN_IF_TRUE_LOG(init->TxFifoQueueMode != FDCAN_TX_FIFO_OPERATION, -1, LOGERROR("[bsp_can] TxFifoQueueMode 需为 FDCAN_TX_FIFO_OPERATION（只要 Tx FIFO，不要 Tx Queue）!"));
 
-        // 接收需至少一个 Rx FIFO：全局过滤只能把不匹配帧 accept 到 FIFO0/1，Rx Buffer 需单独配过滤器
-        BSP_RETURN_IF_TRUE_LOG(init->RxFifo0ElmtsNbr == 0 && init->RxFifo1ElmtsNbr == 0, -1, LOGERROR("[bsp_can] 接收需至少配置一个 Rx FIFO（CubeMX 里 RxFifo0ElmtsNbr/RxFifo1ElmtsNbr>0），Rx Buffer 无法走全局过滤全通"));
-
-        // 硬过滤全通：标准帧 → FIFO0（无则 FIFO1），扩展帧 → FIFO1（仅 1 个 FIFO 则同用），远程帧不拒收
-        if (init->RxFifo0ElmtsNbr > 0)
-        {
-            non_match_std = FDCAN_ACCEPT_IN_RX_FIFO0;
-            non_match_ext = (init->RxFifo1ElmtsNbr > 0) ? FDCAN_ACCEPT_IN_RX_FIFO1 : FDCAN_ACCEPT_IN_RX_FIFO0;
-        }
-        else
-        {
-            non_match_std = FDCAN_ACCEPT_IN_RX_FIFO1;
-            non_match_ext = FDCAN_ACCEPT_IN_RX_FIFO1;
-        }
-        BSP_RETURN_IF_TRUE_LOG(HAL_FDCAN_ConfigGlobalFilter(hfdcan, non_match_std, non_match_ext,
-                                                            FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE) != HAL_OK,
+        // 硬过滤全通：全部走 FDCAN_ACCEPT_IN_RX_FIFO0（接收只保留 Rx FIFO 路径）
+        BSP_RETURN_IF_TRUE_LOG(init->RxFifo0ElmtsNbr == 0, -1, LOGERROR("[bsp_can] RxFifo0ElmtsNbr=0! 接收走 Rx FIFO0，请用 CubeMX 配置（RxFifo0ElmtsNbr>0）"));
+        BSP_RETURN_IF_TRUE_LOG(HAL_FDCAN_ConfigGlobalFilter(hfdcan, FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE) != HAL_OK,
                                -1, LOGERROR("[bsp_can] HAL_FDCAN_ConfigGlobalFilter failed!"));
 
-        // 按 CubeMX 实际配置的数量使能对应接收中断
-        if (init->RxFifo0ElmtsNbr > 0)
-            active_it |= FDCAN_IT_RX_FIFO0_NEW_MESSAGE;
-        if (init->RxFifo1ElmtsNbr > 0)
-            active_it |= FDCAN_IT_RX_FIFO1_NEW_MESSAGE;
-        if (init->RxBuffersNbr > 0)
-            active_it |= FDCAN_IT_RX_BUFFER_NEW_MESSAGE;
+        // 只使能 Rx FIFO0 新报文中断
+        active_it |= FDCAN_IT_RX_FIFO0_NEW_MESSAGE;
         // 发送完成溯源：Tx Event FIFO + MessageMarker（需 CubeMX 配置 TxEventsNbr>0；FULL/LOST 用于检测溯源丢失）
         if (init->TxEventsNbr > 0)
             active_it |= FDCAN_IT_TX_EVT_FIFO_NEW_DATA | FDCAN_IT_TX_EVT_FIFO_FULL | FDCAN_IT_TX_EVT_FIFO_ELT_LOST;
@@ -228,12 +237,12 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
  * @brief 发送一帧CAN数据
  * @param instance      CAN实例
  * @param pack          数据包（id / frame_type / len / data）
- * @param tx_mailbox    出参：本次发送使用的发送标记（FDCAN=MessageMarker 0~15，对应 BxCAN 邮箱索引 0~2）；可为 NULL
- * @param tx_free_level 出参：发送后剩余可发送元素数（Tx FIFO/Queue 空闲数）；可为 NULL
+ * @param tx_mailbox    出参：本次发送使用的发送标记（FDCAN=MessageMarker 0~31，对应 BxCAN 邮箱索引 0~2）；可为 NULL
+ * @param tx_free_level 出参：发送后剩余可发送元素数（Tx FIFO 空闲数）；可为 NULL
  * @retval 0  发送成功
  * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / FIFO 满 / marker 占满 / 加入 FIFO 失败）
  */
-int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_mailbox, uint32_t *tx_free_level)
+int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint8_t *tx_mailbox, uint8_t *tx_free_level)
 {
     FDCAN_HandleTypeDef *hfdcan;
     FDCAN_TxHeaderTypeDef tx_header = {0};
@@ -252,8 +261,9 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_m
     BSP_RETURN_IF_TRUE_LOG(instance->mode == CAN_FRAME_FORMAT_CLASSIC && pack->len > 8, -1,
                            LOGERROR("[bsp_can] Classic mode but len=%d exceeds 8!", pack->len));
 
-    // 错误帧为虚拟事件，不可发送
-    BSP_RETURN_IF_TRUE_LOG(pack->frame_type == CAN_ERROR_FRAME, -1, LOGERROR("[bsp_can] Error frame is a virtual event, cannot transmit!"));
+    // 帧类型与工作模式兼容性检查（FD 帧格式无 RTR 位：非经典模式拒绝远程帧）
+    if (FDCAN_CheckFrameTypeCompatible(instance->mode, pack->frame_type) != 0)
+        return -1;
 
     // 由帧类型填充发送头（ID 类型 / 帧类型 / ID）
     switch (pack->frame_type)
@@ -306,9 +316,9 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_m
     use_tx_event = (hfdcan->Init.TxEventsNbr > 0) ? 1 : 0; // Tx Event FIFO 使能才可溯源
     tx_header.TxEventFifoControl = use_tx_event ? FDCAN_STORE_TX_EVENTS : FDCAN_NO_TX_EVENTS;
 
-    // FIFO/Queue 空闲检查（快速失败，避免无效的 marker 分配）
+    // Tx FIFO 空闲检查（快速失败，避免无效的 marker 分配）
     free_level = HAL_FDCAN_GetTxFifoFreeLevel(hfdcan);
-    BSP_RETURN_IF_TRUE_LOG(free_level == 0, -1, LOGERROR("[bsp_can] TX FIFO/Queue full!"));
+    BSP_RETURN_IF_TRUE_LOG(free_level == 0, -1, LOGERROR("[bsp_can] TX FIFO full!"));
 
     // 发送完成溯源：分配 MessageMarker 并先登记（入队后中断可能立即触发）
     if (use_tx_event)
@@ -321,7 +331,7 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_m
         tx_header.MessageMarker = marker;
     }
 
-    // 加入发送 FIFO/Queue
+    // 加入发送 Tx FIFO
     if (HAL_FDCAN_AddMessageToTxFifoQ(hfdcan, &tx_header, pack->data) != HAL_OK)
     {
         if (use_tx_event)
@@ -432,54 +442,14 @@ static void FDCAN_ReceiveFifo(FDCAN_HandleTypeDef *hfdcan, uint32_t fifo)
     }
 }
 
-/**
- * @brief 读取所有有 New Data 标记的 Rx Buffer（CubeMX 配置 RxBuffersNbr>0 时使能）
- */
-static void FDCAN_ReceiveBuffers(FDCAN_HandleTypeDef *hfdcan)
-{
-    uint8_t i;
-
-    for (i = 0; i < hfdcan->Init.RxBuffersNbr; i++)
-    {
-        if (HAL_FDCAN_IsRxBufferMessageAvailable(hfdcan, i))
-        {
-            FDCAN_RxHeaderTypeDef rx_header;
-            uint8_t rx_data[64];
-            CAN_Pack_s pack = {0};
-
-            if (HAL_FDCAN_GetRxMessage(hfdcan, FDCAN_RX_BUFFER0 + i, &rx_header, rx_data) == HAL_OK)
-            {
-                FDCAN_BuildPack(&rx_header, rx_data, &pack);
-                FDCAN_Dispatch(hfdcan, &pack);
-            }
-        }
-    }
-}
-
-/*------------- 接收中断回调（按 CubeMX 配置使能） --------------*/
+/*------------- 接收中断回调 --------------*/
 
 /**
- * @brief Rx FIFO0 新报文中断回调
+ * @brief Rx FIFO0 新报文中断回调（接收只走 Rx FIFO0）
  */
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
 {
     FDCAN_ReceiveFifo(hfdcan, FDCAN_RX_FIFO0);
-}
-
-/**
- * @brief Rx FIFO1 新报文中断回调
- */
-void HAL_FDCAN_RxFifo1Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo1ITs)
-{
-    FDCAN_ReceiveFifo(hfdcan, FDCAN_RX_FIFO1);
-}
-
-/**
- * @brief Rx Buffer 新报文中断回调（CubeMX 配置 RxBuffersNbr>0 时触发）
- */
-void HAL_FDCAN_RxBufferNewMessageCallback(FDCAN_HandleTypeDef *hfdcan)
-{
-    FDCAN_ReceiveBuffers(hfdcan);
 }
 
 /*------------- 发送完成回调（Tx Event FIFO + MessageMarker 溯源，由 CANConfig 激活 IT） --------------*/
@@ -506,7 +476,8 @@ void HAL_FDCAN_TxEventFifoCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t TxEvent
     {
         if (HAL_FDCAN_GetTxEvent(hfdcan, &event) != HAL_OK)
             break;
-        FDCAN_TxCompleteHandler(can_idx, event.MessageMarker & 0x0F);
+        // MessageMarker 硬件为 8-bit，池内 0~31 用原值即可；越界值由 FDCAN_TxCompleteHandler 边界检查兜底
+        FDCAN_TxCompleteHandler(can_idx, event.MessageMarker);
         fill--;
     }
 }

@@ -169,7 +169,7 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
  * @retval 0  发送成功
  * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / 邮箱全满 / 加入邮箱失败）
  */
-int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_mailbox, uint32_t *tx_free_level)
+int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint8_t *tx_mailbox, uint8_t *tx_free_level)
 {
     CAN_TxHeaderTypeDef tx_header = {0};
     uint32_t mailbox;
@@ -181,9 +181,6 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_m
 
     // 长度校验：经典 CAN 单帧最大 8 字节
     BSP_RETURN_IF_TRUE_LOG(pack->len > 8, -1, LOGERROR("[bsp_can] Length %d exceeds classic CAN max (8)!", pack->len));
-
-    // 错误帧为虚拟事件，不可发送
-    BSP_RETURN_IF_TRUE_LOG(pack->frame_type == CAN_ERROR_FRAME, -1, LOGERROR("[bsp_can] Error frame is a virtual event, cannot transmit!"));
 
     // 由帧类型填充发送头（IDE/RTR/ID）
     switch (pack->frame_type)
