@@ -42,6 +42,18 @@ static CANInstance *s_fdcan_tx_owner[CAN_NUM_MAX][FDCAN_TX_MARKER_NUM] = {{NULL}
 // 外设启动标志：全部初始化步骤成功后才置位。HAL State 中途失败后无法据此重试，必须用独立标志兜底
 static uint8_t s_fdcan_started[CAN_NUM_MAX] = {0};
 
+#if defined(BSP_CAN_LIST_LUT_USED)
+/*------------- 接收 LIST 查表加速（标准 ID 直接索引，省双重循环线性扫描） -------------
+ * s_fdcan_list_lut[CAN][ID] = 该标准 ID 的 LIST filter 所属实例（CANConfig 时登记）
+ * 分发时按 ID 直接索引命中实例（再扫该实例 filters 精确匹配），替代全 CAN 线性扫描。
+ * 一个 (CAN, ID) 只存一个实例指针：同 ID 多实例注册时后写覆盖前写（后注册实例优先）。
+ */
+static CANInstance *s_fdcan_list_lut[CAN_NUM_MAX][0x800]; /* 标准 ID(0~0x7FF) → 实例指针 */
+
+/* 调试辅助：该 CAN 是否已有 LIST 标准帧查表槽位被登记（1=被覆盖过，调试器直接 Watch） */
+volatile uint8_t s_fdcan_list_lut_used[CAN_NUM_MAX] = {0};
+#endif
+
 /*------------- CAN 外设状态/错误统计（调试用，调试器直接 Watch s_fdcan_status） --------------*/
 
 /**
@@ -191,6 +203,70 @@ static int8_t FDCAN_CheckFrameTypeCompatible(CAN_Mode_Type_e mode, CAN_Frame_Typ
     return 0;
 }
 
+#if defined(BSP_CAN_LIST_LUT_USED)
+/*------------- 接收 LIST 查表：登记（宏 BSP_CAN_LIST_LUT_USED 启用，否则走下方循环判断） --------------*/
+
+/**
+ * @brief 判断 filter 是否可被 LIST 查表覆盖（LIST 模式 + 标准帧类型 + 至少一个 ID 在 0~0x7FF）
+ * @note 与 CAN_FilterMatch 的 LIST 分支对齐：标准帧 pack->id <= 0x7FF，ID >0x7FF 视为 unused
+ *       （永远匹配不到标准帧，不落槽）；frame_type 为标准数据/远程帧。
+ */
+static uint8_t FDCAN_ListLutCoverable(const CAN_Filter_s *f)
+{
+    if (f->mode != CAN_FILTER_MODE_LIST)
+        return 0;
+    if (f->frame_type != CAN_STANDARD_DATA_FRAME && f->frame_type != CAN_STANDARD_REMOTE_FRAME)
+        return 0;
+    if ((f->id0 > 0x7FF) && (f->id1 > 0x7FF))
+        return 0;
+    return 1;
+}
+
+/**
+ * @brief 登记实例的 LIST 标准帧 filter 到查表槽位（CANConfig 调用，增量注册/重配置天然支持）
+ * @note 只登记「标准帧 + LIST 模式」且 ID 合法的 filter：id0 必填（≤0x7FF）、id1 可空
+ *       （CAN_ID_UNUSED 表示仅匹配 id0）；任一真实 ID >0x7FF 属配置非法，整条跳过不入表（日志告警）。
+ *       同 (CAN, ID) 已被其他实例占用时后写覆盖前写，后注册实例优先。
+ */
+static void FDCAN_ListLutRegister(CANInstance *inst)
+{
+    uint8_t ci = inst->can_e;
+    uint8_t j;
+
+    if (ci >= CAN_NUM_MAX)
+        return;
+    for (j = 0; j < inst->filter_num; j++)
+    {
+        CAN_Filter_s *f = &inst->filters[j];
+
+        if (f->callback == NULL)
+            continue; /* 无回调，循环路径也跳过，不入表 */
+        if (f->mode != CAN_FILTER_MODE_LIST)
+            continue; /* MASK/RANGE 不入表，由循环兜底 */
+        /* 扩展帧 LIST 不入表（29 位 ID 允许 >0x7FF），由循环兜底 */
+        if (f->frame_type != CAN_STANDARD_DATA_FRAME && f->frame_type != CAN_STANDARD_REMOTE_FRAME)
+            continue;
+
+        /* 标准帧 LIST 校验：id0 必填、id1 可空(CAN_ID_UNUSED)；任一真实 ID >0x7FF 判非法，整条跳过 */
+        if ((f->id0 > 0x7FF) || ((f->id1 != CAN_ID_UNUSED) && (f->id1 > 0x7FF)))
+        {
+            LOGWARNING("[bsp_can] LIST 标准帧 filter ID 非法(id0=0x%lX id1=0x%lX)整条跳过，不入表",
+                       (unsigned long)f->id0, (unsigned long)f->id1);
+            continue;
+        }
+        /* 登记槽位并标记该 CAN 查表已被覆盖（调试直接 Watch s_fdcan_list_lut_used） */
+        s_fdcan_list_lut_used[ci] = 1;
+        if ((f->id0 == f->id1) || (f->id1 == CAN_ID_UNUSED))
+            s_fdcan_list_lut[ci][(uint16_t)f->id0] = inst; /* 单 ID：只落 id0 一槽 */
+        else
+        {
+            s_fdcan_list_lut[ci][(uint16_t)f->id0] = inst; /* 双 ID：id0/id1 各落一槽 */
+            s_fdcan_list_lut[ci][(uint16_t)f->id1] = inst;
+        }
+    }
+}
+#endif
+
 /*------------- 私有函数：发送溯源 --------------*/
 
 /**
@@ -287,6 +363,11 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
     instance->filters = config->filters; // 软件过滤器数组（Config 时写入，指向 config 中的数组）
     instance->filter_num = config->filter_num;
     instance->tx_complete_callback = config->tx_complete_callback;
+
+#if defined(BSP_CAN_LIST_LUT_USED)
+    // 标准 ID + LIST 模式 filter 直接登记查表槽位（增量注册/改 ID 天然支持；同 ID 后写覆盖前写）
+    FDCAN_ListLutRegister(instance);
+#endif
 
     // 模式与 CubeMX FrameFormat 兼容性检查：
     //  - 非 CLASSIC 实例需控制器启用 FD（CubeMX FrameFormat != CLASSIC，硬件 FDOE=1），否则 FD 帧发送失败
@@ -571,10 +652,65 @@ static void FDCAN_BuildPack(const FDCAN_RxHeaderTypeDef *rx_header, const uint8_
         pack->frame_type = (rx_header->IdType == FDCAN_EXTENDED_ID) ? CAN_EXTENDED_DATA_FRAME : CAN_STANDARD_DATA_FRAME;
 }
 
+#if defined(BSP_CAN_LIST_LUT_USED)
 /**
- * @brief 软件过滤分发：遍历本 CAN 上已注册实例，逐个匹配实例内的过滤器数组
+ * @brief 分发（LUT 启用时的唯一入口）：先按标准 ID 查表回调 LIST 标准帧，再循环兜底其余模式
+ * @note 查表命中直接回调（O(该实例 filter 数)，无全 CAN 线性扫描）；循环内跳过 LIST 标准帧
+ *       （已由查表处理），兜底 MASK/RANGE/扩展/未登记，与未启用 LUT 的完整循环等价。
+ *       frame_type 二次校验防同 ID 下 STD_DATA / STD_REMOTE 串。
  */
-static void FDCAN_Dispatch(const FDCAN_HandleTypeDef *hfdcan, const CAN_Pack_s *pack)
+static void FDCAN_ListLutDispatch(uint8_t ci, const FDCAN_HandleTypeDef *hfdcan, const CAN_Pack_s *pack)
+{
+    uint16_t id;
+    CANInstance *inst;
+    uint8_t i;
+
+    if (ci >= CAN_NUM_MAX)
+        return;
+    id = (uint16_t)(pack->id & 0x7FF); /* 必须 uint16_t：0~2047 */
+    inst = s_fdcan_list_lut[ci][id];
+    if (inst != NULL)
+    {
+        uint8_t j;
+
+        for (j = 0; j < inst->filter_num; j++)
+        {
+            CAN_Filter_s *f = &inst->filters[j];
+
+            if (f->callback != NULL && FDCAN_ListLutCoverable(f) &&
+                f->frame_type == pack->frame_type &&
+                (f->id0 == pack->id || (f->id1 != CAN_ID_UNUSED && f->id1 == pack->id)))
+                f->callback(inst, pack);
+        }
+    }
+
+    /* 循环兜底：LIST 标准帧已由查表分发（跳过），其余 MASK/RANGE/扩展/未登记在此匹配 */
+    for (i = 0; i < s_can_idx; i++)
+    {
+        uint8_t j;
+
+        inst = s_can_instance[i];
+        if (inst->map.handle != hfdcan)
+            continue;
+        for (j = 0; j < inst->filter_num; j++)
+        {
+            CAN_Filter_s *f = &inst->filters[j];
+
+            if (f->callback == NULL)
+                continue;
+            if (f->mode == CAN_FILTER_MODE_LIST &&
+                (f->frame_type == CAN_STANDARD_DATA_FRAME || f->frame_type == CAN_STANDARD_REMOTE_FRAME))
+                continue; /* LIST 标准帧已由查表分发，避免重复 */
+            if (CAN_FilterMatch(f, pack))
+                f->callback(inst, pack);
+        }
+    }
+}
+#else
+/**
+ * @brief 软件过滤循环分发（未启用 LUT 时的唯一入口）：遍历本 CAN 上已注册实例，逐个匹配过滤器数组
+ */
+static void FDCAN_LoopDispatch(const FDCAN_HandleTypeDef *hfdcan, const CAN_Pack_s *pack)
 {
     uint8_t i;
 
@@ -596,6 +732,7 @@ static void FDCAN_Dispatch(const FDCAN_HandleTypeDef *hfdcan, const CAN_Pack_s *
         }
     }
 }
+#endif
 
 /**
  * @brief 排空一个接收 FIFO：逐个读报文并分发（中断内一次性取空，避免 IRQ 风暴）
@@ -629,7 +766,12 @@ static void FDCAN_ReceiveFifo(FDCAN_HandleTypeDef *hfdcan, uint32_t fifo)
         if (can_idx < CAN_NUM_MAX)
             s_fdcan_status[can_idx].rx_ok++;
         FDCAN_BuildPack(&rx_header, rx_data, &pack);
-        FDCAN_Dispatch(hfdcan, &pack);
+        // 软件过滤分发：LUT 启用时单入口（查表 + 循环兜底），未启用时纯循环
+#if defined(BSP_CAN_LIST_LUT_USED)
+        FDCAN_ListLutDispatch(can_idx, hfdcan, &pack); /* 查表命中直接回调 LIST 标准帧，其余循环兜底 */
+#else
+        FDCAN_LoopDispatch(hfdcan, &pack); /* 完整循环，全模式分发 */
+#endif
         fill--;
     }
 }
