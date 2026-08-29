@@ -19,6 +19,7 @@
 
 #include "bsp_assert.h"
 #include "bsp_uart_log.h"
+#include "bsp_dwt.h"
 
 /*------------- 私有宏 --------------*/
 #define FDCAN_TX_MARKER_NUM 32 // MessageMarker 为 0~31，对应 BxCAN 的 3 个邮箱索引（TxEventsNbr=32 和 TxFifoQueueElmtsNbr=32都是32）
@@ -37,6 +38,9 @@ static CANInstance **s_can_instance = NULL;
 
 // 发送溯源表：每个 FDCAN 的每个 MessageMarker 当前属于哪个实例（发送完成回调据此回调）
 static CANInstance *s_fdcan_tx_owner[CAN_NUM_MAX][FDCAN_TX_MARKER_NUM] = {{NULL}};
+
+// 外设启动标志：全部初始化步骤成功后才置位。HAL State 中途失败后无法据此重试，必须用独立标志兜底
+static uint8_t s_fdcan_started[CAN_NUM_MAX] = {0};
 
 /*------------- 私有函数：工具 --------------*/
 
@@ -79,6 +83,36 @@ static int32_t FDCAN_BytesToDlc(uint8_t len)
     if (len <= 64)
         return FDCAN_DLC_BYTES_64;
     return -1;
+}
+
+/**
+ * @brief FDCAN 元素尺寸枚举 → 实际字节数（与 TxElmtSize 越界校验配套）
+ * @param elmt_size HAL 数据元素尺寸枚举（FDCAN_DATA_BYTES_*）
+ * @retval 对应字节数（未知值退回 8，保证按最小值校验不误拒）
+ */
+static uint8_t FDCAN_ElmtSizeToBytes(uint32_t elmt_size)
+{
+    switch (elmt_size)
+    {
+    case FDCAN_DATA_BYTES_8:
+        return 8;
+    case FDCAN_DATA_BYTES_12:
+        return 12;
+    case FDCAN_DATA_BYTES_16:
+        return 16;
+    case FDCAN_DATA_BYTES_20:
+        return 20;
+    case FDCAN_DATA_BYTES_24:
+        return 24;
+    case FDCAN_DATA_BYTES_32:
+        return 32;
+    case FDCAN_DATA_BYTES_48:
+        return 48;
+    case FDCAN_DATA_BYTES_64:
+        return 64;
+    default:
+        return 8;
+    }
 }
 
 /**
@@ -209,12 +243,21 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
                                LOGERROR("[bsp_can] 实例模式为 FD_BRS 但 hfdcan FrameFormat != FD_BRS（CubeMX 配置），控制器未启用 BRS，8 Mbps 数据段时序不会生效!"));
     }
 
-    // 首次配置：硬过滤全通 + 启动外设 + 使能接收/发送中断（HAL_FDCAN_Start 后 State: READY → BUSY）
-    if (hfdcan->State == HAL_FDCAN_STATE_READY)
+    // 首次配置：硬过滤全通 + 启动外设 + 使能接收/发送/错误中断（全部成功后才置位 s_fdcan_started）
+    // 用独立标志而非 HAL State 判断：任一步失败返回后，重试 CANConfig 会重走完整初始化（见下 Stop 归一）
+    if (!s_fdcan_started[instance->can_e])
     {
         FDCAN_InitTypeDef *init = &hfdcan->Init;
         uint32_t active_it = 0;
         uint32_t line0_ints = 0;
+
+        // 上次中途失败可能停在 BUSY（Start 已成功、后续步骤失败）：先停回 READY，
+        // 否则 ConfigGlobalFilter/Start 等 READY 门控的 HAL 调用会再次失败，重试永远不成功
+        if (hfdcan->State == HAL_FDCAN_STATE_BUSY)
+        {
+            BSP_RETURN_IF_TRUE_LOG(HAL_FDCAN_Stop(hfdcan) != HAL_OK, -1,
+                                   LOGERROR("[bsp_can] FDCAN Stop failed, can't retry init (can_e=%d)!", instance->can_e));
+        }
 
         // 发送统一接口走 Tx FIFO（AddMessageToTxFifoQ + GetTxFifoFreeLevel），需 CubeMX 配置
         BSP_RETURN_IF_TRUE_LOG(init->TxFifoQueueElmtsNbr == 0, -1, LOGERROR("[bsp_can] TxFifoQueueElmtsNbr=0! 统一接口发送走 Tx FIFO，请用 CubeMX 配置（TxFifoQueueElmtsNbr>0）"));
@@ -242,6 +285,9 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
 
         BSP_RETURN_IF_TRUE_LOG(HAL_FDCAN_Start(hfdcan) != HAL_OK, -1, LOGERROR("[bsp_can] HAL_FDCAN_Start failed!"));
         BSP_RETURN_IF_TRUE_LOG(HAL_FDCAN_ActivateNotification(hfdcan, active_it, 0) != HAL_OK, -1, LOGERROR("[bsp_can] HAL_FDCAN_ActivateNotification failed!"));
+
+        // 全部初始化步骤成功后才置位：任一步失败返回，标志保持 0，下次 CANConfig 可完整重试
+        s_fdcan_started[instance->can_e] = 1;
     }
 
     return 0;
@@ -251,16 +297,16 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
  * @brief 发送一帧CAN数据
  * @param instance      CAN实例
  * @param pack          数据包（id / frame_type / len / data）
+ * @param timeout_ms    发送资源等待超时（ms）：Tx FIFO 满时最多等待其空闲；传 0 表示不等待，满即失败
  * @param tx_mailbox    出参：本次发送使用的发送标记（FDCAN=MessageMarker 0~31，对应 BxCAN 邮箱索引 0~2）；可为 NULL
  * @param tx_free_level 出参：发送后剩余可发送元素数（Tx FIFO 空闲数）；可为 NULL
  * @retval 0  发送成功
- * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / FIFO 满 / marker 占满 / 加入 FIFO 失败）
+ * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / 等待 FIFO 超时 / marker 占满 / 加入 FIFO 失败）
  */
-int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_mailbox, uint8_t *tx_free_level)
+int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeout_ms, uint32_t *tx_mailbox, uint8_t *tx_free_level)
 {
     FDCAN_HandleTypeDef *hfdcan;
     FDCAN_TxHeaderTypeDef tx_header = {0};
-    uint32_t free_level;
     uint32_t marker = 0;
     uint8_t can_idx;
     uint8_t use_tx_event;
@@ -275,6 +321,14 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_m
     BSP_RETURN_IF_TRUE_LOG(pack->len > 64, -1, LOGERROR("[bsp_can] Length %d exceeds FD max (64)!", pack->len));
     BSP_RETURN_IF_TRUE_LOG(instance->mode == CAN_FRAME_FORMAT_CLASSIC && pack->len > 8, -1,
                            LOGERROR("[bsp_can] Classic mode but len=%d exceeds 8!", pack->len));
+
+    // TxElmtSize 越界硬拒绝：len 超过外设 Tx 元素尺寸时，HAL_FDCAN_AddMessageToTxFifoQ 内部
+    // FDCAN_CopyMessageToRAM 会按 len 越界写 Message RAM（内存破坏），必须硬拒绝而非仅警告
+    {
+        uint8_t elmt_bytes = FDCAN_ElmtSizeToBytes(hfdcan->Init.TxElmtSize);
+        BSP_RETURN_IF_TRUE_LOG(pack->len > elmt_bytes, -1,
+                               LOGERROR("[bsp_can] len=%d exceeds FDCAN TxElmtSize=%d bytes!", pack->len, elmt_bytes));
+    }
 
     // 帧类型与工作模式兼容性检查（FD 帧格式无 RTR 位：非经典模式拒绝远程帧）
     if (FDCAN_CheckFrameTypeCompatible(instance->mode, pack->frame_type) != 0)
@@ -338,9 +392,30 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t *tx_m
     use_tx_event = (hfdcan->Init.TxEventsNbr > 0) ? 1 : 0; // Tx Event FIFO 使能才可溯源
     tx_header.TxEventFifoControl = use_tx_event ? FDCAN_STORE_TX_EVENTS : FDCAN_NO_TX_EVENTS;
 
-    // Tx FIFO 空闲检查（快速失败，避免无效的 marker 分配）
-    free_level = HAL_FDCAN_GetTxFifoFreeLevel(hfdcan);
-    BSP_RETURN_IF_TRUE_LOG(free_level == 0, -1, LOGERROR("[bsp_can] TX FIFO full!"));
+    // Tx FIFO 空闲等待：满则轮询等待其释放（timeout_ms 上限，0 表示不等待、满即失败）。
+    // 无总线信号/对端离线时 FIFO 持续占满（帧发不出去），不能死等，超时返回失败
+    if (HAL_FDCAN_GetTxFifoFreeLevel(hfdcan) == 0)
+    {
+        if (timeout_ms == 0)
+        {
+            LOGERROR("[bsp_can] TX FIFO full!");
+            return -1;
+        }
+        else
+        {
+            uint64_t start_time = DWT_GetTimeUs();
+            uint64_t timeout_us = (uint64_t)timeout_ms * 1000;
+
+            while (HAL_FDCAN_GetTxFifoFreeLevel(hfdcan) == 0)
+            {
+                if ((DWT_GetTimeUs() - start_time) > timeout_us)
+                {
+                    LOGWARNING("[bsp_can] FDCAN Tx FIFO timeout (can_e=%d, id=0x%lX)!", instance->can_e, (unsigned long)pack->id);
+                    return -1;
+                }
+            }
+        }
+    }
 
     // 发送完成溯源：分配 MessageMarker 并先登记（入队后中断可能立即触发）
     if (use_tx_event)
