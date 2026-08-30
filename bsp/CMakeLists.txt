@@ -3,7 +3,8 @@ set(MODULE_SOURCES
     bsp_assert/bsp_assert.c
     bsp_dwt/bsp_dwt.c
     bsp_gpio/bsp_gpio.c
-    bsp_uart_log/bsp_uart_log.c
+    bsp_log/bsp_log_uart.c
+    bsp_log/bsp_log_usb.c
     bsp_math/bsp_math.c
     bsp_math/bsp_math_trig_lut.c
     bsp_crc/bsp_crc.c
@@ -24,7 +25,7 @@ set(MODULE_INCLUDE_DIRS
     bsp_assert
     bsp_dwt
     bsp_gpio
-    bsp_uart_log
+    bsp_log
     bsp_math
     bsp_crc
     bsp_module

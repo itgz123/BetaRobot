@@ -13,7 +13,7 @@
 #if SPI_INSTANCE_NUM > 0
 
 #include "bsp_dwt.h"
-#include "bsp_uart_log.h"
+#include "bsp_log.h"
 
 /*------------- 私有类型定义 --------------*/
 

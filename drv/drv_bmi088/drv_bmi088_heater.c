@@ -90,7 +90,7 @@
 
 #include <string.h>
 #include "bsp_dwt.h"
-#include "bsp_uart_log.h"
+#include "bsp_log.h"
 
 /* 加热控制 */
 #ifdef BMI088_HEAT_USED

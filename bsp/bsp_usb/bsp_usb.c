@@ -27,7 +27,7 @@
  */
 
 #include "bsp_usb.h"
-#include "bsp_uart_log.h"
+#include "bsp_log.h"
 #include "usbd_cdc_if.h"
 #include "usb_device.h"
 #include <string.h>

@@ -14,7 +14,7 @@
 
 #ifdef HAL_UART_MODULE_ENABLED
 
-#include "bsp_uart_log.h"
+#include "bsp_log.h"
 #include "bsp_dwt.h"
 
 // 函数声明
