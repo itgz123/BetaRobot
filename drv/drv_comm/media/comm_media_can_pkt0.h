@@ -3,14 +3,15 @@
  * @brief 通信框架-硬件层（Media）CAN 后端 - 第一字节分包（PKT0）
  *
  * 把 bsp_can 包装成统一"任意长度数据单元"通道，并在 media 层做分包收发：
- *   - 发送：整帧（协议帧）按 7B/片切分，每片前加 1B 分包序号（该片在整个帧的第几包，
- *           0 起递增），每包 = [pkt_idx][数据片 ≤ 7B]（≤8B，经典 CAN 单帧上限）经 CANTransmit 发出；
- *           整帧 ≤ 7B 时单包（pkt_idx=0，DLC=len+1）
- *   - 接收：bsp 收包（≤8B）→ 适配钩子 → 按分包序号连续重组整帧
+ *   - 发送：整帧（协议帧）按数据片切分（CLASSIC 7B / FD 63B），每片前加 1B 分包序号
+ *           （该片在整个帧的第几包，0 起递增），每包 = [pkt_idx][数据片] 经 CANTransmit 发出；
+ *           整帧 ≤ 单片长时单包（pkt_idx=0，DLC=len+1）
+ *   - 接收：bsp 收包 → 适配钩子 → 按分包序号连续重组整帧
  *           → 错位/丢包则丢帧重同步 → CommMediaRxHook（comm 层接收入口）
  * 整帧 = 协议帧（rx/tx size + 协议开销），分包序号不进入协议内容。
  *
- * 适用：通用 bsp_can，经典 CAN 8B 分片，BxCAN(F4) 与 FDCAN(H7) 经典模式均可；
+ * 适用：通用 bsp_can，按 mode 支持经典 CAN 8B 分片（BxCAN(F4) 与 FDCAN(H7) 经典模式均可）
+ *      与 FD 64B 分片（FDCAN 硬件，FrameFormat 须匹配 FD/FD_BRS）；
  *      收发两端编译期约定帧长（固定帧长累积，无末包标志），序号纯递增。
  *
  * @note COMM_DEF 通过 token 拼接 COMM_##media_type_##_DEF 分发到本宏。
@@ -31,28 +32,38 @@
 #define CAN_MEDIA_FRAME_MAX 8
 #endif
 
+/* FD 单帧数据上限（64 字节；FDCAN 硬件） */
+#ifndef CAN_MEDIA_FRAME_MAX_FD
+#define CAN_MEDIA_FRAME_MAX_FD 64
+#endif
+
 /* 发送超时默认值（毫秒；上层可用 CommMediaCanPkt0Config_s.timeout_ms 覆盖） */
 #ifndef CAN_MEDIA_TX_TIMEOUT_MS
 #define CAN_MEDIA_TX_TIMEOUT_MS 10
 #endif
 
-/* 单包数据片上限 = 8 - 1（分包序号） */
-#define CAN_MEDIA_PKT0_PAYLOAD_PER_PKT (CAN_MEDIA_FRAME_MAX - 1) /* 7 */
+/* 单包数据片上限（按 mode）：CLASSIC = 8 - 1（分包序号）；FD = 64 - 1 */
+#define CAN_MEDIA_PKT0_PAYLOAD_CLASSIC (CAN_MEDIA_FRAME_MAX - 1) /* 7 */
+#define CAN_MEDIA_PKT0_PAYLOAD_FD (CAN_MEDIA_FRAME_MAX_FD - 1)   /* 63 */
 
-/* 序号空间上限：序号 0..255（1B） × 每包 7B = 1792 */
-#define CAN_MEDIA_PKT0_MAX_FRAME ((uint16_t)(CAN_MEDIA_PKT0_PAYLOAD_PER_PKT * 256u))
+/* 序号空间上限：序号 0..255（1B） × 每包数据片长（CLASSIC 7B → 1792；FD 63B → 16128） */
+#define CAN_MEDIA_PKT0_MAX_FRAME ((uint16_t)(CAN_MEDIA_PKT0_PAYLOAD_CLASSIC * 256u))
+#define CAN_MEDIA_PKT0_MAX_FRAME_FD ((uint16_t)(CAN_MEDIA_PKT0_PAYLOAD_FD * 256u))
 
 /**
  * @brief CAN PKT0 后端运行期配置（CommConfig 的 media_cfg 指向）
- * @note 收发共用 id_type（标准/扩展帧须一致）；tx_id/rx_id 可设 CAN_ID_UNUSED 表示不发送/不接收
+ * @note 收发共用 frame_type（标准/扩展数据帧须一致）；tx_id/rx_id 可设 CAN_ID_UNUSED 表示不发送/不接收
+ * @note mode 决定每包帧格式与数据片长：CLASSIC(8B)/FD/FD_BRS(64B)；FD 两种需 FDCAN 硬件，
+ *       BxCAN 仅接受 CLASSIC（bsp 层拒绝其余 mode）
  */
 typedef struct
 {
-    BoardCAN_e can_e;         /* 板载 CAN 枚举 */
-    uint32_t tx_id;           /* 发送 ID；CAN_ID_UNUSED(-1) 表示不发送 */
-    uint32_t rx_id;           /* 接收 ID（LIST 精确单 ID）；CAN_ID_UNUSED(-1) 表示不接收 */
-    CANFrameIdType_e id_type; /* 标准/扩展（收发共用），0=标准 */
-    uint32_t timeout_ms;      /* CANTransmit 超时；0 使用默认 CAN_MEDIA_TX_TIMEOUT_MS */
+    BoardCAN_e can_e;            /* 板载 CAN 枚举 */
+    uint32_t tx_id;              /* 发送 ID；CAN_ID_UNUSED(-1) 表示不发送 */
+    uint32_t rx_id;              /* 接收 ID（LIST 精确单 ID）；CAN_ID_UNUSED(-1) 表示不接收 */
+    CAN_Frame_Type_e frame_type; /* 帧类型：仅标准/扩展数据帧（收发共用，须一致） */
+    CAN_Mode_Type_e mode;        /* CAN 帧格式：CLASSIC(8B/帧)/FD/FD_BRS(64B/帧) */
+    uint32_t timeout_ms;         /* CANTransmit 超时；0 使用默认 CAN_MEDIA_TX_TIMEOUT_MS */
 } CommMediaCanPkt0Config_s;
 
 /* CAN 介质派生结构体（首成员必须为 CommMedia 基类，vtable 约定） */
@@ -70,6 +81,12 @@ typedef struct
     uint8_t rx_expect_pkt; /* 期望接收的下一分包序号（帧内 0 起递增；错位说明丢包，丢帧重同步） */
     uint32_t lost_frames;  /* 丢帧计数（分包错位/帧中途丢包累加） */
     uint32_t timeout_ms;   /* CANTransmit 超时（Config 写入；0 使用默认） */
+
+    /* CAN 收发参数（Config 写入） */
+    CAN_Filter_s can_filter;     /* 接收过滤器（每实例一份，Config 填写后指针传给 CANConfig；bsp 为指针存储，须常驻实例） */
+    uint32_t tx_id;              /* 发送 ID；CAN_ID_UNUSED(-1) 表示不发送 */
+    CAN_Frame_Type_e frame_type; /* 帧类型（标准/扩展数据帧；收发共用） */
+    CAN_Mode_Type_e mode;        /* CAN 帧格式：CLASSIC(8B/帧)/FD/FD_BRS(64B/帧)；分包片长与接收防御按此 */
 } CommMediaCanPkt0;
 
 /**
@@ -102,23 +119,24 @@ typedef struct
 /**
  * @brief 注册 CAN PKT0 介质后端（不可重入：仅可调用一次）
  * @param media CommMediaCanPkt0 实例指针（COMM_MEDIA_CAN_PKT0_DEF 定义）
- * @retval 0 成功；-1 参数非法 / 帧长超序号空间 / bsp 注册失败
+ * @retval 0 成功；-1 参数非法 / 帧长超序号空间（FD 上限）/ bsp 注册失败
  *
  * @note 完成 bsp CANRegister（防重复注册）+ 挂 vtable + 建立 can↔media 反向指针
  *       + 清接收累积与序列状态。接收回调由 MediaCanPkt0Config 挂接。
+ *       帧长上限在此放宽到 FD 上限（mode 未定，Config 按所选 mode 精确校验）。
  */
 int8_t MediaCanPkt0Register(CommMediaCanPkt0 *media);
 
 /**
  * @brief 配置 CAN PKT0 介质后端（可重入：可反复调用改参数）
  * @param media CommMediaCanPkt0 实例指针（须先 MediaCanPkt0Register）
- * @param cfg   CommMediaCanPkt0Config_s*（can_e/tx_id/rx_id/id_type/timeout_ms；不可为 NULL）
- * @retval 0 成功；-1 参数非法 / 未注册 / 配置失败
+ * @param cfg   CommMediaCanPkt0Config_s*（can_e/tx_id/rx_id/frame_type/mode/timeout_ms；不可为 NULL）
+ * @retval 0 成功；-1 参数非法 / 未注册 / 帧长超所选 mode 上限 / 配置失败
  *
- * @note 组装 CAN_Config_s 调 bsp CANConfig（LIST 精确单 ID 滤波 + CLASSIC 帧 + tx_len=8，
- *       每包 DLC 由发送路径运行时改写），并强制接管 rx_callback=MediaCanPkt0RxHook、
- *       parent=media（反向指针），保证接收统一进 comm 层接收入口
- *       （CommMediaRxHook）。
+ * @note 组装 CAN_Config_s 调 bsp CANConfig（mode 透传 + LIST 精确单 ID 软件过滤 + parent=media），
+ *       BxCAN 非 CLASSIC / FDCAN FrameFormat 不匹配由 bsp 返回 -1。
+ *       每包 ID/帧类型/len 由发送路径运行时逐包构造；接收经 MediaCanPkt0RxHook
+ *       保证统一进 comm 层接收入口（CommMediaRxHook）。
  */
 int8_t MediaCanPkt0Config(CommMediaCanPkt0 *media, CommMediaCanPkt0Config_s *cfg);
 

@@ -20,10 +20,8 @@
 #include "comm_media_usart.h"
 #include "comm_media_usb.h"
 #include "comm_media_usb_simple.h"
-/* FIXME(bsp_can 枚举合并重构期间临时注释，恢复后改回)
 #include "comm_media_can_pkt0.h"
 #include "comm_media_can_idseq.h"
-*/
 
 #ifdef DRV_COMM_USED
 
@@ -107,7 +105,6 @@ int8_t CommRegister(CommInstance *inst)
         if (MediaUsbSimpleRegister((CommMediaUsbSimple *)inst->media) != 0)
             return -1;
         break;
-    /* FIXME(bsp_can 枚举合并重构期间临时注释，恢复后改回)
     case MEDIA_CAN_PKT0:
         if (MediaCanPkt0Register((CommMediaCanPkt0 *)inst->media) != 0)
             return -1;
@@ -116,7 +113,6 @@ int8_t CommRegister(CommInstance *inst)
         if (MediaCanIdseqRegister((CommMediaCanIdseq *)inst->media) != 0)
             return -1;
         break;
-    */
     default:
         return -1; /* 介质类型未支持 */
     }
@@ -170,7 +166,6 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
         if (MediaUsbSimpleConfig((CommMediaUsbSimple *)inst->media, (USB_Config_s *)cfg->media_cfg) != 0)
             return -1;
         break;
-    /* FIXME(bsp_can 枚举合并重构期间临时注释，恢复后改回)
     case MEDIA_CAN_PKT0:
         if (MediaCanPkt0Config((CommMediaCanPkt0 *)inst->media, (CommMediaCanPkt0Config_s *)cfg->media_cfg) != 0)
             return -1;
@@ -179,7 +174,6 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
         if (MediaCanIdseqConfig((CommMediaCanIdseq *)inst->media, (CommMediaCanIdseqConfig_s *)cfg->media_cfg) != 0)
             return -1;
         break;
-    */
     default:
         return -1; /* 介质类型未支持 */
     }
