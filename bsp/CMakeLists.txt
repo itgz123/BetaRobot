@@ -5,6 +5,7 @@ set(MODULE_SOURCES
     bsp_gpio/bsp_gpio.c
     bsp_log/bsp_log_uart.c
     bsp_log/bsp_log_usb.c
+    bsp_format/bsp_format.c
     bsp_math/bsp_math.c
     bsp_math/bsp_math_trig_lut.c
     bsp_crc/bsp_crc.c
@@ -26,6 +27,7 @@ set(MODULE_INCLUDE_DIRS
     bsp_dwt
     bsp_gpio
     bsp_log
+    bsp_format
     bsp_math
     bsp_crc
     bsp_module
