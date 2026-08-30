@@ -276,6 +276,8 @@ typedef struct
     CANInstance *can;        // CAN 实例指针
     CAN_Filter_s can_filter; // CAN 接收过滤器
     DaemonInstance *daemon;  // 守护进程实例
+
+    uint32_t timeout_ms; // CAN 发送超时(ms)（Config 写入）
 } MotorBase_s;
 
 /*============================================

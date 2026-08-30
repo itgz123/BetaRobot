@@ -25,6 +25,7 @@ typedef struct
     CommMedia base;        /* 基类（首成员） */
     uint8_t *tx_buff;      /* 发送 staging 缓冲（协议分包写入；DMA 异步发送期间须常驻） */
     uint16_t tx_buff_size; /* 发送缓冲大小（= tx payload + 协议开销，DEF 宏写入） */
+    uint32_t timeout_ms;   /* USARTTransmit 超时（Config 写入） */
 } CommMediaUsart;
 
 /**

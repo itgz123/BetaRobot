@@ -37,11 +37,6 @@
 #define CAN_MEDIA_FRAME_MAX_FD 64
 #endif
 
-/* 发送超时默认值（毫秒；上层可用 CommMediaCanPkt0Config_s.timeout_ms 覆盖） */
-#ifndef CAN_MEDIA_TX_TIMEOUT_MS
-#define CAN_MEDIA_TX_TIMEOUT_MS 10
-#endif
-
 /* 单包数据片上限（按 mode）：CLASSIC = 8 - 1（分包序号）；FD = 64 - 1 */
 #define CAN_MEDIA_PKT0_PAYLOAD_CLASSIC (CAN_MEDIA_FRAME_MAX - 1) /* 7 */
 #define CAN_MEDIA_PKT0_PAYLOAD_FD (CAN_MEDIA_FRAME_MAX_FD - 1)   /* 63 */
@@ -63,7 +58,7 @@ typedef struct
     uint32_t rx_id;              /* 接收 ID（LIST 精确单 ID）；CAN_ID_UNUSED(-1) 表示不接收 */
     CAN_Frame_Type_e frame_type; /* 帧类型：仅标准/扩展数据帧（收发共用，须一致） */
     CAN_Mode_Type_e mode;        /* CAN 帧格式：CLASSIC(8B/帧)/FD/FD_BRS(64B/帧) */
-    uint32_t timeout_ms;         /* CANTransmit 超时；0 使用默认 CAN_MEDIA_TX_TIMEOUT_MS */
+    uint32_t timeout_ms;         /* CANTransmit 超时（ms；0 = 不等待资源立即返回失败） */
 } CommMediaCanPkt0Config_s;
 
 /* CAN 介质派生结构体（首成员必须为 CommMedia 基类，vtable 约定） */
@@ -80,7 +75,7 @@ typedef struct
     uint8_t tx_active;     /* 异步分包发送进行中（1 = 上一帧尚未全部发出，拒绝新 Send 重入） */
     uint8_t rx_expect_pkt; /* 期望接收的下一分包序号（帧内 0 起递增；错位说明丢包，丢帧重同步） */
     uint32_t lost_frames;  /* 丢帧计数（分包错位/帧中途丢包累加） */
-    uint32_t timeout_ms;   /* CANTransmit 超时（Config 写入；0 使用默认） */
+    uint32_t timeout_ms;   /* CANTransmit 超时（Config 写入） */
 
     /* CAN 收发参数（Config 写入） */
     CAN_Filter_s can_filter;     /* 接收过滤器（每实例一份，Config 填写后指针传给 CANConfig；bsp 为指针存储，须常驻实例） */

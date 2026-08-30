@@ -17,11 +17,6 @@
 
 #ifdef DRV_COMM_USED
 
-/* 发送超时（ms）：BLOCK 模式 = 整帧发送超时；IT/DMA 模式 = 等待就绪超时 */
-#ifndef MEDIA_USART_TX_TIMEOUT_MS
-#define MEDIA_USART_TX_TIMEOUT_MS 100
-#endif
-
 static int8_t MediaUsartSend(CommMedia *media, const uint8_t *data);
 
 static const CommMediaVTable_s s_usart_vtable = {
@@ -43,7 +38,7 @@ static int8_t MediaUsartSend(CommMedia *media, const uint8_t *data)
     if (usart == NULL)
         return -1;
     memcpy(m->tx_buff, data, m->tx_buff_size);
-    return USARTTransmit(usart, m->tx_buff, m->tx_buff_size, MEDIA_USART_TX_TIMEOUT_MS);
+    return USARTTransmit(usart, m->tx_buff, m->tx_buff_size, m->timeout_ms); /* 完全按 Config 配置的超时时间使用 */
 }
 
 /* bsp 接收适配钩子：收完一段数据，长度校验后直接交给 comm 层接收入口 */
@@ -98,6 +93,8 @@ int8_t MediaUsartConfig(CommMediaUsart *media, USART_Config_s *cfg)
     /* USARTConfig 会写入 config->rx_callback；强制接管为适配钩子，
      * 保证接收统一进 comm 层接收入口（CommMediaRxHook） */
     usart->rx_callback = MediaUsartRxHook;
+
+    media->timeout_ms = cfg->timeout_ms; /* 完全按 Config 配置的超时时间使用 */
     return 0;
 }
 

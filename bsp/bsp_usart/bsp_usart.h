@@ -73,6 +73,7 @@ typedef struct
     USART_Work_Mode_e tx_mode;                   // 发送模式（阻塞/中断/DMA）
     void (*rx_callback)(struct USARTInstance *); // 接收完成回调（可为NULL）
     void (*tx_callback)(struct USARTInstance *); // 发送完成回调（DMA模式，可为NULL）
+    uint32_t timeout_ms;                         // USARTTransmit 发送超时(ms)；0 = 不等待就绪立即返回
 } USART_Config_s;
 
 /*------------- 外部接口声明 --------------*/

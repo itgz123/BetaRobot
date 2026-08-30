@@ -25,7 +25,6 @@
 #define BMI088_WRITE_CHECK_INIT_S 0.001f       // 写验证初始等待    (1ms, DWT_Delay微秒)
 #define BMI088_WRITE_CHECK_TIMEOUT_US 10000    // 写验证超时时间   (10ms, DWT_GetTimeUs微秒比较)
 #define BMI088_CS_RELEASE_DELAY_S 0.08f        // CS释放后等待时间(s)
-#define BMI088_SPI_IT_TIMEOUT_MS 10            // SPI IT传输超时(ms)
 #define SPI_BLOCK_TIMEOUT_MS 100               // SPI BLOCK传输超时(ms)
 #define BMI088_TEMP_UPDATE_INTERVAL_US 1280000 // 温度读取间隔 (1.28s，数据手册§5.3.7)
 
@@ -239,7 +238,7 @@ static void BMI088_StartSensorDMA(BMI088Instance *inst, uint8_t sensor_type)
     }
 
     GPIOReset(cs);
-    SPITransmitReceive(inst->spi_inst, inst->tx_buff, inst->tx_len, BMI088_SPI_IT_TIMEOUT_MS);
+    SPITransmitReceive(inst->spi_inst, inst->tx_buff, inst->tx_len, inst->spi_timeout_ms);
 }
 
 /**
@@ -710,6 +709,7 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
     inst->gyro_range = config->gyro_range;
     inst->gyro_conf = config->gyro_conf;
     inst->work_mode = config->work_mode;
+    inst->spi_timeout_ms = config->spi_timeout_ms; /* 完全按 Config 配置的超时时间使用 */
 
     // 配置 SPI 阻塞模式（AccInit/GyroInit 使用阻塞传输）
     SPI_Config_s spi_cfg = {
