@@ -76,6 +76,7 @@ typedef struct
     BMI088_GyroRange_e gyro_range;    // 陀螺仪量程
     BMI088_GyroConf_e gyro_conf;      // 陀螺仪 ODR+BW 组合配置（见 BMI088_GyroConf_e）
     BMI088_WorkMode_e work_mode;      // 工作模式（轮询/中断）
+    uint32_t spi_timeout_ms;          // SPI IT/DMA 传输超时(ms)
 } BMI088_Config_s;
 /**
  * @brief IMU 数据结构体
@@ -133,6 +134,8 @@ typedef struct BMI088Instance
     /* 发送缓冲区 */
     uint8_t *tx_buff; // 发送缓冲区指针
     uint8_t tx_len;   // 发送数据长度
+
+    uint32_t spi_timeout_ms; // SPI IT/DMA 传输超时(ms)（Config 写入）
 
     /* 加速度计配置 */
     BMI088_AccRange_e acc_range; // 量程

@@ -27,8 +27,6 @@
 #include "bsp_math.h"
 #include <string.h>
 
-#define CAN_TRANSMIT_TIMEOUT 1
-
 /* RS05 默认量程（用户 Config 传 0 时自动采用） */
 #define RS_DEFAULT_POS_MAX 12.57f  // 位置范围 ±12.57 rad
 #define RS_DEFAULT_VEL_RANGE 50.0f // 速度范围 ±50 rad/s
@@ -112,7 +110,7 @@ void RSMotor_SendModeCmd(void *inst, uint8_t cmd)
     CAN_Pack_s pack = {.id = motor->can_id, .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
     memset(pack.data, 0xFF, 7);
     pack.data[7] = cmd;
-    CANTransmit(can, &pack, CAN_TRANSMIT_TIMEOUT, NULL, NULL);
+    CANTransmit(can, &pack, motor->base.timeout_ms, NULL, NULL);
 }
 
 /*============================================
@@ -142,7 +140,7 @@ void RSMotor_ChangeCanID(void *inst, uint16_t can_id)
     memset(pack.data, 0xFF, 6);          // 前 6 字节固定 0xFF
     pack.data[6] = (uint8_t)can_id;      // Byte6 = 新电机 id
     pack.data[7] = RS_CMD_CHANGE_CAN_ID; // Byte7 = 指令7 (0xFA)
-    CANTransmit(can, &pack, CAN_TRANSMIT_TIMEOUT, NULL, NULL);
+    CANTransmit(can, &pack, motor->base.timeout_ms, NULL, NULL);
 }
 
 void RSMotor_ChangeMasterCanID(void *inst, uint16_t can_id)
@@ -159,7 +157,7 @@ void RSMotor_ChangeMasterCanID(void *inst, uint16_t can_id)
     memset(pack.data, 0xFF, 6);             // 前 6 字节固定 0xFF
     pack.data[6] = (uint8_t)can_id;         // Byte6 = 新主机 id
     pack.data[7] = RS_CMD_CHANGE_MASTER_ID; // Byte7 = 指令9 (0x01)
-    CANTransmit(can, &pack, CAN_TRANSMIT_TIMEOUT, NULL, NULL);
+    CANTransmit(can, &pack, motor->base.timeout_ms, NULL, NULL);
 }
 
 /*============================================
@@ -467,6 +465,7 @@ int8_t RSMotorConfig(RSMotorInstance *inst, RSMotor_Config_s *cfg)
     inst->base.model = cfg->model;
     inst->can_id = cfg->can_id;
     inst->master_id = cfg->master_id;
+    inst->base.timeout_ms = cfg->timeout_ms; /* 完全按 Config 配置的超时时间使用 */
     inst->base.position_offset = cfg->position_offset; // 位置偏置
 
     /* 控制器设置 */
@@ -726,7 +725,7 @@ void RSMotor_Send(void *inst)
     cf->parts.kd_lo_and_tff_hi = (uint8_t)(((kd & 0xF) << 4) | ((t_ff >> 8) & 0xF));
     cf->parts.tff_lo = (uint8_t)(t_ff & 0xFF);
 
-    CANTransmit(motor->base.can, &pack, CAN_TRANSMIT_TIMEOUT, NULL, NULL);
+    CANTransmit(motor->base.can, &pack, motor->base.timeout_ms, NULL, NULL);
 }
 
 #endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */

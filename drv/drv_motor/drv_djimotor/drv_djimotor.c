@@ -9,8 +9,6 @@
 #include "bsp_math.h"
 #include <string.h>
 
-#define CAN_TRANSMIT_TIMEOUT 1
-
 /*
  * ============================================
  *              DJI 电机分组策略说明
@@ -404,6 +402,7 @@ int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
     // 保存电机参数
     inst->base.model = cfg->model;
     inst->motor_id = cfg->motor_id;
+    inst->base.timeout_ms = cfg->timeout_ms; /* 完全按 Config 配置的超时时间使用 */
     inst->base.setting = cfg->controller_setting;
     inst->base.position_offset = cfg->position_offset; // 位置偏置
 
@@ -631,9 +630,10 @@ void DJIMotor_Send(void *inst)
     // 因此需要收集组内所有不同的 tx_id，分别打包发送
     // 发送时使用组内对应 tx_id 的电机的 CAN 实例，避免修改 tx_id
 
-    // Step 1: 收集组内不同的 tx_id 及对应的 CAN 实例
+    // Step 1: 收集组内不同的 tx_id 及对应的 CAN 实例/超时
     uint16_t tx_ids[4] = {0};
     CANInstance *tx_cans[4] = {NULL};
+    uint32_t tx_timeouts[4] = {0};
     uint8_t tx_id_count = 0;
 
     for (int i = 0; i < 4; i++)
@@ -654,6 +654,7 @@ void DJIMotor_Send(void *inst)
             {
                 tx_ids[tx_id_count] = id;
                 tx_cans[tx_id_count] = group->motors[i]->base.can;
+                tx_timeouts[tx_id_count] = group->motors[i]->base.timeout_ms;
                 tx_id_count++;
             }
         }
@@ -686,7 +687,7 @@ void DJIMotor_Send(void *inst)
             frame->raw[i * 2 + 1] = (uint8_t)(cur & 0xFF);
         }
 
-        CANTransmit(tx_can, &pack, CAN_TRANSMIT_TIMEOUT, NULL, NULL);
+        CANTransmit(tx_can, &pack, tx_timeouts[t], NULL, NULL); /* 该帧所属电机实例的 Config 超时 */
     }
 }
 

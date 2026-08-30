@@ -39,11 +39,6 @@
 #define CAN_MEDIA_FRAME_MAX_FD 64
 #endif
 
-/* 发送超时默认值（毫秒；上层可用 CommMediaCanIdseqConfig_s.timeout_ms 覆盖） */
-#ifndef CAN_MEDIA_TX_TIMEOUT_MS
-#define CAN_MEDIA_TX_TIMEOUT_MS 10
-#endif
-
 /**
  * @brief CAN IDSEQ 后端运行期配置（CommConfig 的 media_cfg 指向）
  * @note 收发共用同一 ID 段（base_id + seq）；Config 校验：frame_type 数据帧、mode 三种合法值、
@@ -56,7 +51,7 @@ typedef struct
     uint32_t base_id;            /* 收发基址（ID 段起点）：分包序号加到基址上（id = base_id + seq） */
     CAN_Frame_Type_e frame_type; /* 帧类型：仅标准/扩展数据帧（收发共用，须一致） */
     CAN_Mode_Type_e mode;        /* CAN 帧格式：CLASSIC(8B/帧)/FD/FD_BRS(64B/帧) */
-    uint32_t timeout_ms;         /* CANTransmit 超时；0 使用默认 CAN_MEDIA_TX_TIMEOUT_MS */
+    uint32_t timeout_ms;         /* CANTransmit 超时（ms；0 = 不等待资源立即返回失败） */
 } CommMediaCanIdseqConfig_s;
 
 /* CAN IDSEQ 介质派生结构体（首成员必须为 CommMedia 基类，vtable 约定） */
@@ -73,7 +68,7 @@ typedef struct
     uint8_t tx_active;      /* 异步分包发送进行中（1 = 上一帧尚未全部发出，拒绝新 Send 重入） */
     uint32_t rx_expect_pkt; /* 期望接收的下一分包序号（序号段大小可 >255，用 uint32_t） */
     uint32_t lost_frames;   /* 丢帧计数（分包错位/帧中途丢包累加） */
-    uint32_t timeout_ms;    /* CANTransmit 超时（Config 写入；0 使用默认） */
+    uint32_t timeout_ms;    /* CANTransmit 超时（Config 写入） */
     uint32_t base_id;       /* 收发基址（ID 段起点；Config 写入） */
 
     /* CAN 收发参数（Config 写入） */

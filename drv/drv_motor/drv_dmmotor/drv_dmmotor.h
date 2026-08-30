@@ -209,6 +209,8 @@ typedef struct
     /* daemon 设置 */
     uint16_t reload_count;            // 重载值（喂狗超时阈值）
     DaemonFaultAction_e fault_action; // 离线故障动作
+
+    uint32_t timeout_ms; // CAN 发送超时(ms)
 } DMMotor_Config_s;
 
 /*============================================

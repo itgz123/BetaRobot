@@ -267,7 +267,7 @@ int8_t MediaCanPkt0Config(CommMediaCanPkt0 *media, CommMediaCanPkt0Config_s *cfg
     media->tx_id = cfg->tx_id;
     media->frame_type = cfg->frame_type;
     media->mode = cfg->mode;
-    media->timeout_ms = (cfg->timeout_ms != 0) ? cfg->timeout_ms : CAN_MEDIA_TX_TIMEOUT_MS;
+    media->timeout_ms = cfg->timeout_ms; /* 完全按 Config 配置的超时时间使用 */
     return 0;
 }
 
