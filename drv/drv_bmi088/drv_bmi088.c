@@ -13,7 +13,7 @@
 
 #include <string.h>
 #include "bsp_dwt.h"
-#include "bsp_uart_log.h"
+#include "bsp_log.h"
 #include "drv_bmi088_heater.h"
 
 /* 基于数据手册的专用延时宏 */

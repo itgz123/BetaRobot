@@ -18,7 +18,7 @@
 #if BSP_CAN_IP == BSP_CAN_IP_FDCAN
 
 #include "bsp_assert.h"
-#include "bsp_uart_log.h"
+#include "bsp_log.h"
 #include "bsp_dwt.h"
 
 /*------------- 私有宏 --------------*/
