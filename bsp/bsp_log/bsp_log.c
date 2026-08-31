@@ -194,6 +194,7 @@ void BSPLogInit(void)
         .timeout_ms = 0,
     };
     USARTConfig(&s_log_uart, &cfg);
+    BSPLOG(&g_log, LOG_LEVEL_INFO, "你好！"); // 测试中文（需要指定文件编码和串口接收都是UTF-8）
 }
 
 void BSPLogInitInstance(LOGInstance *inst, LOG_Config_s *cfg)
