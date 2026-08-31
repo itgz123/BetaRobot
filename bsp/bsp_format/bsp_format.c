@@ -2,7 +2,7 @@
  * @file bsp_format.c
  * @brief BSP 层快速格式化实现（零除法整数转换）
  *
- * @note 仅支持整数转换说明 %d %u %x %X 与固定宽度（见 bsp_format.h）。
+ * @note 支持整数 %d %u %x %X 与字符串 %s，均可带固定宽度（见 bsp_format.h）。
  *       对外只暴露 BSPFormatEx 一个函数（BSPFORMAT 宏内部调用）。
  *       十进制整数转换全程零除法指令：
  *       - 千分位分块查表：uint32 拆成最多 4 组 3 位数，每组各查一次
@@ -172,6 +172,28 @@ static int BSPFmtV(char *out, size_t cap, const char *fmt, size_t fmt_len, va_li
         case 'X':
             numlen = BSPU32ToHex(va_arg(args, uint32_t), numbuf, (spec == 'X'));
             break;
+        case 's':
+        {
+            const char *s = va_arg(args, const char *);
+            int n = 0;
+
+            if (s == NULL)
+            {
+                s = "(null)"; /* NULL 安全 */
+            }
+            /* 宽度语义同数字：超过 width 保留前 width 个，0 表示无限制 */
+            while (*s != '\0' && (width == 0 || n < width))
+            {
+                if (pos + 1 < cap)
+                {
+                    out[pos] = *s;
+                }
+                pos++;
+                n++;
+                s++;
+            }
+            continue; /* 不走数字输出段 */
+        }
         default:
             /* 未支持的转换说明：按字面输出该字符（容错，不崩） */
             if (pos + 1 < cap)
@@ -215,13 +237,18 @@ static int BSPFmtV(char *out, size_t cap, const char *fmt, size_t fmt_len, va_li
     return (int)pos;
 }
 
+int BSPFormatV(char *out, size_t cap, const char *fmt, size_t fmt_len, va_list args)
+{
+    return BSPFmtV(out, cap, fmt, fmt_len, args);
+}
+
 int BSPFormatEx(char *out, size_t cap, const char *fmt, size_t fmt_len, ...)
 {
     va_list args;
     int n;
 
     va_start(args, fmt_len);
-    n = BSPFmtV(out, cap, fmt, fmt_len, args);
+    n = BSPFormatV(out, cap, fmt, fmt_len, args);
     va_end(args);
     return n;
 }
