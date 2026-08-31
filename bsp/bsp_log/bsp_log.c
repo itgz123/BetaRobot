@@ -64,7 +64,8 @@ static const char *s_level_color[] = {
 
 /* 各级别累计日志条数（全局，跨所有实例；借用成功即计入，含排队；限频/池满丢弃不计） */
 uint64_t level_cnt[LOG_LEVEL_NUM];
-static log_buf_s s_log_buf[LOG_BUF_NUM];
+/* DMA 直接读取缓冲，须放 DMA 可访问 RAM（H7 上 .ram_d1，见 bsp_map.h 的 DMA_RAM） */
+static log_buf_s s_log_buf[LOG_BUF_NUM] DMA_RAM = {0};
 USART_INSTANCE_DEF(s_log_uart, 1);          /* 日志串口实例（TX DMA 完成中断回调 = LogUartTxCplt） */
 static volatile log_buf_s *s_tx_buf = NULL; /* 当前 DMA 发送中的缓冲（完成回调里归还并调度下一个） */
 

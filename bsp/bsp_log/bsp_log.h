@@ -15,8 +15,9 @@
  *     log_buf_s 结构体；DMA 完成回调 LogUartTxCplt 归还缓冲并调度下一个。
  *     公共归还接口：BSPLogBufRelease()（DMA 完成后调用，避免池耗尽）。
  *
- * BSPLOG 在 BSP_LOG_USED 定义时把参数透传给核心实现 BSPLogV()（bsp_log.c，
- * 限频/组装/发送都在 .c 里做）；BSP_LOG_USED 未定义时 BSPLOG 为空宏，日志关闭。
+ * BSPLOG 在 BSP_LOG_USED 与 LOG_UART 均定义时把参数透传给核心实现 BSPLogV()
+ * （bsp_log.c，限频/组装/发送都在 .c 里做）；任一未定义时 BSPLOG 为空宏、
+ * 初始化函数为空实现，日志关闭（与 bsp_log.c 的 #if 实现条件保持一致）。
  *
  * 用法：
  *     BSPLogInit();                            // 内含默认实例 g_log 的初始化
@@ -127,35 +128,24 @@ typedef struct
  * @note 须在 .c 文件作用域或函数内使用：LOG_INSTANCE_DEF(g_motor);
  *       使用 BSPLOG 时传 &变量名。
  */
+/* 静态分配日志实例：日志关闭（BSP_LOG_USED 或 LOG_UART 未定义）时为空宏，
+ * 不分配 LOGInstance，零 RAM 占用 */
+#if (defined(BSP_LOG_USED)) && (defined(LOG_UART))
 #define LOG_INSTANCE_DEF(name) static LOGInstance name = {0}
+#else
+#define LOG_INSTANCE_DEF(name)
+#endif
 
 /*============ 外部接口（3 个） ============*/
+
+#if (defined(BSP_LOG_USED)) && (defined(LOG_UART))
+/*============ 日志宏 ============*/
 
 /* 默认日志实例（bsp_log.c 定义，BSPLogInit 初始化为模块名 "log"、不限频）：
  * 免 LOG_INSTANCE_DEF/BSPLogInitInstance 样板，直接 BSPLOG(&g_log, ...) 使用；
  * 多实例按需仍可自行 LOG_INSTANCE_DEF + BSPLogInitInstance。 */
 extern LOGInstance g_log;
 extern uint64_t level_cnt[LOG_LEVEL_NUM];
-
-/**
- * @brief 初始化日志系统依赖的 bsp 相关外设
- * @note DWT 高精度时间戳由启动流程（DWT_Init）初始化，本接口预留；
- *       后续如需日志侧统一初始化 bsp 外设，可在此实现。
- */
-void BSPLogInit(void);
-
-/**
- * @brief 配置日志实例
- * @param inst 实例
- * @param cfg  配置结构体：module_name（模块名，拷贝进定长数组，超长截断）、
- *             times_per_second（每秒最大条数，0 = 不限，上限 255）；可为 NULL
- * @note 限频为 1 秒窗口：窗口内计数达到 times_per_second 后，后续日志被丢弃，
- *       直到距 last_timestamp_us 满 1 秒重置。须在 DWT 初始化（BSPLogInit）后调用。
- */
-void BSPLogInitInstance(LOGInstance *inst, LOG_Config_s *cfg);
-
-#if defined(BSP_LOG_USED)
-/*============ 日志宏 ============*/
 
 /* 级别过滤判断宏：level 低于 LOG_FILTER_LEVEL 返回真（本条剔除）。
  * LOG_FILTER_LEVEL 为编译期常量、level 为调用点字面量枚举值，
@@ -177,11 +167,32 @@ void BSPLogV(LOGInstance *inst, LOG_LEVEL level, const char *fmt, ...);
         BSPLogV((inst), (level), (fmt), ##__VA_ARGS__); \
     } while (0)
 
-#else /* !defined(BSP_LOG_USED) */
+/**
+ * @brief 初始化日志系统依赖的 bsp 相关外设
+ * @note DWT 高精度时间戳由启动流程（DWT_Init）初始化，本接口预留；
+ *       后续如需日志侧统一初始化 bsp 外设，可在此实现。
+ */
+void BSPLogInit(void);
 
+/**
+ * @brief 配置日志实例
+ * @param inst 实例
+ * @param cfg  配置结构体：module_name（模块名，拷贝进定长数组，超长截断）、
+ *             times_per_second（每秒最大条数，0 = 不限，上限 255）；可为 NULL
+ * @note 限频为 1 秒窗口：窗口内计数达到 times_per_second 后，后续日志被丢弃，
+ *       直到距 last_timestamp_us 满 1 秒重置。须在 DWT 初始化（BSPLogInit）后调用。
+ */
+void BSPLogInitInstance(LOGInstance *inst, LOG_Config_s *cfg);
+
+#else /* 日志关闭：BSP_LOG_USED 或 LOG_UART 未定义（与 bsp_log.c 的 #if 一致） */
+
+/* 日志实例未分配（LOG_INSTANCE_DEF 为空宏），故 BSPLogInitInstance/BSPLogInit
+ * 均无实例/外设可初始化，定义为空宏吃掉调用点；关闭态 3 个接口全是空宏，零代码零 RAM。 */
 #define BSPLOG(inst, level, fmt, ...) ((void)0)
+#define BSPLogInitInstance(inst, cfg) ((void)0)
+#define BSPLogInit() ((void)0)
 
-#endif /* BSP_LOG_USED */
+#endif /* (defined(BSP_LOG_USED)) && (defined(LOG_UART)) */
 
 /* 以下之后删除（兼容旧宏：无实例参数。当前为空宏占位，不输出日志；
  * 调用点后续统一迁移到 BSPLOG(inst, level, ...) 后删除） */
