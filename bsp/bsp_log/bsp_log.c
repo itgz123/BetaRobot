@@ -30,23 +30,7 @@
 #include <stdarg.h>
 #include <string.h>
 
-/*============ 内部查表 ============*/
-/* 裸标签（[D]/[I]/[W]/[E]，宏里用 %s 包裹进 []） */
-static const char *s_level_str[] = {
-    "D",
-    "I",
-    "W",
-    "E",
-};
-
-static const char *s_level_color[] = {
-    BSP_LOG_COLOR_BLUE,
-    BSP_LOG_COLOR_GREEN,
-    BSP_LOG_COLOR_YELLOW,
-    BSP_LOG_COLOR_RED,
-};
-
-/*============ 缓冲池（静态区） ============*/
+// 结构体，枚举
 typedef enum : uint8_t
 {
     LOG_BUF_FREE = 0,  /* 空闲：可借出 */
@@ -55,7 +39,6 @@ typedef enum : uint8_t
     LOG_BUF_WAIT_SEND, /* 等待发送：发送完成回调会扫描s_buf_state，如果有待发送就发送 */
 } LOG_BUF_STATE;
 
-/*============ uart相关 ============*/
 typedef struct
 {
     char buf_pool[LOG_LEN_MAX];       /* 生命周期长，DMA 直接读取 */
@@ -63,6 +46,24 @@ typedef struct
     uint16_t buf_len;                 /* 每缓冲有效长度：WAIT_SEND 出队发送时需要 */
 } log_buf_s;
 
+// 静态变量
+/*============ 内部查表 ============*/
+/* 裸标签（[D]/[I]/[W]/[E]，宏里用 %s 包裹进 []） */
+static const char *s_level_str[] = {
+    "D",
+    "I",
+    "W",
+    "E",
+};
+static const char *s_level_color[] = {
+    BSP_LOG_COLOR_BLUE,
+    BSP_LOG_COLOR_GREEN,
+    BSP_LOG_COLOR_YELLOW,
+    BSP_LOG_COLOR_RED,
+};
+
+/* 各级别累计日志条数（全局，跨所有实例；借用成功即计入，含排队；限频/池满丢弃不计） */
+uint64_t level_cnt[LOG_LEVEL_NUM];
 static log_buf_s s_log_buf[LOG_BUF_NUM];
 USART_INSTANCE_DEF(s_log_uart, 1);          /* 日志串口实例（TX DMA 完成中断回调 = LogUartTxCplt） */
 static volatile log_buf_s *s_tx_buf = NULL; /* 当前 DMA 发送中的缓冲（完成回调里归还并调度下一个） */
@@ -215,6 +216,7 @@ void BSPLogInitInstance(LOGInstance *inst, LOG_Config_s *cfg)
 
     inst->times_per_second = (cfg != NULL) ? cfg->times_per_second : 0;
     inst->log_cnt = 0;
+    memset(inst->level_cnt, 0, sizeof(inst->level_cnt)); /* 本实例计数归零（重初始化即清零；全局统计不受影响） */
     /* 窗口起点记为 init 时刻：1 秒窗口从配置时刻开始计算 */
     inst->last_timestamp_us = DWT_GetTimeUs();
 }
@@ -249,6 +251,16 @@ void BSPLogV(LOGInstance *inst, LOG_LEVEL level, const char *fmt, ...)
     {
         return; /* 池满：丢弃本条 */
     }
+
+    /* 各级别累计计数（借用成功即计入；限频/池满丢弃不计；非法级别钳制到 ERROR）：
+     * 本实例计数 + 全局统计都 +1 */
+    if ((unsigned int)level > (unsigned int)LOG_LEVEL_ERROR)
+    {
+        level = LOG_LEVEL_ERROR;
+    }
+    inst->level_cnt[level]++;
+    level_cnt[level]++;
+
     buf = lb->buf_pool;
 
     /* 直接格式化进静态缓冲（不占调用方栈）：头部固定段一次模板格式化，

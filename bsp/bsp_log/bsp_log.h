@@ -5,10 +5,11 @@
  * 分层设计：
  *   - 日志层（本文件 + bsp_log.c）：负责分级、过滤、限频、时间戳与格式串
  *     组装（"[分级][时间戳][模块名]:内容"），借用静态池缓冲格式化后直接
- *     交日志串口 DMA 发送。对外只提供 3 个接口：
- *       ① BSPLogInit()          初始化 bsp 相关外设（DWT 时间戳 + 日志串口）
- *       ② BSPLogInitInstance()  配置一个日志实例（模块名 + 限频）
+ *     交日志串口 DMA 发送。对外只提供 4 个接口：
+ *       ① BSPLogInit()            初始化 bsp 相关外设（DWT 时间戳 + 日志串口）
+ *       ② BSPLogInitInstance()    配置一个日志实例（模块名 + 限频）
  *       ③ BSPLOG(inst, level, fmt, ...)  宏：发送一条日志
+ *       ④ BSPLogGetLevelCount()   读取某级别累计日志条数（全局统计）
  *   - 传输（bsp_log.c 内实现）：UART DMA 直接发送 + 缓冲池状态机调度。
  *     借用/提交/出队均内联在 bsp_log.c，池槽 data/state/len 集中在
  *     log_buf_s 结构体；DMA 完成回调 LogUartTxCplt 归还缓冲并调度下一个。
@@ -71,6 +72,7 @@ typedef enum
     LOG_LEVEL_INFO,
     LOG_LEVEL_WARNING,
     LOG_LEVEL_ERROR,
+    LOG_LEVEL_NUM, /* 级别个数：供 level_cnt 计数数组定长，勿作实际级别使用 */
 } LOG_LEVEL;
 
 /* 全局过滤级别：级别 < 此值的日志不发送（编译期常量，-O 下整条剔除） */
@@ -110,6 +112,7 @@ typedef struct
     uint8_t times_per_second;              /* 每秒最大条数，0 = 不限频（上限 255） */
     uint8_t log_cnt;                       /* 计次：本 1 秒窗口内已发送条数 */
     uint64_t last_timestamp_us;            /* 时间戳：上一次记录窗口起点的 us 值 */
+    uint64_t level_cnt[LOG_LEVEL_NUM];     /* 本实例各级别累计日志条数（借用成功即计入，含排队；限频/池满丢弃不计） */
 } LOGInstance;
 
 typedef struct
@@ -132,6 +135,7 @@ typedef struct
  * 免 LOG_INSTANCE_DEF/BSPLogInitInstance 样板，直接 BSPLOG(&g_log, ...) 使用；
  * 多实例按需仍可自行 LOG_INSTANCE_DEF + BSPLogInitInstance。 */
 extern LOGInstance g_log;
+extern uint64_t level_cnt[LOG_LEVEL_NUM];
 
 /**
  * @brief 初始化日志系统依赖的 bsp 相关外设
