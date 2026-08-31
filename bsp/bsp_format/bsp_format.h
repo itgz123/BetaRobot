@@ -3,24 +3,25 @@
  * @brief BSP 层快速格式化模块（零除法整数转换）
  *
  * @note 目标场景：日志系统的"编译期固定字符串 + 整数"快速格式化。
- *       仅支持整数转换说明 %d %u %x %X 与固定宽度；字符串不进格式化
- *       （由日志宏在编译期拼接）。对外只暴露一个宏 BSPFORMAT 和它内部
- *       调用的一个函数 BSPFormatEx。
+ *       支持整数转换说明 %d %u %x %X 与字符串 %s，均可带固定宽度。
+ *       对外只暴露一个宏 BSPFORMAT 和它内部调用的一个函数 BSPFormatEx。
  *       十进制整数转换全程零除法：低位(<1000) 查 3 位 flash 表，
  *       高位用分层减法剥离（每级最多 9 次减法）。十六进制用位运算。
  *       不依赖 libc 的 snprintf/vsnprintf。
  *
- * 支持的转换说明（仅 4 种）：
+ * 支持的转换说明（5 种）：
  *   %d  有符号十进制整数
  *   %u  无符号十进制整数
  *   %x  十六进制小写
  *   %X  十六进制大写
+ *   %s  字符串（const char*；NULL 安全，输出 "(null)"）
  *
  * 宽度：作为最大输出长度，如 %5d / %8x：整个数字串（含负号）超过
  *       width 个字符时，从高位截断保留 width 个；不超过则原样输出
- *       （不补空格/零）。width == 0（不写宽度）表示无限制。
+ *       （不补空格/零）。字符串同理：%s 超过 width 个字符时保留前
+ *       width 个，不补空格/零。width == 0（不写宽度）表示无限制。
  *
- * 明确不支持：%s %c %i %% %f %p 及 flags(-/0/+/空格/#)、长度修饰符(h/l/ll/...)、
+ * 明确不支持：%c %i %% %f %p 及 flags(-/0/+/空格/#)、长度修饰符(h/l/ll/...)、
  *   精度(.N)、动态宽度(*)。未支持的转换说明按字面输出该字符（容错，不崩）；
  *   注意格式串中若出现 %%，两个 % 都会按字面输出。
  *
@@ -47,6 +48,13 @@
  * @note 一般不应直接调用，统一通过 BSPFORMAT 宏（fmt 为字面量时免运行期 strlen）。
  */
 int BSPFormatEx(char *out, size_t cap, const char *fmt, size_t fmt_len, ...);
+
+/**
+ * @brief va_list 版本：供日志层 BSPLogV 等已持有 va_list 的实现调用
+ * @param args 已 va_start 的变参列表（调用者负责 va_end）
+ * @return 同 BSPFormatEx
+ */
+int BSPFormatV(char *out, size_t cap, const char *fmt, size_t fmt_len, va_list args);
 
 /**
  * @brief 编译期固定格式串宏：fmt 为字面量时，sizeof(fmt)-1 在编译期求出，
