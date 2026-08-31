@@ -297,6 +297,10 @@ target_compile_options(${TARGET_NAME} PRIVATE
     -Wall
     -fdata-sections
     -ffunction-sections
+    # 源文件与字符串常量统一 UTF-8：支持中文日志（如 BSPLOG(...,"你好！")），
+    # 编译出的字符串是 UTF-8 字节，串口按 UTF-8 接收/显示即可正确呈现
+    $<$<COMPILE_LANGUAGE:C>:-finput-charset=UTF-8>
+    $<$<COMPILE_LANGUAGE:C>:-fexec-charset=UTF-8>
     $<$<CONFIG:Debug>:-Og>
     $<$<CONFIG:Debug>:-g>
     $<$<CONFIG:Debug>:-gdwarf-2>
