@@ -3,17 +3,23 @@
  * @brief BSP 层快速格式化实现（零除法整数转换）
  *
  * @note 支持整数 %d %u %x %X 与字符串 %s，均可带固定宽度（见 bsp_format.h）。
+ *       整数默认 32 位（int/uint32_t，8/16 位参数经默认整数提升可用）；
+ *       带 l/ll 长度修饰符（%lld/%llu/%llx 等）按 64 位（int64_t/uint64_t）读取。
  *       对外只暴露 BSPFormatEx 一个函数（BSPFORMAT 宏内部调用）。
  *       十进制整数转换全程零除法指令：
- *       - 千分位分块查表：uint32 拆成最多 4 组 3 位数，每组各查一次
+ *       - 千分位分块查表：拆成最多 7 组 3 位数，每组各查一次
  *         flash 表 BSP_DEC3 拼出字符串，O(1) 恒定时间
- *       - 拆组用 /1000 与 %1000：除数为常量时编译器生成魔数乘法+移位
+ *       - 32 位拆组用 /1000 与 %1000：除数为常量时编译器生成魔数乘法+移位
  *         （umull/lsr/mls），不调用 __aeabi_uidiv、无 udiv 除法指令
+ *       - 64 位拆组用 BSP_Math_U64DivMod1000（bsp_math/bsp_math_int64.h）：
+ *         手写 64 位高半乘法（4 次 umull + 进位累加）+ 魔数 floor(2^64/125)，
+ *         同样零除法指令、不调用 __aeabi_uldivmod
  *       十六进制：每 4 bit 查 16 字符表 + 右移，天然零除法。
  *       负数：判符号位后用 0u - (uint32_t)val 取绝对值，同样零除法。
  */
 
 #include "bsp_format.h"
+#include "bsp_math_int64.h"
 
 /*============================================
  *              查表常量
@@ -102,6 +108,76 @@ static int BSPU32ToHex(uint32_t val, char *buf, int upper)
     return i;
 }
 
+/**
+ * @brief uint64 转十进制（零除法指令），写入 buf，返回字符数
+ * @param buf 至少 21 字节
+ * @note 思路同 BSPU32ToDec：千分位分块查表，uint64 < 1000^7 ≈ 1e21，最多 7 组；
+ *       拆组用 BSP_Math_U64DivMod1000（bsp_math_int64.h 手写 64 位魔数除法，
+ *       基于高半乘法 BSP_Math_UMulH），零除法指令、无库调用。
+ */
+static int BSPU64ToDec(uint64_t val, char *buf)
+{
+    uint64_t g[7]; /* 千分组（低位在前），uint64 < 1000^7 */
+    int n = 0;
+
+    while (val >= 1000u)
+    {
+        val = BSP_Math_U64DivMod1000(val, &g[n++]); /* 商写回 val，余数入 g */
+    }
+    g[n++] = val;
+
+    int out = 0;
+    for (int i = n - 1; i >= 0; i--)
+    {
+        const char *s = BSP_DEC3[(size_t)g[i]];
+        if (i == n - 1)
+        {
+            /* 最高组：剥离前导零（val==0 时保留一个 '0'） */
+            int k = 0;
+            while (k < 2 && s[k] == '0')
+            {
+                k++;
+            }
+            while (k < 3)
+            {
+                buf[out++] = s[k++];
+            }
+        }
+        else
+        {
+            /* 其余组：3 位定宽直补（含中间零） */
+            buf[out++] = s[0];
+            buf[out++] = s[1];
+            buf[out++] = s[2];
+        }
+    }
+    return out;
+}
+
+/**
+ * @brief uint64 转十六进制（位运算，零除法），写入 buf，返回字符数
+ * @param buf 至少 16 字节
+ */
+static int BSPU64ToHex(uint64_t val, char *buf, int upper)
+{
+    const char *tbl = upper ? BSP_HEX_UP : BSP_HEX_LO;
+    char tmp[16];
+    int i = 0;
+
+    do
+    {
+        tmp[i++] = tbl[val & 0xFu];
+        val >>= 4;
+    } while (val != 0);
+
+    /* tmp 是逆序，反转 */
+    for (int j = 0; j < i; j++)
+    {
+        buf[j] = tmp[i - 1 - j];
+    }
+    return i;
+}
+
 /*============================================
  *              核心实现
  *============================================*/
@@ -135,12 +211,24 @@ static int BSPFmtV(char *out, size_t cap, const char *fmt, size_t fmt_len, va_li
             continue;
         }
 
-        /* ---- 解析：宽度（可选） + 转换说明 ---- */
+        /* ---- 解析：宽度（可选） + 长度修饰符（l/ll 可选） + 转换说明 ---- */
         int width = 0;
         while (f < flim && *f >= '0' && *f <= '9')
         {
             width = width * 10 + (*f - '0');
             f++;
+        }
+        /* 长度修饰符：l/ll → 64 位整数（int64_t/uint64_t，本模块统一 long long 语义）；
+         * 无修饰符 → 32 位（int/uint32_t）。其余修饰符(h/z/...)不识别，按字面输出。 */
+        int is64 = 0;
+        if (f < flim && *f == 'l')
+        {
+            is64 = 1;
+            f++;
+            if (f < flim && *f == 'l')
+            {
+                f++;
+            }
         }
         if (f >= flim)
         {
@@ -148,7 +236,7 @@ static int BSPFmtV(char *out, size_t cap, const char *fmt, size_t fmt_len, va_li
         }
         char spec = *f++;
 
-        char numbuf[10];
+        char numbuf[21]; /* uint64 十进制最长 20 位（+ 负号在外部处理） */
         int numlen = 0;
         int neg = 0;
 
@@ -156,21 +244,48 @@ static int BSPFmtV(char *out, size_t cap, const char *fmt, size_t fmt_len, va_li
         {
         case 'd':
         {
-            int32_t v = va_arg(args, int32_t);
-            if (v < 0)
+            if (is64)
             {
-                neg = 1;
-                v = (int32_t)(0u - (uint32_t)v); /* 取绝对值，正确处理 INT32_MIN */
+                int64_t v = va_arg(args, int64_t);
+                if (v < 0)
+                {
+                    neg = 1;
+                    v = (int64_t)(0ull - (uint64_t)v); /* 取绝对值，正确处理 INT64_MIN */
+                }
+                numlen = BSPU64ToDec((uint64_t)v, numbuf);
             }
-            numlen = BSPU32ToDec((uint32_t)v, numbuf);
+            else
+            {
+                int32_t v = va_arg(args, int32_t);
+                if (v < 0)
+                {
+                    neg = 1;
+                    v = (int32_t)(0u - (uint32_t)v); /* 取绝对值，正确处理 INT32_MIN */
+                }
+                numlen = BSPU32ToDec((uint32_t)v, numbuf);
+            }
             break;
         }
         case 'u':
-            numlen = BSPU32ToDec(va_arg(args, uint32_t), numbuf);
+            if (is64)
+            {
+                numlen = BSPU64ToDec(va_arg(args, uint64_t), numbuf);
+            }
+            else
+            {
+                numlen = BSPU32ToDec(va_arg(args, uint32_t), numbuf);
+            }
             break;
         case 'x':
         case 'X':
-            numlen = BSPU32ToHex(va_arg(args, uint32_t), numbuf, (spec == 'X'));
+            if (is64)
+            {
+                numlen = BSPU64ToHex(va_arg(args, uint64_t), numbuf, (spec == 'X'));
+            }
+            else
+            {
+                numlen = BSPU32ToHex(va_arg(args, uint32_t), numbuf, (spec == 'X'));
+            }
             break;
         case 's':
         {

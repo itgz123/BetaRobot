@@ -7,6 +7,7 @@
  *
  * @note 子模块列表：
  *       - bsp_math_const.h    数学常量、宏
+ *       - bsp_math_int64.h    64 位整数乘除（高半乘法/魔数除法，零除法指令）
  *       - bsp_math_types.h    类型定义（向量、四元数、矩阵）
  *       - bsp_math_trig.h     三角函数封装
  *       - bsp_math_trig_lut.h 自研查表三角函数
@@ -25,6 +26,7 @@
 
 /* 包含顺序：叶依赖优先，上层依赖在后 */
 #include "bsp_math_const.h"     /* 数学常量、宏、通用内联函数 */
+#include "bsp_math_int64.h"     /* 64 位整数乘除（高半乘法/魔数除法） */
 #include "bsp_math_types.h"     /* 类型定义 */
 #include "bsp_math_trig_lut.h"  /* 自研查表三角函数（先于 trig.h，供其分发） */
 #include "bsp_math_trig.h"      /* 三角函数封装（sin/cos/sincos 可选走 LUT） */

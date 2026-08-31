@@ -169,7 +169,7 @@ static char *BSPLogAppend(char *dst, const char *end, const char *s)
 #define LOG_HDR_FMT "%s[%s][%s]:"
 #define LOG_HDR_ARGS(color, lvl, st, module) (color), (lvl), (module)
 #else
-#define LOG_HDR_FMT "%s[%s][%u][%s]:"
+#define LOG_HDR_FMT "%s[%s][%llu][%s]:"
 #define LOG_HDR_ARGS(color, lvl, st, module) (color), (lvl), (st), (module)
 #endif
 
@@ -268,9 +268,9 @@ void BSPLogV(LOGInstance *inst, LOG_LEVEL level, const char *fmt, ...)
     end = buf + LOG_LEN_MAX;
     p = buf;
     {
-        uint32_t st = 0;
+        uint64_t st = 0;
 #if TIME_STAMP_STYLE != 0
-        st = (uint32_t)DWT_GetTimeUs();
+        st = DWT_GetTimeUs(); /* 完整 64 位 us，不截断（2^64 µs ≈ 58 万年才回绕） */
         if (TIME_STAMP_STYLE == 2)
         {
             st = st / 1000u;
