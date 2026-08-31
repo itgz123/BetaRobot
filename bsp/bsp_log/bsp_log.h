@@ -5,11 +5,11 @@
  * 分层设计：
  *   - 日志层（本文件 + bsp_log.c）：负责分级、过滤、限频、时间戳与格式串
  *     组装（"[分级][时间戳][模块名]:内容"），借用静态池缓冲格式化后直接
- *     交日志串口 DMA 发送。对外只提供 4 个接口：
+ *     交日志串口 DMA 发送。对外只提供 3 个接口：
  *       ① BSPLogInit()            初始化 bsp 相关外设（DWT 时间戳 + 日志串口）
  *       ② BSPLogInitInstance()    配置一个日志实例（模块名 + 限频）
  *       ③ BSPLOG(inst, level, fmt, ...)  宏：发送一条日志
- *       ④ BSPLogGetLevelCount()   读取某级别累计日志条数（全局统计）
+ *     各级别全局累计条数：extern uint64_t level_cnt[LOG_LEVEL_NUM] 按级别下标直接读取
  *   - 传输（bsp_log.c 内实现）：UART DMA 直接发送 + 缓冲池状态机调度。
  *     借用/提交/出队均内联在 bsp_log.c，池槽 data/state/len 集中在
  *     log_buf_s 结构体；DMA 完成回调 LogUartTxCplt 归还缓冲并调度下一个。
