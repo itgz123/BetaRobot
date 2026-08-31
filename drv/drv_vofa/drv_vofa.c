@@ -2,13 +2,12 @@
  * @file drv_vofa.c
  * @brief VOFA+ JustFloat 协议驱动实现（无任务，外部调用）
  *        使用三缓冲区 + 发送完成回调实现高频发送
- *        VofaLiteSetChannel 直接写入发送缓冲区，减少一次数据复制
+ *        VofaSetChannel 直接写入发送缓冲区，减少一次数据复制
  */
 
 #include "drv_vofa.h"
 
-#ifdef VOFA_LITE_USED
-
+#if (defined(VOFA_USED)) && (defined(VOFA_UART))
 #include "bsp_log.h"
 #include "bsp_usart.h"
 #include "bsp_dwt.h"
@@ -17,7 +16,7 @@
 /*------------- 发送缓冲区大小计算 --------------*/
 
 // 缓冲区 = (时间戳1 + 用户通道) * 4 + 帧尾4字节
-#define TX_BUFF_SIZE ((1 + VOFA_LITE_CHANNELS) * 4 + 4)
+#define TX_BUFF_SIZE ((1 + VOFA_CHANNELS) * 4 + 4)
 
 /*------------- 联合体：float与uint8_t/uint32_t互转 --------------*/
 
@@ -39,7 +38,7 @@ typedef enum : uint8_t
 /*------------- 静态实例定义 --------------*/
 
 // USART 实例（静态定义）
-USART_INSTANCE_DEF(s_vofa_lite_uart, 1);
+USART_INSTANCE_DEF(s_vofa_uart, 1);
 
 // 三套发送缓冲区（放在 DMA_RAM 区域）
 static uint8_t s_tx_buff[3][TX_BUFF_SIZE] DMA_RAM = {0};
@@ -88,23 +87,23 @@ static void VofaTxCpltCallback(USARTInstance *instance)
 void VofaInit(void)
 {
     // 注册 USART（使用 DMA 模式 + 发送完成回调）
-    USARTRegister(&s_vofa_lite_uart);
+    USARTRegister(&s_vofa_uart);
     USART_Config_s usart_cfg = {
-        .uart_e = VOFA_LITE_UART,
+        .uart_e = VOFA_UART,
         .tx_mode = USART_DMA_MODE,
         .rx_callback = NULL,
         .tx_callback = VofaTxCpltCallback,
     };
-    USARTConfig(&s_vofa_lite_uart, &usart_cfg);
+    USARTConfig(&s_vofa_uart, &usart_cfg);
 
-    LOGINFO("[VOFA Lite] Initialized, UART: %d, Channels: %d (ch0=timestamp, ch1~%d=user), Triple-buffer DMA",
-            VOFA_LITE_UART, VOFA_LITE_CHANNELS, VOFA_LITE_CHANNELS);
+    LOGINFO("[VOFA] Initialized, UART: %d, Channels: %d (ch0=timestamp, ch1~%d=user), Triple-buffer DMA",
+            VOFA_UART, VOFA_CHANNELS, VOFA_CHANNELS);
 }
 
 void VofaSetChannel(uint8_t ch, float value)
 {
     // ch=0 为时间戳通道，用户不能设置
-    if (ch == 0 || ch > VOFA_LITE_CHANNELS)
+    if (ch == 0 || ch > VOFA_CHANNELS)
         return;
 
     // 检查写入缓冲区是否为空闲状态
@@ -126,19 +125,19 @@ void VofaSend(void)
     *(uint32_t *)s_tx_buff[s_write_buff] = ts.u32;
 
     // 2. 填充帧尾
-    uint8_t *p = &s_tx_buff[s_write_buff][4 + VOFA_LITE_CHANNELS * 4];
+    uint8_t *p = &s_tx_buff[s_write_buff][4 + VOFA_CHANNELS * 4];
     *p++ = VOFA_JUST_FLOAT_FRAME_END_0;
     *p++ = VOFA_JUST_FLOAT_FRAME_END_1;
     *p++ = VOFA_JUST_FLOAT_FRAME_END_2;
     *p++ = VOFA_JUST_FLOAT_FRAME_END_3;
 
     // 3. 标记写入缓冲区状态并发送
-    if (USARTIsReady(&s_vofa_lite_uart))
+    if (USARTIsReady(&s_vofa_uart))
     {
         // DMA 空闲，直接发送
         s_buff_state[s_write_buff] = BUFF_ACTIVE;
         s_active_buff = s_write_buff;
-        USARTTransmit(&s_vofa_lite_uart, s_tx_buff[s_write_buff], TX_BUFF_SIZE, 0);
+        USARTTransmit(&s_vofa_uart, s_tx_buff[s_write_buff], TX_BUFF_SIZE, 0);
     }
     else
     {
@@ -156,10 +155,10 @@ void VofaSend(void)
         }
     }
     // 没有空闲缓冲区，保持当前索引，下次 SetChannel 会因状态检查而失效
-    LOGWARNING("[VOFA Lite] No idle buffer, SetChannel will be ignored until buffer available!");
+    LOGWARNING("[VOFA] No idle buffer, SetChannel will be ignored until buffer available!");
 }
 
-#else // !VOFA_LITE_USED
+#else // !(defined(VOFA_USED)) && (defined(VOFA_UART))
 
 void VofaInit(void)
 {
@@ -175,4 +174,4 @@ void VofaSend(void)
 {
 }
 
-#endif // VOFA_LITE_USED
+#endif // !(defined(VOFA_USED)) && (defined(VOFA_UART))
