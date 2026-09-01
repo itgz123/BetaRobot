@@ -182,7 +182,7 @@ void BSPLogInit(void);
  * @note 限频为 1 秒窗口：窗口内计数达到 times_per_second 后，后续日志被丢弃，
  *       直到距 last_timestamp_us 满 1 秒重置。须在 DWT 初始化（BSPLogInit）后调用。
  */
-void BSPLogInitInstance(LOGInstance *inst, LOG_Config_s *cfg);
+int8_t BSPLogInitInstance(LOGInstance *inst, LOG_Config_s *cfg);
 
 #else /* 日志关闭：BSP_LOG_USED 或 LOG_UART 未定义（与 bsp_log.c 的 #if 一致） */
 
