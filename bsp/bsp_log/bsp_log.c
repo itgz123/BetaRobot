@@ -199,10 +199,14 @@ void BSPLogInit(void)
     BSPLOG(&g_log, LOG_LEVEL_INFO, "你好！"); // 测试中文（需要指定文件编码和串口接收都是UTF-8）
 }
 
-void BSPLogInitInstance(LOGInstance *inst, LOG_Config_s *cfg)
+int8_t BSPLogInitInstance(LOGInstance *inst, LOG_Config_s *cfg)
 {
+    if (cfg != NULL)
+    {
+        return -1;
+    }
     uint8_t n = 0;
-    const char *name = (cfg != NULL) ? cfg->module_name : NULL;
+    const char *name = cfg->module_name;
 
     if (name != NULL)
     {
@@ -212,14 +216,24 @@ void BSPLogInitInstance(LOGInstance *inst, LOG_Config_s *cfg)
             n++;
         }
     }
+
     inst->module_name[n] = '\0';
     inst->module_name_len = n;
 
-    inst->times_per_second = (cfg != NULL) ? cfg->times_per_second : 0;
+    if (0 == cfg->times_per_second)
+    {
+        inst->times_per_second = 255;
+    }
+    else
+    {
+        inst->times_per_second = cfg->times_per_second;
+    }
+
     inst->log_cnt = 0;
     memset(inst->level_cnt, 0, sizeof(inst->level_cnt)); /* 本实例计数归零（重初始化即清零；全局统计不受影响） */
     /* 窗口起点记为 init 时刻：1 秒窗口从配置时刻开始计算 */
     inst->last_timestamp_us = DWT_GetTimeUs();
+    return 0;
 }
 
 void BSPLogV(LOGInstance *inst, LOG_LEVEL level, const char *fmt, ...)
