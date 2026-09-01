@@ -29,6 +29,7 @@ static const uint8_t s_fdcan_dlc_bytes[16] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
 
 /*------------- 私有变量 --------------*/
+LOG_INSTANCE_DEF(g_can_log); // CAN 日志实例
 static uint8_t s_can_idx = 0;
 #if CAN_INSTANCE_NUM > 0
 static CANInstance *s_can_instance[CAN_INSTANCE_NUM] = {NULL};
@@ -197,7 +198,7 @@ static int8_t FDCAN_CheckFrameTypeCompatible(CAN_Mode_Type_e mode, CAN_Frame_Typ
         return 0;
     if (frame_type == CAN_STANDARD_REMOTE_FRAME || frame_type == CAN_EXTENDED_REMOTE_FRAME)
     {
-        LOGERROR("[bsp_can] FD 模式(mode=%d)不支持远程帧(frame_type=%d)，FD 帧格式无 RTR 位!", mode, frame_type);
+        BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] FD 模式(mode=%d)不支持远程帧(frame_type=%d)，FD 帧格式无 RTR 位!", mode, frame_type);
         return -1;
     }
     return 0;
@@ -250,8 +251,8 @@ static void FDCAN_ListLutRegister(CANInstance *inst)
         /* 标准帧 LIST 校验：id0 必填、id1 可空(CAN_ID_UNUSED)；任一真实 ID >0x7FF 判非法，整条跳过 */
         if ((f->id0 > 0x7FF) || ((f->id1 != CAN_ID_UNUSED) && (f->id1 > 0x7FF)))
         {
-            LOGWARNING("[bsp_can] LIST 标准帧 filter ID 非法(id0=0x%lX id1=0x%lX)整条跳过，不入表",
-                       (unsigned long)f->id0, (unsigned long)f->id1);
+            BSPLOG(&g_can_log, LOG_LEVEL_WARNING, "[bsp_can] LIST 标准帧 filter ID 非法(id0=0x%lX id1=0x%lX)整条跳过，不入表",
+                   (unsigned long)f->id0, (unsigned long)f->id1);
             continue;
         }
         /* 登记槽位并标记该 CAN 查表已被覆盖（调试直接 Watch s_fdcan_list_lut_used） */
@@ -316,22 +317,24 @@ static void FDCAN_TxCompleteHandler(uint8_t can_idx, uint32_t marker)
  */
 int8_t CANRegister(CANInstance *instance)
 {
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_can] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_can_idx >= CAN_INSTANCE_NUM, -1, LOGERROR("[bsp_can] Exceeded max instance count!"));
+    BSPLogInitInstance(&g_can_log, &(LOG_Config_s){.module_name = "can"});
+
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(s_can_idx >= CAN_INSTANCE_NUM, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] Exceeded max instance count!"));
 
     // 防重复注册检查
     for (uint8_t i = 0; i < s_can_idx; i++)
     {
         if (s_can_instance[i] == instance)
         {
-            LOGERROR("[bsp_can] Instance already registered!");
+            BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] Instance already registered!");
             return -1;
         }
     }
 
     s_can_instance[s_can_idx++] = instance;
 
-    LOGINFO("[bsp_can] CAN Instance registered, idx=%d", s_can_idx - 1);
+    BSPLOG(&g_can_log, LOG_LEVEL_INFO, "[bsp_can] CAN Instance registered, idx=%d", s_can_idx - 1);
     return 0;
 }
 
@@ -345,18 +348,18 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
 {
     FDCAN_HandleTypeDef *hfdcan;
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_can] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_can] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->can_e >= CAN_NUM_MAX, -1, LOGERROR("[bsp_can] can_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config->can_e >= CAN_NUM_MAX, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] can_e out of range!"));
 
     // 填充枚举和硬件句柄
     instance->can_e = config->can_e;
     instance->map = can_map[instance->can_e];
     hfdcan = instance->map.handle;
-    BSP_RETURN_IF_TRUE_LOG(hfdcan == NULL, -1, LOGERROR("[bsp_can] FDCAN handle is NULL, check bsp_map mapping!"));
+    BSP_RETURN_IF_TRUE_LOG(hfdcan == NULL, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] FDCAN handle is NULL, check bsp_map mapping!"));
 
     // 一个 handle 允许多个实例共享（如不同 ID 分组各占一个实例），无需防重
-    BSP_RETURN_IF_TRUE_LOG(config->filter_num > 0 && config->filters == NULL, -1, LOGERROR("[bsp_can] filters is NULL but filter_num=%d!", config->filter_num));
+    BSP_RETURN_IF_TRUE_LOG(config->filter_num > 0 && config->filters == NULL, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] filters is NULL but filter_num=%d!", config->filter_num));
 
     instance->mode = config->mode;
     instance->parent = config->parent;
@@ -375,9 +378,9 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
     if (instance->mode != CAN_FRAME_FORMAT_CLASSIC)
     {
         BSP_RETURN_IF_TRUE_LOG(hfdcan->Init.FrameFormat == FDCAN_FRAME_CLASSIC, -1,
-                               LOGERROR("[bsp_can] 实例模式为 FD(mode=%d) 但 hfdcan FrameFormat=CLASSIC（CubeMX 配置），控制器未启用 FD!", instance->mode));
+                               BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] 实例模式为 FD(mode=%d) 但 hfdcan FrameFormat=CLASSIC（CubeMX 配置），控制器未启用 FD!", instance->mode));
         BSP_RETURN_IF_TRUE_LOG(instance->mode == CAN_FRAME_FORMAT_FD_BRS && hfdcan->Init.FrameFormat != FDCAN_FRAME_FD_BRS, -1,
-                               LOGERROR("[bsp_can] 实例模式为 FD_BRS 但 hfdcan FrameFormat != FD_BRS（CubeMX 配置），控制器未启用 BRS，8 Mbps 数据段时序不会生效!"));
+                               BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] 实例模式为 FD_BRS 但 hfdcan FrameFormat != FD_BRS（CubeMX 配置），控制器未启用 BRS，8 Mbps 数据段时序不会生效!"));
     }
 
     // 首次配置：硬过滤全通 + 启动外设 + 使能接收/发送/错误中断（全部成功后才置位 s_fdcan_started）
@@ -393,17 +396,17 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
         if (hfdcan->State == HAL_FDCAN_STATE_BUSY)
         {
             BSP_RETURN_IF_TRUE_LOG(HAL_FDCAN_Stop(hfdcan) != HAL_OK, -1,
-                                   LOGERROR("[bsp_can] FDCAN Stop failed, can't retry init (can_e=%d)!", instance->can_e));
+                                   BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] FDCAN Stop failed, can't retry init (can_e=%d)!", instance->can_e));
         }
 
         // 发送统一接口走 Tx FIFO（AddMessageToTxFifoQ + GetTxFifoFreeLevel），需 CubeMX 配置
-        BSP_RETURN_IF_TRUE_LOG(init->TxFifoQueueElmtsNbr == 0, -1, LOGERROR("[bsp_can] TxFifoQueueElmtsNbr=0! 统一接口发送走 Tx FIFO，请用 CubeMX 配置（TxFifoQueueElmtsNbr>0）"));
-        BSP_RETURN_IF_TRUE_LOG(init->TxFifoQueueMode != FDCAN_TX_FIFO_OPERATION, -1, LOGERROR("[bsp_can] TxFifoQueueMode 需为 FDCAN_TX_FIFO_OPERATION（只要 Tx FIFO，不要 Tx Queue）!"));
+        BSP_RETURN_IF_TRUE_LOG(init->TxFifoQueueElmtsNbr == 0, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] TxFifoQueueElmtsNbr=0! 统一接口发送走 Tx FIFO，请用 CubeMX 配置（TxFifoQueueElmtsNbr>0）"));
+        BSP_RETURN_IF_TRUE_LOG(init->TxFifoQueueMode != FDCAN_TX_FIFO_OPERATION, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] TxFifoQueueMode 需为 FDCAN_TX_FIFO_OPERATION（只要 Tx FIFO，不要 Tx Queue）!"));
 
         // 硬过滤全通：全部走 FDCAN_ACCEPT_IN_RX_FIFO0（接收只保留 Rx FIFO 路径）
-        BSP_RETURN_IF_TRUE_LOG(init->RxFifo0ElmtsNbr == 0, -1, LOGERROR("[bsp_can] RxFifo0ElmtsNbr=0! 接收走 Rx FIFO0，请用 CubeMX 配置（RxFifo0ElmtsNbr>0）"));
+        BSP_RETURN_IF_TRUE_LOG(init->RxFifo0ElmtsNbr == 0, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] RxFifo0ElmtsNbr=0! 接收走 Rx FIFO0，请用 CubeMX 配置（RxFifo0ElmtsNbr>0）"));
         BSP_RETURN_IF_TRUE_LOG(HAL_FDCAN_ConfigGlobalFilter(hfdcan, FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_ACCEPT_IN_RX_FIFO0, FDCAN_FILTER_REMOTE, FDCAN_FILTER_REMOTE) != HAL_OK,
-                               -1, LOGERROR("[bsp_can] HAL_FDCAN_ConfigGlobalFilter failed!"));
+                               -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] HAL_FDCAN_ConfigGlobalFilter failed!"));
 
         // 显式配置中断线：接收/发送事件/错误状态中断源全部映射到 IT0（对应 FDCANx_IT0_IRQn）
         // 注意：HAL_FDCAN_ConfigInterruptLines 是覆盖式调用，需将同一中断线的所有中断源合并
@@ -418,7 +421,7 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
         if (init->TxEventsNbr > 0)
             line0_ints |= FDCAN_IT_TX_EVT_FIFO_NEW_DATA | FDCAN_IT_TX_EVT_FIFO_FULL | FDCAN_IT_TX_EVT_FIFO_ELT_LOST;
         BSP_RETURN_IF_TRUE_LOG(HAL_FDCAN_ConfigInterruptLines(hfdcan, line0_ints, FDCAN_INTERRUPT_LINE0) != HAL_OK,
-                               -1, LOGERROR("[bsp_can] HAL_FDCAN_ConfigInterruptLines failed!"));
+                               -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] HAL_FDCAN_ConfigInterruptLines failed!"));
 
         // Rx FIFO0 新报文 + 满/丢失事件（满/丢失用于状态统计）
         active_it |= FDCAN_IT_RX_FIFO0_NEW_MESSAGE | FDCAN_IT_RX_FIFO0_FULL | FDCAN_IT_RX_FIFO0_MESSAGE_LOST;
@@ -430,8 +433,8 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
         if (init->TxEventsNbr > 0)
             active_it |= FDCAN_IT_TX_EVT_FIFO_NEW_DATA | FDCAN_IT_TX_EVT_FIFO_FULL | FDCAN_IT_TX_EVT_FIFO_ELT_LOST;
 
-        BSP_RETURN_IF_TRUE_LOG(HAL_FDCAN_Start(hfdcan) != HAL_OK, -1, LOGERROR("[bsp_can] HAL_FDCAN_Start failed!"));
-        BSP_RETURN_IF_TRUE_LOG(HAL_FDCAN_ActivateNotification(hfdcan, active_it, 0) != HAL_OK, -1, LOGERROR("[bsp_can] HAL_FDCAN_ActivateNotification failed!"));
+        BSP_RETURN_IF_TRUE_LOG(HAL_FDCAN_Start(hfdcan) != HAL_OK, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] HAL_FDCAN_Start failed!"));
+        BSP_RETURN_IF_TRUE_LOG(HAL_FDCAN_ActivateNotification(hfdcan, active_it, 0) != HAL_OK, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] HAL_FDCAN_ActivateNotification failed!"));
 
         // 全部初始化步骤成功后才置位：任一步失败返回，标志保持 0，下次 CANConfig 可完整重试
         s_fdcan_started[instance->can_e] = 1;
@@ -471,22 +474,22 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeo
     uint8_t use_tx_event;
     int32_t dlc;
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, CAN_FdcanTxFailThenRet(instance), LOGERROR("[bsp_can] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, CAN_FdcanTxFailThenRet(instance), BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] Instance is NULL!"));
     hfdcan = instance->map.handle;
-    BSP_RETURN_IF_TRUE_LOG(hfdcan == NULL, CAN_FdcanTxFailThenRet(instance), LOGERROR("[bsp_can] FDCAN handle is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(pack == NULL, CAN_FdcanTxFailThenRet(instance), LOGERROR("[bsp_can] Pack is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(hfdcan == NULL, CAN_FdcanTxFailThenRet(instance), BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] FDCAN handle is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(pack == NULL, CAN_FdcanTxFailThenRet(instance), BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] Pack is NULL!"));
 
     // 长度校验：经典 CAN 单帧最大 8 字节，FD 最大 64 字节
-    BSP_RETURN_IF_TRUE_LOG(pack->len > 64, CAN_FdcanTxFailThenRet(instance), LOGERROR("[bsp_can] Length %d exceeds FD max (64)!", pack->len));
+    BSP_RETURN_IF_TRUE_LOG(pack->len > 64, CAN_FdcanTxFailThenRet(instance), BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] Length %d exceeds FD max (64)!", pack->len));
     BSP_RETURN_IF_TRUE_LOG(instance->mode == CAN_FRAME_FORMAT_CLASSIC && pack->len > 8, CAN_FdcanTxFailThenRet(instance),
-                           LOGERROR("[bsp_can] Classic mode but len=%d exceeds 8!", pack->len));
+                           BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] Classic mode but len=%d exceeds 8!", pack->len));
 
     // TxElmtSize 越界硬拒绝：len 超过外设 Tx 元素尺寸时，HAL_FDCAN_AddMessageToTxFifoQ 内部
     // FDCAN_CopyMessageToRAM 会按 len 越界写 Message RAM（内存破坏），必须硬拒绝而非仅警告
     {
         uint8_t elmt_bytes = FDCAN_ElmtSizeToBytes(hfdcan->Init.TxElmtSize);
         BSP_RETURN_IF_TRUE_LOG(pack->len > elmt_bytes, CAN_FdcanTxFailThenRet(instance),
-                               LOGERROR("[bsp_can] len=%d exceeds FDCAN TxElmtSize=%d bytes!", pack->len, elmt_bytes));
+                               BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] len=%d exceeds FDCAN TxElmtSize=%d bytes!", pack->len, elmt_bytes));
     }
 
     // 帧类型与工作模式兼容性检查（FD 帧格式无 RTR 位：非经典模式拒绝远程帧）
@@ -517,7 +520,7 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeo
         tx_header.Identifier = pack->id;
         break;
     default:
-        LOGERROR("[bsp_can] Invalid frame_type=%d!", pack->frame_type);
+        BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] Invalid frame_type=%d!", pack->frame_type);
         return CAN_FdcanTxFailThenRet(instance);
     }
 
@@ -542,7 +545,7 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeo
     dlc = FDCAN_BytesToDlc(pack->len);
     if (dlc < 0)
     {
-        LOGERROR("[bsp_can] Length %d exceeds FD max (64)!", pack->len);
+        BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] Length %d exceeds FD max (64)!", pack->len);
         return CAN_FdcanTxFailThenRet(instance);
     }
     tx_header.DataLength = (uint32_t)dlc;
@@ -557,7 +560,7 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeo
     {
         if (timeout_ms == 0)
         {
-            LOGERROR("[bsp_can] TX FIFO full!");
+            BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] TX FIFO full!");
             return CAN_FdcanTxFailThenRet(instance);
         }
         else
@@ -569,7 +572,7 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeo
             {
                 if ((DWT_GetTimeUs() - start_time) > timeout_us)
                 {
-                    LOGWARNING("[bsp_can] FDCAN Tx FIFO timeout (can_e=%d, id=0x%lX)!", instance->can_e, (unsigned long)pack->id);
+                    BSPLOG(&g_can_log, LOG_LEVEL_WARNING, "[bsp_can] FDCAN Tx FIFO timeout (can_e=%d, id=0x%lX)!", instance->can_e, (unsigned long)pack->id);
                     return CAN_FdcanTxFailThenRet(instance);
                 }
             }
@@ -581,7 +584,7 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeo
     {
         if (FDCAN_AllocMarker(can_idx, instance, &marker) != 0)
         {
-            LOGERROR("[bsp_can] All %d TX markers in flight (Tx Event FIFO busy)!", FDCAN_TX_MARKER_NUM);
+            BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] All %d TX markers in flight (Tx Event FIFO busy)!", FDCAN_TX_MARKER_NUM);
             return CAN_FdcanTxFailThenRet(instance);
         }
         tx_header.MessageMarker = marker;
@@ -592,7 +595,7 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeo
     {
         if (use_tx_event)
             s_fdcan_tx_owner[can_idx][marker] = NULL; // 加入失败，释放 marker 槽
-        LOGERROR("[bsp_can] HAL_FDCAN_AddMessageToTxFifoQ failed!");
+        BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] HAL_FDCAN_AddMessageToTxFifoQ failed!");
         return CAN_FdcanTxFailThenRet(instance);
     }
 
@@ -843,11 +846,11 @@ void HAL_FDCAN_ErrorStatusCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t ErrorSt
     }
 
     if (ErrorStatusITs & FDCAN_IT_BUS_OFF)
-        LOGERROR("[bsp_can] FDCAN Bus-off! (can_e=%d)", can_idx);
+        BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] FDCAN Bus-off! (can_e=%d)", can_idx);
     if (ErrorStatusITs & FDCAN_IT_ERROR_PASSIVE)
-        LOGWARNING("[bsp_can] FDCAN Error Passive! (can_e=%d)", can_idx);
+        BSPLOG(&g_can_log, LOG_LEVEL_WARNING, "[bsp_can] FDCAN Error Passive! (can_e=%d)", can_idx);
     if (ErrorStatusITs & FDCAN_IT_ERROR_WARNING)
-        LOGWARNING("[bsp_can] FDCAN Error Warning! (can_e=%d)", can_idx);
+        BSPLOG(&g_can_log, LOG_LEVEL_WARNING, "[bsp_can] FDCAN Error Warning! (can_e=%d)", can_idx);
 }
 
 /*------------- 发送完成回调（Tx Event FIFO + MessageMarker 溯源，由 CANConfig 激活 IT） --------------*/
@@ -868,7 +871,7 @@ void HAL_FDCAN_TxEventFifoCallback(FDCAN_HandleTypeDef *hfdcan, uint32_t TxEvent
     if (TxEventFifoITs & (FDCAN_IT_TX_EVT_FIFO_FULL | FDCAN_IT_TX_EVT_FIFO_ELT_LOST))
     {
         s_fdcan_status[can_idx].tx_event_lost++;
-        LOGERROR("[bsp_can] Tx Event FIFO full/lost! 发送完成溯源可能丢失");
+        BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] Tx Event FIFO full/lost! 发送完成溯源可能丢失");
     }
 
     // 逐个弹出事件并分发

@@ -16,6 +16,12 @@
 #include "bsp_log.h"
 #include "drv_bmi088_heater.h"
 
+/* bmi088 主驱动与加热器共用日志实例：LOG_INSTANCE_DEF 是 static 无法跨 TU，
+ * 故此处全局定义 + drv_bmi088.h extern 声明；日志关闭时不分配，BSPLOG 空宏不引用 */
+#if (defined(BSP_LOG_USED)) && (defined(LOG_UART))
+LOGInstance g_bmi088_log = {0};
+#endif
+
 /* 基于数据手册的专用延时宏 */
 #define BMI088_SPI_SWITCH_DELAY_S 0.002f   // SPI模式切换延时  (2ms)
 #define BMI088_ACC_RESET_DELAY_S 0.002f    // 加速度计软复位延时 (2ms，数据手册1ms+余量)
@@ -120,7 +126,7 @@ static void BMI088_ReadReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, 
 {
     if (len > BMI088_RAW_DATA_SIZE)
     {
-        LOGWARNING("[drv_bmi088] Read len > 6: %d", len);
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_WARNING, "[drv_bmi088] Read len > 6: %d", len);
         return;
     }
 
@@ -169,8 +175,8 @@ static uint8_t BMI088_WriteRegWithCheck(BMI088Instance *inst, GPIOInstance *cs, 
         }
     } while ((DWT_GetTimeUs() - start_us) < BMI088_WRITE_CHECK_TIMEOUT_US);
 
-    LOGWARNING("[drv_bmi088] %s write 0x%02X verify failed (expected 0x%02X, got 0x%02X)",
-               (cs == inst->cs_acc) ? "Acc" : "Gyro", reg, data, inst->spi_inst->rx_buff[rx_off]);
+    BSPLOG(&g_bmi088_log, LOG_LEVEL_WARNING, "[drv_bmi088] %s write 0x%02X verify failed (expected 0x%02X, got 0x%02X)",
+           (cs == inst->cs_acc) ? "Acc" : "Gyro", reg, data, inst->spi_inst->rx_buff[rx_off]);
     return 1;
 }
 
@@ -463,14 +469,14 @@ static uint8_t BMI088_AccInit(BMI088Instance *inst)
     BMI088_ReadReg(inst, inst->cs_acc, BMI088_ACC_CHIP_ID_REG, 1, 1);
     if (inst->spi_inst->rx_buff[BMI088_ACC_RX_DATA_OFF] != BMI088_ACC_CHIP_ID_VAL)
     {
-        LOGERROR("[drv_bmi088] Acc CHIP_ID error: 0x%02X", inst->spi_inst->rx_buff[2]);
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] Acc CHIP_ID error: 0x%02X", inst->spi_inst->rx_buff[2]);
         return 1;
     }
 
     // 5. 开启加速度计
     if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_ACC_PWR_CTRL_REG, BMI088_ACC_ENABLE_ON) != 0)
     {
-        LOGERROR("[drv_bmi088] acc_pwr_ctrl write failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] acc_pwr_ctrl write failed");
         return 1;
     }
     DWT_Delay(BMI088_ACC_PWR_UP_DELAY_S); // 数据手册§3: 写 ACC_PWR_CTRL 后等 450µs
@@ -478,35 +484,35 @@ static uint8_t BMI088_AccInit(BMI088Instance *inst)
     // 6. 退出挂起模式
     if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_ACC_PWR_CONF_REG, BMI088_ACC_PWR_SAVE_ACTIVE) != 0)
     {
-        LOGERROR("[drv_bmi088] acc_pwr_conf write failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] acc_pwr_conf write failed");
         return 1;
     }
 
     // 7. 写入量程配置
     if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_ACC_RANGE_REG, (uint8_t)inst->acc_range) != 0)
     {
-        LOGERROR("[drv_bmi088] acc_range write failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] acc_range write failed");
         return 1;
     }
 
     // 8. 写入滤波器和ODR配置
     if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_ACC_CONF_REG, inst->acc_bwp | inst->acc_odr) != 0)
     {
-        LOGERROR("[drv_bmi088] acc_conf write failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] acc_conf write failed");
         return 1;
     }
 
     // 9. 配置 INT1 引脚
     if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_INT1_IO_CTRL_REG, BMI088_INT1_OUT | BMI088_INT1_LVL_HIGH) != 0)
     {
-        LOGERROR("[drv_bmi088] int1_io_ctrl write failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] int1_io_ctrl write failed");
         return 1;
     }
 
     // 10. 配置中断映射
     if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_INT_MAP_DATA_REG, BMI088_INT1_DRDY) != 0)
     {
-        LOGERROR("[drv_bmi088] int_map_data write failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] int_map_data write failed");
         return 1;
     }
     return 0;
@@ -522,49 +528,49 @@ static uint8_t BMI088_GyroInit(BMI088Instance *inst)
     BMI088_ReadReg(inst, inst->cs_gyro, BMI088_GYRO_CHIP_ID_REG, 1, 0);
     if (inst->spi_inst->rx_buff[BMI088_GYRO_RX_DATA_OFF] != BMI088_GYRO_CHIP_ID_VALUE)
     {
-        LOGERROR("[drv_bmi088] Gyro CHIP_ID error: 0x%02X", inst->spi_inst->rx_buff[1]);
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] Gyro CHIP_ID error: 0x%02X", inst->spi_inst->rx_buff[1]);
         return 1;
     }
 
     // 3. 写入量程配置
     if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_RANGE_REG, (uint8_t)inst->gyro_range) != 0)
     {
-        LOGERROR("[drv_bmi088] gyro_range write failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] gyro_range write failed");
         return 1;
     }
 
     // 4. 写入带宽配置（使用组合值 OR BMI088_GYRO_BW_MUST_SET）
     if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_BANDWIDTH_REG, inst->gyro_conf | BMI088_GYRO_BW_MUST_SET) != 0)
     {
-        LOGERROR("[drv_bmi088] gyro_bandwidth write failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] gyro_bandwidth write failed");
         return 1;
     }
 
     // 5. 写入电源模式
     if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_LPM1_REG, BMI088_GYRO_PM_NORMAL) != 0)
     {
-        LOGERROR("[drv_bmi088] gyro_lpm1 write failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] gyro_lpm1 write failed");
         return 1;
     }
 
     // 6. 配置中断控制
     if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_INT_CTRL_REG, BMI088_GYRO_INT_DATA_EN) != 0)
     {
-        LOGERROR("[drv_bmi088] gyro_int_ctrl write failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] gyro_int_ctrl write failed");
         return 1;
     }
 
     // 7. 配置 INT3 引脚（推挽输出 + 高电平有效，INT4 保持复位默认）
     if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_INT3_INT4_IO_CONF_REG, BMI088_INT4_OD_OPEN_DRAIN | BMI088_INT4_LVL_HIGH | BMI088_INT3_LVL_HIGH) != 0)
     {
-        LOGERROR("[drv_bmi088] int3_int4_io_conf write failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] int3_int4_io_conf write failed");
         return 1;
     }
 
     // 8. 配置 INT3 中断映射
     if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_INT3_INT4_IO_MAP_REG, BMI088_INT3_DATA) != 0)
     {
-        LOGERROR("[drv_bmi088] int3_int4_io_map write failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] int3_int4_io_map write failed");
         return 1;
     }
     return 0;
@@ -579,16 +585,18 @@ static uint8_t BMI088_GyroInit(BMI088Instance *inst)
  */
 int8_t BMI088Register(BMI088Instance *inst)
 {
+    BSPLogInitInstance(&g_bmi088_log, &(LOG_Config_s){.module_name = "bmi088"});
+
     if (inst == NULL)
     {
-        LOGERROR("[drv_bmi088] Instance is NULL");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] Instance is NULL");
         return -1;
     }
 
     // 防重复注册检查（通过检查 SPI parent 是否已设置）
     if (inst->spi_inst && inst->spi_inst->parent == inst)
     {
-        LOGERROR("[drv_bmi088] Instance already registered!");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] Instance already registered!");
         return -1;
     }
 
@@ -602,36 +610,36 @@ int8_t BMI088Register(BMI088Instance *inst)
     // 注册 SPI（只注册，Config 时设置硬件句柄）
     if (SPIRegister(inst->spi_inst) != 0)
     {
-        LOGERROR("[drv_bmi088] SPI register failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] SPI register failed");
         return -1;
     }
 
     // 注册 CS/INT GPIO（只注册，Config 时填充映射）
     if (GPIORegister(inst->cs_acc) != 0)
     {
-        LOGERROR("[drv_bmi088] cs_acc register failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] cs_acc register failed");
         return -1;
     }
     if (GPIORegister(inst->cs_gyro) != 0)
     {
-        LOGERROR("[drv_bmi088] cs_gyro register failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] cs_gyro register failed");
         return -1;
     }
     if (GPIORegister(inst->int_acc) != 0)
     {
-        LOGERROR("[drv_bmi088] int_acc register failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] int_acc register failed");
         return -1;
     }
     if (GPIORegister(inst->int_gyro) != 0)
     {
-        LOGERROR("[drv_bmi088] int_gyro register failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] int_gyro register failed");
         return -1;
     }
 
     // 注册 PWM（只注册，Config 时决定是否启动）
     if (PWMRegister(inst->heater_pwm) != 0)
     {
-        LOGERROR("[drv_bmi088] heater_pwm register failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] heater_pwm register failed");
         return -1;
     }
 
@@ -641,7 +649,7 @@ int8_t BMI088Register(BMI088Instance *inst)
         DaemonRegister(inst->daemon);
     }
 
-    LOGINFO("[drv_bmi088] BMI088 registered, waiting for Config...");
+    BSPLOG(&g_bmi088_log, LOG_LEVEL_INFO, "[drv_bmi088] BMI088 registered, waiting for Config...");
     return 0;
 }
 
@@ -654,12 +662,12 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
 {
     if (inst == NULL)
     {
-        LOGERROR("[drv_bmi088] Instance is NULL");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] Instance is NULL");
         return -1;
     }
     if (config == NULL)
     {
-        LOGERROR("[drv_bmi088] Config is NULL");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] Config is NULL");
         return -1;
     }
 
@@ -679,13 +687,13 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
         };
         if (GPIOConfig(inst->cs_acc, &cs_gpio) != 0)
         {
-            LOGERROR("[drv_bmi088] cs_acc config failed");
+            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] cs_acc config failed");
             return -1;
         }
         cs_gpio.gpio_e = config->cs_gyro_e;
         if (GPIOConfig(inst->cs_gyro, &cs_gpio) != 0)
         {
-            LOGERROR("[drv_bmi088] cs_gyro config failed");
+            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] cs_gyro config failed");
             return -1;
         }
     }
@@ -698,7 +706,7 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
     // 初始化加热 PWM（Config 加热器）
     if (BMI088_HeaterInit(inst) != 0)
     {
-        LOGERROR("[drv_bmi088] heater_pwm init failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] heater_pwm init failed");
         return -1;
     }
 
@@ -719,7 +727,7 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
     };
     if (SPIConfig(inst->spi_inst, &spi_cfg) != 0)
     {
-        LOGERROR("[drv_bmi088] SPI block mode config failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] SPI block mode config failed");
         return -1;
     }
 
@@ -752,13 +760,13 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
         };
         if (GPIOConfig(inst->int_acc, &int_gpio_cfg) != 0)
         {
-            LOGERROR("[drv_bmi088] int_acc config callback failed");
+            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] int_acc config callback failed");
             return -1;
         }
         int_gpio_cfg.gpio_e = config->int_gyro_e;
         if (GPIOConfig(inst->int_gyro, &int_gpio_cfg) != 0)
         {
-            LOGERROR("[drv_bmi088] int_gyro config callback failed");
+            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] int_gyro config callback failed");
             return -1;
         }
 
@@ -770,7 +778,7 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
         };
         if (SPIConfig(inst->spi_inst, &spi_dma_cfg) != 0)
         {
-            LOGERROR("[drv_bmi088] SPI DMA mode config failed");
+            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] SPI DMA mode config failed");
             return -1;
         }
 
@@ -792,10 +800,10 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
         memset(inst->t_acc, 0, sizeof(inst->t_acc));
         memset(inst->t_gyro, 0, sizeof(inst->t_gyro));
 
-        LOGINFO("[drv_bmi088] BMI088 INT mode initialized");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_INFO, "[drv_bmi088] BMI088 INT mode initialized");
     }
 
-    LOGINFO("[drv_bmi088] BMI088 config success");
+    BSPLOG(&g_bmi088_log, LOG_LEVEL_INFO, "[drv_bmi088] BMI088 config success");
     return 0;
 }
 
@@ -812,13 +820,13 @@ BMI088_Data_t BMI088ReadBlocking(BMI088Instance *inst)
 {
     if (inst == NULL)
     {
-        LOGERROR("[drv_bmi088] Instance is NULL");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "[drv_bmi088] Instance is NULL");
         return (BMI088_Data_t){0};
     }
 
     if (inst->work_mode == BMI088_MODE_INT)
     {
-        LOGWARNING("[drv_bmi088] BMI088ReadBlocking called in INT mode, use BMI088ReadInt instead");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_WARNING, "[drv_bmi088] BMI088ReadBlocking called in INT mode, use BMI088ReadInt instead");
         return (BMI088_Data_t){0};
     }
 

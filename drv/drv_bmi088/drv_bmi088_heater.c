@@ -158,6 +158,7 @@ static TIM_HandleTypeDef s_htim8 = {0};
 /* ══════════════════ TIM8 OPM+RCR 硬件安全初始化 ══════════════════ */
 static int8_t BMI088_HeaterInit_TIM8(BMI088Instance *inst)
 {
+    BSPLogInitInstance(&g_bmi088_log, &(LOG_Config_s){.module_name = "bmi088"});
     (void)inst;
 
     /* ── DBGMCU 配置：CPU halt 时立即冻结 TIM8，MOE 硬件复位 → 输出强制 LOW ── */
@@ -317,17 +318,17 @@ static int8_t BMI088_HeaterInit_TIM8(BMI088Instance *inst)
          */
         if (!(TIM8->CCER & TIM_CCER_CC3NE))
         {
-            LOGERROR("Htr CC3NE");
+            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "Htr CC3NE");
             return -1;
         }
         if (!(TIM8->BDTR & TIM_BDTR_MOE))
         {
-            LOGERROR("Htr MOE");
+            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "Htr MOE");
             return -1;
         }
         if (!(TIM8->CR1 & TIM_CR1_OPM))
         {
-            LOGERROR("Htr OPM");
+            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "Htr OPM");
             return -1;
         }
     }
@@ -348,7 +349,7 @@ int8_t BMI088_HeaterInit(BMI088Instance *inst)
         return BMI088_HeaterInit_TIM8(inst);
 
     /* 其他定时器：用 BSP PWMConfig（PWMRegister 已在 BMI088Register 中完成） */
-    PWM_Config_s pwm_cfg = { .tim_e = inst->heater_pwm->tim_e };
+    PWM_Config_s pwm_cfg = {.tim_e = inst->heater_pwm->tim_e};
     return PWMConfig(inst->heater_pwm, &pwm_cfg);
 }
 
@@ -528,7 +529,7 @@ int8_t BMI088_HeaterInit(BMI088Instance *inst)
     if (inst->heater_pwm->tim_e == BMI088_HEATER_NONE)
         return 0;
     /* PWMRegister 已在 BMI088Register 中完成，此处只执行 PWMConfig */
-    PWM_Config_s pwm_cfg = { .tim_e = inst->heater_pwm->tim_e };
+    PWM_Config_s pwm_cfg = {.tim_e = inst->heater_pwm->tim_e};
     return PWMConfig(inst->heater_pwm, &pwm_cfg);
 }
 
