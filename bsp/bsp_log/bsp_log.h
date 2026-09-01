@@ -194,12 +194,4 @@ void BSPLogInitInstance(LOGInstance *inst, LOG_Config_s *cfg);
 
 #endif /* (defined(BSP_LOG_USED)) && (defined(LOG_UART)) */
 
-/* 以下之后删除（兼容旧宏：无实例参数。当前为空宏占位，不输出日志；
- * 调用点后续统一迁移到 BSPLOG(inst, level, ...) 后删除） */
-#define LOGDEBUG(format, ...) ((void)0)
-#define LOGINFO(format, ...) ((void)0)
-#define LOGWARNING(format, ...) ((void)0)
-#define LOGERROR(format, ...) ((void)0)
-/* 以上之后删除 */
-
 #endif /* __BSP_LOG_H */

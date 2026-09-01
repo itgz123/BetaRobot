@@ -20,6 +20,11 @@
 #include "bsp_tim.h"
 #include "drv_daemon.h"
 #include "bmi088_reg_def.h"
+#include "bsp_log.h"
+
+/* bmi088 主驱动与加热器共用日志实例（drv_bmi088.c 定义，heater 经 extern 复用，
+ * 共享模块名/限频/计数）；日志关闭时无定义，BSPLOG 空宏不引用 */
+extern LOGInstance g_bmi088_log;
 
 /**
  * @brief BMI088 工作模式枚举

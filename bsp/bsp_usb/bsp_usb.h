@@ -104,7 +104,7 @@ int8_t USBConfig(USBInstance *instance, const USB_Config_s *config);
  * @param len  数据长度
  *
  * @note 数据写入环形缓冲后立即尝试发送；
- *       缓冲满时丢弃超出数据并 LOGWARNING。
+ *       缓冲满时丢弃超出数据并输出 WARNING 日志。
  */
 void USBTransmit(USBInstance *instance, const uint8_t *data, uint16_t len);
 

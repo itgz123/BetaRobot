@@ -53,6 +53,7 @@ extern USBD_HandleTypeDef USB_TEST_DEVICE;
  *============================================*/
 /** 当前活动实例（供 CDC 回调使用） */
 static USBInstance *s_active_inst = NULL;
+LOG_INSTANCE_DEF(g_usb_log); /* USB 日志实例 */
 
 /** USB 实例管理数组 */
 static USBInstance *s_usb_instances[USB_INSTANCE_NUM] = {NULL};
@@ -120,29 +121,31 @@ void bsp_usb_tx_complete_handler(void)
 
 int8_t USBRegister(USBInstance *instance)
 {
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_usb] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_usb_idx >= USB_INSTANCE_NUM, -1, LOGERROR("[bsp_usb] Exceeded max instance count!"));
+    BSPLogInitInstance(&g_usb_log, &(LOG_Config_s){.module_name = "usb"});
+
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "[bsp_usb] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(s_usb_idx >= USB_INSTANCE_NUM, -1, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "[bsp_usb] Exceeded max instance count!"));
 
     /* 防重复注册 */
     for (uint8_t i = 0; i < s_usb_idx; i++)
     {
         if (s_usb_instances[i] == instance)
         {
-            LOGERROR("[bsp_usb] Instance already registered!");
+            BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "[bsp_usb] Instance already registered!");
             return -1;
         }
     }
 
     s_usb_instances[s_usb_idx++] = instance;
     s_active_inst = instance;
-    LOGINFO("[bsp_usb] USB instance registered");
+    BSPLOG(&g_usb_log, LOG_LEVEL_INFO, "[bsp_usb] USB instance registered");
     return 0;
 }
 
 int8_t USBConfig(USBInstance *instance, const USB_Config_s *config)
 {
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_usb] Config: instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_usb] Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "[bsp_usb] Config: instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "[bsp_usb] Config is NULL!"));
 
     /* 验证实例已注册 */
     uint8_t found = 0;
@@ -154,14 +157,14 @@ int8_t USBConfig(USBInstance *instance, const USB_Config_s *config)
             break;
         }
     }
-    BSP_RETURN_IF_TRUE_LOG(!found, -1, LOGERROR("[bsp_usb] Instance not registered!"));
+    BSP_RETURN_IF_TRUE_LOG(!found, -1, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "[bsp_usb] Instance not registered!"));
 
     /* 设置回调与反向指针 */
     instance->rx_callback = config->rx_callback;
     instance->tx_callback = config->tx_callback;
     instance->parent = config->parent; /* 反向指针：DRV 层传入 media 实例（可为 NULL）*/
 
-    LOGINFO("[bsp_usb] USB VCP configured");
+    BSPLOG(&g_usb_log, LOG_LEVEL_INFO, "[bsp_usb] USB VCP configured");
     return 0;
 }
 
@@ -184,7 +187,7 @@ void USBTransmit(USBInstance *instance, const uint8_t *data, uint16_t len)
         uint16_t next = (instance->tx_head + 1) % APP_TX_DATA_SIZE;
         if (next == instance->tx_tail)
         {
-            LOGWARNING("[bsp_usb] TX ring full, %d bytes dropped", len - i);
+            BSPLOG(&g_usb_log, LOG_LEVEL_WARNING, "[bsp_usb] TX ring full, %d bytes dropped", len - i);
             break;
         }
         instance->tx_ring[instance->tx_head] = data[i];

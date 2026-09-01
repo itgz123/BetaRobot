@@ -16,6 +16,7 @@
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_gpio_idx = 0;
+LOG_INSTANCE_DEF(g_gpio_log); /* GPIO 日志实例 */
 #if GPIO_INSTANCE_NUM > 0
 static GPIOInstance *s_gpio_instance[GPIO_INSTANCE_NUM] = {NULL};
 static GPIOInstance *s_exti_pin_instance[16] = {NULL};
@@ -90,21 +91,23 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
  */
 int8_t GPIORegister(GPIOInstance *instance)
 {
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_gpio] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_gpio_idx >= GPIO_INSTANCE_NUM, -1, LOGERROR("[bsp_gpio] Exceeded max instance count!"));
+    BSPLogInitInstance(&g_gpio_log, &(LOG_Config_s){.module_name = "gpio"});
+
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "[bsp_gpio] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(s_gpio_idx >= GPIO_INSTANCE_NUM, -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "[bsp_gpio] Exceeded max instance count!"));
 
     // 防重复注册检查
     for (uint8_t i = 0; i < s_gpio_idx; i++)
     {
         if (s_gpio_instance[i] == instance)
         {
-            LOGERROR("[bsp_gpio] Instance already registered!");
+            BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "[bsp_gpio] Instance already registered!");
             return -1;
         }
     }
 
     s_gpio_instance[s_gpio_idx++] = instance;
-    LOGINFO("[bsp_gpio] GPIO instance registered, idx=%d", s_gpio_idx - 1);
+    BSPLOG(&g_gpio_log, LOG_LEVEL_INFO, "[bsp_gpio] GPIO instance registered, idx=%d", s_gpio_idx - 1);
     return 0;
 }
 
@@ -114,18 +117,18 @@ int8_t GPIORegister(GPIOInstance *instance)
  */
 int8_t GPIOConfig(GPIOInstance *instance, const GPIO_Config_s *config)
 {
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_gpio] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_gpio] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->gpio_e >= GPIO_NUM_MAX, -1, LOGERROR("[bsp_gpio] gpio_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "[bsp_gpio] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "[bsp_gpio] Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config->gpio_e >= GPIO_NUM_MAX, -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "[bsp_gpio] gpio_e out of range!"));
 
     // 填充枚举和硬件映射
     instance->gpio_e = config->gpio_e;
     instance->map = gpio_map[instance->gpio_e];
 
-    BSP_RETURN_IF_TRUE_LOG(instance->map.port == NULL || !GPIOIsSingleBitPin(instance->map.pin), -1, LOGERROR("[bsp_gpio] Invalid GPIO map, check bsp_cfg mapping!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->map.port == NULL || !GPIOIsSingleBitPin(instance->map.pin), -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "[bsp_gpio] Invalid GPIO map, check bsp_cfg mapping!"));
 
     uint8_t pin_idx = GPIOPinToIndex(instance->map.pin);
-    BSP_RETURN_IF_TRUE_LOG(pin_idx >= 16, -1, LOGERROR("[bsp_gpio] Invalid pin index!"));
+    BSP_RETURN_IF_TRUE_LOG(pin_idx >= 16, -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "[bsp_gpio] Invalid pin index!"));
 
     // 如果之前注册过 EXTI 映射且是本实例，先清除
     if (s_exti_pin_instance[pin_idx] == instance)
@@ -141,7 +144,7 @@ int8_t GPIOConfig(GPIOInstance *instance, const GPIO_Config_s *config)
         // 同一 pin 位只能绑定一个回调
         if (s_exti_pin_instance[pin_idx] != NULL)
         {
-            LOGERROR("[bsp_gpio] Duplicate EXTI pin registration not allowed! pin_idx=%d", pin_idx);
+            BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "[bsp_gpio] Duplicate EXTI pin registration not allowed! pin_idx=%d", pin_idx);
             instance->callback = NULL;
             return -1;
         }
@@ -155,7 +158,7 @@ void GPIOToggle(GPIOInstance *instance)
 {
     if (instance == NULL)
     {
-        LOGWARNING("[bsp_gpio] GPIOToggle: instance is NULL!");
+        BSPLOG(&g_gpio_log, LOG_LEVEL_WARNING, "[bsp_gpio] GPIOToggle: instance is NULL!");
         return;
     }
     HAL_GPIO_TogglePin(instance->map.port, instance->map.pin);
@@ -165,7 +168,7 @@ void GPIOSet(GPIOInstance *instance)
 {
     if (instance == NULL)
     {
-        LOGWARNING("[bsp_gpio] GPIOSet: instance is NULL!");
+        BSPLOG(&g_gpio_log, LOG_LEVEL_WARNING, "[bsp_gpio] GPIOSet: instance is NULL!");
         return;
     }
     HAL_GPIO_WritePin(instance->map.port, instance->map.pin, GPIO_PIN_SET);
@@ -175,7 +178,7 @@ void GPIOReset(GPIOInstance *instance)
 {
     if (instance == NULL)
     {
-        LOGWARNING("[bsp_gpio] GPIOReset: instance is NULL!");
+        BSPLOG(&g_gpio_log, LOG_LEVEL_WARNING, "[bsp_gpio] GPIOReset: instance is NULL!");
         return;
     }
     HAL_GPIO_WritePin(instance->map.port, instance->map.pin, GPIO_PIN_RESET);
@@ -185,7 +188,7 @@ GPIO_PinState GPIORead(GPIOInstance *instance)
 {
     if (instance == NULL)
     {
-        LOGWARNING("[bsp_gpio] GPIORead: instance is NULL!");
+        BSPLOG(&g_gpio_log, LOG_LEVEL_WARNING, "[bsp_gpio] GPIORead: instance is NULL!");
         return GPIO_PIN_RESET;
     }
     return HAL_GPIO_ReadPin(instance->map.port, instance->map.pin);
@@ -195,7 +198,7 @@ void GPIOWrite(GPIOInstance *instance, GPIO_PinState state)
 {
     if (instance == NULL)
     {
-        LOGWARNING("[bsp_gpio] GPIOWrite: instance is NULL!");
+        BSPLOG(&g_gpio_log, LOG_LEVEL_WARNING, "[bsp_gpio] GPIOWrite: instance is NULL!");
         return;
     }
     HAL_GPIO_WritePin(instance->map.port, instance->map.pin, state);

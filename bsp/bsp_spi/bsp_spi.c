@@ -36,6 +36,7 @@ typedef HAL_StatusTypeDef (*SPI_ReceiveFunc)(SPI_HandleTypeDef *, uint8_t *, uin
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_spi_idx = 0;
+LOG_INSTANCE_DEF(g_spi_log); /* SPI 日志实例 */
 #if SPI_INSTANCE_NUM > 0
 static SPIInstance *s_spi_instance[SPI_INSTANCE_NUM] = {NULL};
 static SPIInstance *s_spi_last_route = NULL;
@@ -170,11 +171,11 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
     {
         uint32_t error_code = hspi->ErrorCode;
         (void)error_code;
-        LOGWARNING("[spi] Error detected, code=0x%lX (MODF:%d OVR:%d FRE:%d DMA:%d)", error_code,
-                   (error_code & HAL_SPI_ERROR_MODF) ? 1 : 0, // 模式错误
-                   (error_code & HAL_SPI_ERROR_OVR) ? 1 : 0,  // 溢出错误
-                   (error_code & HAL_SPI_ERROR_FRE) ? 1 : 0,  // 帧错误
-                   (error_code & HAL_SPI_ERROR_DMA) ? 1 : 0); // DMA错误
+        BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "[spi] Error detected, code=0x%lX (MODF:%d OVR:%d FRE:%d DMA:%d)", error_code,
+               (error_code & HAL_SPI_ERROR_MODF) ? 1 : 0, // 模式错误
+               (error_code & HAL_SPI_ERROR_OVR) ? 1 : 0,  // 溢出错误
+               (error_code & HAL_SPI_ERROR_FRE) ? 1 : 0,  // 帧错误
+               (error_code & HAL_SPI_ERROR_DMA) ? 1 : 0); // DMA错误
     }
 }
 
@@ -186,22 +187,24 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
  */
 int8_t SPIRegister(SPIInstance *instance)
 {
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_spi] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_spi_idx >= SPI_INSTANCE_NUM, -1, LOGERROR("[bsp_spi] Exceeded max instance count!"));
+    BSPLogInitInstance(&g_spi_log, &(LOG_Config_s){.module_name = "spi"});
+
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "[bsp_spi] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(s_spi_idx >= SPI_INSTANCE_NUM, -1, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "[bsp_spi] Exceeded max instance count!"));
 
     // 防重复注册检查
     for (uint8_t i = 0; i < s_spi_idx; i++)
     {
         if (s_spi_instance[i] == instance)
         {
-            LOGERROR("[bsp_spi] Instance already registered!");
+            BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "[bsp_spi] Instance already registered!");
             return -1;
         }
     }
 
     s_spi_instance[s_spi_idx++] = instance;
 
-    LOGINFO("[bsp_spi] SPI instance registered, idx=%d", s_spi_idx - 1);
+    BSPLOG(&g_spi_log, LOG_LEVEL_INFO, "[bsp_spi] SPI instance registered, idx=%d", s_spi_idx - 1);
     return 0;
 }
 
@@ -211,16 +214,16 @@ int8_t SPIRegister(SPIInstance *instance)
  */
 int8_t SPIConfig(SPIInstance *instance, const SPI_Config_s *config)
 {
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, LOGERROR("[bsp_spi] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, LOGERROR("[bsp_spi] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->spi_e >= SPI_NUM_MAX, -1, LOGERROR("[bsp_spi] spi_e out of range!"));
-    BSP_RETURN_IF_TRUE_LOG(config->work_mode != SPI_BLOCK_MODE && config->work_mode != SPI_IT_MODE && config->work_mode != SPI_DMA_MODE, -1, LOGERROR("[bsp_spi] Invalid work_mode=%d!", config->work_mode));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "[bsp_spi] Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "[bsp_spi] Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config->spi_e >= SPI_NUM_MAX, -1, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "[bsp_spi] spi_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(config->work_mode != SPI_BLOCK_MODE && config->work_mode != SPI_IT_MODE && config->work_mode != SPI_DMA_MODE, -1, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "[bsp_spi] Invalid work_mode=%d!", config->work_mode));
 
     // 填充枚举和硬件句柄
     instance->spi_e = config->spi_e;
     instance->handle = spi_map[instance->spi_e].handle;
 
-    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, -1, LOGERROR("[bsp_spi] SPI handle is NULL, check CubeMX configuration!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, -1, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "[bsp_spi] SPI handle is NULL, check CubeMX configuration!"));
 
     instance->work_mode = config->work_mode;
     instance->rx_callback = config->rx_callback;
@@ -232,7 +235,7 @@ void SPITransmit(SPIInstance *instance, uint8_t *data, uint16_t len, uint32_t ti
 {
     if (instance == NULL || data == NULL || len == 0)
     {
-        LOGWARNING("[bsp_spi] Invalid transmit parameters!");
+        BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "[bsp_spi] Invalid transmit parameters!");
         return;
     }
 
@@ -246,7 +249,7 @@ void SPITransmit(SPIInstance *instance, uint8_t *data, uint16_t len, uint32_t ti
         {
             if (timeout_ms > 0 && (DWT_GetTimeUs() - start_time) > timeout_us)
             {
-                LOGWARNING("[bsp_spi] SPI busy timeout (spi_e=%d)", instance->spi_e);
+                BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "[bsp_spi] SPI busy timeout (spi_e=%d)", instance->spi_e);
                 return;
             }
         }
@@ -260,13 +263,13 @@ void SPIReceive(SPIInstance *instance, uint16_t len, uint32_t timeout_ms)
 {
     if (instance == NULL || len == 0)
     {
-        LOGWARNING("[bsp_spi] Invalid receive parameters!");
+        BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "[bsp_spi] Invalid receive parameters!");
         return;
     }
 
     if (len > instance->buff_size)
     {
-        LOGWARNING("[bsp_spi] len > buff_size, truncated!");
+        BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "[bsp_spi] len > buff_size, truncated!");
         len = instance->buff_size;
     }
 
@@ -280,7 +283,7 @@ void SPIReceive(SPIInstance *instance, uint16_t len, uint32_t timeout_ms)
         {
             if (timeout_ms > 0 && (DWT_GetTimeUs() - start_time) > timeout_us)
             {
-                LOGWARNING("[bsp_spi] SPI busy timeout (spi_e=%d)", instance->spi_e);
+                BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "[bsp_spi] SPI busy timeout (spi_e=%d)", instance->spi_e);
                 return;
             }
         }
@@ -295,13 +298,13 @@ void SPITransmitReceive(SPIInstance *instance, uint8_t *tx_data, uint16_t len, u
 {
     if (instance == NULL || tx_data == NULL || len == 0)
     {
-        LOGWARNING("[bsp_spi] Invalid transmit/receive parameters!");
+        BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "[bsp_spi] Invalid transmit/receive parameters!");
         return;
     }
 
     if (len > instance->buff_size)
     {
-        LOGWARNING("[bsp_spi] len > buff_size, truncated!");
+        BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "[bsp_spi] len > buff_size, truncated!");
         len = instance->buff_size;
     }
 
@@ -315,7 +318,7 @@ void SPITransmitReceive(SPIInstance *instance, uint8_t *tx_data, uint16_t len, u
         {
             if (timeout_ms > 0 && (DWT_GetTimeUs() - start_time) > timeout_us)
             {
-                LOGWARNING("[bsp_spi] SPI busy timeout (spi_e=%d)", instance->spi_e);
+                BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "[bsp_spi] SPI busy timeout (spi_e=%d)", instance->spi_e);
                 return;
             }
         }
