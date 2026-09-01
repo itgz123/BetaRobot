@@ -20,6 +20,9 @@
 
 #include "bsp_format.h"
 #include "bsp_math_int64.h"
+#include "app_cfg.h"
+
+#ifdef BSP_FORMAT_USED
 
 /*============================================
  *              查表常量
@@ -367,3 +370,5 @@ int BSPFormatEx(char *out, size_t cap, const char *fmt, size_t fmt_len, ...)
     va_end(args);
     return n;
 }
+
+#endif /* BSP_FORMAT_USED */
