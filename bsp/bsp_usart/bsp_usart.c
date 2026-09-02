@@ -18,7 +18,7 @@
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_usart_idx = 0;
-LOG_INSTANCE_DEF(g_usart_log, "usart", 0); /* USART 日志实例 */
+LOG_INSTANCE_DEF(g_usart_log, "bsp_usart", 0); /* USART 日志实例 */
 #if UART_INSTANCE_NUM > 0
 static USARTInstance *s_usart_instance[UART_INSTANCE_NUM] = {NULL};
 static USARTInstance *s_usart_last_route = NULL;
@@ -101,7 +101,7 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
     {
         uint32_t error_code = huart->ErrorCode;
         (void)error_code;
-        BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "[bsp_usart] Error detected, code=0x%lX (PE:%d FE:%d NE:%d ORE:%d DMA:%d)", error_code,
+        BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "Error detected, code=0x%lX (PE:%d FE:%d NE:%d ORE:%d DMA:%d)", error_code,
                (error_code & HAL_UART_ERROR_PE) ? 1 : 0,   // 奇偶校验错误
                (error_code & HAL_UART_ERROR_FE) ? 1 : 0,   // 帧错误
                (error_code & HAL_UART_ERROR_NE) ? 1 : 0,   // 噪声错误
@@ -133,22 +133,22 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
 int8_t USARTRegister(USARTInstance *instance)
 {
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "[bsp_usart] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_usart_idx >= UART_INSTANCE_NUM, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "[bsp_usart] Exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(s_usart_idx >= UART_INSTANCE_NUM, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Exceeded max instance count!"));
 
     // 防重复注册检查
     for (uint8_t i = 0; i < s_usart_idx; i++)
     {
         if (s_usart_instance[i] == instance)
         {
-            BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "[bsp_usart] Instance already registered!");
+            BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Instance already registered!");
             return -1;
         }
     }
 
     s_usart_instance[s_usart_idx++] = instance;
 
-    BSPLOG(&g_usart_log, LOG_LEVEL_INFO, "[bsp_usart] USART Instance registered, idx=%d", s_usart_idx - 1);
+    BSPLOG(&g_usart_log, LOG_LEVEL_INFO, "USART Instance registered, idx=%d", s_usart_idx - 1);
     return 0;
 }
 
@@ -158,18 +158,18 @@ int8_t USARTRegister(USARTInstance *instance)
  */
 int8_t USARTConfig(USARTInstance *instance, const USART_Config_s *config)
 {
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "[bsp_usart] Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "[bsp_usart] Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->uart_e >= UART_NUM_MAX, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "[bsp_usart] uart_e out of range!"));
-    BSP_RETURN_IF_TRUE_LOG(config->tx_mode != USART_BLOCK_MODE && config->tx_mode != USART_IT_MODE && config->tx_mode != USART_DMA_MODE, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "[bsp_usart] Invalid tx_mode=%d!", config->tx_mode));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config->uart_e >= UART_NUM_MAX, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "uart_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(config->tx_mode != USART_BLOCK_MODE && config->tx_mode != USART_IT_MODE && config->tx_mode != USART_DMA_MODE, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Invalid tx_mode=%d!", config->tx_mode));
 
     // 填充枚举和硬件句柄
     instance->uart_e = config->uart_e;
     instance->handle = uart_map[instance->uart_e].handle;
-    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "[bsp_usart] UART handle is NULL, check bsp_cfg mapping!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "UART handle is NULL, check bsp_cfg mapping!"));
 
     // RX 使用 ReceiveToIdle DMA，必须配置 RX DMA
-    BSP_RETURN_IF_TRUE_LOG(instance->handle->hdmarx == NULL, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "[bsp_usart] RX DMA is required but hdmarx is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->handle->hdmarx == NULL, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "RX DMA is required but hdmarx is NULL!"));
 
     // 重复注册检查（同一 handle 不能重复注册）
     for (uint8_t i = 0; i < s_usart_idx; i++)
@@ -178,7 +178,7 @@ int8_t USARTConfig(USARTInstance *instance, const USART_Config_s *config)
             continue;
         if (s_usart_instance[i]->handle == instance->handle)
         {
-            BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "[bsp_usart] Same UART handle already registered!");
+            BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Same UART handle already registered!");
             return -1;
         }
     }
@@ -197,7 +197,7 @@ int8_t USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len, uint3
 {
     if (instance == NULL || data == NULL || len == 0)
     {
-        BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "[bsp_usart] Invalid transmit parameters!");
+        BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "Invalid transmit parameters!");
         return -1;
     }
 
@@ -211,7 +211,7 @@ int8_t USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len, uint3
         {
             if ((DWT_GetTimeUs() - start_time) > timeout_us)
             {
-                BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "[bsp_usart] UART busy timeout (uart_e=%d)", instance->uart_e);
+                BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "UART busy timeout (uart_e=%d)", instance->uart_e);
                 return -1;
             }
         }
@@ -233,7 +233,7 @@ int8_t USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len, uint3
             return -1;
         break;
     default:
-        BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "[bsp_usart] Invalid tx_mode=%d!", instance->tx_mode);
+        BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "Invalid tx_mode=%d!", instance->tx_mode);
         return -1;
     }
     return 0;
@@ -248,7 +248,7 @@ void USARTRestartReceive(USARTInstance *instance)
 
     if (HAL_UARTEx_ReceiveToIdle_DMA(instance->handle, instance->rx_buff, instance->rx_buff_size) != HAL_OK)
     {
-        BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "[bsp_usart] Restart receive failed!");
+        BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "Restart receive failed!");
         return;
     }
 

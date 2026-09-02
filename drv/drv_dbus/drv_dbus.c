@@ -24,7 +24,7 @@
 // 函数声明
 static void DBUSUARTRxCallback(USARTInstance *usart_inst);
 
-LOG_INSTANCE_DEF(g_dbus_log, "dbus", 0); // DBUS 日志实例
+LOG_INSTANCE_DEF(g_dbus_log, "drv_dbus", 0); // DBUS 日志实例
 
 /*------------- 外部接口实现 --------------*/
 
@@ -36,20 +36,20 @@ int8_t DBUSRegister(DBUSInstance *instance)
 
     if (instance == NULL)
     {
-        BSPLOG(&g_dbus_log, LOG_LEVEL_ERROR, "[drv_dbus] Instance is NULL!");
+        BSPLOG(&g_dbus_log, LOG_LEVEL_ERROR, "Instance is NULL!");
         return -1;
     }
 
     if (instance->usart_inst == NULL)
     {
-        BSPLOG(&g_dbus_log, LOG_LEVEL_ERROR, "[drv_dbus] usart_inst is NULL!");
+        BSPLOG(&g_dbus_log, LOG_LEVEL_ERROR, "usart_inst is NULL!");
         return -1;
     }
 
     // 注册 BSP 层 USART 实例（USARTRegister 自身有防重复检查）
     if (USARTRegister(instance->usart_inst) != 0)
     {
-        BSPLOG(&g_dbus_log, LOG_LEVEL_ERROR, "[drv_dbus] USART register failed!");
+        BSPLOG(&g_dbus_log, LOG_LEVEL_ERROR, "USART register failed!");
         return -1;
     }
 
@@ -69,19 +69,19 @@ int8_t DBUSConfig(DBUSInstance *instance, const DBUS_Config_s *config)
 {
     if (instance == NULL)
     {
-        BSPLOG(&g_dbus_log, LOG_LEVEL_ERROR, "[drv_dbus] Instance is NULL!");
+        BSPLOG(&g_dbus_log, LOG_LEVEL_ERROR, "Instance is NULL!");
         return -1;
     }
 
     if (config == NULL)
     {
-        BSPLOG(&g_dbus_log, LOG_LEVEL_ERROR, "[drv_dbus] Config is NULL!");
+        BSPLOG(&g_dbus_log, LOG_LEVEL_ERROR, "Config is NULL!");
         return -1;
     }
 
     if (instance->usart_inst == NULL)
     {
-        BSPLOG(&g_dbus_log, LOG_LEVEL_ERROR, "[drv_dbus] usart_inst is NULL!");
+        BSPLOG(&g_dbus_log, LOG_LEVEL_ERROR, "usart_inst is NULL!");
         return -1;
     }
 
@@ -97,7 +97,7 @@ int8_t DBUSConfig(DBUSInstance *instance, const DBUS_Config_s *config)
     };
     if (USARTConfig(instance->usart_inst, &usart_cfg) != 0)
     {
-        BSPLOG(&g_dbus_log, LOG_LEVEL_ERROR, "[drv_dbus] USART config failed!");
+        BSPLOG(&g_dbus_log, LOG_LEVEL_ERROR, "USART config failed!");
         return -1;
     }
 
@@ -127,7 +127,7 @@ static DBUS_Data_t DBUSDecodeFrame(const uint8_t *data, uint16_t len)
     // 参数检查
     if (data == NULL || len < DBUS_FRAME_SIZE)
     {
-        BSPLOG(&g_dbus_log, LOG_LEVEL_WARNING, "[drv_dbus] Invalid frame data, len=%d", len);
+        BSPLOG(&g_dbus_log, LOG_LEVEL_WARNING, "Invalid frame data, len=%d", len);
         result.frame_lost = 1;
         return result;
     }
@@ -186,7 +186,7 @@ static void DBUSUARTRxCallback(USARTInstance *usart_inst)
     // 检查帧长度
     if (usart_inst->rx_len != DBUS_FRAME_SIZE)
     {
-        BSPLOG(&g_dbus_log, LOG_LEVEL_WARNING, "[drv_dbus] Frame length error: %d (expected %d)", usart_inst->rx_len, DBUS_FRAME_SIZE);
+        BSPLOG(&g_dbus_log, LOG_LEVEL_WARNING, "Frame length error: %d (expected %d)", usart_inst->rx_len, DBUS_FRAME_SIZE);
         return;
     }
 
