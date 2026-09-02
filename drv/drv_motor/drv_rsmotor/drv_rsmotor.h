@@ -53,7 +53,8 @@ typedef struct RSMotorInstance RSMotorInstance;
  *   D[6]：bits[7:6]=模式状态(0 Reset/1 Cali/2 Motor), bit[5]=故障, bit[4]=预警, bits[3:0]=绕组温度高4位 TEMP[11:8]
  *   D[7]：绕组温度低8位 TEMP[7:0]（值 = 温度℃ × 10，解析时需 ÷10）
  */
-typedef struct __attribute__((packed))
+#pragma pack(push, 1)
+typedef struct
 {
     uint8_t can_id;               // [0]   电机 canid
     uint16_t position_be;         // [1-2] 位置 uint16 大端
@@ -63,6 +64,7 @@ typedef struct __attribute__((packed))
     uint8_t status_and_temp_hi;   // [6]   mode[7:6] | fault[5] | warn[4] | TEMP[11:8]
     uint8_t temp_lo;              // [7]   绕组温度 TEMP[7:0]（= ℃×10）
 } RS_FeedbackFrameParts_s;
+#pragma pack(pop)
 
 typedef union
 {
@@ -84,7 +86,8 @@ typedef union
  *
  * @note 本项目在上位机做 PID（Kp=Kd=0），仅通过 t_ff 下发扭矩
  */
-typedef struct __attribute__((packed))
+#pragma pack(push, 1)
+typedef struct
 {
     uint16_t p_des_be;          // [0-1] 位置目标 uint16 大端
     uint8_t v_des_hi;           // [2]   v_des[11:4]
@@ -94,6 +97,7 @@ typedef struct __attribute__((packed))
     uint8_t kd_lo_and_tff_hi;   // [6]   kd[3:0] | t_ff[11:8]
     uint8_t tff_lo;             // [7]   t_ff[7:0]
 } RS_ControlFrameParts_s;
+#pragma pack(pop)
 
 typedef union
 {

@@ -102,12 +102,14 @@ typedef union
 {
     uint8_t bytes[6]; // 原始字节
     int16_t axis[3];  // 三轴数组: [x, y, z]
-    struct __attribute__((packed))
+#pragma pack(push, 1)
+    struct
     {
         int16_t x; // X 轴
         int16_t y; // Y 轴
         int16_t z; // Z 轴
     };
+#pragma pack(pop)
 } BMI088_AxisRaw_u;
 
 /**

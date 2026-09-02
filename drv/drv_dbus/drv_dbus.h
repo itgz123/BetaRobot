@@ -67,7 +67,8 @@ typedef enum
  */
 typedef union
 {
-    struct __attribute__((packed))
+#pragma pack(push, 1)
+    struct
     {
         uint16_t w : 1;     // Bit0: W 键
         uint16_t s : 1;     // Bit1: S 键
@@ -79,6 +80,7 @@ typedef union
         uint16_t ctrl : 1;  // Bit7: Ctrl 键
         uint16_t reserved : 8;
     };
+#pragma pack(pop)
     uint16_t value; // 16 位原始键值
 } DBUS_Key_t;
 

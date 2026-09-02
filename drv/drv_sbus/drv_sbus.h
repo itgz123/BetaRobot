@@ -45,11 +45,13 @@
 typedef union
 {
     uint8_t raw[25];
-    struct __attribute__((packed))
+#pragma pack(push, 1)
+    struct
     {
-        uint8_t header;                // [0]  帧头 0x0F
-        uint8_t ch_data[22];           // [1-22] 16通道 × 11位
-        struct __attribute__((packed)) // [23] 标志位
+        uint8_t header;      // [0]  帧头 0x0F
+        uint8_t ch_data[22]; // [1-22] 16通道 × 11位
+#pragma pack(push, 1)
+        struct // [23] 标志位
         {
             uint8_t ch17 : 1;       // bit 0: 数字通道 1
             uint8_t ch18 : 1;       // bit 1: 数字通道 2
@@ -57,8 +59,10 @@ typedef union
             uint8_t failsafe : 1;   // bit 3: 失控保护
             uint8_t reserved : 4;   // bits 4-7
         } flags;
+#pragma pack(pop)
         uint8_t footer; // [24] 帧尾
     } frame;
+#pragma pack(pop)
 } SBUS_RawFrame_u;
 
 /*------------- 类型定义 --------------*/
