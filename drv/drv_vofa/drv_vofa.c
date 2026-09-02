@@ -40,7 +40,7 @@ typedef enum : uint8_t
 // USART 实例（静态定义）
 USART_INSTANCE_DEF(s_vofa_uart, 1);
 
-LOG_INSTANCE_DEF(g_vofa_log, "vofa", 0); // VOFA 日志实例
+LOG_INSTANCE_DEF(g_vofa_log, "drv_vofa", 0); // VOFA 日志实例
 
 // 三套发送缓冲区（放在 DMA_RAM 区域）
 static uint8_t s_tx_buff[3][TX_BUFF_SIZE] DMA_RAM = {0};
@@ -99,7 +99,7 @@ void VofaInit(void)
     };
     USARTConfig(&s_vofa_uart, &usart_cfg);
 
-    BSPLOG(&g_vofa_log, LOG_LEVEL_INFO, "[VOFA] Initialized, UART: %d, Channels: %d (ch0=timestamp, ch1~%d=user), Triple-buffer DMA",
+    BSPLOG(&g_vofa_log, LOG_LEVEL_INFO, "Initialized, UART: %d, Channels: %d (ch0=timestamp, ch1~%d=user), Triple-buffer DMA",
            VOFA_UART, VOFA_CHANNELS, VOFA_CHANNELS);
 }
 
@@ -158,7 +158,7 @@ void VofaSend(void)
         }
     }
     // 没有空闲缓冲区，保持当前索引，下次 SetChannel 会因状态检查而失效
-    BSPLOG(&g_vofa_log, LOG_LEVEL_WARNING, "[VOFA] No idle buffer, SetChannel will be ignored until buffer available!");
+    BSPLOG(&g_vofa_log, LOG_LEVEL_WARNING, "No idle buffer, SetChannel will be ignored until buffer available!");
 }
 
 #else // !(defined(VOFA_USED)) && (defined(VOFA_UART))

@@ -19,7 +19,7 @@
  *============================================*/
 static uint8_t s_adc_idx = 0;                         // 已注册实例数量
 static ADCInstance *s_adc_instance[ADC_INSTANCE_NUM]; // 实例指针数组
-LOG_INSTANCE_DEF(g_adc_log, "adc", 0);                // ADC 日志实例
+LOG_INSTANCE_DEF(g_adc_log, "bsp_adc", 0);            // ADC 日志实例
 
 /**
  * @brief 按实例映射配置 ADC 通道
@@ -55,15 +55,15 @@ static HAL_StatusTypeDef ADCConfigChannel(ADCInstance *instance)
 int8_t ADCRegister(ADCInstance *instance)
 {
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "[BSP_ADC] Register failed: instance is NULL"));
-    BSP_RETURN_IF_TRUE_LOG(s_adc_idx >= ADC_INSTANCE_NUM, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "[BSP_ADC] Register failed: instance num exceeded %d", ADC_INSTANCE_NUM));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Register failed: instance is NULL"));
+    BSP_RETURN_IF_TRUE_LOG(s_adc_idx >= ADC_INSTANCE_NUM, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Register failed: instance num exceeded %d", ADC_INSTANCE_NUM));
 
     // 防重复注册检查
     for (uint8_t i = 0; i < s_adc_idx; i++)
     {
         if (s_adc_instance[i] == instance)
         {
-            BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "[BSP_ADC] Register failed: instance already registered");
+            BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Register failed: instance already registered");
             return -1;
         }
     }
@@ -71,7 +71,7 @@ int8_t ADCRegister(ADCInstance *instance)
     // 保存实例指针
     s_adc_instance[s_adc_idx++] = instance;
 
-    BSPLOG(&g_adc_log, LOG_LEVEL_INFO, "[BSP_ADC] Register success, total=%d", s_adc_idx);
+    BSPLOG(&g_adc_log, LOG_LEVEL_INFO, "Register success, total=%d", s_adc_idx);
     return 0;
 }
 
@@ -81,18 +81,18 @@ int8_t ADCRegister(ADCInstance *instance)
  */
 int8_t ADCConfig(ADCInstance *instance, const ADC_Config_s *config)
 {
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "[BSP_ADC] Config failed: instance is NULL"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "[BSP_ADC] Config failed: config is NULL"));
-    BSP_RETURN_IF_TRUE_LOG(config->adc_e >= ADC_NUM_MAX, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "[BSP_ADC] Config failed: adc_e out of range"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Config failed: instance is NULL"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Config failed: config is NULL"));
+    BSP_RETURN_IF_TRUE_LOG(config->adc_e >= ADC_NUM_MAX, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Config failed: adc_e out of range"));
 
     // 填充枚举和硬件映射
     instance->adc_e = config->adc_e;
     instance->adc_map = adc_map[instance->adc_e];
 
-    BSP_RETURN_IF_TRUE_LOG(instance->adc_map.handle == NULL, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "[BSP_ADC] Config failed: ADC handle is NULL"));
+    BSP_RETURN_IF_TRUE_LOG(instance->adc_map.handle == NULL, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Config failed: ADC handle is NULL"));
 
     // 配置ADC通道
-    BSP_RETURN_IF_TRUE_LOG(ADCConfigChannel(instance) != HAL_OK, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "[BSP_ADC] Config failed: config channel failed, adc_e=%d", instance->adc_e));
+    BSP_RETURN_IF_TRUE_LOG(ADCConfigChannel(instance) != HAL_OK, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Config failed: config channel failed, adc_e=%d", instance->adc_e));
 
     // ADC校准（仅H7系列支持，F4系列无校准API）
     ADC_HandleTypeDef *hadc = instance->adc_map.handle;
@@ -100,16 +100,16 @@ int8_t ADCConfig(ADCInstance *instance, const ADC_Config_s *config)
     // H7系列：需要指定校准类型和差分模式
     if (HAL_ADCEx_Calibration_Start(hadc, ADC_CALIB_OFFSET, ADC_SINGLE_ENDED) != HAL_OK)
     {
-        BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "[BSP_ADC] Config failed: Calibration failed, adc_e=%d", instance->adc_e);
+        BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Config failed: Calibration failed, adc_e=%d", instance->adc_e);
         return -1;
     }
 #else
     // F4系列：无校准API，跳过
     (void)hadc; // 避免未使用警告
-    BSPLOG(&g_adc_log, LOG_LEVEL_INFO, "[BSP_ADC] ADC calibration skipped (not supported on F4 series)");
+    BSPLOG(&g_adc_log, LOG_LEVEL_INFO, "ADC calibration skipped (not supported on F4 series)");
 #endif
 
-    BSPLOG(&g_adc_log, LOG_LEVEL_INFO, "[BSP_ADC] Config success: adc_e=%d, handle=0x%p, channel=%lu", instance->adc_e, instance->adc_map.handle, instance->adc_map.channel);
+    BSPLOG(&g_adc_log, LOG_LEVEL_INFO, "Config success: adc_e=%d, handle=0x%p, channel=%lu", instance->adc_e, instance->adc_map.handle, instance->adc_map.channel);
     return 0;
 }
 

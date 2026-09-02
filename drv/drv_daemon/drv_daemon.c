@@ -10,7 +10,7 @@
 // 用于保存所有的daemon instance
 static DaemonInstance *s_daemon_instances[DAEMON_MX_CNT] = {NULL};
 static uint8_t s_idx = 0;
-LOG_INSTANCE_DEF(g_daemon_log, "daemon", 0); // Daemon 日志实例
+LOG_INSTANCE_DEF(g_daemon_log, "drv_daemon", 0); // Daemon 日志实例
 
 // 蜂鸣器鸣叫声音表格
 const uint8_t voice_map[DAEMON_FAULT_NUM][12] = {0};
@@ -29,13 +29,13 @@ void DaemonConfig(DaemonInstance *inst, const Daemon_Config_s *config)
 
     if (config->fault_action > DAEMON_FAULT_RESERVED_7)
     {
-        BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "[DAEMON] Invalid fault_action: %d, max: %d", config->fault_action, DAEMON_FAULT_RESERVED_7);
+        BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "Invalid fault_action: %d, max: %d", config->fault_action, DAEMON_FAULT_RESERVED_7);
         return;
     }
 
     if (config->owner_id == NULL)
     {
-        BSPLOG(&g_daemon_log, LOG_LEVEL_WARNING, "[DAEMON] owner_id is NULL, daemon may not identify offline module");
+        BSPLOG(&g_daemon_log, LOG_LEVEL_WARNING, "owner_id is NULL, daemon may not identify offline module");
     }
 
     inst->reload_count = config->reload_count;
@@ -56,7 +56,7 @@ void DaemonRegister(DaemonInstance *inst)
     {
         if (s_daemon_instances[i] == inst)
         {
-            BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "[DAEMON] Instance already registered!");
+            BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "Instance already registered!");
             return;
         }
     }
@@ -72,7 +72,7 @@ void DaemonReload(DaemonInstance *instance)
     if (!instance->is_online)
     {
         instance->is_online = 1;
-        BSPLOG(&g_daemon_log, LOG_LEVEL_INFO, "[DAEMON] Module 0x%08X back ONLINE", (uint32_t)(uintptr_t)instance->owner_id);
+        BSPLOG(&g_daemon_log, LOG_LEVEL_INFO, "Module 0x%08X back ONLINE", (uint32_t)(uintptr_t)instance->owner_id);
     }
 
     instance->temp_count = instance->reload_count;
@@ -99,7 +99,7 @@ void DaemonTask(void)
             if (dins->temp_count == 0)
             {
                 dins->is_online = 0;
-                BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "[DAEMON] Module 0x%08X OFFLINE", (uint32_t)(uintptr_t)dins->owner_id);
+                BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "Module 0x%08X OFFLINE", (uint32_t)(uintptr_t)dins->owner_id);
             }
         }
         else

@@ -20,7 +20,7 @@
 // 函数声明
 static void SBUSUARTRxCallback(USARTInstance *usart_inst);
 
-LOG_INSTANCE_DEF(g_sbus_log, "sbus", 0); // SBUS 日志实例
+LOG_INSTANCE_DEF(g_sbus_log, "drv_sbus", 0); // SBUS 日志实例
 
 /*------------- 外部接口实现 --------------*/
 
@@ -32,20 +32,20 @@ int8_t SBUSRegister(SBUSInstance *instance)
 
     if (instance == NULL)
     {
-        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "[drv_sbus] Instance is NULL!");
+        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "Instance is NULL!");
         return -1;
     }
 
     if (instance->usart_inst == NULL)
     {
-        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "[drv_sbus] usart_inst is NULL!");
+        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "usart_inst is NULL!");
         return -1;
     }
 
     // 注册 BSP 层 USART 实例（USARTRegister 自身有防重复检查）
     if (USARTRegister(instance->usart_inst) != 0)
     {
-        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "[drv_sbus] USART register failed!");
+        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "USART register failed!");
         return -1;
     }
 
@@ -65,19 +65,19 @@ int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config)
 {
     if (instance == NULL)
     {
-        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "[drv_sbus] Instance is NULL!");
+        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "Instance is NULL!");
         return -1;
     }
 
     if (config == NULL)
     {
-        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "[drv_sbus] Config is NULL!");
+        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "Config is NULL!");
         return -1;
     }
 
     if (instance->usart_inst == NULL)
     {
-        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "[drv_sbus] usart_inst is NULL!");
+        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "usart_inst is NULL!");
         return -1;
     }
 
@@ -93,7 +93,7 @@ int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config)
     };
     if (USARTConfig(instance->usart_inst, &usart_cfg) != 0)
     {
-        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "[drv_sbus] USART config failed!");
+        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "USART config failed!");
         return -1;
     }
 
@@ -123,7 +123,7 @@ static SBUS_Data_t SBUSDecodeFrame(const uint8_t *data, uint16_t len)
     // 参数检查
     if (data == NULL || len < SBUS_FRAME_SIZE)
     {
-        BSPLOG(&g_sbus_log, LOG_LEVEL_WARNING, "[drv_sbus] Invalid frame data, len=%d", len);
+        BSPLOG(&g_sbus_log, LOG_LEVEL_WARNING, "Invalid frame data, len=%d", len);
         result.frame_lost = 1;
         return result;
     }
@@ -134,7 +134,7 @@ static SBUS_Data_t SBUSDecodeFrame(const uint8_t *data, uint16_t len)
     // 帧头检查
     if (frame->frame.header != SBUS_HEADER)
     {
-        BSPLOG(&g_sbus_log, LOG_LEVEL_WARNING, "[drv_sbus] Invalid frame header: 0x%02X", frame->frame.header);
+        BSPLOG(&g_sbus_log, LOG_LEVEL_WARNING, "Invalid frame header: 0x%02X", frame->frame.header);
         result.frame_lost = 1;
         return result;
     }
@@ -144,7 +144,7 @@ static SBUS_Data_t SBUSDecodeFrame(const uint8_t *data, uint16_t len)
         frame->frame.footer != SBUS_FOOTER_FRAME_LOST &&
         frame->frame.footer != SBUS_FOOTER_FAILSAFE)
     {
-        BSPLOG(&g_sbus_log, LOG_LEVEL_WARNING, "[drv_sbus] Invalid frame footer: 0x%02X", frame->frame.footer);
+        BSPLOG(&g_sbus_log, LOG_LEVEL_WARNING, "Invalid frame footer: 0x%02X", frame->frame.footer);
         result.frame_lost = 1;
         return result;
     }
@@ -204,7 +204,7 @@ static void SBUSUARTRxCallback(USARTInstance *usart_inst)
     // 检查帧长度
     if (usart_inst->rx_len != SBUS_FRAME_SIZE)
     {
-        BSPLOG(&g_sbus_log, LOG_LEVEL_WARNING, "[drv_sbus] Frame length error: %d (expected %d)", usart_inst->rx_len, SBUS_FRAME_SIZE);
+        BSPLOG(&g_sbus_log, LOG_LEVEL_WARNING, "Frame length error: %d (expected %d)", usart_inst->rx_len, SBUS_FRAME_SIZE);
         return;
     }
 
