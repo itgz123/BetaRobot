@@ -87,33 +87,47 @@ int8_t CommSend(CommInstance *inst, const uint8_t *payload);
  * @param rx_proto_       接收协议名 token：拼接 COMM_##rx_proto_##_DEF（协议 DEF 宏）、
  *                        PROTO_##rx_proto_（协议类型 id）、PROTO_##rx_proto_##_OVERHEAD（开销）
  * @param tx_proto_       发送协议名 token（同上三件套）
- * @param rx_size         接收 payload 大小（media rx 缓冲 = rx_size + 协议开销）
- * @param tx_size         发送 payload 大小（media tx 缓冲 = tx_size + 协议开销）
+ * @param rx_type_        接收 payload 结构体类型（线协议字节布局契约）
+ * @param rx_size         接收 payload 约定长度（协议文档值，非 sizeof(rx_type_)；
+ *                        宏内 _Static_assert 校验 sizeof(rx_type_) == rx_size，不符即编译报错）
+ * @param tx_type_        发送 payload 结构体类型（线协议字节布局契约）
+ * @param tx_size         发送 payload 约定长度（协议文档值，非 sizeof(tx_type_)；
+ *                        宏内 _Static_assert 校验 sizeof(tx_type_) == tx_size）
  * @param unpack_mode_    接收解包位置（UNPACK_IN_ISR 直解 / UNPACK_IN_TASK 入队解包）
  *
+ * @note 跨板通信的布局一致性只能靠"每端各自把本地 sizeof(结构体) 与双方约定的线长常量
+ *       比对"来保证（编译期无法跨两块板比较）。故 rx_size/tx_size 必须是写在协议文档里的
+ *       固定值（如 48/55），而不是 sizeof(...)：否则 _Static_assert 变成恒等式、失去检查意义。
+ *       任一端增删字段/改动压缩方式导致 sizeof 偏离约定值，该端编译即失败。
  * @note 协议名 token 内置为 RAW / CUSTOM；app 自定义协议（id >= PROTO_USER）需：
  *       1) app 层定义协议头（DEF 宏 + 开销宏 + 类型 id + Init + 后端描述符）；
  *       2) CommRegister 前调用 CommProtoRegisterBackend 登记；3) 此处传自定义 token。
  * @example
- *   COMM_DEF(cmd_comm, MEDIA_USART, RAW, RAW, 8, 16, UNPACK_IN_ISR);
+ *   COMM_DEF(vis_comm, MEDIA_USB_SIMPLE, VISUAL, VISUAL,
+ *            vision_recv_t, 48, vision_send_t, 55, UNPACK_IN_ISR);
+ *   // 48/55 为与对端约定的线长（协议文档值）；若结构与约定不符，内部 _Static_assert 编译期报错
  */
-#define COMM_DEF(name, media_type_, rx_proto_, tx_proto_, rx_size, tx_size, unpack_mode_) \
-    COMM_##media_type_##_DEF(name##_media,                                                \
-                             (rx_size) + PROTO_##rx_proto_##_OVERHEAD,                    \
-                             (tx_size) + PROTO_##tx_proto_##_OVERHEAD);                   \
-    COMM_PROTO_##rx_proto_##_DEF(name##_rx_proto, name##_media, rx_size);                 \
-    COMM_PROTO_##tx_proto_##_DEF(name##_tx_proto, name##_media, tx_size);                 \
-    static uint8_t name##_tx_buff[(tx_size) + PROTO_##tx_proto_##_OVERHEAD] = {0};        \
-    CommInstance name = {                                                                 \
-        .media_type = media_type_,                                                        \
-        .rx_proto_type = PROTO_##rx_proto_,                                               \
-        .tx_proto_type = PROTO_##tx_proto_,                                               \
-        .unpack_mode = unpack_mode_,                                                      \
-        .media = &name##_media,                                                           \
-        .rx_proto = &name##_rx_proto,                                                     \
-        .tx_proto = &name##_tx_proto,                                                     \
-        .tx_buff = name##_tx_buff,                                                        \
-        .inited = 0,                                                                      \
+#define COMM_DEF(name, media_type_, rx_proto_, tx_proto_, rx_type_, rx_size, tx_type_, tx_size, unpack_mode_) \
+    _Static_assert(sizeof(rx_type_) == (rx_size),                                                             \
+                   "COMM rx: sizeof(" #rx_type_ ") == " #rx_size " FAILED, layout != wire-protocol len");     \
+    _Static_assert(sizeof(tx_type_) == (tx_size),                                                             \
+                   "COMM tx: sizeof(" #tx_type_ ") == " #tx_size " FAILED, layout != wire-protocol len");     \
+    COMM_##media_type_##_DEF(name##_media,                                                                    \
+                             (rx_size) + PROTO_##rx_proto_##_OVERHEAD,                                        \
+                             (tx_size) + PROTO_##tx_proto_##_OVERHEAD);                                       \
+    COMM_PROTO_##rx_proto_##_DEF(name##_rx_proto, name##_media, rx_size);                                     \
+    COMM_PROTO_##tx_proto_##_DEF(name##_tx_proto, name##_media, tx_size);                                     \
+    static uint8_t name##_tx_buff[(tx_size) + PROTO_##tx_proto_##_OVERHEAD] = {0};                            \
+    CommInstance name = {                                                                                     \
+        .media_type = media_type_,                                                                            \
+        .rx_proto_type = PROTO_##rx_proto_,                                                                   \
+        .tx_proto_type = PROTO_##tx_proto_,                                                                   \
+        .unpack_mode = unpack_mode_,                                                                          \
+        .media = &name##_media,                                                                               \
+        .rx_proto = &name##_rx_proto,                                                                         \
+        .tx_proto = &name##_tx_proto,                                                                         \
+        .tx_buff = name##_tx_buff,                                                                            \
+        .inited = 0,                                                                                          \
     }
 
 #endif /* DRV_COMM_H */
