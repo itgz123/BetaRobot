@@ -25,10 +25,10 @@
 #define SBUS_CHANNEL_COUNT 16   // 模拟通道数量
 #define SBUS_DIGITAL_CH_COUNT 2 // 数字通道数量
 
-// SBUS 通道值范围
-#define SBUS_CH_MIN 353     // 通道最小值172
-#define SBUS_CH_MAX 1695    // 通道最大值1811
-#define SBUS_CH_CENTER 1024 // 通道中间值992
+// SBUS 通道值范围（不同遥控器有不同厂家，不同校准，所以可能不准，但是以下值是sbus协议标准值，只要是sbus协议，解释不准也会在-1 ~ +1范围内）
+#define SBUS_CH_MIN 172    // 通道最小值
+#define SBUS_CH_MAX 1811   // 通道最大值
+#define SBUS_CH_CENTER 992 // 通道中间值
 
 // SBUS 帧头和帧尾
 #define SBUS_HEADER 0x0F            // 帧头
