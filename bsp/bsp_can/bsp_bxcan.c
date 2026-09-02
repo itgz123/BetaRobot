@@ -276,6 +276,8 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
         hw_filter.FilterMaskIdHigh = 0;
         hw_filter.FilterMaskIdLow = 0; // 掩码全 0 = 全通过
         hw_filter.FilterActivation = ENABLE;
+        hw_filter.SlaveStartFilterBank = 14; // F4 双 CAN 共享 28 filter bank：CAN1(主)占 0..13，CAN2(从)占 14..27
+        // 漏设此字段会被 HAL_CAN_ConfigFilter 写成 0，使 CAN2 失去从 bank 的过滤能力 → CAN2 收不到任何帧
 
         // CAN1 用 bank 0..13/FIFO0，CAN2 用 bank 14..27/FIFO1（SlaveStartFilterBank=14）
         if (instance->map.handle->Instance == CAN1)
