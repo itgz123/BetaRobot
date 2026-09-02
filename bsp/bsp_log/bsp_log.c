@@ -174,16 +174,13 @@ static char *BSPLogAppend(char *dst, const char *end, const char *s)
 #define LOG_HDR_ARGS(color, lvl, st, module) (color), (lvl), (st), (module)
 #endif
 
-/*============ 外部接口（3 个） ============*/
+/*============ 外部接口（2 个） ============*/
 
-/* 默认日志实例：开箱即用，BSPLogInit 里初始化为模块名 "log"、不限频 */
-LOGInstance g_log = {0};
+/* 默认日志实例：开箱即用，模块名 "log"、255 档限频（extern 声明见 bsp_log.h） */
+LOG_INSTANCE_DEF(g_log, "log", 0);
 
 void BSPLogInit(void)
 {
-    /* 默认实例：模块名 "log"、不限频，供 BSPLOG(&g_log, ...) 直接使用 */
-    BSPLogInitInstance(&g_log, &(LOG_Config_s){.module_name = "log"});
-
     if (USARTRegister(&s_log_uart) != 0)
     {
         return;
@@ -197,43 +194,6 @@ void BSPLogInit(void)
     };
     USARTConfig(&s_log_uart, &cfg);
     BSPLOG(&g_log, LOG_LEVEL_INFO, "你好！"); // 测试中文（需要指定文件编码和串口接收都是UTF-8）
-}
-
-int8_t BSPLogInitInstance(LOGInstance *inst, LOG_Config_s *cfg)
-{
-    if (cfg != NULL)
-    {
-        return -1;
-    }
-    uint8_t n = 0;
-    const char *name = cfg->module_name;
-
-    if (name != NULL)
-    {
-        while (name[n] != '\0' && n < MODULE_NAME_LEN_MAX - 1)
-        {
-            inst->module_name[n] = name[n];
-            n++;
-        }
-    }
-
-    inst->module_name[n] = '\0';
-    inst->module_name_len = n;
-
-    if (0 == cfg->times_per_second)
-    {
-        inst->times_per_second = 255;
-    }
-    else
-    {
-        inst->times_per_second = cfg->times_per_second;
-    }
-
-    inst->log_cnt = 0;
-    memset(inst->level_cnt, 0, sizeof(inst->level_cnt)); /* 本实例计数归零（重初始化即清零；全局统计不受影响） */
-    /* 窗口起点记为 init 时刻：1 秒窗口从配置时刻开始计算 */
-    inst->last_timestamp_us = DWT_GetTimeUs();
-    return 0;
 }
 
 void BSPLogV(LOGInstance *inst, LOG_LEVEL level, const char *fmt, ...)

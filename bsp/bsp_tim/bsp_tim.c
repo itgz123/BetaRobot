@@ -20,7 +20,7 @@
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_pwm_idx = 0;
-LOG_INSTANCE_DEF(g_tim_log); /* TIM 日志实例（PWM + 编码器共用） */
+LOG_INSTANCE_DEF(g_tim_log, "tim", 0); /* TIM 日志实例（PWM + 编码器共用） */
 #if PWM_INSTANCE_NUM > 0
 static PWMInstance *s_pwm_instance[PWM_INSTANCE_NUM] = {NULL};
 #else
@@ -35,7 +35,6 @@ static PWMInstance **s_pwm_instance = NULL;
  */
 int8_t PWMRegister(PWMInstance *instance)
 {
-    BSPLogInitInstance(&g_tim_log, &(LOG_Config_s){.module_name = "tim"});
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "[bsp_tim] PWM instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_pwm_idx >= PWM_INSTANCE_NUM, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "[bsp_tim] PWM exceeded max instance count!"));
@@ -130,7 +129,6 @@ static EncoderInstance **s_encoder_instance = NULL;
  */
 int8_t EncoderRegister(EncoderInstance *instance)
 {
-    BSPLogInitInstance(&g_tim_log, &(LOG_Config_s){.module_name = "tim"});
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "[bsp_tim] Encoder instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_encoder_idx >= ENCODER_INSTANCE_NUM, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "[bsp_tim] Encoder exceeded max instance count!"));

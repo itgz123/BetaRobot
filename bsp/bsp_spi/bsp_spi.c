@@ -36,7 +36,7 @@ typedef HAL_StatusTypeDef (*SPI_ReceiveFunc)(SPI_HandleTypeDef *, uint8_t *, uin
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_spi_idx = 0;
-LOG_INSTANCE_DEF(g_spi_log); /* SPI 日志实例 */
+LOG_INSTANCE_DEF(g_spi_log, "spi", 0); /* SPI 日志实例 */
 #if SPI_INSTANCE_NUM > 0
 static SPIInstance *s_spi_instance[SPI_INSTANCE_NUM] = {NULL};
 static SPIInstance *s_spi_last_route = NULL;
@@ -187,7 +187,6 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
  */
 int8_t SPIRegister(SPIInstance *instance)
 {
-    BSPLogInitInstance(&g_spi_log, &(LOG_Config_s){.module_name = "spi"});
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "[bsp_spi] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_spi_idx >= SPI_INSTANCE_NUM, -1, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "[bsp_spi] Exceeded max instance count!"));

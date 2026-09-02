@@ -16,11 +16,9 @@
 #include "bsp_log.h"
 #include "drv_bmi088_heater.h"
 
-/* bmi088 主驱动与加热器共用日志实例：LOG_INSTANCE_DEF 是 static 无法跨 TU，
- * 故此处全局定义 + drv_bmi088.h extern 声明；日志关闭时不分配，BSPLOG 空宏不引用 */
-#if (defined(BSP_LOG_USED)) && (defined(LOG_UART))
-LOGInstance g_bmi088_log = {0};
-#endif
+/* bmi088 主驱动与加热器共用日志实例：LOG_INSTANCE_DEF 定义全局符号（非 static），
+ * drv_bmi088.h extern 声明，heater 复用；日志关闭时宏为空、不分配，BSPLOG 空宏不引用 */
+LOG_INSTANCE_DEF(g_bmi088_log, "bmi088", 0);
 
 /* 基于数据手册的专用延时宏 */
 #define BMI088_SPI_SWITCH_DELAY_S 0.002f   // SPI模式切换延时  (2ms)
@@ -585,7 +583,6 @@ static uint8_t BMI088_GyroInit(BMI088Instance *inst)
  */
 int8_t BMI088Register(BMI088Instance *inst)
 {
-    BSPLogInitInstance(&g_bmi088_log, &(LOG_Config_s){.module_name = "bmi088"});
 
     if (inst == NULL)
     {

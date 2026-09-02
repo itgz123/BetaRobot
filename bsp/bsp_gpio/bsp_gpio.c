@@ -16,7 +16,7 @@
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_gpio_idx = 0;
-LOG_INSTANCE_DEF(g_gpio_log); /* GPIO 日志实例 */
+LOG_INSTANCE_DEF(g_gpio_log, "gpio", 0); /* GPIO 日志实例 */
 #if GPIO_INSTANCE_NUM > 0
 static GPIOInstance *s_gpio_instance[GPIO_INSTANCE_NUM] = {NULL};
 static GPIOInstance *s_exti_pin_instance[16] = {NULL};
@@ -91,7 +91,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
  */
 int8_t GPIORegister(GPIOInstance *instance)
 {
-    BSPLogInitInstance(&g_gpio_log, &(LOG_Config_s){.module_name = "gpio"});
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "[bsp_gpio] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_gpio_idx >= GPIO_INSTANCE_NUM, -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "[bsp_gpio] Exceeded max instance count!"));

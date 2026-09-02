@@ -24,7 +24,7 @@
 // 函数声明
 static void DBUSUARTRxCallback(USARTInstance *usart_inst);
 
-LOG_INSTANCE_DEF(g_dbus_log); // DBUS 日志实例
+LOG_INSTANCE_DEF(g_dbus_log, "dbus", 0); // DBUS 日志实例
 
 /*------------- 外部接口实现 --------------*/
 
@@ -33,7 +33,6 @@ LOG_INSTANCE_DEF(g_dbus_log); // DBUS 日志实例
  */
 int8_t DBUSRegister(DBUSInstance *instance)
 {
-    BSPLogInitInstance(&g_dbus_log, &(LOG_Config_s){.module_name = "dbus"});
 
     if (instance == NULL)
     {

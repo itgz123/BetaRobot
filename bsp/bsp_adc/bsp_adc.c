@@ -19,7 +19,7 @@
  *============================================*/
 static uint8_t s_adc_idx = 0;                         // 已注册实例数量
 static ADCInstance *s_adc_instance[ADC_INSTANCE_NUM]; // 实例指针数组
-LOG_INSTANCE_DEF(g_adc_log);                          // ADC 日志实例
+LOG_INSTANCE_DEF(g_adc_log, "adc", 0);                // ADC 日志实例
 
 /**
  * @brief 按实例映射配置 ADC 通道
@@ -54,7 +54,6 @@ static HAL_StatusTypeDef ADCConfigChannel(ADCInstance *instance)
  */
 int8_t ADCRegister(ADCInstance *instance)
 {
-    BSPLogInitInstance(&g_adc_log, &(LOG_Config_s){.module_name = "adc"});
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "[BSP_ADC] Register failed: instance is NULL"));
     BSP_RETURN_IF_TRUE_LOG(s_adc_idx >= ADC_INSTANCE_NUM, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "[BSP_ADC] Register failed: instance num exceeded %d", ADC_INSTANCE_NUM));

@@ -158,7 +158,6 @@ static TIM_HandleTypeDef s_htim8 = {0};
 /* ══════════════════ TIM8 OPM+RCR 硬件安全初始化 ══════════════════ */
 static int8_t BMI088_HeaterInit_TIM8(BMI088Instance *inst)
 {
-    BSPLogInitInstance(&g_bmi088_log, &(LOG_Config_s){.module_name = "bmi088"});
     (void)inst;
 
     /* ── DBGMCU 配置：CPU halt 时立即冻结 TIM8，MOE 硬件复位 → 输出强制 LOW ── */
