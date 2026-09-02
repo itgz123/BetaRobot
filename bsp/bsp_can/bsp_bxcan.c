@@ -18,7 +18,7 @@
 #include "bsp_dwt.h"
 
 /*------------- 私有变量 --------------*/
-LOG_INSTANCE_DEF(g_can_log); // CAN 日志实例
+LOG_INSTANCE_DEF(g_can_log, "can", 0); // CAN 日志实例
 static uint8_t s_can_idx = 0;
 #if CAN_INSTANCE_NUM > 0
 static CANInstance *s_can_instance[CAN_INSTANCE_NUM] = {NULL};
@@ -202,7 +202,6 @@ static void CAN_TxCompleteHandler(CAN_HandleTypeDef *hcan, uint8_t mailbox_idx)
  */
 int8_t CANRegister(CANInstance *instance)
 {
-    BSPLogInitInstance(&g_can_log, &(LOG_Config_s){.module_name = "can"});
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_can_idx >= CAN_INSTANCE_NUM, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "[bsp_can] Exceeded max instance count!"));

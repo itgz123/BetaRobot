@@ -10,7 +10,7 @@
 // 用于保存所有的daemon instance
 static DaemonInstance *s_daemon_instances[DAEMON_MX_CNT] = {NULL};
 static uint8_t s_idx = 0;
-LOG_INSTANCE_DEF(g_daemon_log); // Daemon 日志实例
+LOG_INSTANCE_DEF(g_daemon_log, "daemon", 0); // Daemon 日志实例
 
 // 蜂鸣器鸣叫声音表格
 const uint8_t voice_map[DAEMON_FAULT_NUM][12] = {0};
@@ -166,7 +166,6 @@ ITCM_RAM static void DaemonTaskFunc(void *argument)
 
 void DaemonInit(void)
 {
-    BSPLogInitInstance(&g_daemon_log, &(LOG_Config_s){.module_name = "daemon"});
 
     Task_Init_Config_s task_cfg = {
         .func = DaemonTaskFunc,

@@ -18,7 +18,7 @@
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_usart_idx = 0;
-LOG_INSTANCE_DEF(g_usart_log); /* USART 日志实例 */
+LOG_INSTANCE_DEF(g_usart_log, "usart", 0); /* USART 日志实例 */
 #if UART_INSTANCE_NUM > 0
 static USARTInstance *s_usart_instance[UART_INSTANCE_NUM] = {NULL};
 static USARTInstance *s_usart_last_route = NULL;
@@ -132,7 +132,6 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
  */
 int8_t USARTRegister(USARTInstance *instance)
 {
-    BSPLogInitInstance(&g_usart_log, &(LOG_Config_s){.module_name = "usart"});
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "[bsp_usart] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_usart_idx >= UART_INSTANCE_NUM, -1, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "[bsp_usart] Exceeded max instance count!"));

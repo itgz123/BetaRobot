@@ -53,7 +53,7 @@ extern USBD_HandleTypeDef USB_TEST_DEVICE;
  *============================================*/
 /** 当前活动实例（供 CDC 回调使用） */
 static USBInstance *s_active_inst = NULL;
-LOG_INSTANCE_DEF(g_usb_log); /* USB 日志实例 */
+LOG_INSTANCE_DEF(g_usb_log, "usb", 0); /* USB 日志实例 */
 
 /** USB 实例管理数组 */
 static USBInstance *s_usb_instances[USB_INSTANCE_NUM] = {NULL};
@@ -121,7 +121,6 @@ void bsp_usb_tx_complete_handler(void)
 
 int8_t USBRegister(USBInstance *instance)
 {
-    BSPLogInitInstance(&g_usb_log, &(LOG_Config_s){.module_name = "usb"});
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "[bsp_usb] Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_usb_idx >= USB_INSTANCE_NUM, -1, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "[bsp_usb] Exceeded max instance count!"));

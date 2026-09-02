@@ -20,7 +20,7 @@
 // 函数声明
 static void SBUSUARTRxCallback(USARTInstance *usart_inst);
 
-LOG_INSTANCE_DEF(g_sbus_log); // SBUS 日志实例
+LOG_INSTANCE_DEF(g_sbus_log, "sbus", 0); // SBUS 日志实例
 
 /*------------- 外部接口实现 --------------*/
 
@@ -29,7 +29,6 @@ LOG_INSTANCE_DEF(g_sbus_log); // SBUS 日志实例
  */
 int8_t SBUSRegister(SBUSInstance *instance)
 {
-    BSPLogInitInstance(&g_sbus_log, &(LOG_Config_s){.module_name = "sbus"});
 
     if (instance == NULL)
     {
