@@ -152,15 +152,17 @@ ITCM_RAM static void DaemonTaskFunc(void *argument)
 {
     static uint64_t start;
     static uint64_t dt;
-    BSPLOG(&g_daemon_log, LOG_LEVEL_INFO, "[freeRTOS] DAEMON Task Start");
+    TickType_t xLastWakeTime = xTaskGetTickCount();           // 周期锚点(绝对唤醒时刻)
+    const TickType_t xPeriod = pdMS_TO_TICKS(DAEMON_FREQ_MS); // 任务周期(tick)
+    BSPLOG(&g_daemon_log, LOG_LEVEL_INFO, "DAEMON Task Start");
     for (;;)
     {
+        vTaskDelayUntil(&xLastWakeTime, xPeriod); // 固定周期唤醒，避免 vTaskDelay 的周期漂移
         start = DWT_GetTimeUs();
         DaemonTask();
         dt = DWT_GetTimeUs() - start;
-        if ((dt / 1000) > DAEMON_FREQ_MS)
-            BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "[freeRTOS] DAEMON Task is being DELAY! dt = %d(ms)", (dt / 1000));
-        vTaskDelay(pdMS_TO_TICKS(DAEMON_FREQ_MS));
+        if (dt > 1000 * DAEMON_FREQ_MS)
+            BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "DAEMON Task is being DELAY! dt = %llu(us)", dt);
     }
 }
 
