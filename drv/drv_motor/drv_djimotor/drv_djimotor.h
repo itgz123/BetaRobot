@@ -8,7 +8,7 @@
 #include "drv_motor_base.h"
 #include "drv_daemon.h"
 #include "drv_pid.h"
-#include "bsp_math.h"
+#include "lib_math.h"
 
 /*============================================
  *              前向声明

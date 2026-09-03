@@ -1,20 +1,18 @@
 # drv 层源文件
 set(MODULE_SOURCES
-    drv_pid/drv_pid.c
     drv_chassis/drv_chassis_position_lite.c
     drv_sbus/drv_sbus.c
     drv_dbus/drv_dbus.c
     drv_bmi088/drv_bmi088.c
     drv_bmi088/drv_bmi088_heater.c
     drv_daemon/drv_daemon.c
-    drv_mahony/drv_mahony.c
     drv_vofa/drv_vofa.c
     drv_motor/drv_djimotor/drv_djimotor.c
     drv_motor/drv_dmmotor/drv_dmmotor.c
     drv_motor/drv_rsmotor/drv_rsmotor.c
     drv_axis_lite/drv_axis_mit_lite.c
     drv_planner/drv_planner.c
-    drv_mit/drv_mit.c
+    drv_pid/drv_pid.c
     # comm开始
     drv_comm/drv_comm.c
     drv_comm/media/comm_media.c
@@ -33,7 +31,6 @@ set(MODULE_SOURCES
 set(MODULE_INCLUDE_DIRS
     drv_bmi088
     drv_chassis
-    drv_pid
     drv_sbus
     drv_dbus
     drv_daemon
@@ -44,8 +41,7 @@ set(MODULE_INCLUDE_DIRS
     drv_motor/drv_rsmotor
     drv_axis_lite
     drv_planner
-    drv_mahony
-    drv_mit
+    drv_pid
     # comm开始
     drv_comm/
     drv_comm/media
