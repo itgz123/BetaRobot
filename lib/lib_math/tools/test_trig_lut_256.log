@@ -1,0 +1,15 @@
+=== test_trig_lut: LIB_MATH_TRIG_TABLE_SIZE = 256 ===
+表条目 257（约 1 KB flash）
+ModeA 纯插值+量化 max = 4.719e-06   目标 < 2.000e-05  [PASS]
+  grid [0, 2pi)                    65536 pts
+  grid [-4pi, 0)                   65536 pts
+  grid 特殊边界点                12 pts
+ModeB sin  整管 max = 4.758e-06  rms = 2.437e-06  (131084 pts)
+ModeB cos  整管 max = 4.766e-06  rms = 2.431e-06  (131084 pts)
+ModeB tan  整管 max = 2.524e-01  rms = 2.383e-03  (130994 pts, |cos|>1e-3)
+一致性 cos(x)=sin(x+pi/2)   max = 3.874e-07
+一致性 SinCos 与单独调用    max = 0.000e+00
+ModeB 门限 < 1.600e-04
+大角度 |theta|<=1000 sin 信息 max = 1.786e-05（不作判定）
+
+结果: PASS

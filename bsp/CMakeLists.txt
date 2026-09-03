@@ -4,11 +4,6 @@ set(MODULE_SOURCES
     bsp_dwt/bsp_dwt.c
     bsp_gpio/bsp_gpio.c
     bsp_log/bsp_log.c
-    bsp_format/bsp_format.c
-    bsp_math/bsp_math.c
-    bsp_math/bsp_math_trig_lut.c
-    bsp_crc/bsp_crc.c
-    bsp_crc/bsp_crc_tables.c
     bsp_spi/bsp_spi.c
     bsp_tim/bsp_tim.c
     bsp_usart/bsp_usart.c
@@ -26,9 +21,6 @@ set(MODULE_INCLUDE_DIRS
     bsp_dwt
     bsp_gpio
     bsp_log
-    bsp_format
-    bsp_math
-    bsp_crc
     bsp_module
     bsp_spi
     bsp_tim

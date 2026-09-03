@@ -34,7 +34,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "bsp_format.h"
+#include "lib_format.h"
 #include "app_cfg.h"
 
 /*============ 配置（可在 app_cfg.h 中预定义覆盖） ============*/

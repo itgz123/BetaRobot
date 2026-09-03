@@ -5,7 +5,7 @@
  * 帧格式（N = payload_size，固定长度）：
  *   [帧头 0xA5] [seq 1B] [payload N] [CRC8 1B] [帧尾 0x5A]
  *   CRC8 校验范围 = seq + payload（帧头后到 CRC 前），poly 0x07、init 0x00，
- *   由 bsp_crc 提供（Flash 表 BSP_CRC_TBL_CRC8，每字节 1 次查表）。
+ *   由 lib_crc 提供（Flash 表 LIB_CRC_TBL_CRC8，每字节 1 次查表）。
  *
  * 接收检测（CustomUnpack，按序校验全过才接受）：
  *   帧头/帧尾/CRC 不符 → 坏帧，丢弃，不更新 seq
@@ -28,22 +28,22 @@ static const CommProtoVTable_s s_custom_vtable = {
     .reset = CustomReset,
 };
 
-/* CRC8（poly 0x07、init 0x00、MSB-first、无反射无异或）两档实现，均来自 bsp_crc：
- *   1) bsp_crc 表已编译（BSP_CRC_USED + BSP_CRC_TABLES_USED）→ 查表 BSP_CRC_TableCalc
- *   2) 表未编译 → 逐位 BSP_CRC_Direct
- * 协议 CRC 强制依赖 bsp_crc（不内置手写实现）；未启用 BSP_CRC_USED 则编译报错。
+/* CRC8（poly 0x07、init 0x00、MSB-first、无反射无异或）两档实现，均来自 lib_crc：
+ *   1) lib_crc 表已编译（LIB_CRC_USED + LIB_CRC_TABLES_USED）→ 查表 LIB_CRC_TableCalc
+ *   2) 表未编译 → 逐位 LIB_CRC_Direct
+ * 协议 CRC 强制依赖 lib_crc（不内置手写实现）；未启用 LIB_CRC_USED 则编译报错。
  * 校验范围统一为 seq 起（&data[1]）到 payload 末，长度 payload_size + 1 */
-#if defined(BSP_CRC_USED) && defined(BSP_CRC_TABLES_USED)
-#include "bsp_crc.h"
-#include "bsp_crc_tables.h"
-#define PROTO_CUSTOM_CRC8(data, len) ((uint8_t)BSP_CRC_TableCalc(&BSP_CRC_TBL_CRC8, (data), (len)))
-#elif defined(BSP_CRC_USED)
-#include "bsp_crc.h"
-static const BSP_CRC_Algo_t s_crc8_algo = {0x00, 8, 0x07, 0x00, 0, 0}; /* CRC-8: poly 0x07/init 0x00 非反射 */
-#define PROTO_CUSTOM_CRC8(data, len) ((uint8_t)BSP_CRC_Direct(&s_crc8_algo, (data), (len)))
+#if defined(LIB_CRC_USED) && defined(LIB_CRC_TABLES_USED)
+#include "lib_crc.h"
+#include "lib_crc_tables.h"
+#define PROTO_CUSTOM_CRC8(data, len) ((uint8_t)LIB_CRC_TableCalc(&LIB_CRC_TBL_CRC8, (data), (len)))
+#elif defined(LIB_CRC_USED)
+#include "lib_crc.h"
+static const LIB_CRC_Algo_t s_crc8_algo = {0x00, 8, 0x07, 0x00, 0, 0}; /* CRC-8: poly 0x07/init 0x00 非反射 */
+#define PROTO_CUSTOM_CRC8(data, len) ((uint8_t)LIB_CRC_Direct(&s_crc8_algo, (data), (len)))
 #else
-#error "comm_proto_custom 的 CRC8 依赖 bsp_crc（BSP_CRC_USED），请启用 BSP_CRC_USED"
-#endif /* BSP_CRC_USED / BSP_CRC_TABLES_USED */
+#error "comm_proto_custom 的 CRC8 依赖 lib_crc（LIB_CRC_USED），请启用 LIB_CRC_USED"
+#endif /* LIB_CRC_USED / LIB_CRC_TABLES_USED */
 
 /* 打包：帧头 + seq(自增) + payload + CRC8 + 帧尾 */
 static int8_t CustomPack(CommProto *self, const uint8_t *payload, uint8_t *out_buff)

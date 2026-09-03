@@ -7,7 +7,7 @@
  *
  * 缓冲池设计（不占调用方栈、生命周期长、DMA 友好）：
  *   - bsp_log.c 静态区定义 log_buf_s 缓冲池（LOG_BUF_NUM 个，每槽
- *     data + 状态 + 长度）。BSPLogV 借用空闲缓冲，用 BSPFormatV 一次模板
+ *     data + 状态 + 长度）。BSPLogV 借用空闲缓冲，用 LibFormatV 一次模板
  *     格式化（头部模板 LOG_HDR_FMT：颜色/分级/时间戳/模块名，固定串从 flash
  *     拷贝、数字格式化到其中）直接写进 data，随后 uart 空闲时直接 DMA 发送、
  *     忙时置 WAIT_SEND 排队等完成回调调度。
@@ -162,7 +162,7 @@ static char *BSPLogAppend(char *dst, const char *end, const char *s)
     return dst;
 }
 
-/* 日志头部模板：颜色+分级+[时间戳]+模块名+冒号，一次 BSPFormatEx 格式化。
+/* 日志头部模板：颜色+分级+[时间戳]+模块名+冒号，一次 LibFormatEx 格式化。
  * 时间戳风格由 TIME_STAMP_STYLE 编译期决定（0=无 / 1=us / 2=ms）。
  * LOG_HDR_ARGS 同步调整变参个数（STYLE==0 只传 3 个，不含 st）——
  * va_list 顺序消费，多传的参数会错位，必须与模板转换个数严格一致。 */
@@ -252,12 +252,12 @@ void BSPLogV(LOGInstance *inst, LOG_LEVEL level, const char *fmt, ...)
         }
 #endif
         (void)st; /* STYLE==0 时不参与格式化 */
-        p += BSPFormatEx(p, (size_t)(end - p), LOG_HDR_FMT, sizeof(LOG_HDR_FMT) - 1,
+        p += LibFormatEx(p, (size_t)(end - p), LOG_HDR_FMT, sizeof(LOG_HDR_FMT) - 1,
                          LOG_HDR_ARGS(BSPLogLevelColor(level), BSPLogLevelStr(level), st, inst->module_name));
     }
 
     va_start(args, fmt);
-    n = BSPFormatV(p, (size_t)(end - p), fmt, strlen(fmt), args);
+    n = LibFormatV(p, (size_t)(end - p), fmt, strlen(fmt), args);
     va_end(args);
     p += (n < (int)(end - p)) ? n : ((int)(end - p) - 1); /* 截断时钳到 end-1 */
 

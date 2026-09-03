@@ -7,7 +7,7 @@
 
 #include "drv_planner.h"
 #include "bsp_dwt.h"
-#include "bsp_math.h"
+#include "lib_math.h"
 
 /* 积分保护：相邻两次调用间隔超过该值时按该值积分，避免位置跳变 */
 #define PLANNER_DT_MAX_S (0.05f)
@@ -59,7 +59,7 @@ void PlannerCalculate(PlannerInstance *inst, const PlannerInput_s *in, PlannerOu
     const Planner_Init_Config_s *cfg = &inst->cfg;
 
     // ======== 2. 设定速度：通道值(-1~1) × max_speed = 目标速度，限幅到 ±max_speed ========
-    float ref_speed = BSP_Math_Clamp(in->target_cmd * cfg->max_speed, -cfg->max_speed, cfg->max_speed);
+    float ref_speed = Lib_Math_Clamp(in->target_cmd * cfg->max_speed, -cfg->max_speed, cfg->max_speed);
 
     // ======== 3. 设定加速度：当前加速度 + 速度差纠正，限幅到 ±max_acc ========
     // 稳态（设定速度==当前速度）时输出当前加速度；有速度差时叠加纠正项
@@ -68,7 +68,7 @@ void PlannerCalculate(PlannerInstance *inst, const PlannerInput_s *in, PlannerOu
     {
         ref_acc += (ref_speed - in->current_speed) / dt;
     }
-    ref_acc = BSP_Math_Clamp(ref_acc, -cfg->max_acc, cfg->max_acc);
+    ref_acc = Lib_Math_Clamp(ref_acc, -cfg->max_acc, cfg->max_acc);
 
     // ======== 4. 设定位置：当前位置 + 设定速度积分，再按位置模式处理 ========
     float ref_pos = in->current_position + (ref_speed * dt);
@@ -78,12 +78,12 @@ void PlannerCalculate(PlannerInstance *inst, const PlannerInput_s *in, PlannerOu
         // 限幅模式：位置限幅到 [min, max]
         if (cfg->pos_limit_min < cfg->pos_limit_max)
         {
-            ref_pos = BSP_Math_Clamp(ref_pos, cfg->pos_limit_min, cfg->pos_limit_max);
+            ref_pos = Lib_Math_Clamp(ref_pos, cfg->pos_limit_min, cfg->pos_limit_max);
         }
         break;
     case PLANNER_POS_WRAP:
         // 环绕模式：位置归一化到 [min, max)
-        ref_pos = BSP_Math_WrapAngle(ref_pos, cfg->pos_limit_min, cfg->pos_limit_max);
+        ref_pos = Lib_Math_WrapAngle(ref_pos, cfg->pos_limit_min, cfg->pos_limit_max);
         break;
     case PLANNER_POS_CONTINUOUS:
     default:

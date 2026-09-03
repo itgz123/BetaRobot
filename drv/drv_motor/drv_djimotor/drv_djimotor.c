@@ -6,7 +6,7 @@
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
 #include "bsp_dwt.h"
-#include "bsp_math.h"
+#include "lib_math.h"
 #include <string.h>
 
 /*
@@ -259,7 +259,7 @@ MotorData_s DJIMotor_GetData(void *inst)
     // 归一化
     if (setting->position_mode == MOTOR_POSITION_WRAP) // ④ 归一化
     {
-        angle = BSP_Math_WrapAngle(angle, setting->angle_limit_min, setting->angle_limit_max);
+        angle = Lib_Math_WrapAngle(angle, setting->angle_limit_min, setting->angle_limit_max);
     }
 
     result.position = angle;
@@ -501,12 +501,12 @@ static void DJIMotor_Calculate(DJIMotorInstance *inst)
             // 限幅模式：setpoint 限幅到 [min, max]
             if (setting->angle_limit_min < setting->angle_limit_max)
             {
-                setpoint = BSP_Math_Clamp(setpoint, setting->angle_limit_min, setting->angle_limit_max);
+                setpoint = Lib_Math_Clamp(setpoint, setting->angle_limit_min, setting->angle_limit_max);
             }
             break;
         case MOTOR_POSITION_WRAP:
             // 环绕模式：setpoint 归一化到 [min, max)
-            setpoint = BSP_Math_WrapAngle(setpoint, setting->angle_limit_min, setting->angle_limit_max);
+            setpoint = Lib_Math_WrapAngle(setpoint, setting->angle_limit_min, setting->angle_limit_max);
             break;
         case MOTOR_POSITION_CONTINUOUS:
         default:
@@ -679,7 +679,7 @@ void DJIMotor_Send(void *inst)
             {
                 // 根据电机型号限幅到电流原始值范围
                 uint16_t current_max = dji_motor_params[m->base.model].current_max;
-                float out = BSP_Math_Clamp(m->base.controller.output, -(float)current_max, (float)current_max);
+                float out = Lib_Math_Clamp(m->base.controller.output, -(float)current_max, (float)current_max);
                 cur = (int16_t)out;
             }
             // CAN 总线需要大端字节序（MSB first）

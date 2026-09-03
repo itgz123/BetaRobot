@@ -24,7 +24,7 @@
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
 #include "bsp_dwt.h"
-#include "bsp_math.h"
+#include "lib_math.h"
 #include <string.h>
 
 /* RS05 默认量程（用户 Config 传 0 时自动采用） */
@@ -303,7 +303,7 @@ MotorData_s RSMotor_GetData(void *inst)
     // 归一化
     if (setting->position_mode == MOTOR_POSITION_WRAP) // ④ 归一化
     {
-        angle = BSP_Math_WrapAngle(angle, setting->angle_limit_min, setting->angle_limit_max);
+        angle = Lib_Math_WrapAngle(angle, setting->angle_limit_min, setting->angle_limit_max);
     }
 
     result.position = angle;
@@ -560,12 +560,12 @@ static void RSMotor_Calculate(RSMotorInstance *inst)
             // 限幅模式：setpoint 限幅到 [min, max]
             if (setting->angle_limit_min < setting->angle_limit_max)
             {
-                setpoint = BSP_Math_Clamp(setpoint, setting->angle_limit_min, setting->angle_limit_max);
+                setpoint = Lib_Math_Clamp(setpoint, setting->angle_limit_min, setting->angle_limit_max);
             }
             break;
         case MOTOR_POSITION_WRAP:
             // 环绕模式：setpoint 归一化到 [min, max)
-            setpoint = BSP_Math_WrapAngle(setpoint, setting->angle_limit_min, setting->angle_limit_max);
+            setpoint = Lib_Math_WrapAngle(setpoint, setting->angle_limit_min, setting->angle_limit_max);
             break;
         case MOTOR_POSITION_CONTINUOUS:
         default:
@@ -703,7 +703,7 @@ void RSMotor_Send(void *inst)
 
     /* 扭矩限幅 (Nm)，根据电机型号的 t_range 保护 */
     const RSMotorProtocolMap_s *map = &motor->proto_map;
-    float output_clamped = BSP_Math_Clamp(motor->base.controller.output, -map->t_range, map->t_range);
+    float output_clamped = Lib_Math_Clamp(motor->base.controller.output, -map->t_range, map->t_range);
 
     /* 扭矩输出：浮点(Nm) → 12位无符号定点 */
     uint16_t p_des = 0; /* 不使用板载位置控制 */

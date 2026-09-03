@@ -3,7 +3,7 @@
 
 #ifdef DRV_CHASSIS_USED
 
-#include "bsp_math.h"
+#include "lib_math.h"
 
 /*
  * 坐标系:  x+向前, y+向左, w+逆时针
@@ -259,7 +259,7 @@ int8_t ChassisPositionLite_Init(ChassisPositionLiteInstance_t *inst, ChassisPosi
     case CHASSISTYPE_MECANUM_X:
         if (cfg->x <= 0.0f || cfg->y <= 0.0f)
             return -4;
-        inst->r = BSP_Math_Sqrt(cfg->x * cfg->x * 0.25f +
+        inst->r = Lib_Math_Sqrt(cfg->x * cfg->x * 0.25f +
                                 cfg->y * cfg->y * 0.25f);
         break;
 

@@ -13,7 +13,7 @@
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
 #include "bsp_dwt.h"
-#include "bsp_math.h"
+#include "lib_math.h"
 #include "drv_vofa.h"
 #include <string.h>
 #include <float.h>
@@ -130,14 +130,14 @@ static inline float GenerateMultiSineTorque(const MultiSineParam_s *params, floa
 
     float theta = M_2PI * t / params->duration; // ω₀·t = 2π·t/T
     float half = 0.5f * theta;                  // π·t/T
-    float sin_half = BSP_Math_Sin(half);
+    float sin_half = Lib_Math_Sin(half);
 
     // sin(πt/T) = 0 时（t = kT），所有 sin(i·θ) = 0，总和为 0
     if (sin_half == 0.0f)
         return 0.0f;
 
     float N = (float)params->num_freqs;
-    float sum = BSP_Math_Sin(N * half) * BSP_Math_Sin((N + 1.0f) * half) / sin_half;
+    float sum = Lib_Math_Sin(N * half) * Lib_Math_Sin((N + 1.0f) * half) / sin_half;
 
     return params->amplitude * sum;
 }
@@ -163,7 +163,7 @@ float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const MotorData_s *mdata, 
     float angle = isfinite(angle_motor) ? angle_motor / gear : 0.0f; // 输出侧 rad
     float speed = isfinite(speed_motor) ? speed_motor / gear : 0.0f; // 输出侧 rad/s
 
-    inst->params.gravity_ff = inst->params.gravity * BSP_Math_Cos(angle); // Nm
+    inst->params.gravity_ff = inst->params.gravity * Lib_Math_Cos(angle); // Nm
 
     uint64_t now_us = DWT_GetTimeUs();
 
@@ -228,7 +228,7 @@ float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const MotorData_s *mdata, 
         float A_end = inst->chirp_params.amplitude_end;
         float amp_t = (A_end > 0.0f && T > 0.0f) ? A_start + (A_end - A_start) * t / T : A_start;
 
-        float chirp = amp_t * BSP_Math_Sin(phase); // Nm
+        float chirp = amp_t * Lib_Math_Sin(phase); // Nm
 
         inst->params.friction_ff = chirp;
         inst->params.total_ff = inst->params.gravity_ff + chirp;
@@ -272,9 +272,9 @@ float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const MotorData_s *mdata, 
         float w = M_2PI * inst->sine_params.freq; // rad/s
         float base = inst->tune_base_angle;
 
-        ref_pos = base + A * BSP_Math_Sin(w * t);   // rad
-        ref_vel = A * w * BSP_Math_Cos(w * t);      // rad/s
-        ref_acc = -A * w * w * BSP_Math_Sin(w * t); // rad/s²
+        ref_pos = base + A * Lib_Math_Sin(w * t);   // rad
+        ref_vel = A * w * Lib_Math_Cos(w * t);      // rad/s
+        ref_acc = -A * w * w * Lib_Math_Sin(w * t); // rad/s²
 
         CalcFeedforward(inst, ref_acc, speed);
 
