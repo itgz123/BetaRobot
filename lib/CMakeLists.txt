@@ -3,6 +3,7 @@ set(MODULE_SOURCES
     lib_crc/lib_crc.c
     lib_crc/lib_crc_tables.c
     lib_format/lib_format.c
+    lib_kf/lib_kf.c
     lib_mahony/lib_mahony.c
     lib_math/lib_math.c
     lib_math/lib_math_trig_lut.c
@@ -16,6 +17,7 @@ set(MODULE_INCLUDE_DIRS
     lib_crc
     lib_dh_matrix
     lib_format
+    lib_kf
     lib_mahony
     lib_math
     lib_mit
