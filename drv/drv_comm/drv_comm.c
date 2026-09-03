@@ -3,8 +3,8 @@
  * @brief 通信框架-顶层（CommInstance 统一入口）实现
  *
  * 两段式接口（对齐 bsp_usart 的 USARTRegister/USARTConfig 模式）：
- *   - CommRegister（不可重入）：media 后端注册 → proto 挂 vtable → 接线分发
- *   - CommConfig  （可重入）  ：介质参数 + 出帧回调（均可反复修改）
+ *   - CommRegister（不可重入）：media 后端注册 → proto 挂 vtable → 接线分发 + 登记看门狗
+ *   - CommConfig  （可重入）  ：介质参数 + 链路对端看门狗 + 出帧回调（均可反复修改）
  *
  * 一条 comm = 一个双向对话：接收协议(rx_proto)与发送协议(tx_proto)分离，
  * 各自 payload 大小可不同（编译期确定，DEF 宏写入）。
@@ -16,6 +16,7 @@
  */
 
 #include "drv_comm.h"
+#include "drv_daemon.h" /* 链路对端看门狗：注册/配置/喂狗统一在 comm 层 */
 // 介质后端 Register/Config（协议后端经注册表 CommProtoBackendFind 分发，见 CommRegister）
 #include "comm_media_usart.h"
 #include "comm_media_usb.h"
@@ -50,10 +51,19 @@ static void CommRxPush(CommInstance *inst, const uint8_t *data)
  */
 void CommMediaRxHook(CommMedia *media, const uint8_t *data)
 {
-    CommInstance *inst = (CommInstance *)media->parent;
+    CommInstance *inst;
     CommProto *rx_proto;
     const uint8_t *payload;
 
+    if (media == NULL)
+        return;
+
+    /* 链路对端看门狗喂狗：各 media 后端仅在收齐一帧完整合法数据后才调用本入口，
+     * 故凡到达此处即代表对端持续在线；reload==0（未启用监控）由 DaemonTask 跳过 */
+    if (media->daemon != NULL)
+        DaemonReload(media->daemon);
+
+    inst = (CommInstance *)media->parent;
     if (inst == NULL || inst->rx_proto == NULL)
         return;
     rx_proto = COMM_INSTANCE_RX_PROTO(inst);
@@ -136,16 +146,25 @@ int8_t CommRegister(CommInstance *inst)
 
     /* 建立反向指针：media 回指所属 comm 实例（接收分发据此反查 rx_proto） */
     media->parent = inst;
+
+    /* 登记链路对端看门狗：实例经 DEF 宏内嵌于 media（media->daemon）。armed（reload>0）
+     * 由 CommConfig 决定（reload==0 时 DaemonTask 跳过，等效禁用），故此处仅登记一次 */
+    if (media->daemon != NULL)
+        DaemonRegister(media->daemon);
+
     inst->inited = 1;
     return 0;
 }
 
 int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
 {
+    CommMedia *media;
+
     if (inst == NULL || inst->media == NULL || cfg == NULL)
         return -1;
     if (!inst->inited)
         return -1; /* 须先 CommRegister */
+    media = COMM_INSTANCE_MEDIA(inst);
 
     /* 1. 介质参数（USART 需 media_cfg 非空才下发；USB 无运行期参数但须挂接收钩子）
      *    @note USB 的 MediaUsbConfig 内部强制接管接收回调，media_cfg 可为 NULL */
@@ -178,7 +197,20 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
         return -1; /* 介质类型未支持 */
     }
 
-    /* 2. 出帧消费回调（可重入：直接覆盖 rx_proto->on_frame，运行期可修改） */
+    /* 2. 链路对端看门狗参数（统一配置，可重入：反复调用改 reload/fault）。
+     *    reload==0 → DaemonConfig 置 0，DaemonTask 跳过该实例 = 禁用监控（恒在线）。
+     *    owner_id 填 comm 实例，离线日志/回调据此识别所属链路 */
+    if (media->daemon != NULL)
+    {
+        Daemon_Config_s daemon_cfg = {
+            .reload_count = cfg->daemon_reload,
+            .fault_action = cfg->daemon_fault,
+            .owner_id = inst,
+        };
+        DaemonConfig(media->daemon, &daemon_cfg);
+    }
+
+    /* 3. 出帧消费回调（可重入：直接覆盖 rx_proto->on_frame，运行期可修改） */
     if (cfg->on_frame != NULL)
     {
         COMM_INSTANCE_RX_PROTO(inst)->on_frame = cfg->on_frame;

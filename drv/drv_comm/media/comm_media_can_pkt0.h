@@ -90,9 +90,10 @@ typedef struct
  * @param rx_buff_sz  协议帧长（= rx_size + 协议开销，COMM_DEF 传入；接收累积缓冲 = rx_buff_sz）
  * @param tx_buff_sz  协议帧长（= tx_size + 协议开销；发送分包依据，写入 tx_frame_len）
  *
- * @note 展开定义 name##_can（CANInstance）、name##_rx_buff（完整协议帧接收缓冲，
- *       不含分包序号）、name##_tx_buff（完整协议帧发送 staging 缓冲，异步分包期间
- *       保数据不失效）与 name（CommMediaCanPkt0），并绑定 base.media。
+ * @note 展开定义 name##_can（CANInstance）、name##_daemon（链路对端看门狗，绑定到
+ *       name.base.daemon）、name##_rx_buff（完整协议帧接收缓冲，不含分包序号）、
+ *       name##_tx_buff（完整协议帧发送 staging 缓冲，异步分包期间保数据不失效）与
+ *       name（CommMediaCanPkt0），并绑定 base.media/base.daemon。
  *       MediaCanPkt0Send 先整帧拷入 tx_buff，发第一包后返回，剩余包在
  *       CAN 发送完成回调（bsp tx_complete_callback）中逐包续发。
  *       缓冲放普通 RAM（CAN 无 DMA）。
@@ -102,10 +103,12 @@ typedef struct
  */
 #define COMM_MEDIA_CAN_PKT0_DEF(name, rx_buff_sz, tx_buff_sz) \
     CAN_INSTANCE_DEF(name##_can);                             \
+    DAEMON_INSTANCE_DEF(name##_daemon);                       \
     static uint8_t name##_rx_buff[(rx_buff_sz)] = {0};        \
     static uint8_t name##_tx_buff[(tx_buff_sz)] = {0};        \
     static CommMediaCanPkt0 name = {                          \
         .base.media = &name##_can,                            \
+        .base.daemon = &name##_daemon,                        \
         .rx_buff = name##_rx_buff,                            \
         .tx_buff = name##_tx_buff,                            \
         .rx_frame_len = (rx_buff_sz),                         \

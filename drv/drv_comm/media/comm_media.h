@@ -7,6 +7,9 @@
  *   - 接收：后端适配钩子把收到的数据单元直接交给 comm 层接收入口
  *           （CommMediaRxHook，经 parent 反查），media 基类不做接收分发
  *   - 归属：一个 media 只属于一个 comm 实例（经 parent 反查）
+ *   - 看门狗：基类持有 daemon 指针（DEF 宏内嵌 name##_daemon），监控链路对端是否持续发帧——
+ *             收到完整合法帧即在 comm 层接收入口（CommMediaRxHook）喂狗；armed（reload>0）
+ *             由 CommConfig 统一配置，未配（reload==0）等效禁用恒在线。
  * 基类不解析内容（SOF/CRC/comm_id 属协议层），不感知介质物理限制（属后端）。
  */
 
@@ -15,6 +18,7 @@
 
 #include <stdint.h>
 #include "app_cfg.h"
+#include "drv_daemon.h" /* DaemonInstance：链路对端看门狗（drv 层共享，无环） */
 /* 依赖单向：drv_comm.h → comm_media.h；本头自包含，勿 include drv_comm.h（防环） */
 
 /* 介质类型枚举（COMM_DEF / 后端 Config 用） */
@@ -42,6 +46,9 @@ struct CommMedia
     const CommMediaVTable_s *vtable; /* 必须首成员 */
     void *parent;                    /* 指向 comm 实例（接收分发经此反查） */
     void *media;                     /* 指向 bsp 实例 */
+    DaemonInstance *daemon;          /* 链路对端看门狗实例（DEF 宏内嵌 name##_daemon 并绑定）：
+                                      * 收到完整合法帧即在 CommMediaRxHook 喂狗；armed（reload>0）
+                                      * 由 CommConfig 统一配置，reload==0 等效禁用。NULL 表示不监控 */
 };
 
 /* 公共接口 */

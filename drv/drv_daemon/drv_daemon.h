@@ -40,7 +40,7 @@ typedef void (*offline_callback)(void *);
 /* daemon结构体定义 */
 typedef struct daemon_ins
 {
-    uint16_t reload_count;            // 重载值
+    uint16_t reload_count;            // 重载值（喂狗超时阈值）；0 = 禁用（不监控，等效恒在线）
     DaemonFaultAction_e fault_action; // 离线故障动作, 见 DaemonFaultAction_e
     offline_callback callback;        // 异常处理函数,当模块发生异常时会被调用
     uint16_t temp_count;              // 当前值,减为零说明模块离线或异常

@@ -40,8 +40,10 @@ typedef struct
  */
 typedef struct
 {
-    void *media_cfg;             /* 介质后端配置指针（USART → USART_Config_s*；NULL 跳过介质配置） */
-    ProtoFrameCallback on_frame; /* 出帧消费回调（NULL 表示不修改） */
+    void *media_cfg;                  /* 介质后端配置指针（USART → USART_Config_s*；NULL 跳过介质配置） */
+    ProtoFrameCallback on_frame;      /* 出帧消费回调（NULL 表示不修改） */
+    uint16_t daemon_reload;           /* 链路对端看门狗重载值（单位：daemon 周期，默认 ms；0 = 禁用不监控，恒在线） */
+    DaemonFaultAction_e daemon_fault; /* 链路对端离线故障动作（见 DaemonFaultAction_e） */
 } CommConfig_s;
 
 /**
@@ -49,22 +51,25 @@ typedef struct
  * @param inst CommInstance 指针（COMM_DEF 定义）
  * @retval 0 成功；-1 失败（参数非法 / 后端注册失败 / 类型未支持）
  *
- * @note 完成三步：1) media 后端注册（USART 内部做 USARTRegister，防重复注册）；
+ * @note 完成：1) media 后端注册（USART 内部做 USARTRegister，防重复注册）；
  *       2) 接收/发送协议后端 Init（挂 vtable）；3) 接线：media 接管接收钩子 +
- *       建立 media→comm 反向指针（接收时经 media->parent 反查 rx_proto 解包）。
- *       介质参数与出帧回调由 CommConfig 配置。
+ *       建立 media→comm 反向指针（接收时经 media->parent 反查 rx_proto 解包）；
+ *       4) 登记链路对端看门狗（media->daemon，DEF 宏内嵌；armed 由 CommConfig 决定）。
+ *       介质参数、看门狗参数与出帧回调由 CommConfig 配置。
  */
 int8_t CommRegister(CommInstance *inst);
 
 /**
- * @brief 配置 comm 实例（可重入：可反复调用改介质参数 / 出帧回调）
+ * @brief 配置 comm 实例（可重入：可反复调用改介质参数 / 看门狗 / 出帧回调）
  * @param inst CommInstance 指针（须先 CommRegister）
- * @param cfg  CommConfig_s 配置（media_cfg / on_frame 均可为 NULL，NULL 则跳过对应项）
+ * @param cfg  CommConfig_s 配置（media_cfg / on_frame 均可为 NULL，NULL 则跳过对应项；
+ *            daemon_reload/daemon_fault 为标量，每次调用都会写入，0 表示禁用监控）
  * @retval 0 成功；-1 失败（参数非法 / 未注册 / 配置失败 / 类型未支持）
  *
  * @note media_cfg 经 media 后端下发（USART → MediaUsartConfig → bsp USARTConfig），
- *       运行中可再次调用以切换波特率/发送模式等；on_frame 直接覆盖挂到
- *       接收协议 rx_proto->on_frame，可运行期修改消费逻辑。
+ *       运行中可再次调用以切换波特率/发送模式等；daemon_reload>0 启用链路对端看门狗
+ *       （收到完整合法帧喂狗，见 CommIsOnline）；on_frame 直接覆盖挂到接收协议
+ *       rx_proto->on_frame，可运行期修改消费逻辑。
  */
 int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg);
 

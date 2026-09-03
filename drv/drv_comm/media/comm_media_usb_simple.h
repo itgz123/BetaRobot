@@ -45,8 +45,9 @@ typedef struct
  * @param rx_buff_sz  协议帧长（= rx_size + 协议开销，COMM_DEF 传入；接收累积缓冲 = rx_buff_sz）
  * @param tx_buff_sz  协议帧长（= tx_size + 协议开销；发送透传/分包依据，写入 tx_frame_len）
  *
- * @note 展开定义 name##_usb（USBInstance）、name##_rx_buff（完整协议帧接收缓冲，
- *       不含分包序号）与 name（CommMediaUsbSimple），并绑定 base.media。
+ * @note 展开定义 name##_usb（USBInstance）、name##_daemon（链路对端看门狗，绑定到
+ *       name.base.daemon）、name##_rx_buff（完整协议帧接收缓冲，不含分包序号）与
+ *       name（CommMediaUsbSimple），并绑定 base.media/base.daemon。
  *       缓冲放普通 RAM（USB 无 DMA）。
  *
  * @example
@@ -55,9 +56,11 @@ typedef struct
  */
 #define COMM_MEDIA_USB_SIMPLE_DEF(name, rx_buff_sz, tx_buff_sz) \
     USB_INSTANCE_DEF(name##_usb);                               \
+    DAEMON_INSTANCE_DEF(name##_daemon);                         \
     static uint8_t name##_rx_buff[(rx_buff_sz)] = {0};          \
     static CommMediaUsbSimple name = {                          \
         .base.media = &name##_usb,                              \
+        .base.daemon = &name##_daemon,                          \
         .rx_buff = name##_rx_buff,                              \
         .rx_frame_len = (rx_buff_sz),                           \
         .tx_frame_len = (tx_buff_sz)}
