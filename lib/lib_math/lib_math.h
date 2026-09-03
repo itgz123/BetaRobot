@@ -16,6 +16,7 @@
  *       - lib_math_quat.h     四元数运算
  *       - lib_math_matrix.h   矩阵运算（3x3/4x4）
  *       - lib_math_transform.h 变换函数（旋转、平移、剪切、Rodrigues）
+ *       - lib_math_linalg.h   任意维通用线性代数（增广求逆、块置单位/对角）
  *
  * @note 三角函数（lib_math_trig.h）全部使用标准库 math.h；
  *       若定义 LIB_MATH_TRIG_LUT_USED，sin/cos/sincos 自动改用查表法
@@ -35,5 +36,6 @@
 #include "lib_math_quat.h"      /* 四元数运算 */
 #include "lib_math_matrix.h"    /* 3x3 和 4x4 矩阵运算 */
 #include "lib_math_transform.h" /* 变换函数 */
+#include "lib_math_linalg.h"    /* 任意维通用线性代数 */
 
 #endif /* __LIB_MATH_H */
