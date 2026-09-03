@@ -34,8 +34,9 @@ typedef struct
  * @param rx_buff_sz  bsp 接收缓冲区大小（传给 USART_INSTANCE_DEF）
  * @param tx_buff_sz  media 发送缓冲区大小（app payload + 协议开销，编译期确定）
  *
- * @note 展开定义 name##_usart（USARTInstance，含接收缓冲）与 name（CommMediaUsart，
- *       含发送缓冲），且 name.base.media 指向 name##_usart——运行时无需另传 bsp 实例。
+ * @note 展开定义 name##_usart（USARTInstance，含接收缓冲）、name##_daemon（链路对端
+ *       看门狗，绑定到 name.base.daemon）与 name（CommMediaUsart，含发送缓冲），且
+ *       name.base.media 指向 name##_usart——运行时无需另传 bsp 实例。
  *       DMA_RAM 在 Cortex-M7 上将缓冲区放入 RAM_D1 以支持 DMA，M4 上为空（同 bsp_usart）。
  *
  * @example
@@ -43,9 +44,11 @@ typedef struct
  */
 #define COMM_MEDIA_USART_DEF(name, rx_buff_sz, tx_buff_sz)   \
     USART_INSTANCE_DEF(name##_usart, rx_buff_sz);            \
+    DAEMON_INSTANCE_DEF(name##_daemon);                      \
     static uint8_t name##_tx_buff[tx_buff_sz] DMA_RAM = {0}; \
     static CommMediaUsart name = {                           \
         .base.media = &name##_usart,                         \
+        .base.daemon = &name##_daemon,                       \
         .tx_buff = name##_tx_buff,                           \
         .tx_buff_size = tx_buff_sz}
 

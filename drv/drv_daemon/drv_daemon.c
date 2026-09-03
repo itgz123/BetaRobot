@@ -93,6 +93,10 @@ void DaemonTask(void)
     for (size_t i = 0; i < s_idx; ++i)
     {
         dins = s_daemon_instances[i];
+        /* reload_count=0 表示禁用（不监控）：跳过离线判定与故障动作，等效恒在线。
+         * 使未 DaemonConfig 配过（或配 0）的模块不会一开机就被判离线 / 拉低全局在线标志 */
+        if (dins->reload_count == 0)
+            continue;
         if (dins->temp_count > 0)
         {
             dins->temp_count--;

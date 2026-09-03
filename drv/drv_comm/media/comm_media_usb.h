@@ -42,19 +42,22 @@ typedef struct
  * @param rx_buff_sz  协议帧长（= rx_size + 协议开销，COMM_DEF 传入；接收累积缓冲 = rx_buff_sz）
  * @param tx_buff_sz  协议帧长（= tx_size + 协议开销；发送分包依据，写入 tx_frame_len）
  *
- * @note 展开定义 name##_usb（USBInstance）、name##_rx_buff（完整协议帧接收缓冲，
- *       不含分包序号）与 name（CommMediaUsb），并绑定 base.media。发送不持
- *       staging 缓冲：MediaUsbSend 直接引用 comm 打包缓冲（data 在本函数运行期间
- *       有效）。缓冲放普通 RAM（USB 无 DMA）。
+ * @note 展开定义 name##_usb（USBInstance）、name##_daemon（链路对端看门狗，绑定到
+ *       name.base.daemon）、name##_rx_buff（完整协议帧接收缓冲，不含分包序号）与
+ *       name（CommMediaUsb），并绑定 base.media/base.daemon。发送不持 staging 缓冲：
+ *       MediaUsbSend 直接引用 comm 打包缓冲（data 在本函数运行期间有效）。
+ *       缓冲放普通 RAM（USB 无 DMA）。
  *
  * @example
  *   COMM_MEDIA_USB_DEF(usb_comm_media, 16, 16); 协议帧 16B，帧长 > 63B 时自动分包
  */
 #define COMM_MEDIA_USB_DEF(name, rx_buff_sz, tx_buff_sz) \
     USB_INSTANCE_DEF(name##_usb);                        \
+    DAEMON_INSTANCE_DEF(name##_daemon);                  \
     static uint8_t name##_rx_buff[(rx_buff_sz)] = {0};   \
     static CommMediaUsb name = {                         \
         .base.media = &name##_usb,                       \
+        .base.daemon = &name##_daemon,                   \
         .rx_buff = name##_rx_buff,                       \
         .rx_frame_len = (rx_buff_sz),                    \
         .tx_frame_len = (tx_buff_sz)}
