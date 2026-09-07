@@ -24,7 +24,10 @@
 // 函数声明
 static void DBUSUARTRxCallback(USARTInstance *usart_inst);
 
-LOG_INSTANCE_DEF(g_dbus_log, "drv_dbus", 0); // DBUS 日志实例
+#ifndef DRV_DBUS_LOG_LIMIT
+#define DRV_DBUS_LOG_LIMIT 10
+#endif                                                        // !DRV_DBUS_LOG_LIMIT
+LOG_INSTANCE_DEF(g_dbus_log, "drv_dbus", DRV_DBUS_LOG_LIMIT); // DBUS 日志实例
 
 /*------------- 外部接口实现 --------------*/
 

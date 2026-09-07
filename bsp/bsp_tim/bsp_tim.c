@@ -20,7 +20,10 @@
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_pwm_idx = 0;
-LOG_INSTANCE_DEF(g_tim_log, "bsp_tim", 0); /* TIM 日志实例（PWM + 编码器共用） */
+#ifndef BSP_TIM_LOG_LIMIT
+#define BSP_TIM_LOG_LIMIT 10
+#endif                                                     // !BSP_TIM_LOG_LIMIT
+LOG_INSTANCE_DEF(g_tim_log, "bsp_tim", BSP_TIM_LOG_LIMIT); /* TIM 日志实例（PWM + 编码器共用） */
 #if PWM_INSTANCE_NUM > 0
 static PWMInstance *s_pwm_instance[PWM_INSTANCE_NUM] = {NULL};
 #else

@@ -36,7 +36,10 @@ typedef HAL_StatusTypeDef (*SPI_ReceiveFunc)(SPI_HandleTypeDef *, uint8_t *, uin
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_spi_idx = 0;
-LOG_INSTANCE_DEF(g_spi_log, "bsp_spi", 0); /* SPI 日志实例 */
+#ifndef BSP_SPI_LOG_LIMIT
+#define BSP_SPI_LOG_LIMIT 10
+#endif                                                     // !BSP_SPI_LOG_LIMIT
+LOG_INSTANCE_DEF(g_spi_log, "bsp_spi", BSP_SPI_LOG_LIMIT); /* SPI 日志实例 */
 #if SPI_INSTANCE_NUM > 0
 static SPIInstance *s_spi_instance[SPI_INSTANCE_NUM] = {NULL};
 static SPIInstance *s_spi_last_route = NULL;

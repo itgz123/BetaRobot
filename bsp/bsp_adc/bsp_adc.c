@@ -19,7 +19,10 @@
  *============================================*/
 static uint8_t s_adc_idx = 0;                         // 已注册实例数量
 static ADCInstance *s_adc_instance[ADC_INSTANCE_NUM]; // 实例指针数组
-LOG_INSTANCE_DEF(g_adc_log, "bsp_adc", 0);            // ADC 日志实例
+#ifndef BSP_ADC_LOG_LIMIT
+#define BSP_ADC_LOG_LIMIT 10
+#endif                                                     // !BSP_ADC_LOG_LIMIT
+LOG_INSTANCE_DEF(g_adc_log, "bsp_adc", BSP_ADC_LOG_LIMIT); // ADC 日志实例
 
 /**
  * @brief 按实例映射配置 ADC 通道

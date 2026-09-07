@@ -29,7 +29,10 @@ static const uint8_t s_fdcan_dlc_bytes[16] = {
     0, 1, 2, 3, 4, 5, 6, 7, 8, 12, 16, 20, 24, 32, 48, 64};
 
 /*------------- 私有变量 --------------*/
-LOG_INSTANCE_DEF(g_can_log, "bsp_fdcan", 0); // CAN 日志实例
+#ifndef BSP_FDCAN_LOG_LIMIT
+#define BSP_FDCAN_LOG_LIMIT 10
+#endif                                                         // !BSP_FDCAN_LOG_LIMIT
+LOG_INSTANCE_DEF(g_can_log, "bsp_fdcan", BSP_FDCAN_LOG_LIMIT); // CAN 日志实例
 static uint8_t s_can_idx = 0;
 #if CAN_INSTANCE_NUM > 0
 static CANInstance *s_can_instance[CAN_INSTANCE_NUM] = {NULL};

@@ -10,7 +10,10 @@
 // 用于保存所有的daemon instance
 static DaemonInstance *s_daemon_instances[DAEMON_MX_CNT] = {NULL};
 static uint8_t s_idx = 0;
-LOG_INSTANCE_DEF(g_daemon_log, "drv_daemon", 0); // Daemon 日志实例
+#ifndef DRV_DAEMON_LOG_LIMIT
+#define DRV_DAEMON_LOG_LIMIT 10
+#endif                                                              // !DRV_DAEMON_LOG_LIMIT
+LOG_INSTANCE_DEF(g_daemon_log, "drv_daemon", DRV_DAEMON_LOG_LIMIT); // Daemon 日志实例
 
 // 蜂鸣器鸣叫声音表格
 const uint8_t voice_map[DAEMON_FAULT_NUM][12] = {0};

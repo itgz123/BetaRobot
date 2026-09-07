@@ -40,7 +40,10 @@ typedef enum : uint8_t
 // USART 实例（静态定义）
 USART_INSTANCE_DEF(s_vofa_uart, 1);
 
-LOG_INSTANCE_DEF(g_vofa_log, "drv_vofa", 0); // VOFA 日志实例
+#ifndef DRV_VOFA_LOG_LIMIT
+#define DRV_VOFA_LOG_LIMIT 10
+#endif                                                        // !DRV_VOFA_LOG_LIMIT
+LOG_INSTANCE_DEF(g_vofa_log, "drv_vofa", DRV_VOFA_LOG_LIMIT); // VOFA 日志实例
 
 // 三套发送缓冲区（放在 DMA_RAM 区域）
 static uint8_t s_tx_buff[3][TX_BUFF_SIZE] DMA_RAM = {0};

@@ -16,7 +16,10 @@
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_gpio_idx = 0;
-LOG_INSTANCE_DEF(g_gpio_log, "bsp_gpio", 0); /* GPIO 日志实例 */
+#ifndef BSP_GPIO_LOG_LIMIT
+#define BSP_GPIO_LOG_LIMIT 10
+#endif                                                        // !BSP_GPIO_LOG_LIMIT
+LOG_INSTANCE_DEF(g_gpio_log, "bsp_gpio", BSP_GPIO_LOG_LIMIT); /* GPIO 日志实例 */
 #if GPIO_INSTANCE_NUM > 0
 static GPIOInstance *s_gpio_instance[GPIO_INSTANCE_NUM] = {NULL};
 static GPIOInstance *s_exti_pin_instance[16] = {NULL};
