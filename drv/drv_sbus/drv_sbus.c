@@ -20,7 +20,10 @@
 // 函数声明
 static void SBUSUARTRxCallback(USARTInstance *usart_inst);
 
-LOG_INSTANCE_DEF(g_sbus_log, "drv_sbus", 0); // SBUS 日志实例
+#ifndef DRV_SBUS_LOG_LIMIT
+#define DRV_SBUS_LOG_LIMIT 10
+#endif                                                        // !DRV_SBUS_LOG_LIMIT
+LOG_INSTANCE_DEF(g_sbus_log, "drv_sbus", DRV_SBUS_LOG_LIMIT); // SBUS 日志实例
 
 /*------------- 外部接口实现 --------------*/
 

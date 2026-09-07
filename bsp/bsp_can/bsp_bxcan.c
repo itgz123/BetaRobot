@@ -18,7 +18,10 @@
 #include "bsp_dwt.h"
 
 /*------------- 私有变量 --------------*/
-LOG_INSTANCE_DEF(g_can_log, "bsp_bxcan", 0); // CAN 日志实例
+#ifndef BSP_BXCAN_LOG_LIMIT
+#define BSP_BXCAN_LOG_LIMIT 10
+#endif                                                         // !BSP_BXCAN_LOG_LIMIT
+LOG_INSTANCE_DEF(g_can_log, "bsp_bxcan", BSP_BXCAN_LOG_LIMIT); // CAN 日志实例
 static uint8_t s_can_idx = 0;
 #if CAN_INSTANCE_NUM > 0
 static CANInstance *s_can_instance[CAN_INSTANCE_NUM] = {NULL};

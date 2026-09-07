@@ -18,7 +18,10 @@
 
 /* bmi088 主驱动与加热器共用日志实例：LOG_INSTANCE_DEF 定义全局符号（非 static），
  * drv_bmi088.h extern 声明，heater 复用；日志关闭时宏为空、不分配，BSPLOG 空宏不引用 */
-LOG_INSTANCE_DEF(g_bmi088_log, "drv_bmi088", 0);
+#ifndef DRV_BMI088_LOG_LIMIT
+#define DRV_BMI088_LOG_LIMIT 10
+#endif // !DRV_BMI088_LOG_LIMIT
+LOG_INSTANCE_DEF(g_bmi088_log, "drv_bmi088", DRV_BMI088_LOG_LIMIT);
 
 /* 基于数据手册的专用延时宏 */
 #define BMI088_SPI_SWITCH_DELAY_S 0.002f   // SPI模式切换延时  (2ms)

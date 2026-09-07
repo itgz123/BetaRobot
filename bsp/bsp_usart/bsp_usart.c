@@ -18,7 +18,10 @@
 
 /*------------- 私有变量 --------------*/
 static uint8_t s_usart_idx = 0;
-LOG_INSTANCE_DEF(g_usart_log, "bsp_usart", 0); /* USART 日志实例 */
+#ifndef BSP_USART_LOG_LIMIT
+#define BSP_USART_LOG_LIMIT 10
+#endif                                                           // !BSP_USART_LOG_LIMIT
+LOG_INSTANCE_DEF(g_usart_log, "bsp_usart", BSP_USART_LOG_LIMIT); /* USART 日志实例 */
 #if UART_INSTANCE_NUM > 0
 static USARTInstance *s_usart_instance[UART_INSTANCE_NUM] = {NULL};
 static USARTInstance *s_usart_last_route = NULL;

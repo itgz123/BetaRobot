@@ -176,8 +176,12 @@ static char *BSPLogAppend(char *dst, const char *end, const char *s)
 
 /*============ 外部接口（2 个） ============*/
 
-/* 默认日志实例：开箱即用，模块名按无后缀文件名 "bsp_log"、255 档限频（extern 声明见 bsp_log.h） */
-LOG_INSTANCE_DEF(g_log, "bsp_log", 0);
+/* 默认日志实例：开箱即用，模块名按无后缀文件名 "bsp_log"、
+ * 默认限频 10 条/秒，可编译期用 BSP_LOG_LOG_LIMIT(-D) 覆盖（extern 声明见 bsp_log.h） */
+#ifndef BSP_LOG_LOG_LIMIT
+#define BSP_LOG_LOG_LIMIT 10
+#endif // !BSP_LOG_LOG_LIMIT
+LOG_INSTANCE_DEF(g_log, "bsp_log", BSP_LOG_LOG_LIMIT);
 
 void BSPLogInit(void)
 {

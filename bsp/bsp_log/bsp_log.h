@@ -140,7 +140,8 @@ typedef struct
 #if (defined(BSP_LOG_USED)) && (defined(LOG_UART))
 /*============ 日志宏 ============*/
 
-/* 默认日志实例（bsp_log.c 定义，编译期初始化为模块名 "bsp_log"、255 档限频）：
+/* 默认日志实例（bsp_log.c 定义，编译期初始化为模块名 "bsp_log"、
+ * 默认限频 10 条/秒，可由 BSP_LOG_LOG_LIMIT 覆盖）：
  * 免 LOG_INSTANCE_DEF 样板，直接 BSPLOG(&g_log, ...) 使用；
  * 多实例按需仍可自行 LOG_INSTANCE_DEF + 编译期初始化。 */
 extern LOGInstance g_log;

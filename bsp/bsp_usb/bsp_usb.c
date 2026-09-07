@@ -46,6 +46,9 @@
 #define USB_CDC_TRANSMIT CDC_Transmit_FS
 #define USB_TEST_DEVICE hUsbDeviceFS
 #endif
+#ifndef BSP_USB_LOG_LIMIT
+#define BSP_USB_LOG_LIMIT 10
+#endif // !BSP_USB_LOG_LIMIT
 extern USBD_HandleTypeDef USB_TEST_DEVICE;
 
 /*============================================
@@ -53,7 +56,7 @@ extern USBD_HandleTypeDef USB_TEST_DEVICE;
  *============================================*/
 /** 当前活动实例（供 CDC 回调使用） */
 static USBInstance *s_active_inst = NULL;
-LOG_INSTANCE_DEF(g_usb_log, "bsp_usb", 0); /* USB 日志实例 */
+LOG_INSTANCE_DEF(g_usb_log, "bsp_usb", BSP_USB_LOG_LIMIT); /* USB 日志实例 */
 
 /** USB 实例管理数组 */
 static USBInstance *s_usb_instances[USB_INSTANCE_NUM] = {NULL};
