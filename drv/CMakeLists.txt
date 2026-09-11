@@ -7,7 +7,7 @@ set(MODULE_SOURCES
     drv_bmi088/drv_bmi088_heater.c
     drv_daemon/drv_daemon.c
     drv_vofa/drv_vofa.c
-    drv_motor/drv_djimotor/drv_djimotor.c
+    drv_motor/drv_djimotor/drv_djimotor_broadcast.c
     drv_motor/drv_dmmotor/drv_dmmotor.c
     drv_motor/drv_rsmotor/drv_rsmotor.c
     drv_axis_lite/drv_axis_mit_lite.c
@@ -40,6 +40,7 @@ set(MODULE_INCLUDE_DIRS
     drv_motor/drv_djimotor
     drv_motor/drv_dmmotor
     drv_motor/drv_rsmotor
+    drv_motor/drv_lkmotor
     drv_axis_lite
     drv_planner
     drv_pid

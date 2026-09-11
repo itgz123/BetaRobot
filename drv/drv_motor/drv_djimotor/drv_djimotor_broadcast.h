@@ -1,5 +1,5 @@
-#ifndef __DRV_DJIMOTOR_H
-#define __DRV_DJIMOTOR_H
+#ifndef __DRV_DJIMOTOR_BROADCAST_H
+#define __DRV_DJIMOTOR_BROADCAST_H
 
 #include "bsp_can.h"
 
@@ -13,16 +13,16 @@
 /*============================================
  *              前向声明
  *============================================*/
-typedef struct DJIMotorInstance DJIMotorInstance;
+typedef struct DJIMotorBroadcastInstance DJIMotorBroadcastInstance;
 
 /*============================================
  *              数据结构体
  *============================================*/
 typedef struct
 {
-    DJIMotorInstance *motors[4]; // 组内4个电机指针
-    uint8_t motor_init_flag[4];  // 电机是否初始化标志
-} DJIMotorSendGroup_s;
+    DJIMotorBroadcastInstance *motors[4]; // 组内4个电机指针
+    uint8_t motor_init_flag[4];           // 电机是否初始化标志
+} DJIMotorBroadcastSendGroup_s;
 
 /**
  * @brief DJI 电机 CAN 帧联合体
@@ -50,7 +50,7 @@ typedef union
         uint8_t error_code;             // 错误码
     } rx;                               // 接收布局
 #pragma pack(pop)
-} DJIMotorCanFrame_u;
+} DJIMotorBroadcastCanFrame_u;
 
 /*============================================
  *              电机参数结构体
@@ -65,12 +65,12 @@ typedef struct
     float pos_scale;         // = M_2PI / encoder_resolution  编码器原始值 → rad
     float current_scale;     // = current_max_a / current_max  电流原始值 → A
     float inv_current_scale; // = current_max / current_max_a  电流 A → 原始值
-} DJIMotorParams_s;
+} DJIMotorBroadcastParams_s;
 
 /*============================================
  *              DJI 电机实例结构体
  *============================================*/
-struct DJIMotorInstance
+struct DJIMotorBroadcastInstance
 {
     MotorBase_s base; // 基类（继承）
 
@@ -87,14 +87,14 @@ struct DJIMotorInstance
     uint8_t error_code;      // 错误码
 
     /* 分组发送 (DJI 特有) */
-    DJIMotorSendGroup_s *sender_group;
+    DJIMotorBroadcastSendGroup_s *sender_group;
     uint8_t motor_idx_in_group;
 };
 
 /**
  * @brief DJI 电机配置结构体（Config 函数使用）
  *
- * @note 可重复调用 DJIMotorConfig 运行时修改 PID 参数、控制器设置、daemon 等。
+ * @note 可重复调用 DJIMotorBroadcastConfig 运行时修改 PID 参数、控制器设置、daemon 等。
  */
 typedef struct
 {
@@ -119,28 +119,28 @@ typedef struct
     DaemonFaultAction_e fault_action; // 离线故障动作
 
     uint32_t timeout_ms; // CAN 发送超时(ms)
-} DJIMotor_Config_s;
+} DJIMotorBroadcast_Config_s;
 
 /*============================================
  *              单电机实例定义宏
  *============================================*/
 
-#define DJIMOTOR_INSTANCE_DEF(name)     \
-    CAN_INSTANCE_DEF(name##_can);       \
-    DAEMON_INSTANCE_DEF(name##_daemon); \
-    static DJIMotorInstance name = {    \
-        .base.can = &name##_can,        \
-        .base.daemon = &name##_daemon,  \
+#define DJIMOTOR_BROADCAST_INSTANCE_DEF(name) \
+    CAN_INSTANCE_DEF(name##_can);             \
+    DAEMON_INSTANCE_DEF(name##_daemon);       \
+    static DJIMotorBroadcastInstance name = { \
+        .base.can = &name##_can,              \
+        .base.daemon = &name##_daemon,        \
     }
 
-int8_t DJIMotorRegister(DJIMotorInstance *inst);
-int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg);
-void DJIMotorEnable(void *inst);
-void DJIMotorDisable(void *inst);
-void DJIMotorSetRef(void *inst, float ref);
-MotorData_s DJIMotor_GetData(void *inst);
-void DJIMotorSend(void *inst); // 按照can的接收id分组，只要调用同1组的任意一个电机的发送函数，即可发送整组电机
+int8_t DJIMotorBroadcastRegister(DJIMotorBroadcastInstance *inst);
+int8_t DJIMotorBroadcastConfig(DJIMotorBroadcastInstance *inst, DJIMotorBroadcast_Config_s *cfg);
+void DJIMotorBroadcastEnable(void *inst);
+void DJIMotorBroadcastDisable(void *inst);
+void DJIMotorBroadcastSetRef(void *inst, float ref);
+MotorData_s DJIMotorBroadcast_GetData(void *inst);
+void DJIMotorBroadcastSend(void *inst); // 按照can的接收id分组，只要调用同1组的任意一个电机的发送函数，即可发送整组电机
 
 #endif // BSP_CAN_MODULE_ENABLED
 
-#endif // __DRV_DJIMOTOR_H
+#endif // __DRV_DJIMOTOR_BROADCAST_H
