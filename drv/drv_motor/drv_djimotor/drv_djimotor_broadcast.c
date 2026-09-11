@@ -1,7 +1,7 @@
-#include "drv_djimotor.h"
+#include "drv_djimotor_broadcast.h"
 #include "app_cfg.h"
 
-#ifdef DRV_DJIMOTOR_USED
+#ifdef DRV_DJIMOTOR_BROADCAST_USED
 
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
@@ -36,7 +36,7 @@
  *   - Group 2: rx_id 0x209-0x20B（GM6020 ID 5-7，tx_id=0x2FE）
  *
  * 发送处理：
- *   由于 Group 1 可能包含不同 tx_id 的电机，DJIMotorSend() 会检查组内电机的 tx_id，
+ *   由于 Group 1 可能包含不同 tx_id 的电机，DJIMotorBroadcastSend() 会检查组内电机的 tx_id，
  *   将相同 tx_id 的电机数据打包到同一帧发送，不同 tx_id 则分别发送多帧。
  *
  * 【关键约束】
@@ -44,10 +44,10 @@
  *   因此按 rx_id 分组是安全的，只需在发送时处理 tx_id 差异。
  */
 
-#define DJI_MOTOR_GROUP_0 0   // 接收ID: 0x201-0x204
-#define DJI_MOTOR_GROUP_1 1   // 接收ID: 0x205-0x208
-#define DJI_MOTOR_GROUP_2 2   // 接收ID: 0x209-0x20b
-#define DJI_MOTOR_GROUP_NUM 3 // 3组电机
+#define DJI_MOTOR_BROADCAST_GROUP_0 0   // 接收ID: 0x201-0x204
+#define DJI_MOTOR_BROADCAST_GROUP_1 1   // 接收ID: 0x205-0x208
+#define DJI_MOTOR_BROADCAST_GROUP_2 2   // 接收ID: 0x209-0x20b
+#define DJI_MOTOR_BROADCAST_GROUP_NUM 3 // 3组电机
 
 // 编码器分辨率 (14位)
 #define DJI_ENCODER_RESOLUTION 8192
@@ -66,7 +66,7 @@
  *              电机参数表定义
  *============================================*/
 /* pos_scale = M_2PI / 8192 ≈ 0.000767, current_scale = 电流量程A / 电流量程raw */
-const DJIMotorParams_s dji_motor_params[DJI_MODEL_NUM] = {
+const DJIMotorBroadcastParams_s dji_motor_broadcast_params[DJI_MODEL_NUM] = {
     [DJI_MODEL_M3508] = {
         .current_max = C620_CURRENT_MAX,
         .current_max_a = C620_CURRENT_MAX_A,
@@ -108,23 +108,23 @@ const uint16_t can_rx_id_base[DJI_MODEL_NUM] = {
     [DJI_MODEL_GM6020] = 0x204,
 };
 
-static DJIMotorSendGroup_s s_send_groups[CAN_NUM_MAX][DJI_MOTOR_GROUP_NUM] = {0};
+static DJIMotorBroadcastSendGroup_s s_send_groups[CAN_NUM_MAX][DJI_MOTOR_BROADCAST_GROUP_NUM] = {0};
 
 /*============================================
  *              虚函数表实例
  *============================================*/
-void DJIMotor_Enable(void *inst);
-void DJIMotor_Disable(void *inst);
-void DJIMotor_SetRef(void *inst, float ref);
-void DJIMotor_Send(void *inst);
-MotorData_s DJIMotor_GetData(void *inst);
+void DJIMotorBroadcast_Enable(void *inst);
+void DJIMotorBroadcast_Disable(void *inst);
+void DJIMotorBroadcast_SetRef(void *inst, float ref);
+void DJIMotorBroadcast_Send(void *inst);
+MotorData_s DJIMotorBroadcast_GetData(void *inst);
 
-const static MotorVTable_s s_dji_motor_vtable = {
-    .enable = DJIMotor_Enable,
-    .disable = DJIMotor_Disable,
-    .set_ref = DJIMotor_SetRef,
-    .send = DJIMotor_Send,
-    .get_data = DJIMotor_GetData,
+const static MotorVTable_s s_dji_motor_broadcast_vtable = {
+    .enable = DJIMotorBroadcast_Enable,
+    .disable = DJIMotorBroadcast_Disable,
+    .set_ref = DJIMotorBroadcast_SetRef,
+    .send = DJIMotorBroadcast_Send,
+    .get_data = DJIMotorBroadcast_GetData,
     .send_cmd = NULL, /* DJI 电机无需模式命令 */
 };
 
@@ -133,14 +133,14 @@ const static MotorVTable_s s_dji_motor_vtable = {
  * @param can CAN实例指针
  * @param pack 收到的 CAN 数据帧（ID 已由过滤器匹配）
  * @note 仅 memcpy 原始字节 + 时间戳 + flip 双缓冲 + 喂狗。
- *       所有数据处理移到 DJIMotor_GetData。
+ *       所有数据处理移到 DJIMotorBroadcast_GetData。
  */
-static void DJIMotorRxCallback(CANInstance *can, const CAN_Pack_s *pack)
+static void DJIMotorBroadcastRxCallback(CANInstance *can, const CAN_Pack_s *pack)
 {
     if (!can || !can->parent)
         return;
 
-    DJIMotorInstance *motor = (DJIMotorInstance *)can->parent;
+    DJIMotorBroadcastInstance *motor = (DJIMotorBroadcastInstance *)can->parent;
 
     /* 写入当前 ISR 缓冲区 */
     uint8_t idx = motor->base.raw_frame_idx;
@@ -161,23 +161,23 @@ static void DJIMotorRxCallback(CANInstance *can, const CAN_Pack_s *pack)
 }
 
 /*============================================
- *              统一数据获取接口 (DJIMotor_GetData)
+ *              统一数据获取接口 (DJIMotorBroadcast_GetData)
  *
  * 完整处理链：位域解析 → SI 转换 → 多圈累加 → 速度计算 → 滤波 → 偏置/方向
  *============================================*/
 
 /**
  * @brief DJI 电机统一数据获取
- * @param inst DJIMotorInstance 指针
+ * @param inst DJIMotorBroadcastInstance 指针
  * @return MotorData_s 包含所有反馈数据
  */
-MotorData_s DJIMotor_GetData(void *inst)
+MotorData_s DJIMotorBroadcast_GetData(void *inst)
 {
     MotorData_s result = {0};
     if (!inst)
         return result;
 
-    DJIMotorInstance *motor = (DJIMotorInstance *)inst;
+    DJIMotorBroadcastInstance *motor = (DJIMotorBroadcastInstance *)inst;
     MotorBase_s *base = &motor->base;
 
     /* 缓存命中：上次获取后没有新中断，直接返回缓存 */
@@ -189,14 +189,14 @@ MotorData_s DJIMotor_GetData(void *inst)
     MotorRawFrame_s frame = base->raw_frames[ready_idx];
 
     /* ====== Step 2: 解析位域 + SI 转换 ====== */
-    DJIMotorCanFrame_u can_frame;
+    DJIMotorBroadcastCanFrame_u can_frame;
     memcpy(can_frame.raw, frame.bytes, 8);
 
     DJIModel_e model = base->model;
     if (model >= DJI_MODEL_NUM)
         return result;
 
-    const DJIMotorParams_s *params = &dji_motor_params[model];
+    const DJIMotorBroadcastParams_s *params = &dji_motor_broadcast_params[model];
     MotorControllerSetting_s *setting = &base->setting;
 
     uint16_t raw_encoder = ((uint16_t)can_frame.rx.encoder_h << 8) | can_frame.rx.encoder_l;
@@ -298,24 +298,24 @@ MotorData_s DJIMotor_GetData(void *inst)
 
 /**
  * @brief DJI电机守护进程回调函数
- * @param owner 守护进程所有者指针 (DJIMotorInstance*)
+ * @param owner 守护进程所有者指针 (DJIMotorBroadcastInstance*)
  * @note 电机离线时调用，清空 PID 状态避免积分累积
  */
-static void DJIMotorDaemonCallback(void *owner)
+static void DJIMotorBroadcastDaemonCallback(void *owner)
 {
     if (!owner)
         return;
 
-    DJIMotorInstance *motor = (DJIMotorInstance *)owner;
+    DJIMotorBroadcastInstance *motor = (DJIMotorBroadcastInstance *)owner;
     PIDReset(&motor->base.controller.pid_speed);
     PIDReset(&motor->base.controller.pid_angle);
 }
 
 /**
  * @brief 注册DJI电机实例（仅调用一次）
- * @note 只注册 CAN/Daemon 实例，不配置电机参数（由 DJIMotorConfig 负责）。
+ * @note 只注册 CAN/Daemon 实例，不配置电机参数（由 DJIMotorBroadcastConfig 负责）。
  */
-int8_t DJIMotorRegister(DJIMotorInstance *inst)
+int8_t DJIMotorBroadcastRegister(DJIMotorBroadcastInstance *inst)
 {
     if (!inst)
         return -1;
@@ -335,7 +335,7 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst)
     // 初始化基本属性
     inst->base.brand = MOTOR_BRAND_DJI;
     inst->base.enable = MOTOR_DISABLE;
-    inst->base.vtable = &s_dji_motor_vtable;
+    inst->base.vtable = &s_dji_motor_broadcast_vtable;
 
     // 注册 daemon（占位，Config 更新运行参数）
     if (inst->base.daemon)
@@ -349,9 +349,9 @@ int8_t DJIMotorRegister(DJIMotorInstance *inst)
 /**
  * @brief 配置DJI电机实例（可重复调用）
  * @note 配置电机参数、PID、CAN 滤波器、daemon 等。
- *       要求在 DJIMotorRegister 之后调用。
+ *       要求在 DJIMotorBroadcastRegister 之后调用。
  */
-int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
+int8_t DJIMotorBroadcastConfig(DJIMotorBroadcastInstance *inst, DJIMotorBroadcast_Config_s *cfg)
 {
     if (!inst || !cfg)
         return -1;
@@ -386,7 +386,7 @@ int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
         inst->base.can_filter.id0 = rx_id;
         inst->base.can_filter.id1 = CAN_ID_UNUSED;
         inst->base.can_filter.frame_type = CAN_STANDARD_DATA_FRAME;
-        inst->base.can_filter.callback = DJIMotorRxCallback;
+        inst->base.can_filter.callback = DJIMotorBroadcastRxCallback;
 
         CAN_Config_s can_cfg = {
             .can_e = cfg->can_e,
@@ -458,7 +458,7 @@ int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
     if (inst->base.daemon)
     {
         Daemon_Config_s daemon_cfg = {
-            .callback = DJIMotorDaemonCallback,
+            .callback = DJIMotorBroadcastDaemonCallback,
             .fault_action = cfg->fault_action,
             .owner_id = inst,
             .reload_count = cfg->reload_count,
@@ -472,7 +472,7 @@ int8_t DJIMotorConfig(DJIMotorInstance *inst, DJIMotor_Config_s *cfg)
 /**
  * @brief 单个电机控制计算
  */
-static void DJIMotor_Calculate(DJIMotorInstance *inst)
+static void DJIMotorBroadcast_Calculate(DJIMotorBroadcastInstance *inst)
 {
     if (!inst || !inst->base.enable)
         return;
@@ -489,7 +489,7 @@ static void DJIMotor_Calculate(DJIMotorInstance *inst)
         return;
 
     /* 统一获取一次反馈数据（后续 GetData 走缓存，不重复解析） */
-    MotorData_s md = DJIMotor_GetData(inst);
+    MotorData_s md = DJIMotorBroadcast_GetData(inst);
 
     // 位置环 (最外环)
     if (setting->loop_type & MOTOR_LOOP_ANGLE)
@@ -536,7 +536,7 @@ static void DJIMotor_Calculate(DJIMotorInstance *inst)
     }
     else
     {
-        // 开环模式 (MOTOR_LOOP_OPEN): setpoint 直接作为力矩输出，依赖 DJIMotor_Send 原始值限幅保护
+        // 开环模式 (MOTOR_LOOP_OPEN): setpoint 直接作为力矩输出，依赖 DJIMotorBroadcast_Send 原始值限幅保护
         // 仅位置环模式 (MOTOR_LOOP_ANGLE): setpoint 是位置环 PID 输出（力矩 Nm）
         output = setpoint;
     }
@@ -545,25 +545,25 @@ static void DJIMotor_Calculate(DJIMotorInstance *inst)
     output *= setting->motor_direction;
 
     // 扭矩 → 电流 → CAN 发送原始值（全部乘法，零除法）
-    ctrl->output = output * inst->inv_torque_constant * dji_motor_params[model].inv_current_scale;
+    ctrl->output = output * inst->inv_torque_constant * dji_motor_broadcast_params[model].inv_current_scale;
 }
 
 /*============================================
  *              虚函数实现
  *============================================*/
-void DJIMotor_Enable(void *inst)
+void DJIMotorBroadcast_Enable(void *inst)
 {
     if (!inst)
         return;
-    DJIMotorInstance *motor = (DJIMotorInstance *)inst;
+    DJIMotorBroadcastInstance *motor = (DJIMotorBroadcastInstance *)inst;
     motor->base.enable = MOTOR_ENABLE;
 }
 
-void DJIMotor_Disable(void *inst)
+void DJIMotorBroadcast_Disable(void *inst)
 {
     if (!inst)
         return;
-    DJIMotorInstance *motor = (DJIMotorInstance *)inst;
+    DJIMotorBroadcastInstance *motor = (DJIMotorBroadcastInstance *)inst;
     motor->base.enable = MOTOR_DISABLE;
     PIDReset(&motor->base.controller.pid_speed);
     PIDReset(&motor->base.controller.pid_angle);
@@ -571,7 +571,7 @@ void DJIMotor_Disable(void *inst)
 
 /**
  * @brief 设置电机控制参考值
- * @param inst DJIMotorInstance 指针
+ * @param inst DJIMotorBroadcastInstance 指针
  * @param ref 参考值
  *
  * 方向标定流程:
@@ -594,31 +594,31 @@ void DJIMotor_Disable(void *inst)
  *
  * 最终输出统一限幅到 ±current_max (原始值) 再发送到 CAN 总线
  */
-void DJIMotor_SetRef(void *inst, float ref)
+void DJIMotorBroadcast_SetRef(void *inst, float ref)
 {
     if (!inst)
         return;
-    DJIMotorInstance *motor = (DJIMotorInstance *)inst;
+    DJIMotorBroadcastInstance *motor = (DJIMotorBroadcastInstance *)inst;
     motor->base.controller.ref = ref;
 }
 
-void DJIMotor_Send(void *inst)
+void DJIMotorBroadcast_Send(void *inst)
 {
     if (!inst)
         return;
-    DJIMotorInstance *motor = (DJIMotorInstance *)inst;
+    DJIMotorBroadcastInstance *motor = (DJIMotorBroadcastInstance *)inst;
 
     if (!motor->sender_group || !motor->base.can)
         return;
 
-    DJIMotorSendGroup_s *group = motor->sender_group;
+    DJIMotorBroadcastSendGroup_s *group = motor->sender_group;
 
     // ===== 控制计算：组内所有已初始化电机 =====
     for (int i = 0; i < 4; i++)
     {
         if (group->motor_init_flag[i] && group->motors[i])
         {
-            DJIMotor_Calculate(group->motors[i]);
+            DJIMotorBroadcast_Calculate(group->motors[i]);
         }
     }
 
@@ -667,18 +667,18 @@ void DJIMotor_Send(void *inst)
         uint16_t current_tx_id = tx_ids[t];
         CANInstance *tx_can = tx_cans[t];
         CAN_Pack_s pack = {.id = current_tx_id, .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
-        DJIMotorCanFrame_u *frame = (DJIMotorCanFrame_u *)pack.data;
+        DJIMotorBroadcastCanFrame_u *frame = (DJIMotorBroadcastCanFrame_u *)pack.data;
 
         for (int i = 0; i < 4; i++)
         {
             int16_t cur = 0;
-            DJIMotorInstance *m = group->motors[i];
+            DJIMotorBroadcastInstance *m = group->motors[i];
             // 只有匹配当前 tx_id 的电机才填充数据
             if (group->motor_init_flag[i] && m && m->base.enable &&
                 m->base.can && m->tx_id == current_tx_id)
             {
                 // 根据电机型号限幅到电流原始值范围
-                uint16_t current_max = dji_motor_params[m->base.model].current_max;
+                uint16_t current_max = dji_motor_broadcast_params[m->base.model].current_max;
                 float out = Lib_Math_Clamp(m->base.controller.output, -(float)current_max, (float)current_max);
                 cur = (int16_t)out;
             }
@@ -693,4 +693,4 @@ void DJIMotor_Send(void *inst)
 
 #endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */
 
-#endif /* DRV_DJIMOTOR_USED */
+#endif /* DRV_DJIMOTOR_BROADCAST_USED */
