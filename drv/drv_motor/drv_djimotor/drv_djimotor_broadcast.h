@@ -135,11 +135,11 @@ typedef struct
 
 int8_t DJIMotorBroadcastRegister(DJIMotorBroadcastInstance *inst);
 int8_t DJIMotorBroadcastConfig(DJIMotorBroadcastInstance *inst, DJIMotorBroadcast_Config_s *cfg);
-void DJIMotorBroadcastEnable(void *inst);
-void DJIMotorBroadcastDisable(void *inst);
-void DJIMotorBroadcastSetRef(void *inst, float ref);
+void DJIMotorBroadcast_Enable(void *inst);
+void DJIMotorBroadcast_Disable(void *inst);
+void DJIMotorBroadcast_SetRef(void *inst, float ref);
 MotorData_s DJIMotorBroadcast_GetData(void *inst);
-void DJIMotorBroadcastSend(void *inst); // 按照can的接收id分组，只要调用同1组的任意一个电机的发送函数，即可发送整组电机
+void DJIMotorBroadcast_Send(void *inst); // 按照can的接收id分组，只要调用同1组的任意一个电机的发送函数，即可发送整组电机
 
 #endif // BSP_CAN_MODULE_ENABLED
 
