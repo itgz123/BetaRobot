@@ -119,6 +119,28 @@
                 "panel": "new"
             },
             "problemMatcher": []
+        },
+        {
+            "label": "check docs",
+            "type": "shell",
+            "windows": {
+                "command": "docs/check-docs.bat"
+            },
+            "linux": {
+                "command": "bash docs/check-docs.sh"
+            },
+            "osx": {
+                "command": "bash docs/check-docs.sh"
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "detail": "本地构建文档站点，推送前校验文档改动",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": []
         }
     ]
 }
