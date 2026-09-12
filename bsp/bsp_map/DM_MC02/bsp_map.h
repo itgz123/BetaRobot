@@ -79,6 +79,10 @@ typedef enum
     GPIO_LCD_KEY2,
     GPIO_EX_KEY,
     GPIO_USER_KEY,
+    GPIO_PWM_1, // PA0  TIM2_CH1，与 TIM_PWM_1 同引脚（GPIO/PWM 复用）
+    GPIO_PWM_2, // PA2  TIM2_CH3，与 TIM_PWM_2 同引脚
+    GPIO_PWM_3, // PE9  TIM1_CH1，与 TIM_PWM_3 同引脚
+    GPIO_PWM_4, // PE13 TIM1_CH3，与 TIM_PWM_4 同引脚
     GPIO_NUM_MAX
 } BoardGPIO_e;
 

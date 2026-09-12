@@ -75,6 +75,13 @@ typedef enum
     GPIO_BMI088_INT_GYRO,
     GPIO_IST8310_DRDY,
     GPIO_IST8310_RSTN,
+    GPIO_PWM_1, // PE9  TIM1_CH1，与 TIM_PWM_1 同引脚（GPIO/PWM 复用）
+    GPIO_PWM_2, // PE11 TIM1_CH2，与 TIM_PWM_2 同引脚
+    GPIO_PWM_3, // PE13 TIM1_CH3，与 TIM_PWM_3 同引脚
+    GPIO_PWM_4, // PE14 TIM1_CH4，与 TIM_PWM_4 同引脚
+    GPIO_PWM_5, // PC6  TIM8_CH1，与 TIM_PWM_5 同引脚
+    GPIO_PWM_6, // PI6  TIM8_CH2，与 TIM_PWM_6 同引脚
+    GPIO_PWM_7, // PI7  TIM8_CH3，与 TIM_PWM_7 同引脚
     GPIO_NUM_MAX
 } BoardGPIO_e;
 
@@ -150,6 +157,5 @@ extern const CAN_Map_t can_map[];
 extern const SPI_Map_t spi_map[];
 extern const I2C_Map_t i2c_map[];
 extern const ADC_Map_t adc_map[];
-
 
 #endif /* __DJI_C_BSP_MAP_H */

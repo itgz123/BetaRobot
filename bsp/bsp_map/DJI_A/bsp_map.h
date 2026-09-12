@@ -90,6 +90,22 @@ typedef enum
     GPIO_POWER_EN3,
     GPIO_POWER_EN4,
     GPIO_DAC_EXTI,
+    GPIO_PWM_1,  // PA0  TIM2_CH1，与 TIM_PWM_1 同引脚（GPIO/PWM 复用）
+    GPIO_PWM_2,  // PA1  TIM2_CH2
+    GPIO_PWM_3,  // PA2  TIM2_CH3
+    GPIO_PWM_4,  // PA3  TIM2_CH4
+    GPIO_PWM_5,  // PD12 TIM4_CH1，与 TIM_PWM_5 同引脚
+    GPIO_PWM_6,  // PD13 TIM4_CH2
+    GPIO_PWM_7,  // PD14 TIM4_CH3
+    GPIO_PWM_8,  // PD15 TIM4_CH4
+    GPIO_PWM_9,  // PH10 TIM5_CH1，与 TIM_PWM_9 同引脚
+    GPIO_PWM_10, // PH11 TIM5_CH2
+    GPIO_PWM_11, // PH12 TIM5_CH3
+    GPIO_PWM_12, // PI0  TIM5_CH4
+    GPIO_PWM_13, // PI5  TIM8_CH1，与 TIM_PWM_13 同引脚
+    GPIO_PWM_14, // PI6  TIM8_CH2
+    GPIO_PWM_15, // PI7  TIM8_CH3
+    GPIO_PWM_16, // PI2  TIM8_CH4
     GPIO_NUM_MAX
 } BoardGPIO_e;
 
@@ -198,6 +214,5 @@ extern const SPI_Map_t spi_map[];
 extern const I2C_Map_t i2c_map[];
 extern const ADC_Map_t adc_map[];
 extern const DAC_Map_t dac_map[];
-
 
 #endif /* __DJI_A_BSP_MAP_H */

@@ -19,6 +19,10 @@ const GPIO_Map_t gpio_map[GPIO_NUM_MAX] = {
     [GPIO_LCD_KEY2] = {GPIOD, GPIO_PIN_10},
     [GPIO_EX_KEY] = {GPIOA, GPIO_PIN_15},
     [GPIO_USER_KEY] = {GPIOE, GPIO_PIN_14},
+    [GPIO_PWM_1] = {GPIOA, GPIO_PIN_0},  /* PA0  TIM2_CH1 */
+    [GPIO_PWM_2] = {GPIOA, GPIO_PIN_2},  /* PA2  TIM2_CH3 */
+    [GPIO_PWM_3] = {GPIOE, GPIO_PIN_9},  /* PE9  TIM1_CH1 */
+    [GPIO_PWM_4] = {GPIOE, GPIO_PIN_13}, /* PE13 TIM1_CH3 */
 };
 
 const TIM_Map_t tim_map[TIM_NUM_MAX] = {
