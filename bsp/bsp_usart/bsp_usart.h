@@ -118,9 +118,18 @@ int8_t USARTConfig(USARTInstance *instance, const USART_Config_s *config);
 int8_t USARTTransmit(USARTInstance *instance, uint8_t *data, uint16_t len, uint32_t timeout_ms);
 
 /**
+ * @brief 发送卡死自恢复：中止当前发送并复位 HAL 状态
+ * @param instance USART实例
+ * @retval 0 成功（含 BLOCK 模式无需恢复）；-1 参数非法
+ * @note 用于 DMA/IT 发送中途出错导致 gState 停在 BUSY_TX_TX 不再回 READY 的场景
+ *       （此后每次 USARTTransmit 都判忙超时=永久静默）。调用后应重新发起发送。
+ */
+int8_t USARTRecoverTransmit(USARTInstance *instance);
+
+/**
  * @brief 重新启动接收
  * @param instance USART实例
- * @note 用于错误恢复或手动重启接收
+ * @note 用于错误恢复或手动重启接收；失败自动重试若干次
  */
 void USARTRestartReceive(USARTInstance *instance);
 

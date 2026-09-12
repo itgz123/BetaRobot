@@ -41,6 +41,14 @@
 #define CAN_MEDIA_FRAME_MAX_FD 64
 #endif
 
+/* 异步分包发送卡死兜底阈值：连续 N 次 Send 都发现 tx_active 仍为 1（说明分包续发的
+ * 发送完成回调丢失/总线异常），即判定卡死并强制放弃残帧恢复发送，避免永久卡死。
+ * 按 Send 调用次数计（本工程 2ms 周期 → N=3 约 6ms）：须小于链路看门狗 daemon_reload
+ * （10ms），保证在对端判离线之前已自恢复；正常单帧发送仅数百 µs，不会误触发。 */
+#ifndef CAN_MEDIA_IDSEQ_TX_STALL_LIMIT
+#define CAN_MEDIA_IDSEQ_TX_STALL_LIMIT 3u
+#endif
+
 /**
  * @brief CAN IDSEQ 后端运行期配置（CommConfig 的 media_cfg 指向）
  * @note 收发各用独立 ID 段，一个 comm 实例即可双向（字段名与 pkt0 统一）：
@@ -64,20 +72,23 @@ typedef struct
 /* CAN IDSEQ 介质派生结构体（首成员必须为 CommMedia 基类，vtable 约定） */
 typedef struct
 {
-    CommMedia base;         /* 基类（首成员） */
-    uint8_t *rx_buff;       /* 接收累积缓冲（完整协议帧，不含分包序号；DEF 宏静态绑定，大小 = rx_buff_sz） */
-    uint8_t *tx_buff;       /* 发送 staging 缓冲（完整协议帧，不含分包序号；DEF 宏静态绑定，大小 = tx_buff_sz；
-                             * MediaCanIdseqSend 先整帧拷入此处，再逐包异步发出） */
-    uint16_t rx_frame_len;  /* 完整协议帧长（不含分包序号）= rx_buff_sz（DEF 宏写入；接收累积目标） */
-    uint16_t tx_frame_len;  /* 完整协议帧长（不含分包序号）= tx_buff_sz（DEF 宏写入；发送分包依据） */
-    uint16_t rx_cnt;        /* 已累积字节数（0..rx_frame_len，上交后归零） */
-    uint16_t tx_sent;       /* 已发送字节位置（0..tx_frame_len；异步分包推进依据，发完一帧回到 tx_frame_len） */
-    uint8_t tx_active;      /* 异步分包发送进行中（1 = 上一帧尚未全部发出，拒绝新 Send 重入） */
-    uint32_t rx_expect_pkt; /* 期望接收的下一分包序号（序号段大小可 >255，用 uint32_t） */
-    uint32_t lost_frames;   /* 丢帧计数（分包错位/帧中途丢包累加） */
-    uint32_t timeout_ms;    /* CANTransmit 超时（Config 写入） */
-    uint32_t tx_id;         /* 发送 ID 段基址（id = tx_id + 分包序号；Config 写入；CAN_ID_UNUSED = 不发送） */
-    uint32_t rx_id;         /* 接收 ID 段基址（过滤段起点；Config 写入；CAN_ID_UNUSED = 不接收） */
+    CommMedia base;            /* 基类（首成员） */
+    uint8_t *rx_buff;          /* 接收累积缓冲（完整协议帧，不含分包序号；DEF 宏静态绑定，大小 = rx_buff_sz） */
+    uint8_t *tx_buff;          /* 发送 staging 缓冲（完整协议帧，不含分包序号；DEF 宏静态绑定，大小 = tx_buff_sz；
+                                * MediaCanIdseqSend 先整帧拷入此处，再逐包异步发出） */
+    uint16_t rx_frame_len;     /* 完整协议帧长（不含分包序号）= rx_buff_sz（DEF 宏写入；接收累积目标） */
+    uint16_t tx_frame_len;     /* 完整协议帧长（不含分包序号）= tx_buff_sz（DEF 宏写入；发送分包依据） */
+    uint16_t rx_cnt;           /* 已累积字节数（0..rx_frame_len，上交后归零） */
+    uint16_t tx_sent;          /* 已发送字节位置（0..tx_frame_len；异步分包推进依据，发完一帧回到 tx_frame_len） */
+    uint8_t tx_active;         /* 异步分包发送进行中（1 = 上一帧尚未全部发出，拒绝新 Send 重入） */
+    uint8_t tx_stall;          /* 连续 Send 时 tx_active 仍为 1 的次数（达 CAN_MEDIA_IDSEQ_TX_STALL_LIMIT 判卡死） */
+    uint32_t tx_fail;          /* 发送失败计数（重入拒绝/首包失败/中超时；只增不清，调试用） */
+    uint32_t tx_stall_recover; /* 发送卡死强制恢复次数（只增不清，调试用；正常恒 0） */
+    uint32_t rx_expect_pkt;    /* 期望接收的下一分包序号（序号段大小可 >255，用 uint32_t） */
+    uint32_t lost_frames;      /* 丢帧计数（分包错位/帧中途丢包累加） */
+    uint32_t timeout_ms;       /* CANTransmit 超时（Config 写入） */
+    uint32_t tx_id;            /* 发送 ID 段基址（id = tx_id + 分包序号；Config 写入；CAN_ID_UNUSED = 不发送） */
+    uint32_t rx_id;            /* 接收 ID 段基址（过滤段起点；Config 写入；CAN_ID_UNUSED = 不接收） */
 
     /* CAN 收发参数（Config 写入） */
     CAN_Filter_s can_filter;     /* 接收过滤器（每实例一份，MASK 段匹配；bsp 为指针存储，须常驻实例） */

@@ -170,14 +170,14 @@ int8_t USBConfig(USBInstance *instance, const USB_Config_s *config)
     return 0;
 }
 
-void USBTransmit(USBInstance *instance, const uint8_t *data, uint16_t len)
+int8_t USBTransmit(USBInstance *instance, const uint8_t *data, uint16_t len)
 {
-    if ((instance == NULL) || (len == 0))
-        return;
+    if ((instance == NULL) || (data == NULL) || (len == 0))
+        return -1;
 
     if (USB_TEST_DEVICE.dev_state != USBD_STATE_CONFIGURED)
     {
-        return;
+        return -1; /* 未枚举：整包丢弃 */
     }
 
     /* 确保 s_active_inst 指向此实例，供 bsp_usb_process_tx 使用 */
@@ -190,7 +190,9 @@ void USBTransmit(USBInstance *instance, const uint8_t *data, uint16_t len)
         if (next == instance->tx_tail)
         {
             BSPLOG(&g_usb_log, LOG_LEVEL_WARNING, "TX ring full, %d bytes dropped", len - i);
-            break;
+            /* 尝试立即发送已入队部分（主机恢复读取后 TX 完成中断会自动续发整个环） */
+            bsp_usb_process_tx();
+            return -1;
         }
         instance->tx_ring[instance->tx_head] = data[i];
         instance->tx_head = next;
@@ -198,4 +200,5 @@ void USBTransmit(USBInstance *instance, const uint8_t *data, uint16_t len)
 
     /* 尝试立即发送 */
     bsp_usb_process_tx();
+    return 0;
 }

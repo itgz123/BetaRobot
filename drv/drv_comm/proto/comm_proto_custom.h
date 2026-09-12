@@ -36,7 +36,9 @@ typedef struct
     CommProto base;       /* 基类（首成员） */
     uint8_t tx_seq;       /* 发送帧序列（pack 时自增写入帧） */
     uint8_t rx_last_seq;  /* 上次收到的帧序列（unpack 检测丢帧/重帧） */
-    uint32_t lost_frames; /* 累计丢帧数（跳号时 += 跳过帧数；重帧/坏帧不计） */
+    uint32_t lost_frames; /* 累计丢帧数（正向跳号时 += 跳过帧数；重帧/坏帧不计） */
+    uint32_t rx_err;      /* 坏帧计数（帧头/帧尾/CRC 不符；只增不清，调试用） */
+    uint32_t rx_resync;   /* 对端 seq 反向跳变（重启/长中断）重同步次数；只增不清，调试用 */
 } CommProtoCustom;
 
 /**

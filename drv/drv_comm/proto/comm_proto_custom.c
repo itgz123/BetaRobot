@@ -73,19 +73,40 @@ static const uint8_t *CustomUnpack(CommProto *self, const uint8_t *data)
 
     /* 1. 帧头/帧尾定界（固定长度帧，整帧长 = n + 4） */
     if (data[0] != PROTO_CUSTOM_FRAME_HEADER)
+    {
+        p->rx_err++;
         return NULL;
+    }
     if (data[n + 3] != PROTO_CUSTOM_FRAME_TAIL)
+    {
+        p->rx_err++;
         return NULL;
+    }
     /* 2. CRC8 校验（seq + payload）；不符 = 坏帧，丢弃且不更新 seq */
     if (PROTO_CUSTOM_CRC8(&data[1], n + 1) != data[n + 2])
+    {
+        p->rx_err++;
         return NULL;
+    }
 
     /* 3. 帧序列检测 */
     seq = data[1];
     if (seq == p->rx_last_seq)
         return NULL; /* 重帧，丢弃 */
-    if (seq != (uint8_t)(p->rx_last_seq + 1))
-        p->lost_frames += (uint8_t)(seq - (p->rx_last_seq + 1)); /* 跳号记丢帧，仍接受 */
+    {
+        /* 正向跳号（gap 1..127）= 真丢帧，累计；
+         * 反向跳变（gap >= 128，对端重启 / 长时间中断后 seq 回绕）按重同步处理，
+         * 不把 (256-gap) 巨量帧数记成丢帧（否则计数器被一次重启刷爆） */
+        uint8_t gap = (uint8_t)(seq - (uint8_t)(p->rx_last_seq + 1));
+
+        if (gap != 0)
+        {
+            if (gap < 128u)
+                p->lost_frames += gap;
+            else
+                p->rx_resync++;
+        }
+    }
     p->rx_last_seq = seq;
 
     return data + 2; /* payload 指针（帧头后） */
@@ -101,6 +122,8 @@ static void CustomReset(CommProto *self)
     p->tx_seq = 0;
     p->rx_last_seq = 0xFF; /* 0xFF+1 回卷=0：重置后首帧 seq=0 视为正常新帧而非重帧 */
     p->lost_frames = 0;
+    p->rx_err = 0;
+    p->rx_resync = 0;
 }
 
 int8_t CommProtoCustomInit(CommProtoCustom *proto)
@@ -111,6 +134,8 @@ int8_t CommProtoCustomInit(CommProtoCustom *proto)
     proto->tx_seq = 0;
     proto->rx_last_seq = 0xFF; /* 0xFF+1 回卷=0：首帧 seq=0 视为正常新帧而非重帧 */
     proto->lost_frames = 0;
+    proto->rx_err = 0;
+    proto->rx_resync = 0;
     return 0;
 }
 

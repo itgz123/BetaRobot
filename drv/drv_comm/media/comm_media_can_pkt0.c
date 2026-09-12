@@ -51,16 +51,38 @@ static int8_t MediaCanPkt0Send(CommMedia *media, const uint8_t *data)
     if (can == NULL)
         return -1;
 
+    if (m->tx_id == CAN_ID_UNUSED)
+        return -1; /* 未配置发送 ID：只收不发 */
+
     if (m->tx_active)
-        return -1; /* 上一帧仍在异步分包发送中，拒绝重入 */
+    {
+        /* 卡死兜底：分包续发依赖 bsp 发送完成回调，一旦该回调丢失（邮箱 RQCP 被同总线
+         * 其他实例复用吞掉 / 总线异常），tx_active 会永久为 1，之后所有 Send 都被拒 →
+         * 链路单向静默。连续 N 次 Send 仍见 tx_active=1 即判定卡死，强制放弃残帧
+         * （接收端按分包序号错位丢帧重同步，仅损失一帧）后继续发新帧。 */
+        if (++m->tx_stall >= CAN_MEDIA_PKT0_TX_STALL_LIMIT)
+        {
+            m->tx_stall = 0;
+            m->tx_active = 0;
+            m->tx_sent = 0;
+            m->tx_stall_recover++; /* 调试观测：正常为 0 */
+        }
+        else
+        {
+            m->tx_fail++;
+            return -1; /* 上一帧仍在异步分包发送中，拒绝重入 */
+        }
+    }
 
     memcpy(m->tx_buff, data, m->tx_frame_len); /* 整帧拷入自持缓冲（异步续发期间不失效） */
     m->tx_sent = 0;
     m->tx_active = 1;
+    m->tx_stall = 0; /* 新帧开始，卡死计数归零 */
 
     if (MediaCanPkt0SendNext(m) != 0)
     {
         m->tx_active = 0; /* 首包发送失败：中止 */
+        m->tx_fail++;
         return -1;
     }
     return 0;
@@ -109,8 +131,16 @@ static void MediaCanPkt0TxHook(CANInstance *can, uint32_t tx_mailbox)
     (void)tx_mailbox;
     if (m == NULL)
         return;
-    if (MediaCanPkt0SendNext(m) != 0)
-        m->tx_active = 0; /* 发完(1) 或失败(-1)：结束本轮异步发送 */
+    {
+        int8_t r = MediaCanPkt0SendNext(m);
+
+        if (r != 0)
+        {
+            m->tx_active = 0; /* 发完(1) 或失败(-1)：结束本轮异步发送 */
+            if (r < 0)
+                m->tx_fail++; /* 分包续发失败：记录（接收端按分包序号错位丢帧重同步） */
+        }
+    }
 }
 
 /* bsp 接收适配钩子：每包 = [pkt_idx][数据片]，按分包序号连续重组整帧。
@@ -203,6 +233,9 @@ int8_t MediaCanPkt0Register(CommMediaCanPkt0 *media)
     media->lost_frames = 0;
     media->tx_sent = 0;
     media->tx_active = 0;
+    media->tx_stall = 0;
+    media->tx_fail = 0;
+    media->tx_stall_recover = 0;
     return 0;
 }
 

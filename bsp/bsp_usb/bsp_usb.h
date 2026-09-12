@@ -102,11 +102,14 @@ int8_t USBConfig(USBInstance *instance, const USB_Config_s *config);
  * @param instance USB 实例
  * @param data 数据指针
  * @param len  数据长度
+ * @retval 0  整包已写入环形缓冲（并已尝试立即发出）
+ * @retval -1 未枚举 / 参数非法 / 环形缓冲满（超出部分丢弃）
  *
- * @note 数据写入环形缓冲后立即尝试发送；
- *       缓冲满时丢弃超出数据并输出 WARNING 日志。
+ * @note 数据写入环形缓冲后立即尝试发送；缓冲满时丢弃超出数据并输出 WARNING 日志。
+ *       返回 -1 供上层（comm media）记录发送错误——USB 侧丢包不影响后续发送，
+ *       主机恢复读取后由 TX 完成中断自动续发，无需额外恢复动作。
  */
-void USBTransmit(USBInstance *instance, const uint8_t *data, uint16_t len);
+int8_t USBTransmit(USBInstance *instance, const uint8_t *data, uint16_t len);
 
 #endif /* HAL_PCD_MODULE_ENABLED */
 

@@ -20,7 +20,12 @@
 static uint8_t s_usart_idx = 0;
 #ifndef BSP_USART_LOG_LIMIT
 #define BSP_USART_LOG_LIMIT 10
-#endif                                                           // !BSP_USART_LOG_LIMIT
+#endif // !BSP_USART_LOG_LIMIT
+
+/* 接收重启失败重试次数（自恢复：避免一次失败后 RX 永久停摆） */
+#ifndef USART_RX_RESTART_RETRY
+#define USART_RX_RESTART_RETRY 3
+#endif
 LOG_INSTANCE_DEF(g_usart_log, "bsp_usart", BSP_USART_LOG_LIMIT); /* USART 日志实例 */
 #if UART_INSTANCE_NUM > 0
 static USARTInstance *s_usart_instance[UART_INSTANCE_NUM] = {NULL};
@@ -249,14 +254,35 @@ void USARTRestartReceive(USARTInstance *instance)
         return;
     }
 
-    if (HAL_UARTEx_ReceiveToIdle_DMA(instance->handle, instance->rx_buff, instance->rx_buff_size) != HAL_OK)
+    /* 自恢复：重启接收失败（HAL 忙/状态未复位）则重试若干次，避免一次失败后
+     * 接收永久停摆（RX 停 = 对端看门狗判离线，链路永久失效） */
+    for (uint8_t attempt = 0; attempt < USART_RX_RESTART_RETRY; attempt++)
     {
-        BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "Restart receive failed!");
-        return;
+        if (HAL_UARTEx_ReceiveToIdle_DMA(instance->handle, instance->rx_buff, instance->rx_buff_size) == HAL_OK)
+        {
+            // 关闭DMA半传输中断，防止两次进入HAL_UARTEx_RxEventCallback()
+            __HAL_DMA_DISABLE_IT(instance->handle->hdmarx, DMA_IT_HT);
+            return;
+        }
     }
+    BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Restart receive failed after %d retries!", USART_RX_RESTART_RETRY);
+}
 
-    // 关闭DMA半传输中断，防止两次进入HAL_UARTEx_RxEventCallback()
-    __HAL_DMA_DISABLE_IT(instance->handle->hdmarx, DMA_IT_HT);
+int8_t USARTRecoverTransmit(USARTInstance *instance)
+{
+    if (instance == NULL || instance->handle == NULL)
+        return -1;
+
+    if (instance->tx_mode == USART_BLOCK_MODE)
+        return 0; /* BLOCK 模式无异步状态可卡死 */
+
+    /* DMA/IT 发送中途出错（噪声/帧错误/DMA 故障）时 gState 可能停在 BUSY_TX，
+     * 此后每次 USARTTransmit 都在"等就绪"处超时返回 -1 → 发送永久静默。
+     * 强制中止当前发送并复位状态，让下一次发送能重新发起。 */
+    (void)HAL_UART_AbortTransmit(instance->handle);
+    if (instance->handle->gState != HAL_UART_STATE_READY)
+        instance->handle->gState = HAL_UART_STATE_READY; /* Abort 未复位状态时兜底 */
+    return 0;
 }
 
 uint8_t USARTIsReady(USARTInstance *instance)

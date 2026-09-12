@@ -45,6 +45,14 @@
 #define CAN_MEDIA_PKT0_MAX_FRAME ((uint16_t)(CAN_MEDIA_PKT0_PAYLOAD_CLASSIC * 256u))
 #define CAN_MEDIA_PKT0_MAX_FRAME_FD ((uint16_t)(CAN_MEDIA_PKT0_PAYLOAD_FD * 256u))
 
+/* 异步分包发送卡死兜底阈值：连续 N 次 Send 都发现 tx_active 仍为 1（分包续发的发送完成
+ * 回调丢失/总线异常），即判定卡死并强制放弃残帧恢复发送，避免永久卡死。按 Send 调用
+ * 次数计（本工程 2ms 周期 → N=3 约 6ms）：须小于链路看门狗 daemon_reload（10ms），
+ * 保证在对端判离线之前已自恢复；正常单帧发送仅数百 µs，不会误触发。 */
+#ifndef CAN_MEDIA_PKT0_TX_STALL_LIMIT
+#define CAN_MEDIA_PKT0_TX_STALL_LIMIT 3u
+#endif
+
 /**
  * @brief CAN PKT0 后端运行期配置（CommConfig 的 media_cfg 指向）
  * @note 收发共用 frame_type（标准/扩展数据帧须一致）；tx_id/rx_id 可设 CAN_ID_UNUSED 表示不发送/不接收
@@ -64,18 +72,21 @@ typedef struct
 /* CAN 介质派生结构体（首成员必须为 CommMedia 基类，vtable 约定） */
 typedef struct
 {
-    CommMedia base;        /* 基类（首成员） */
-    uint8_t *rx_buff;      /* 接收累积缓冲（完整协议帧，不含分包序号；DEF 宏静态绑定，大小 = rx_buff_sz） */
-    uint8_t *tx_buff;      /* 发送 staging 缓冲（完整协议帧，不含分包序号；DEF 宏静态绑定，大小 = tx_buff_sz；
-                            * MediaCanPkt0Send 先整帧拷入此处，再逐包异步发出） */
-    uint16_t rx_frame_len; /* 完整协议帧长（不含分包序号）= rx_buff_sz（DEF 宏写入；接收累积目标） */
-    uint16_t tx_frame_len; /* 完整协议帧长（不含分包序号）= tx_buff_sz（DEF 宏写入；发送分包依据） */
-    uint16_t rx_cnt;       /* 已累积字节数（0..rx_frame_len，上交后归零） */
-    uint16_t tx_sent;      /* 已发送字节位置（0..tx_frame_len；异步分包推进依据，发完一帧回到 tx_frame_len） */
-    uint8_t tx_active;     /* 异步分包发送进行中（1 = 上一帧尚未全部发出，拒绝新 Send 重入） */
-    uint8_t rx_expect_pkt; /* 期望接收的下一分包序号（帧内 0 起递增；错位说明丢包，丢帧重同步） */
-    uint32_t lost_frames;  /* 丢帧计数（分包错位/帧中途丢包累加） */
-    uint32_t timeout_ms;   /* CANTransmit 超时（Config 写入） */
+    CommMedia base;            /* 基类（首成员） */
+    uint8_t *rx_buff;          /* 接收累积缓冲（完整协议帧，不含分包序号；DEF 宏静态绑定，大小 = rx_buff_sz） */
+    uint8_t *tx_buff;          /* 发送 staging 缓冲（完整协议帧，不含分包序号；DEF 宏静态绑定，大小 = tx_buff_sz；
+                                * MediaCanPkt0Send 先整帧拷入此处，再逐包异步发出） */
+    uint16_t rx_frame_len;     /* 完整协议帧长（不含分包序号）= rx_buff_sz（DEF 宏写入；接收累积目标） */
+    uint16_t tx_frame_len;     /* 完整协议帧长（不含分包序号）= tx_buff_sz（DEF 宏写入；发送分包依据） */
+    uint16_t rx_cnt;           /* 已累积字节数（0..rx_frame_len，上交后归零） */
+    uint16_t tx_sent;          /* 已发送字节位置（0..tx_frame_len；异步分包推进依据，发完一帧回到 tx_frame_len） */
+    uint8_t tx_active;         /* 异步分包发送进行中（1 = 上一帧尚未全部发出，拒绝新 Send 重入） */
+    uint8_t tx_stall;          /* 连续 Send 时 tx_active 仍为 1 的次数（达 CAN_MEDIA_PKT0_TX_STALL_LIMIT 判卡死） */
+    uint8_t rx_expect_pkt;     /* 期望接收的下一分包序号（帧内 0 起递增；错位说明丢包，丢帧重同步） */
+    uint32_t tx_fail;          /* 发送失败计数（重入拒绝/首包失败/续发失败；只增不清，调试用） */
+    uint32_t tx_stall_recover; /* 发送卡死强制恢复次数（只增不清，调试用；正常恒 0） */
+    uint32_t lost_frames;      /* 丢帧计数（分包错位/帧中途丢包累加） */
+    uint32_t timeout_ms;       /* CANTransmit 超时（Config 写入） */
 
     /* CAN 收发参数（Config 写入） */
     CAN_Filter_s can_filter;     /* 接收过滤器（每实例一份，Config 填写后指针传给 CANConfig；bsp 为指针存储，须常驻实例） */
