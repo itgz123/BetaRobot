@@ -292,9 +292,8 @@ static void TerminalLiteTaskFunc(void *argument)
         }
         if (s_ring_overrun)
         {
-            uint16_t o = s_ring_overrun;
+            BSPLOG(&g_terminal_lite_log, LOG_LEVEL_WARNING, "rx ring overrun: %u", s_ring_overrun);
             s_ring_overrun = 0;
-            BSPLOG(&g_terminal_lite_log, LOG_LEVEL_WARNING, "rx ring overrun: %u", o);
         }
         if (!line_ready)
         {
