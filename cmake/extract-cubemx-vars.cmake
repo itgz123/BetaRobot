@@ -56,13 +56,12 @@ if(CMAKE_SCRIPT_MODE_FILE)
 endif()
 
 # 在项目模式下：提供给顶层 CMakeLists.txt 调用的函数
-function(load_cubemx_vars cubemx_cmake_file hal_dir)
-    set(output_file "${CMAKE_BINARY_DIR}/cubemx_vars_${HAL_CONFIG_NAME}.cmake")
+function(load_cubemx_vars cubemx_cmake_file hal_dir output_file)
     execute_process(
         COMMAND "${CMAKE_COMMAND}"
-            -DCUBEMX_CMAKE_FILE=${cubemx_cmake_file}
-            -DCUBEMX_HAL_DIR=${hal_dir}
-            -DCUBEMX_OUTPUT_FILE=${output_file}
+            "-DCUBEMX_CMAKE_FILE=${cubemx_cmake_file}"
+            "-DCUBEMX_HAL_DIR=${hal_dir}"
+            "-DCUBEMX_OUTPUT_FILE=${output_file}"
             -P "${CMAKE_CURRENT_FUNCTION_LIST_FILE}"
         RESULT_VARIABLE extract_result
         OUTPUT_VARIABLE extract_output

@@ -16,16 +16,16 @@
 2. VSCode 打开仓库根目录 → 右下角弹窗选 "Reopen in Container"（或命令面板：Dev Containers: Reopen in Container）
 3. 首次构建自动完成：apt 安装工具 + 下载 ARM 工具链 15.3.rel1 到 `/opt/arm-gnu-toolchain`（需联网，约 300~400 MB）
 4. 自动初始化：复制 `user_cfg.h.example` → `user_cfg.h`，并执行 `scripts/setup_apps.sh` 拉取独立 app 仓库到 `app/`
-5. 之后操作与 Windows 完全一致：`Ctrl+Shift+B` 编译；任务面板选 "download dap" / "DAP-link RTT"；`F5` 调试
+5. 之后操作与 Windows 完全一致：`Ctrl+Shift+B` 编译；任务面板选 "download dap"；`F5` 调试
 
 ### 容器内常用命令
 
 ```bash
 arm-none-eabi-gcc --version        # 工具链版本
-cmake --preset Debug               # 配置
-cmake --build build/Debug -j24     # 编译（生成 BetaRobot.elf/.hex/.bin）
-cmake --build build/Debug --target download_dap   # 用 DAPlink 烧录
-cmake --build build/Debug --target rtt_connect    # 启动 RTT 日志（telnet 8888）
+cmake --preset default             # 配置（自动发现 app/ 下的应用）
+cmake --build --preset Debug       # 编译当前 app（生成 <app>.elf/.hex/.bin）
+cmake --build --preset Release     # 编译当前 app 的 Release
+cmake --build --preset Debug --target download_dap   # 用 DAPlink 烧录
 ```
 
 ### USB 透传（DAPlink）
@@ -38,8 +38,8 @@ cmake --build build/Debug --target rtt_connect    # 启动 RTT 日志（telnet 8
 ### 常见问题
 
 - 容器内 CMake 报 `CMakeCache.txt ... is different than the directory ...`：
-  这是宿主机（或其他环境）已用不同路径构建过 `build/` 目录导致。执行
-  `cmake -E rm -rf build/Debug` 后重新 `cmake --preset Debug` 即可
+  这是宿主机（或其他环境）已用不同 generator/路径构建过 `build/` 目录导致。执行
+  `cmake -E rm -rf build` 后重新 `cmake --preset default` 即可
 - app 仓库拉取失败（ssh-agent 未转发）：容器内执行
   `git config --global url."https://github.com/".insteadOf "git@github.com:"` 后重新执行
   `bash scripts/setup_apps.sh`
