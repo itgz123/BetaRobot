@@ -3,7 +3,7 @@
  * @brief 通信框架-硬件层（Media）CAN 后端 - ID 分包（IDSEQ）实现
  *
  * 发送：整帧按 mode 数据片分包（CLASSIC 8B / FD 64B），分包序号编码进 CAN ID
- *       段内偏移（id = base_id + seq，0 起递增），每包 = 整帧全为数据片（序号在 ID，
+ *       段内偏移（id = tx_id + seq，0 起递增），每包 = 整帧全为数据片（序号在 ID，
  *       不占数据字节，末包短帧不补零）经 CANTransmit 发出。
  * 接收：bsp CAN 中断 → 软件过滤分发（RANGE 段匹配后回调带 CAN_Pack_s）
  *       → 适配钩子 MediaCanIdseqRxHook（从 pack->id 提取序号，连续重组，错位丢帧重同步）
@@ -34,7 +34,7 @@ static const CommMediaVTable_s s_can_idseq_vtable = {
     .send = MediaCanIdseqSend,
 };
 
-/* vtable 发送实现：整帧协议帧按 mode 数据片异步分包发送，每包 ID = base_id + seq。
+/* vtable 发送实现：整帧协议帧按 mode 数据片异步分包发送，每包 ID = tx_id + seq。
  * 1) 整帧拷入自持 staging 缓冲 m->tx_buff（comm 打包缓冲 data 在 CommSend 返回后即失效，
  *    而后续分包在 CAN 发送完成回调中续发，必须拷贝保数据）
  * 2) 发第一包（8B/64B，seq=0）后返回，tx_sent 记录已发位置
@@ -53,6 +53,9 @@ static int8_t MediaCanIdseqSend(CommMedia *media, const uint8_t *data)
     if (can == NULL)
         return -1;
 
+    if (m->tx_id == CAN_ID_UNUSED)
+        return -1; /* 未配置发送 ID 段：只收不发 */
+
     if (m->tx_active)
         return -1; /* 上一帧仍在异步分包发送中，拒绝重入 */
 
@@ -69,8 +72,8 @@ static int8_t MediaCanIdseqSend(CommMedia *media, const uint8_t *data)
 }
 
 /* 提交下一分包：从 tx_sent 起切 ≤单片长数据片（按 mode：CLASSIC 8B / FD 64B），
- * ID = base_id + seq（seq = 已发片数），整包全为数据片（序号在 ID，无序号字节）。
- * @retval 0 成功提交一片；1 整帧已发完（无待发数据）；-1 发送失败/超时 */
+ * ID = tx_id + seq（seq = 已发片数），整包全为数据片（序号在 ID，无序号字节）。
+ * @retval 0 成功提交一片；1 整帧已发完（无待发数据）；-1 发送失败/超时/未配置发送 */
 static int8_t MediaCanIdseqSendNext(CommMediaCanIdseq *m)
 {
     CANInstance *can = (CANInstance *)m->base.media;
@@ -80,6 +83,9 @@ static int8_t MediaCanIdseqSendNext(CommMediaCanIdseq *m)
     uint8_t chunk;
     uint32_t pkt_idx;
 
+    if (m->tx_id == CAN_ID_UNUSED)
+        return -1; /* 未配置发送 ID 段：只收不发 */
+
     remain = m->tx_frame_len - m->tx_sent;
     if (remain == 0)
         return 1; /* 整帧已发完 */
@@ -88,7 +94,7 @@ static int8_t MediaCanIdseqSendNext(CommMediaCanIdseq *m)
     chunk = (remain > payload_max) ? payload_max : (uint8_t)remain;
     pkt_idx = m->tx_sent / payload_max; /* 该片在整个帧的第几包（0 起） */
 
-    pack.id = m->base_id + pkt_idx;  /* 发送 ID = 基址 + 分包序号（bsp 同步拷贝，可栈上构造） */
+    pack.id = m->tx_id + pkt_idx;    /* 发送 ID = 发送段基址 + 分包序号（bsp 同步拷贝，可栈上构造） */
     pack.frame_type = m->frame_type; /* 标准/扩展数据帧（Config 写入） */
     pack.len = chunk;                /* 序号在 ID，数据片占满整包，len = 数据片长 */
     memcpy(pack.data, &m->tx_buff[m->tx_sent], chunk);
@@ -114,8 +120,8 @@ static void MediaCanIdseqTxHook(CANInstance *can, uint32_t tx_mailbox)
         m->tx_active = 0; /* 发完(1) 或失败(-1)：结束本轮异步发送 */
 }
 
-/* bsp 接收适配钩子：每包 ID = base_id + seq，按序号连续重组整帧。
- * 一包 ≤ 8B（CLASSIC）/ 64B（FD），序号 = pack->id - base_id，错位说明丢包 → 丢帧重同步。 */
+/* bsp 接收适配钩子：每包 ID = rx_id + seq，按序号连续重组整帧。
+ * 一包 ≤ 8B（CLASSIC）/ 64B（FD），序号 = pack->id - rx_id，错位说明丢包 → 丢帧重同步。 */
 static void MediaCanIdseqRxHook(CANInstance *can, const CAN_Pack_s *pack)
 {
     CommMediaCanIdseq *m = (CommMediaCanIdseq *)can->parent; /* media 层设置的反向指针 */
@@ -130,8 +136,8 @@ static void MediaCanIdseqRxHook(CANInstance *can, const CAN_Pack_s *pack)
     if (pack->len > frame_max)
         return;
 
-    /* 序号 = 实际匹配 ID 相对 base_id 的偏移（RANGE 过滤保证 id ∈ [base_id, 段上限]） */
-    seq = pack->id - m->base_id;
+    /* 序号 = 实际匹配 ID 相对 rx_id 的偏移（RANGE 过滤保证 id ∈ [rx_id, 段上限]） */
+    seq = pack->id - m->rx_id;
     data_len = pack->len; /* 序号在 ID，数据片占满整包 */
 
     /* 分包序号校验：期望连续。错位说明丢包/错乱 → 丢弃当前帧累积，重新同步 */
@@ -211,7 +217,8 @@ int8_t MediaCanIdseqConfig(CommMediaCanIdseq *media, CommMediaCanIdseqConfig_s *
     uint32_t id_max;
     uint32_t frame_max;
     uint32_t num_pkts;
-    uint32_t end_id;
+    uint32_t tx_end_id = 0;
+    uint32_t rx_end_id = 0;
     uint8_t payload_max;
 
     if (media == NULL || cfg == NULL)
@@ -231,30 +238,49 @@ int8_t MediaCanIdseqConfig(CommMediaCanIdseq *media, CommMediaCanIdseqConfig_s *
         cfg->mode != CAN_FRAME_FORMAT_FD_BRS)
         return -1;
 
-    /* base_id 范围（ID 上限取决于帧类型） */
+    /* ID 上限取决于帧类型 */
     id_max = (cfg->frame_type == CAN_EXTENDED_DATA_FRAME) ? 0x1FFFFFFFU : 0x7FFU;
-    if (cfg->base_id > id_max)
-        return -1;
 
     /* 数据片长按 mode（CLASSIC 8B / FD 64B）；收发帧长取较大者 → 所需分包数（向上取整）。
-     * RANGE 段大小 = 包数，无需 2 的幂对齐，任意 base_id 起点均可 */
+     * RANGE 段大小 = 包数，无需 2 的幂对齐，任意起点均可 */
     payload_max = (cfg->mode == CAN_FRAME_FORMAT_CLASSIC) ? CAN_MEDIA_FRAME_MAX : CAN_MEDIA_FRAME_MAX_FD;
     frame_max = (media->rx_frame_len > media->tx_frame_len) ? media->rx_frame_len : media->tx_frame_len;
     num_pkts = ((uint32_t)frame_max + payload_max - 1u) / payload_max;
     if (num_pkts == 0)
         num_pkts = 1; /* 防御（Register 已保证帧长非 0） */
 
-    /* ID 段 [base_id, base_id + num_pkts - 1]，越 ID 上限则帧长装不进段 → 返回 */
-    end_id = cfg->base_id + num_pkts - 1u;
-    if (end_id > id_max)
-        return -1;
+    /* 各方向 ID 段 [id, id + num_pkts - 1]，越 ID 上限则该段装不下 → 返回；CAN_ID_UNUSED = 关闭该方向 */
+    if (cfg->tx_id != CAN_ID_UNUSED)
+    {
+        tx_end_id = cfg->tx_id + num_pkts - 1u;
+        if (cfg->tx_id > id_max || tx_end_id > id_max)
+            return -1;
+    }
+    if (cfg->rx_id != CAN_ID_UNUSED)
+    {
+        rx_end_id = cfg->rx_id + num_pkts - 1u;
+        if (cfg->rx_id > id_max || rx_end_id > id_max)
+            return -1;
+    }
 
-    /* 组装 per-instance 过滤器：RANGE 段匹配 id0 <= id <= id1（bsp 为指针存储，须常驻实例） */
-    media->can_filter.mode = CAN_FILTER_MODE_RANGE;
-    media->can_filter.id0 = cfg->base_id; /* 段下限 = base_id */
-    media->can_filter.id1 = end_id;       /* 段上限 = base_id + 分包数 - 1 */
+    /* 组装 per-instance 过滤器：RX 段 RANGE 匹配 rx_id <= id <= rx_end_id；rx_id=CAN_ID_UNUSED
+     * 时不接收（LIST + CAN_ID_UNUSED + 回调 NULL，与 pkt0 一致）。
+     * bsp 为指针存储，过滤器须常驻实例 */
+    if (cfg->rx_id == CAN_ID_UNUSED)
+    {
+        media->can_filter.mode = CAN_FILTER_MODE_LIST;
+        media->can_filter.id0 = CAN_ID_UNUSED;
+        media->can_filter.id1 = CAN_ID_UNUSED;
+        media->can_filter.callback = NULL;
+    }
+    else
+    {
+        media->can_filter.mode = CAN_FILTER_MODE_RANGE;
+        media->can_filter.id0 = cfg->rx_id;               /* 段下限 = rx_id */
+        media->can_filter.id1 = rx_end_id;                /* 段上限 = rx_id + 分包数 - 1 */
+        media->can_filter.callback = MediaCanIdseqRxHook; /* 保证接收统一进 comm 层接收入口 */
+    }
     media->can_filter.frame_type = cfg->frame_type;
-    media->can_filter.callback = MediaCanIdseqRxHook; /* 保证接收统一进 comm 层接收入口 */
 
     /* 组装 bsp 配置：mode 透传（FDCAN FD/FD_BRS 需 CubeMX FrameFormat 匹配，不匹配 bsp 返回 -1）
      * + 软件过滤 + 发送完成回调续发
@@ -271,7 +297,8 @@ int8_t MediaCanIdseqConfig(CommMediaCanIdseq *media, CommMediaCanIdseqConfig_s *
     if (CANConfig(can, &can_cfg) != 0)
         return -1;
 
-    media->base_id = cfg->base_id;
+    media->tx_id = cfg->tx_id;
+    media->rx_id = cfg->rx_id;
     media->frame_type = cfg->frame_type;
     media->mode = cfg->mode;
     media->timeout_ms = cfg->timeout_ms; /* 完全按 Config 配置的超时时间使用 */
