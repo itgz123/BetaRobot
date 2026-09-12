@@ -1,146 +1,95 @@
 {
-    "version": "2.0.0",
-    "inputs": [
-        {
-            "id": "selectBoard",
-            "type": "pickString",
-            "description": "选择开发板",
-            "options": [
-                "DM_MC02",
-                "DJI_A",
-                "DJI_C"
-            ],
-            "default": "DM_MC02"
-        }
-    ],
-    "tasks": [
-        {
-            "label": "build",
-            "type": "shell",
-            "command": "cmake --preset Debug ; cmake --build build/Debug -j24",
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "detail": "配置并编译项目",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            },
-            "problemMatcher": [
-                "$gcc"
-            ]
-        },
-        {
-            "label": "download dap",
-            "type": "shell",
-            "command": "cmake",
-            "args": [
-                "--build",
-                "build/Debug",
-                "--target",
-                "download_dap"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "detail": "使用 DAPlink 下载",
-            "problemMatcher": []
-        },
-        {
-            "label": "download jlink",
-            "type": "shell",
-            "command": "cmake",
-            "args": [
-                "--build",
-                "build/Debug",
-                "--target",
-                "download_jlink"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "detail": "使用 J-Link 下载",
-            "problemMatcher": []
-        },
-        {
-            "label": "clean",
-            "type": "shell",
-            "command": "cmake",
-            "args": [
-                "-E",
-                "rm",
-                "-rf",
-                "build/Debug"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "detail": "删除构建目录",
-            "problemMatcher": []
-        },
-        {
-            "label": "DAP-link RTT",
-            "type": "shell",
-            "command": "cmake",
-            "args": [
-                "--build",
-                "build/Debug",
-                "--target",
-                "rtt_connect"
-            ],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "detail": "启动 RTT 调试连接",
-            "problemMatcher": [],
-            "presentation": {
-                "reveal": "always",
-                "panel": "new"
-            }
-        },
-        {
-            "label": "start docs",
-            "type": "shell",
-            "windows": {
-                "command": "docs/start-docs.bat"
-            },
-            "linux": {
-                "command": "bash docs/start-docs.sh"
-            },
-            "osx": {
-                "command": "bash docs/start-docs.sh"
-            },
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "detail": "启动本地文档预览站点",
-            "presentation": {
-                "reveal": "always",
-                "panel": "new"
-            },
-            "problemMatcher": []
-        },
-        {
-            "label": "check docs",
-            "type": "shell",
-            "windows": {
-                "command": "docs/check-docs.bat"
-            },
-            "linux": {
-                "command": "bash docs/check-docs.sh"
-            },
-            "osx": {
-                "command": "bash docs/check-docs.sh"
-            },
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "detail": "本地构建文档站点，推送前校验文档改动",
-            "presentation": {
-                "reveal": "always",
-                "panel": "new"
-            },
-            "problemMatcher": []
-        }
-    ]
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build",
+      "type": "shell",
+      "command": "cmake --preset default ; cmake --build --preset Debug",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "detail": "配置并编译当前 app（由 user_cfg.h 的 APP_NAME 决定，Debug）",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "build release",
+      "type": "shell",
+      "command": "cmake --preset default ; cmake --build --preset Release",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "detail": "配置并编译当前 app（Release）",
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "download dap",
+      "type": "shell",
+      "command": "cmake",
+      "args": ["--build", "--preset", "Debug", "--target", "download_dap"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "detail": "使用 DAPlink 下载当前 app（Debug）",
+      "problemMatcher": []
+    },
+    {
+      "label": "clean",
+      "type": "shell",
+      "command": "cmake",
+      "args": ["-E", "rm", "-rf", "build"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "detail": "删除整个构建目录（含所有 app 的产物）",
+      "problemMatcher": []
+    },
+    {
+      "label": "start docs",
+      "type": "shell",
+      "windows": {
+        "command": "docs/start-docs.bat"
+      },
+      "linux": {
+        "command": "bash docs/start-docs.sh"
+      },
+      "osx": {
+        "command": "bash docs/start-docs.sh"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "detail": "启动本地文档预览站点",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "check docs",
+      "type": "shell",
+      "windows": {
+        "command": "docs/check-docs.bat"
+      },
+      "linux": {
+        "command": "bash docs/check-docs.sh"
+      },
+      "osx": {
+        "command": "bash docs/check-docs.sh"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "detail": "本地构建文档站点，推送前校验文档改动",
+      "presentation": {
+        "reveal": "always",
+        "panel": "new"
+      },
+      "problemMatcher": []
+    }
+  ]
 }

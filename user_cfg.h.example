@@ -4,14 +4,12 @@
 /*============================================
  *           选择编译哪个应用
  *    对应 app/<APP_NAME>/ 目录
+ *    切换后下次构建自动 reconfigure，
+ *    其他应用已编译的产物保留、无需重编
+ *
+ *    Debug/Release 由 VSCode 任务或
+ *    cmake --build --config 决定，不在此配置
  *============================================*/
-#define APP_NAME half_rudder_gimbal
-
-/*============================================
- *           选择构建类型
- *============================================*/
-#define Debug 0
-#define Release 1
-#define BUILD_TYPE Debug
+#define APP_NAME half_rudder_chassis // half_rudder_chassis/half_rudder_gimbal
 
 #endif // __USER_CFG_H

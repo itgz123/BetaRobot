@@ -1,219 +1,103 @@
 {
-    // 启动调试的快捷键是F5
-    // 
-    // 使用流程：
-    // 1. 修改 app/inc/app_cfg.h 中的 DEVELOPMENT_BOARD 宏选择开发板
-    // 2. F5 启动调试 → 选择对应的开发板名 → 选择调试配置
-    "version": "0.2.0",
-    "inputs": [
-        {
-            "id": "selectBoard",
-            "type": "pickString",
-            "description": "选择开发板（需与 app_cfg.h 中的 DEVELOPMENT_BOARD 对应）",
-            "options": [
-                "DM_MC02",
-                "DJI_A",
-                "DJI_C"
-            ],
-            "default": "DM_MC02"
-        },
-        {
-            "id": "jlinkDevice",
-            "type": "pickString",
-            "description": "J-Link 目标设备（根据开发板选择）",
-            "options": [
-                {
-                    "label": "DJI_A / DJI_C",
-                    "value": "Cortex-M4"
-                },
-                {
-                    "label": "DM_MC02",
-                    "value": "Cortex-M7"
-                }
-            ],
-            "default": "Cortex-M7"
-        }
-    ],
-    "configurations": [
-        // ==================== DAPlink - Launch ====================
-        {
-            "name": "DAPlink - Launch",
-            "type": "cortex-debug",
-            "request": "launch",
-            "preLaunchTask": "build",
-            "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build/Debug/BetaRobot.elf",
-            "device": "${input:selectBoard}",
-            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
-            "servertype": "openocd",
-            "configFiles": [
-                "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/openocd_daplink.cfg"
-            ],
-            "runToEntryPoint": "main",
-            "rtos": "FreeRTOS",
-            "liveWatch": {
-                "enabled": true,
-                "samplesPerSecond": 4
-            }
-        },
-        // ==================== DAPlink - Launch (RTT) ====================
-        {
-            "name": "DAPlink - Launch (RTT)",
-            "type": "cortex-debug",
-            "request": "launch",
-            "preLaunchTask": "build",
-            "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build/Debug/BetaRobot.elf",
-            "device": "${input:selectBoard}",
-            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
-            "servertype": "openocd",
-            "configFiles": [
-                "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/openocd_daplink.cfg"
-            ],
-            "runToEntryPoint": "main",
-            "rtos": "FreeRTOS",
-            "liveWatch": {
-                "enabled": true,
-                "samplesPerSecond": 4
-            },
-            "rttConfig": {
-                "enabled": true,
-                "address": "auto",
-                "decoders": [
-                    {
-                        "port": 0,
-                        "type": "console",
-                        "name": "RTT Channel 0"
-                    }
-                ]
-            }
-        },
-        // ==================== DAPlink - Attach ====================
-        {
-            "name": "DAPlink - Attach",
-            "type": "cortex-debug",
-            "request": "attach",
-            "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build/Debug/BetaRobot.elf",
-            "device": "${input:selectBoard}",
-            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
-            "servertype": "openocd",
-            "configFiles": [
-                "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/openocd_daplink.cfg"
-            ],
-            "rtos": "FreeRTOS"
-        },
-        // ==================== DAPlink - Attach (RTT) ====================
-        {
-            "name": "DAPlink - Attach (RTT)",
-            "type": "cortex-debug",
-            "request": "attach",
-            "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build/Debug/BetaRobot.elf",
-            "device": "${input:selectBoard}",
-            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
-            "servertype": "openocd",
-            "configFiles": [
-                "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/openocd_daplink.cfg"
-            ],
-            "rtos": "FreeRTOS",
-            "rttConfig": {
-                "enabled": true,
-                "address": "auto",
-                "decoders": [
-                    {
-                        "port": 0,
-                        "type": "console",
-                        "name": "RTT Channel 0"
-                    }
-                ]
-            }
-        },
-        // ==================== J-Link - Launch ====================
-        {
-            "name": "J-Link - Launch",
-            "type": "cortex-debug",
-            "request": "launch",
-            "preLaunchTask": "build",
-            "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build/Debug/BetaRobot.elf",
-            "device": "${input:jlinkDevice}",
-            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
-            "servertype": "jlink",
-            "runToEntryPoint": "main",
-            "rtos": "FreeRTOS",
-            "liveWatch": {
-                "enabled": true,
-                "samplesPerSecond": 4
-            },
-            "interface": "swd"
-        },
-        // ==================== J-Link - Launch (RTT) ====================
-        {
-            "name": "J-Link - Launch (RTT)",
-            "type": "cortex-debug",
-            "request": "launch",
-            "preLaunchTask": "build",
-            "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build/Debug/BetaRobot.elf",
-            "device": "${input:jlinkDevice}",
-            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
-            "servertype": "jlink",
-            "runToEntryPoint": "main",
-            "rtos": "FreeRTOS",
-            "liveWatch": {
-                "enabled": true,
-                "samplesPerSecond": 4
-            },
-            "interface": "swd",
-            "rttConfig": {
-                "enabled": true,
-                "address": "auto",
-                "decoders": [
-                    {
-                        "port": 0,
-                        "type": "console",
-                        "name": "RTT Channel 0"
-                    }
-                ]
-            }
-        },
-        // ==================== J-Link - Attach ====================
-        {
-            "name": "J-Link - Attach",
-            "type": "cortex-debug",
-            "request": "attach",
-            "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build/Debug/BetaRobot.elf",
-            "device": "${input:jlinkDevice}",
-            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
-            "servertype": "jlink",
-            "rtos": "FreeRTOS",
-            "interface": "swd"
-        },
-        // ==================== J-Link - Attach (RTT) ====================
-        {
-            "name": "J-Link - Attach (RTT)",
-            "type": "cortex-debug",
-            "request": "attach",
-            "cwd": "${workspaceFolder}",
-            "executable": "${workspaceFolder}/build/Debug/BetaRobot.elf",
-            "device": "${input:jlinkDevice}",
-            "svdFile": "${workspaceFolder}/cubemx/board_config/${input:selectBoard}/${input:selectBoard}.svd",
-            "servertype": "jlink",
-            "rtos": "FreeRTOS",
-            "interface": "swd",
-            "rttConfig": {
-                "enabled": true,
-                "address": "auto",
-                "decoders": [
-                    {
-                        "port": 0,
-                        "type": "console",
-                        "name": "RTT Channel 0"
-                    }
-                ]
-            }
-        }
-    ]
+  // 启动调试的快捷键是F5
+  //
+  // 使用流程：
+  // 1. 修改 user_cfg.h 中的 APP_NAME 选择要调试的应用
+  // 2. F5 启动调试 —— 会自动构建当前 app 并将其产物复制到 build/active/Debug/
+  //
+  // 说明：路径全部固定，无需选择应用或开发板。
+  //       开发板相关的 svd / openocd 配置由 CMake 按 app_cfg.h 的 DEVELOPMENT_BOARD 复制。
+  "version": "0.2.0",
+  "configurations": [
+    // ==================== DAPlink - Launch ====================
+    {
+      "name": "DAPlink - Launch",
+      "type": "cortex-debug",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/active/Debug/BetaRobot.elf",
+      "svdFile": "${workspaceFolder}/build/active/Debug/device.svd",
+      "servertype": "openocd",
+      "configFiles": [
+        "${workspaceFolder}/build/active/Debug/openocd_daplink.cfg"
+      ],
+      "runToEntryPoint": "main",
+      "rtos": "FreeRTOS",
+      "liveWatch": {
+        "enabled": true,
+        "samplesPerSecond": 4
+      }
+    },
+    // ==================== DAPlink - Launch (RTT) ====================
+    {
+      "name": "DAPlink - Launch (RTT)",
+      "type": "cortex-debug",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/active/Debug/BetaRobot.elf",
+      "svdFile": "${workspaceFolder}/build/active/Debug/device.svd",
+      "servertype": "openocd",
+      "configFiles": [
+        "${workspaceFolder}/build/active/Debug/openocd_daplink.cfg"
+      ],
+      "runToEntryPoint": "main",
+      "rtos": "FreeRTOS",
+      "liveWatch": {
+        "enabled": true,
+        "samplesPerSecond": 4
+      },
+      "rttConfig": {
+        "enabled": true,
+        "address": "auto",
+        "decoders": [
+          {
+            "port": 0,
+            "type": "console",
+            "name": "RTT Channel 0"
+          }
+        ]
+      }
+    },
+    // ==================== DAPlink - Attach ====================
+    {
+      "name": "DAPlink - Attach",
+      "type": "cortex-debug",
+      "request": "attach",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/active/Debug/BetaRobot.elf",
+      "svdFile": "${workspaceFolder}/build/active/Debug/device.svd",
+      "servertype": "openocd",
+      "configFiles": [
+        "${workspaceFolder}/build/active/Debug/openocd_daplink.cfg"
+      ],
+      "rtos": "FreeRTOS"
+    },
+    // ==================== DAPlink - Attach (RTT) ====================
+    {
+      "name": "DAPlink - Attach (RTT)",
+      "type": "cortex-debug",
+      "request": "attach",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/active/Debug/BetaRobot.elf",
+      "svdFile": "${workspaceFolder}/build/active/Debug/device.svd",
+      "servertype": "openocd",
+      "configFiles": [
+        "${workspaceFolder}/build/active/Debug/openocd_daplink.cfg"
+      ],
+      "rtos": "FreeRTOS",
+      "rttConfig": {
+        "enabled": true,
+        "address": "auto",
+        "decoders": [
+          {
+            "port": 0,
+            "type": "console",
+            "name": "RTT Channel 0"
+          }
+        ]
+      }
+    }
+  ]
 }
