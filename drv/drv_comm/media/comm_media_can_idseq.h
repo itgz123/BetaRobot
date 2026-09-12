@@ -4,9 +4,9 @@
  *
  * 把 bsp_can 包装成统一"任意长度数据单元"通道，并在 media 层做分包收发：
  *   - 发送：整帧（协议帧）按数据片切分（CLASSIC 8B / FD 64B），序号编码进 CAN ID
- *           段内偏移（id = base_id + seq，0 起递增），每包 = 整帧全为数据片（序号在 ID，
+ *           段内偏移（id = tx_id + seq，0 起递增），每包 = 整帧全为数据片（序号在 ID，
  *           不占数据字节），末包短帧不补零（接收端用实际 len 量度）经 CANTransmit 发出
- *   - 接收：bsp 收包 → 适配钩子 → 从 pack->id 提取序号（seq = id - base_id）
+ *   - 接收：bsp 收包 → 适配钩子 → 从 pack->id 提取序号（seq = id - rx_id）
  *           → 按序号连续重组整帧 → 错位/丢包则丢帧重同步 → CommMediaRxHook（comm 层接收入口）
  * 整帧 = 协议帧（rx/tx size + 协议开销），分包序号在 CAN ID 中，不进入协议内容。
  *
@@ -15,9 +15,11 @@
  *      收发两端编译期约定帧长（固定帧长累积，无末包标志），序号纯递增。
  *
  * @note COMM_DEF 通过 token 拼接 COMM_##media_type_##_DEF 分发到本宏。
- * @note 同 CAN 总线上每个 comm 实例须分配互不重叠的 ID 段：本后端占
- *       [base_id, base_id + 分包数)，分包数 = ceil(帧长/数据片长)，Config 按帧长自动定段
- *       （RANGE 过滤，无需 2 的幂对齐，任意 base_id 起点均可）。
+ * @note 一个 comm 实例即可双向收发（与 uart/usb 统一，且与 pkt0 的 tx_id/rx_id 配置同名）：
+ *       发送用 tx_id 段、接收用 rx_id 段，两段各自独立、可任意指定起点。段长 = 分包数 =
+ *       ceil(帧长/数据片长)，Config 按帧长自动定段（RANGE 过滤，无需 2 的幂对齐）。
+ *       同 CAN 总线上各实例实际占用的 ID 段须互不重叠（板间一条对话：一端 tx_id 段 =
+ *       另一端 rx_id 段，两方向各占一段）。
  */
 
 #ifndef COMM_MEDIA_CAN_IDSEQ_H
@@ -41,14 +43,19 @@
 
 /**
  * @brief CAN IDSEQ 后端运行期配置（CommConfig 的 media_cfg 指向）
- * @note 收发共用同一 ID 段（base_id + seq）；Config 校验：frame_type 数据帧、mode 三种合法值、
- *       base_id ≤ ID 上限、ID 段 [base_id, base_id + 分包数) 不越上限
+ * @note 收发各用独立 ID 段，一个 comm 实例即可双向（字段名与 pkt0 统一）：
+ *       发送 id = tx_id + 分包序号；接收按 id - rx_id 取序号，过滤段 [rx_id, rx_id + 分包数)。
+ *       tx_id / rx_id 可设 CAN_ID_UNUSED 关闭该方向（只发 / 只收）。
+ * @note Config 校验：frame_type 数据帧、mode 三种合法值、启用方向的 ID 段不越 ID 上限
  *       （分包数 = ceil(帧长/数据片长)，CLASSIC 8B / FD 64B）。
+ * @note 同一实例 tx_id 段与 rx_id 段若重叠，双向同时启用会在总线自撞；应用上须错开
+ *       （板间链路通常一端 tx_id 段 = 另一端 rx_id 段，两段互不重叠）。
  */
 typedef struct
 {
     BoardCAN_e can_e;            /* 板载 CAN 枚举 */
-    uint32_t base_id;            /* 收发基址（ID 段起点）：分包序号加到基址上（id = base_id + seq） */
+    uint32_t tx_id;              /* 发送 ID 段基址（id = tx_id + 分包序号）；CAN_ID_UNUSED = 不发送 */
+    uint32_t rx_id;              /* 接收 ID 段基址（过滤段 [rx_id, rx_id + 分包数)）；CAN_ID_UNUSED = 不接收 */
     CAN_Frame_Type_e frame_type; /* 帧类型：仅标准/扩展数据帧（收发共用，须一致） */
     CAN_Mode_Type_e mode;        /* CAN 帧格式：CLASSIC(8B/帧)/FD/FD_BRS(64B/帧) */
     uint32_t timeout_ms;         /* CANTransmit 超时（ms；0 = 不等待资源立即返回失败） */
@@ -69,7 +76,8 @@ typedef struct
     uint32_t rx_expect_pkt; /* 期望接收的下一分包序号（序号段大小可 >255，用 uint32_t） */
     uint32_t lost_frames;   /* 丢帧计数（分包错位/帧中途丢包累加） */
     uint32_t timeout_ms;    /* CANTransmit 超时（Config 写入） */
-    uint32_t base_id;       /* 收发基址（ID 段起点；Config 写入） */
+    uint32_t tx_id;         /* 发送 ID 段基址（id = tx_id + 分包序号；Config 写入；CAN_ID_UNUSED = 不发送） */
+    uint32_t rx_id;         /* 接收 ID 段基址（过滤段起点；Config 写入；CAN_ID_UNUSED = 不接收） */
 
     /* CAN 收发参数（Config 写入） */
     CAN_Filter_s can_filter;     /* 接收过滤器（每实例一份，MASK 段匹配；bsp 为指针存储，须常驻实例） */
@@ -89,7 +97,7 @@ typedef struct
  *       name（CommMediaCanIdseq），并绑定 base.media/base.daemon。
  *       MediaCanIdseqSend 先整帧拷入 tx_buff，发第一包后返回，剩余包在
  *       CAN 发送完成回调（bsp tx_complete_callback）中逐包续发。
- *       缓冲放普通 RAM（CAN 无 DMA）。base_id/frame_type/mode 由 Config 写入。
+ *       缓冲放普通 RAM（CAN 无 DMA）。tx_id/rx_id/frame_type/mode 由 Config 写入。
  *
  * @example
  *   COMM_MEDIA_CAN_IDSEQ_DEF(can_comm_media, 16, 16); 协议帧 16B，帧长 > 8B 时自动分包
@@ -121,12 +129,13 @@ int8_t MediaCanIdseqRegister(CommMediaCanIdseq *media);
 /**
  * @brief 配置 CAN IDSEQ 介质后端（可重入：可反复调用改参数）
  * @param media CommMediaCanIdseq 实例指针（须先 MediaCanIdseqRegister）
- * @param cfg   CommMediaCanIdseqConfig_s*（can_e/base_id/frame_type/mode/timeout_ms；不可为 NULL）
+ * @param cfg   CommMediaCanIdseqConfig_s*（can_e/tx_id/rx_id/frame_type/mode/timeout_ms；不可为 NULL）
  * @retval 0 成功；-1 参数非法 / 未注册 / 配置失败
  *
- * @note 校验 frame_type 数据帧、mode 三种合法值、base_id ≤ ID 上限、ID 段不越上限；
+ * @note 校验 frame_type 数据帧、mode 三种合法值、启用方向的 ID 段不越上限；
  *       按帧长自动定段（分包数 = ceil(帧长/数据片长)），组装 CAN_Config_s 调 bsp CANConfig
- *       （RANGE 段过滤 id0=段下限/id1=段上限 + mode 透传，每包 ID/len 由发送路径运行时构造），
+ *       （RX 段 RANGE 过滤 id0=rx_id/id1=段上限 + mode 透传，每包 ID/len 由发送路径运行时构造；
+ *       rx_id=CAN_ID_UNUSED 时不挂接收回调），
  *       BxCAN 非 CLASSIC / FDCAN FrameFormat 不匹配由 bsp 返回 -1。
  *       接收经 MediaCanIdseqRxHook 保证统一进 comm 层接收入口（CommMediaRxHook）。
  */
