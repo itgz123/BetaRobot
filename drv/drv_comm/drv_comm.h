@@ -111,6 +111,32 @@ int8_t CommSend(CommInstance *inst, const uint8_t *payload);
  *   COMM_DEF(vis_comm, MEDIA_USB_SIMPLE, VISUAL, VISUAL,
  *            vision_recv_t, 48, vision_send_t, 55, UNPACK_IN_ISR);
  *   // 48/55 为与对端约定的线长（协议文档值）；若结构与约定不符，内部 _Static_assert 编译期报错
+ * @note 调试：本宏展开出的实例名是固定的，Live Watch 面板点 "+" 直接输入即可（须为
+ *       全局/静态表达式；右键 "Add to Live Watch" 会做全局/静态校验，指向结构体成员的
+ *       cast 表达式可改用 "+" 输入框绕过）。以 COMM_DEF(vis_comm, ...) 为例：
+ *         vis_comm                  CommInstance 本体（全局，唯一非 static）
+ *         vis_comm_media            media 派生实例（static，基类与派生字段都在此）
+ *         vis_comm_media_daemon     链路对端看门狗 DaemonInstance（static）
+ *         vis_comm_rx_proto         接收协议实例（static）
+ *         vis_comm_tx_proto         发送协议实例（static）
+ *         vis_comm_tx_buff[0]@N     发送缓冲（static 数组，N = tx_size + 协议开销；
+ *                                   不写 [0]@N 只能看到首字节）
+ *       注 1：凡是 void* 成员一律展不开（GDB: Attempt to dereference a generic pointer），
+ *             不止 CommInstance 的 media/rx_proto/tx_proto——CommMedia.base.parent、
+ *             CommMedia.base.media、CommProto.base.media、DaemonInstance.owner_id、
+ *             USB/USARTInstance.parent 同理。展不开就改用上表 static 实例名；硬要经
+ *             成员访问需手写 cast，如 *(CommMediaUsbSimple *)vis_comm.media。
+ *       注 2：凡是 uint8_t* 缓冲成员都只显示首字节，看全用 <inst>.<buf>[0]@N，N 取同
+ *             结构体的 rx_frame_len / tx_frame_len / tx_buff_size / rx_len；各缓冲另有
+ *             同名静态数组可直接写：comm 层 <name>_tx_buff，media 层
+ *             <name>_media_rx_buff / <name>_media_tx_buff，USART bsp 层
+ *             <name>_media_usart_rx_buff（USB 的 rx_buff 指向 HAL 的 UserRxBufferFS，
+ *             无静态数组名）。
+ *       注 3：<name>_media 之后的 bsp 实例名随介质而异（USART→name_media_usart、
+ *             USB→name_media_usb、CAN→name_media_can）；base.media 是 void* 展不开，
+ *             要看 bsp 实例内部直接输这个名字。base.daemon 是 DaemonInstance*，有类型、
+ *             可正常子字段展开。
+ *       注 4：static 名跨编译单元可能重名，GDB 解析不到时用 '文件.c'::name 限定。
  */
 #define COMM_DEF(name, media_type_, rx_proto_, tx_proto_, rx_type_, rx_size, tx_type_, tx_size, unpack_mode_) \
     _Static_assert(sizeof(rx_type_) == (rx_size),                                                             \
