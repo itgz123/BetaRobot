@@ -37,6 +37,7 @@ typedef struct
     uint16_t rx_cnt;       /* 已累积字节数（0..rx_frame_len，上交后归零；长帧重组用） */
     uint8_t rx_expect_pkt; /* 期望接收的下一分包序号（帧内 0 起递增；长帧重组用） */
     uint32_t lost_frames;  /* 丢帧计数（短帧长度不符 / 长帧分包错位累加） */
+    uint32_t tx_fail;      /* 发送失败计数（未枚举/ring 满导致 USBTransmit 丢包；只增不清，调试用） */
 } CommMediaUsbSimple;
 
 /**

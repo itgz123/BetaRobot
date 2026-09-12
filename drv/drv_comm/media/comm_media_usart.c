@@ -25,7 +25,8 @@ static const CommMediaVTable_s s_usart_vtable = {
 
 /* vtable 发送实现：UART 无分包，一帧 = 整个缓冲。
  * 拷贝 comm 打包缓冲 → m->tx_buff（后端自持 staging，DMA 异步发送期间须常驻）后整帧发出。
- * 分包后端（CAN/USB）需用状态机标志 + 发送完成回调续发，此处不需要。 */
+ * 自恢复：DMA/IT 发送中途出错时 gState 可能卡在 BUSY_TX 永不回 READY（此后每次发送都
+ * 超时=永久静默），故发送失败先中止卡死的发送再重试一次，仍失败才记 tx_fail 返回。 */
 static int8_t MediaUsartSend(CommMedia *media, const uint8_t *data)
 {
     CommMediaUsart *m = (CommMediaUsart *)media;
@@ -38,7 +39,16 @@ static int8_t MediaUsartSend(CommMedia *media, const uint8_t *data)
     if (usart == NULL)
         return -1;
     memcpy(m->tx_buff, data, m->tx_buff_size);
-    return USARTTransmit(usart, m->tx_buff, m->tx_buff_size, m->timeout_ms); /* 完全按 Config 配置的超时时间使用 */
+
+    if (USARTTransmit(usart, m->tx_buff, m->tx_buff_size, m->timeout_ms) == 0)
+        return 0; /* 完全按 Config 配置的超时时间使用 */
+
+    USARTRecoverTransmit(usart); /* 中止卡死的上一次发送，复位 HAL 状态 */
+    if (USARTTransmit(usart, m->tx_buff, m->tx_buff_size, m->timeout_ms) == 0)
+        return 0;
+
+    m->tx_fail++;
+    return -1;
 }
 
 /* bsp 接收适配钩子：收完一段数据，长度校验后直接交给 comm 层接收入口 */
@@ -73,6 +83,7 @@ int8_t MediaUsartRegister(CommMediaUsart *media)
     media->base.parent = NULL; /* comm 层挂所属 CommInstance */
 
     usart->parent = media; /* 反向指针：适配钩子据此取回 media */
+    media->tx_fail = 0;
     return 0;
 }
 

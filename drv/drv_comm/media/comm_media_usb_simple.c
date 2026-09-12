@@ -41,6 +41,7 @@ static int8_t MediaUsbSimpleSend(CommMedia *media, const uint8_t *data)
     USBInstance *usb;
     uint16_t remain;
     uint8_t pkt_idx = 0;
+    int8_t ret = 0;
     uint8_t pkt[USB_TX_BUF_SIZE]; /* 长帧分包单包暂存 = [pkt_idx][数据片] */
 
     /* 先判空再解引用（m==NULL 时不能先访问 m->base.media） */
@@ -50,11 +51,17 @@ static int8_t MediaUsbSimpleSend(CommMedia *media, const uint8_t *data)
     if (usb == NULL)
         return -1;
 
-    /* 短帧（整帧 ≤ 64B，单包装下）：免分包序号，整帧一包透传 */
+    /* 短帧（整帧 ≤ 64B，单包装下）：免分包序号，整帧一包透传。
+     * USBTransmit 返回 -1 = 未枚举/ring 满丢包：记录后返回失败（不自恢复动作，
+     * 主机恢复读取后自动续发）。 */
     if (m->tx_frame_len <= USB_TX_BUF_SIZE)
     {
-        USBTransmit(usb, data, m->tx_frame_len); /* bsp 未枚举时静默丢弃 */
-        return 0;
+        if (USBTransmit(usb, data, m->tx_frame_len) != 0)
+        {
+            m->tx_fail++;
+            ret = -1;
+        }
+        return ret;
     }
 
     /* 长帧（> 63B）：分包发送，每包 = [分包序号][数据片 ≤ 63B]（行为同 usb 后端） */
@@ -65,10 +72,14 @@ static int8_t MediaUsbSimpleSend(CommMedia *media, const uint8_t *data)
 
         pkt[0] = pkt_idx++; /* 分包序号（0,1,2,...） */
         memcpy(&pkt[1], &data[m->tx_frame_len - remain], chunk);
-        USBTransmit(usb, pkt, (uint16_t)(chunk + 1)); /* bsp 未枚举时静默丢弃 */
+        if (USBTransmit(usb, pkt, (uint16_t)(chunk + 1)) != 0)
+        {
+            m->tx_fail++;
+            ret = -1;
+        }
         remain -= chunk;
     }
-    return 0;
+    return ret;
 }
 
 /* 重组出一整帧（短帧整包透传直接触发 / 长帧 rx_cnt 已达 rx_frame_len）：上交 comm 层并复位累积 */
@@ -168,6 +179,7 @@ int8_t MediaUsbSimpleRegister(CommMediaUsbSimple *media)
     media->rx_cnt = 0;
     media->rx_expect_pkt = 0;
     media->lost_frames = 0;
+    media->tx_fail = 0;
     return 0;
 }
 

@@ -118,11 +118,12 @@ static void CAN_ListLutRegister(CANInstance *inst)
 typedef struct
 {
     /* 收发计数 */
-    uint32_t tx_ok;   /* 发送完成次数（TxMailbox*CompleteCallback） */
-    uint32_t tx_fail; /* CANTransmit 返回 -1 次数 */
-    uint32_t rx_ok;   /* 成功收帧次数 */
-    uint32_t rx_full; /* RxFIFO0/1 FULL 事件次数 */
-    uint32_t rx_lost; /* RxFIFO0/1 overrun 丢帧次数（FOV0/FOV1） */
+    uint32_t tx_ok;    /* 发送完成次数（TxMailbox*CompleteCallback） */
+    uint32_t tx_fail;  /* CANTransmit 返回 -1 次数 */
+    uint32_t tx_drain; /* 任务上下文同步分发的完成事件数（消除邮箱复用竞态；见 CAN_TxDrainCompletions） */
+    uint32_t rx_ok;    /* 成功收帧次数 */
+    uint32_t rx_full;  /* RxFIFO0/1 FULL 事件次数 */
+    uint32_t rx_lost;  /* RxFIFO0/1 overrun 丢帧次数（FOV0/FOV1） */
     /* 错误计数 */
     uint32_t err_bus_off;  /* bus-off 进入次数 */
     uint32_t err_passive;  /* error passive 进入次数 */
@@ -195,6 +196,60 @@ static void CAN_TxCompleteHandler(CAN_HandleTypeDef *hcan, uint8_t mailbox_idx)
     s_can_tx_owner[can_idx][mailbox_idx] = NULL;
     if (inst != NULL && inst->tx_complete_callback != NULL)
         inst->tx_complete_callback(inst, mailbox_idx);
+}
+
+/* TSR 中三个邮箱的“请求完成”/“发送成功”位（bxCAN 不连续：bit0/8/16） */
+static const uint32_t s_can_rqcp_mask[CAN_TX_MAILBOX_NUM] = {CAN_TSR_RQCP0, CAN_TSR_RQCP1, CAN_TSR_RQCP2};
+static const uint32_t s_can_txok_mask[CAN_TX_MAILBOX_NUM] = {CAN_TSR_TXOK0, CAN_TSR_TXOK1, CAN_TSR_TXOK2};
+
+/* 分发进行中标志：分发会回调上层（可能再触发 CANTransmit）；嵌套调用直接跳过，
+ * 避免同一 media 的回调被重入（外层未处理完时内层又推进 tx_sent 造成分包错乱）。
+ * ISR 可能抢占任务上下文看到 1，故 volatile。 */
+static volatile uint8_t s_can_tx_draining = 0;
+
+/**
+ * @brief 同步分发 TSR 中尚未处理的发送完成事件（消除邮箱复用竞态）
+ * @param instance 即将发送的 CAN 实例
+ * @note bxCAN 发送完成本由 HAL 在 CAN 中断内依 TSR.RQCPx 分发；但向邮箱写 TXRQ 会清掉
+ *       RQCPx，而 HAL 进中断时只读一次 TSR。若任务上下文（总线上其他实例，如共用 CAN1 的
+ *       电机）在中断处理前复用了刚发完的邮箱，该完成事件即被吞掉——依赖它续发的异步分包
+ *       （comm media idseq/pkt0）会永久卡在 tx_active 造成单向静默。
+ *       故入队前先屏蔽 TX 邮箱中断、把未处理的完成事件同步分发掉再恢复中断，从根上消除竞态。
+ *       屏蔽期间新到的完成事件因 bxCAN 中断是 TSR 电平触发，恢复 IER 后会补触发，不会丢。
+ */
+static void CAN_TxDrainCompletions(CANInstance *instance)
+{
+    CAN_HandleTypeDef *hcan = instance->map.handle;
+    uint32_t ier, tsr;
+    uint8_t i;
+
+    if (hcan == NULL || s_can_tx_draining)
+        return; /* 嵌套调用：外层正在分发，跳过（否则将重入同一 media 回调） */
+
+    s_can_tx_draining = 1;
+    ier = hcan->Instance->IER;
+    hcan->Instance->IER = ier & ~CAN_IT_TX_MAILBOX_EMPTY; /* 屏蔽，避免 HAL 中断并发处理同一事件 */
+    tsr = hcan->Instance->TSR;
+
+    for (i = 0; i < CAN_TX_MAILBOX_NUM; i++)
+    {
+        if ((tsr & s_can_rqcp_mask[i]) == 0U)
+            continue;
+
+        hcan->Instance->TSR = s_can_rqcp_mask[i]; /* 写 1 清 RQCPx（同时清 TXOK/ALST/TERR） */
+        if ((tsr & s_can_txok_mask[i]) != 0U)
+        {
+            CAN_TxCompleteHandler(hcan, i); /* 发送成功：走正常完成回调（含状态统计） */
+            s_bxcan_status[instance->can_e].tx_drain++;
+        }
+        else
+        {
+            s_bxcan_status[instance->can_e].err_tx++; /* 仲裁失败/发送错误：仅计数（同 HAL Abort 语义） */
+        }
+    }
+
+    hcan->Instance->IER = ier; /* 恢复中断使能 */
+    s_can_tx_draining = 0;
 }
 
 /*------------- 外部接口实现 --------------*/
@@ -379,6 +434,11 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeo
         return CAN_BxcanTxFailThenRet(instance);
     }
     tx_header.DLC = pack->len;
+
+    // 入队前先同步分发未处理的发送完成事件：防止本函数复用刚发完的邮箱时写 TXRQ 清掉 RQCPx，
+    // 把 HAL 本该在中断里分发的完成回调吞掉（异步分包发送会因此永久卡死）。必须在下面的
+    // 空闲邮箱判断之前做——分发可能触发续发、改变邮箱占用情况。
+    CAN_TxDrainCompletions(instance);
 
     // 邮箱空闲等待：三个发送邮箱全满则轮询等待其释放（timeout_ms 上限，0 表示不等待、满即失败）。
     // 无总线信号/对端离线时邮箱持续被占满（帧发不出去），不能死等，超时返回失败
