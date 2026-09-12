@@ -22,6 +22,7 @@ typedef enum : uint8_t
     MOTOR_BRAND_DJI,       // DJI电机（大疆）
     MOTOR_BRAND_DM,        // DM电机（达妙）
     MOTOR_BRAND_RS,        // RS电机（灵足时代）
+    MOTOR_BRAND_LK,        // LK电机（瓴控/翎控）
 } MotorBrand_e;
 
 /*============================================
@@ -52,6 +53,16 @@ typedef enum : uint8_t
     RS_MODEL_RS05 = 0, // RS05准直驱电机（反馈的位置/速度/力矩语义是输出轴的，7.75:1减速比已由固件折算）
     RS_MODEL_NUM,      // RS电机型号数量
 } RSModel_e;
+
+/*============================================
+ *              LK电机型号枚举
+ *============================================*/
+typedef enum : uint8_t
+{
+    LK_MODEL_MF = 0, // MF系列一体化直驱电机（首版支持，直驱无减速比，反馈为电机轴）
+    LK_MODEL_MS,     // MS系列（预留，首版 Config 拒绝：MS无转矩闭环，仅有开环power）
+    LK_MODEL_NUM,    // LK电机型号数量
+} LKModel_e;
 
 /*============================================
  *              控制模式枚举 (位掩码)
