@@ -54,6 +54,23 @@ typedef enum : uint16_t
 /**
  * @brief PID 初始化配置结构体
  */
+/*
+pid_angle_setting = {
+    .kp = 0,                    // 比例系数
+    .ki = 0,                    // 积分系数
+    .kd = 0,                    // 微分系数
+    .integral_limit = 0,        // 积分限幅阈值 (0 = 禁用)
+    .coef_a = 0,                // 变速积分参数 A (0 = 禁用)
+    .coef_b = 0,                // 变速积分参数 B
+    .d_lpf_rc = 0,              // 微分滤波时间常数 RC (0 = 禁用)
+    .out_lpf_rc = 0,            // 输出滤波时间常数 RC (0 = 禁用)
+    .deadband = 0,              // 死区范围 (0 = 禁用)
+    .error_normalize_range = 0, // 误差归一化范围 (0 = 禁用, 需要 PID_ENABLE_ERROR_NORMALIZE)
+    .out_max = 0,               // 输出上限 (需要 PID_ENABLE_OUTPUT_LIMIT)
+    .out_min = 0,               // 输出下限 (需要 PID_ENABLE_OUTPUT_LIMIT)
+    .config_mask = 0,           // 功能配置掩码
+};
+ */
 typedef struct
 {
     float kp;                    // 比例系数
