@@ -12,6 +12,13 @@ const GPIO_Map_t gpio_map[GPIO_NUM_MAX] = {
     [GPIO_BMI088_INT_GYRO] = {GPIOC, GPIO_PIN_5},
     [GPIO_IST8310_DRDY] = {GPIOG, GPIO_PIN_3},
     [GPIO_IST8310_RSTN] = {GPIOG, GPIO_PIN_6},
+    [GPIO_PWM_1] = {GPIOE, GPIO_PIN_9},  /* PE9  TIM1_CH1 */
+    [GPIO_PWM_2] = {GPIOE, GPIO_PIN_11}, /* PE11 TIM1_CH2 */
+    [GPIO_PWM_3] = {GPIOE, GPIO_PIN_13}, /* PE13 TIM1_CH3 */
+    [GPIO_PWM_4] = {GPIOE, GPIO_PIN_14}, /* PE14 TIM1_CH4 */
+    [GPIO_PWM_5] = {GPIOC, GPIO_PIN_6},  /* PC6  TIM8_CH1 */
+    [GPIO_PWM_6] = {GPIOI, GPIO_PIN_6},  /* PI6  TIM8_CH2 */
+    [GPIO_PWM_7] = {GPIOI, GPIO_PIN_7},  /* PI7  TIM8_CH3 */
 };
 
 const TIM_Map_t tim_map[TIM_NUM_MAX] = {
@@ -40,7 +47,6 @@ const CAN_Map_t can_map[CAN_NUM_MAX] = {
     [CAN_1] = {&hcan1},
     [CAN_2] = {&hcan2},
 };
-
 
 const SPI_Map_t spi_map[SPI_NUM_MAX] = {
     [SPI_BMI088] = {&hspi1},

@@ -25,6 +25,22 @@ const GPIO_Map_t gpio_map[GPIO_NUM_MAX] = {
     [GPIO_POWER_EN3] = {GPIOH, GPIO_PIN_4},
     [GPIO_POWER_EN4] = {GPIOH, GPIO_PIN_5},
     [GPIO_DAC_EXTI] = {GPIOI, GPIO_PIN_9},
+    [GPIO_PWM_1] = {GPIOA, GPIO_PIN_0},   /* PA0  TIM2_CH1 */
+    [GPIO_PWM_2] = {GPIOA, GPIO_PIN_1},   /* PA1  TIM2_CH2 */
+    [GPIO_PWM_3] = {GPIOA, GPIO_PIN_2},   /* PA2  TIM2_CH3 */
+    [GPIO_PWM_4] = {GPIOA, GPIO_PIN_3},   /* PA3  TIM2_CH4 */
+    [GPIO_PWM_5] = {GPIOD, GPIO_PIN_12},  /* PD12 TIM4_CH1 */
+    [GPIO_PWM_6] = {GPIOD, GPIO_PIN_13},  /* PD13 TIM4_CH2 */
+    [GPIO_PWM_7] = {GPIOD, GPIO_PIN_14},  /* PD14 TIM4_CH3 */
+    [GPIO_PWM_8] = {GPIOD, GPIO_PIN_15},  /* PD15 TIM4_CH4 */
+    [GPIO_PWM_9] = {GPIOH, GPIO_PIN_10},  /* PH10 TIM5_CH1 */
+    [GPIO_PWM_10] = {GPIOH, GPIO_PIN_11}, /* PH11 TIM5_CH2 */
+    [GPIO_PWM_11] = {GPIOH, GPIO_PIN_12}, /* PH12 TIM5_CH3 */
+    [GPIO_PWM_12] = {GPIOI, GPIO_PIN_0},  /* PI0  TIM5_CH4 */
+    [GPIO_PWM_13] = {GPIOI, GPIO_PIN_5},  /* PI5  TIM8_CH1 */
+    [GPIO_PWM_14] = {GPIOI, GPIO_PIN_6},  /* PI6  TIM8_CH2 */
+    [GPIO_PWM_15] = {GPIOI, GPIO_PIN_7},  /* PI7  TIM8_CH3 */
+    [GPIO_PWM_16] = {GPIOI, GPIO_PIN_2},  /* PI2  TIM8_CH4 */
 };
 
 const TIM_Map_t tim_map[TIM_NUM_MAX] = {
@@ -65,7 +81,6 @@ const CAN_Map_t can_map[CAN_NUM_MAX] = {
     [CAN_1] = {&hcan1},
     [CAN_2] = {&hcan2},
 };
-
 
 const SPI_Map_t spi_map[SPI_NUM_MAX] = {
     [SPI_OLED] = {&hspi1},
