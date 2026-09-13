@@ -11,7 +11,7 @@
  *       step3: 固定频率正弦波位置设定值，kp,kd设置为0，检查辨识效果
  *       step4: 先调kd，再调kp，需要抗外界干扰（kp不能单独非零）
  *       step5: 正常控制
- * @note 这个文件轻量封装，不直接操作电机：AxisMitLiteCalculate 接收反馈数据、计算并返回 setref，
+ * @note 这个文件轻量封装，不依赖 motor：AxisMitLiteCalculate 接收 AxisLiteState_s 反馈、计算并返回 setref，
  *       由 app 层手动调用 motor.set_ref 设置力矩
  * @note drv\drv_axis_lite\identify_axis_mit_lite.py可以辨识参数
  */
@@ -19,7 +19,6 @@
 #ifndef DRV_AXIS_MIT_LITE_H
 #define DRV_AXIS_MIT_LITE_H
 
-#include "drv_motor_base.h"
 #include "lib_mit.h"
 #include "drv_axis_lite_def.h"
 #include <stdint.h>
@@ -82,10 +81,10 @@ int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, const AxisMitLite_Init_Config_
 /**
  * @brief 计算控制输出，返回 setref 力矩值（不调用 motor.set_ref，由 app 手动设置）
  * @param inst 实例指针
- * @param mdata 电机反馈数据指针（位置/速度/力矩，只读）
+ * @param state 关节反馈指针（位置/速度/力矩，只读），由 app 层从电机读出后填入
  * @param ref 外部设定值指针（位置/速度/加速度，仅 NORMAL 阶段使用，只读）
  * @return setref 最终发送给电机的力矩值 (Nm)
- * @note 反馈数据坐标系由 app 决定：mdata 应提供与 params.gear_ratio 匹配的电机侧数据，
+ * @note 反馈数据坐标系由 app 决定：state 应填与 params.gear_ratio 匹配的电机侧数据，
  *       内部按 angle = angle/gear 换算到输出侧；若 app 直接给输出侧数据请将 gear_ratio 置 1
  * @note setref =（重力前馈 + 惯量前馈 + 摩擦前馈） + （kp * 位置误差 + kd * 速度误差）
  * @note 当实例 vofa_enable 置 1 时，自动设定 12 个 VOFA 调试通道：
@@ -110,6 +109,6 @@ int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, const AxisMitLite_Init_Config_
  *
  *       ch12: setref值，最终发送给电机的力矩值 (Nm)
  */
-float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const MotorData_s *mdata, const AxisMitLiteRef_s *ref);
+float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const AxisLiteState_s *state, const AxisMitLiteRef_s *ref);
 
 #endif // !DRV_AXIS_MIT_LITE_H

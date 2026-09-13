@@ -1,15 +1,34 @@
 /**
- * @file drv_axis_mit_lite.h
- * @brief 轻量级单轴关节控制驱动模块实现
+ * @file drv_axis_lite_def.h
+ * @brief axis lite 层公共类型（关节控制的输入/输出/参数）
  * @author TRW
  * @date 2026-06-07
  *
  * @note 考虑：重力(实际位置)；惯量(参考加速度)；双向库伦摩擦(实际速度)；双向粘性摩擦(实际速度)。
+ *
+ * @note axis lite 模块统一约定：只做控制律计算，不持有电机、不调用 Motor* 接口。
+ *       反馈由 app 层读好后填进 AxisLiteState_s 传入，输出 setref 由 app 层自行 MotorSetRef 下发。
  */
 #ifndef DRV_AXIS_LITE_DEF_H
 #define DRV_AXIS_LITE_DEF_H
 
 #include <stdint.h>
+
+/*============================================
+ *              输入：关节反馈（电机侧）
+ *============================================*/
+/**
+ * @brief  关节反馈量
+ * @note   app 层从电机读出后填入本结构传入，lite 层不依赖 motor 类型。
+ *         数值为**电机侧**（减速比之前），与 AxisLiteParams_s.gear_ratio 匹配；
+ *         若 app 直接给输出侧数据，请把 gear_ratio 置 1。
+ */
+typedef struct
+{
+    float position; // 位置 (rad)，多圈累加值
+    float speed;    // 速度 (rad/s)
+    float torque;   // 力矩 (Nm)，仅用于 VOFA 观测，不参与控制律
+} AxisLiteState_s;
 
 /*============================================
  *              控制阶段枚举
