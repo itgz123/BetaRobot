@@ -42,11 +42,13 @@ static void f_Output_Filter(PIDInstance *pid);
 /**
  * @brief 梯形积分
  *        使用梯形面积代替矩形，提高积分精度
- *        ITerm = Ki * (Err + Last_Err) / 2
+ *        ITerm = Ki * (Err + Last_Err) / 2 * dt
+ *
+ * @note 积分必须乘 dt，否则 Ki 会随调用频率变化（见 f_ 其它函数的 dt 约定）
  */
 static void f_Trapezoid_Intergral(PIDInstance *pid)
 {
-    pid->i_term = pid->ki * ((pid->error + pid->last_error) / 2.0f);
+    pid->i_term = (pid->dt > 0.0f) ? pid->ki * ((pid->error + pid->last_error) / 2.0f) * pid->dt : 0.0f;
 }
 
 /**
@@ -317,8 +319,8 @@ float LibPIDCalculate(PIDInstance *instance, float setpoint, float measure, floa
         instance->p_out = instance->kp * instance->error;
     }
 
-    // 5. 积分项
-    instance->i_term = instance->ki * instance->error;
+    // 5. 积分项 (i_term = Ki * e * dt；dt<=0 时本次不累积，兼容首帧/无时间基准)
+    instance->i_term = (instance->dt > 0.0f) ? instance->ki * instance->error * instance->dt : 0.0f;
 
     // 梯形积分
     if (instance->config_mask & PID_ENABLE_TRAPEZOID_INTEGRAL)
