@@ -180,10 +180,12 @@ void LibPIDReset(PIDInstance *instance);
  * @return 控制输出
  *
  * @note 位置式 PID 公式：
- *       u(k) = Kp*e(k) + Ki*Σe + Kd*(e(k)-e(k-1))/dt
+ *       u(k) = Kp*e(k) + Ki*Σ(e·dt) + Kd*(e(k)-e(k-1))/dt
  *
- * @note dt 由调用方传入：微分项、微分滤波、输出滤波均按该 dt 计算，
- *       dt<=0 时相应项按 0/关闭处理（等价原自动时间戳的首帧行为）
+ * @note dt 由调用方传入：积分项、微分项、微分滤波、输出滤波均按该 dt 计算，
+ *       dt<=0 时相应项按 0/关闭处理（等价原自动时间戳的首帧行为）。
+ *       因此 Ki 的单位是"每秒"，与 PIDCalculate 的调用频率无关；
+ *       早期版本积分漏乘 dt（Ki 实为"每次调用"的增量），迁移时须把旧 ki × 调用频率。
  *
  * @note 拓展功能根据 config_mask 掩码启用：
  *       - PID_ENABLE_TRAPEZOID_INTEGRAL → 梯形积分
