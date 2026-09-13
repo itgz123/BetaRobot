@@ -1,7 +1,14 @@
-#include "drv_chassis_position_lite.h"
+/**
+ * @file drv_chassis_lite_position_omni.c
+ * @brief 轻量级全向/麦轮底盘运动学实现（纯计算，不依赖电机）
+ * @author TRW
+ * @date 2026-09-13
+ */
+
+#include "drv_chassis_lite_position_omni.h"
 #include "app_cfg.h"
 
-#ifdef DRV_CHASSIS_USED
+#ifdef DRV_CHASSIS_LITE_POSITION_OMNI_USED
 
 #include "lib_math.h"
 
@@ -10,11 +17,12 @@
  * 轮子顺序: LF(0左前), LB(1左后), RB(2右后), RF(3右前)
  *
  * 所有逆解公式直接计算轮子接触点线速度 [m/s],
- * 最终除以 wheel_radius 得到电机角速度参考值 [rad/s].
+ * 最终乘以 reduction_ratio / wheel_radius 得到电机侧角速度 [rad/s].
  *
- * 所有正解公式从轮子接触点线速度出发,
- * 由 MotorGetSpeed [rad/s] × wheel_radius 得到 [m/s].
+ * 所有正解公式从电机侧角速度 [rad/s] 出发,
+ * 乘 wheel_radius / reduction_ratio 得到接触点线速度 [m/s].
  */
+
 /*============================================================================*
  * OMNI_T — 全向轮 (前后左右)
  *
@@ -35,34 +43,31 @@
  *   vy = (v_RB - v_LF) / 2
  *   w  = -((v_LF+v_RB)/x + (v_LB+v_RF)/y) / 2
  *============================================================================*/
-static void omnit_inverse(ChassisPositionLiteInstance_t *inst, ChassisCmd_t cmd)
+static void omnit_inverse(const ChassisLitePositionOmniInstance_t *inst, ChassisCmd_t cmd, ChassisLitePositionRef_t *out)
 {
     float y2 = inst->y * 0.5f;
     float x2 = inst->x * 0.5f;
-    float inv_r = 1.0f / inst->wheel_radius;
+    float k = inst->reduction_ratio / inst->wheel_radius;
 
-    MotorSetRef(inst->motor[WHEEL_LF], (-cmd.vy - cmd.w * x2) * inv_r * inst->reduction_ratio);
-    MotorSetRef(inst->motor[WHEEL_LB], (cmd.vx - cmd.w * y2) * inv_r * inst->reduction_ratio);
-    MotorSetRef(inst->motor[WHEEL_RB], (cmd.vy - cmd.w * x2) * inv_r * inst->reduction_ratio);
-    MotorSetRef(inst->motor[WHEEL_RF], (-cmd.vx - cmd.w * y2) * inv_r * inst->reduction_ratio);
+    out->drive_speed[WHEEL_LF] = (-cmd.vy - cmd.w * x2) * k;
+    out->drive_speed[WHEEL_LB] = (cmd.vx - cmd.w * y2) * k;
+    out->drive_speed[WHEEL_RB] = (cmd.vy - cmd.w * x2) * k;
+    out->drive_speed[WHEEL_RF] = (-cmd.vx - cmd.w * y2) * k;
 }
 
-static ChassisCmd_t omnit_forward(ChassisPositionLiteInstance_t *inst)
+static ChassisCmd_t omnit_forward(const ChassisLitePositionOmniInstance_t *inst, const ChassisLitePositionRef_t *in)
 {
-    float R = inst->wheel_radius;
-    float inv_reduction_ratio = 1.0f / inst->reduction_ratio;
-    MotorData_s md[WHEEL_NUM];
-    for (int i = 0; i < WHEEL_NUM; i++)
-        md[i] = MotorGetData(inst->motor[i]);
-    float v_lf = md[WHEEL_LF].speed * R * inv_reduction_ratio;
-    float v_lb = md[WHEEL_LB].speed * R * inv_reduction_ratio;
-    float v_rb = md[WHEEL_RB].speed * R * inv_reduction_ratio;
-    float v_rf = md[WHEEL_RF].speed * R * inv_reduction_ratio;
+    float k = inst->wheel_radius / inst->reduction_ratio;
+    float v_lf = in->drive_speed[WHEEL_LF] * k;
+    float v_lb = in->drive_speed[WHEEL_LB] * k;
+    float v_rb = in->drive_speed[WHEEL_RB] * k;
+    float v_rf = in->drive_speed[WHEEL_RF] * k;
 
     ChassisCmd_t cmd;
     cmd.vx = (v_lb - v_rf) * 0.5f;
     cmd.vy = (v_rb - v_lf) * 0.5f;
     cmd.w = -((v_lf + v_rb) / inst->x + (v_lb + v_rf) / inst->y) * 0.5f;
+    cmd.enable = 0;
     return cmd;
 }
 
@@ -86,35 +91,27 @@ static ChassisCmd_t omnit_forward(ChassisPositionLiteInstance_t *inst)
  *   vy = r/(4·a) · (-v_LF + v_LB + v_RB - v_RF)
  *   w  = (-v_RB - v_RF - v_LF - v_LB) / (4·r)
  *============================================================================*/
-static void omnix_inverse(ChassisPositionLiteInstance_t *inst, ChassisCmd_t cmd)
+static void omnix_inverse(const ChassisLitePositionOmniInstance_t *inst, ChassisCmd_t cmd, ChassisLitePositionRef_t *out)
 {
     float a = inst->x * 0.5f;
     float b = inst->y * 0.5f;
     float r = inst->r;
     float inv_r = 1.0f / r;
-    float inv_rw = 1.0f / inst->wheel_radius;
+    float k = inst->reduction_ratio / inst->wheel_radius;
 
-    MotorSetRef(inst->motor[WHEEL_LF],
-                ((b * cmd.vx - a * cmd.vy) * inv_r - cmd.w * r) * inv_rw * inst->reduction_ratio);
-    MotorSetRef(inst->motor[WHEEL_LB],
-                ((b * cmd.vx + a * cmd.vy) * inv_r - cmd.w * r) * inv_rw * inst->reduction_ratio);
-    MotorSetRef(inst->motor[WHEEL_RB],
-                ((-b * cmd.vx + a * cmd.vy) * inv_r - cmd.w * r) * inv_rw * inst->reduction_ratio);
-    MotorSetRef(inst->motor[WHEEL_RF],
-                ((-b * cmd.vx - a * cmd.vy) * inv_r - cmd.w * r) * inv_rw * inst->reduction_ratio);
+    out->drive_speed[WHEEL_LF] = ((b * cmd.vx - a * cmd.vy) * inv_r - cmd.w * r) * k;
+    out->drive_speed[WHEEL_LB] = ((b * cmd.vx + a * cmd.vy) * inv_r - cmd.w * r) * k;
+    out->drive_speed[WHEEL_RB] = ((-b * cmd.vx + a * cmd.vy) * inv_r - cmd.w * r) * k;
+    out->drive_speed[WHEEL_RF] = ((-b * cmd.vx - a * cmd.vy) * inv_r - cmd.w * r) * k;
 }
 
-static ChassisCmd_t omnix_forward(ChassisPositionLiteInstance_t *inst)
+static ChassisCmd_t omnix_forward(const ChassisLitePositionOmniInstance_t *inst, const ChassisLitePositionRef_t *in)
 {
-    float R = inst->wheel_radius;
-    float inv_reduction_ratio = 1.0f / inst->reduction_ratio;
-    MotorData_s md[WHEEL_NUM];
-    for (int i = 0; i < WHEEL_NUM; i++)
-        md[i] = MotorGetData(inst->motor[i]);
-    float v_lf = md[WHEEL_LF].speed * R * inv_reduction_ratio;
-    float v_lb = md[WHEEL_LB].speed * R * inv_reduction_ratio;
-    float v_rb = md[WHEEL_RB].speed * R * inv_reduction_ratio;
-    float v_rf = md[WHEEL_RF].speed * R * inv_reduction_ratio;
+    float k = inst->wheel_radius / inst->reduction_ratio;
+    float v_lf = in->drive_speed[WHEEL_LF] * k;
+    float v_lb = in->drive_speed[WHEEL_LB] * k;
+    float v_rb = in->drive_speed[WHEEL_RB] * k;
+    float v_rf = in->drive_speed[WHEEL_RF] * k;
 
     float a = inst->x * 0.5f;
     float b = inst->y * 0.5f;
@@ -126,6 +123,7 @@ static ChassisCmd_t omnix_forward(ChassisPositionLiteInstance_t *inst)
     cmd.vx = r4b * (v_lf + v_lb - v_rb - v_rf);
     cmd.vy = r4a * (-v_lf + v_lb + v_rb - v_rf);
     cmd.w = (-v_rb - v_rf - v_lf - v_lb) / (4.0f * r);
+    cmd.enable = 0;
     return cmd;
 }
 
@@ -146,33 +144,30 @@ static ChassisCmd_t omnix_forward(ChassisPositionLiteInstance_t *inst)
  *   vy = (v_LB - v_RF - v_LF + v_RB) / 4
  *   w  = (-v_RF - v_RB - v_LF - v_LB) / 2·(x+y)
  *============================================================================*/
-static void mecanumo_inverse(ChassisPositionLiteInstance_t *inst, ChassisCmd_t cmd)
+static void mecanumo_inverse(const ChassisLitePositionOmniInstance_t *inst, ChassisCmd_t cmd, ChassisLitePositionRef_t *out)
 {
     float Z = (inst->x + inst->y) * 0.5f;
-    float inv_r = 1.0f / inst->wheel_radius;
+    float k = inst->reduction_ratio / inst->wheel_radius;
 
-    MotorSetRef(inst->motor[WHEEL_LF], (cmd.vx - cmd.vy - Z * cmd.w) * inv_r * inst->reduction_ratio);
-    MotorSetRef(inst->motor[WHEEL_LB], (cmd.vx + cmd.vy - Z * cmd.w) * inv_r * inst->reduction_ratio);
-    MotorSetRef(inst->motor[WHEEL_RB], (-cmd.vx + cmd.vy - Z * cmd.w) * inv_r * inst->reduction_ratio);
-    MotorSetRef(inst->motor[WHEEL_RF], (-cmd.vx - cmd.vy - Z * cmd.w) * inv_r * inst->reduction_ratio);
+    out->drive_speed[WHEEL_LF] = (cmd.vx - cmd.vy - Z * cmd.w) * k;
+    out->drive_speed[WHEEL_LB] = (cmd.vx + cmd.vy - Z * cmd.w) * k;
+    out->drive_speed[WHEEL_RB] = (-cmd.vx + cmd.vy - Z * cmd.w) * k;
+    out->drive_speed[WHEEL_RF] = (-cmd.vx - cmd.vy - Z * cmd.w) * k;
 }
 
-static ChassisCmd_t mecanumo_forward(ChassisPositionLiteInstance_t *inst)
+static ChassisCmd_t mecanumo_forward(const ChassisLitePositionOmniInstance_t *inst, const ChassisLitePositionRef_t *in)
 {
-    float R = inst->wheel_radius;
-    float inv_reduction_ratio = 1.0f / inst->reduction_ratio;
-    MotorData_s md[WHEEL_NUM];
-    for (int i = 0; i < WHEEL_NUM; i++)
-        md[i] = MotorGetData(inst->motor[i]);
-    float v_lf = md[WHEEL_LF].speed * R * inv_reduction_ratio;
-    float v_lb = md[WHEEL_LB].speed * R * inv_reduction_ratio;
-    float v_rb = md[WHEEL_RB].speed * R * inv_reduction_ratio;
-    float v_rf = md[WHEEL_RF].speed * R * inv_reduction_ratio;
+    float k = inst->wheel_radius / inst->reduction_ratio;
+    float v_lf = in->drive_speed[WHEEL_LF] * k;
+    float v_lb = in->drive_speed[WHEEL_LB] * k;
+    float v_rb = in->drive_speed[WHEEL_RB] * k;
+    float v_rf = in->drive_speed[WHEEL_RF] * k;
 
     ChassisCmd_t cmd;
     cmd.vx = (v_lf + v_lb - v_rb - v_rf) * 0.25f;
     cmd.vy = (v_lb - v_rf - v_lf + v_rb) * 0.25f;
     cmd.w = (-v_rf - v_rb - v_lf - v_lb) / (2.0f * (inst->x + inst->y));
+    cmd.enable = 0;
     return cmd;
 }
 
@@ -193,33 +188,30 @@ static ChassisCmd_t mecanumo_forward(ChassisPositionLiteInstance_t *inst)
  *   vy = (v_LF + v_RB - v_RF - v_LB) / 4
  *   w  = (v_RB + v_RF - v_LF - v_LB) / 2·(x+y)
  *============================================================================*/
-static void mecanumx_inverse(ChassisPositionLiteInstance_t *inst, ChassisCmd_t cmd)
+static void mecanumx_inverse(const ChassisLitePositionOmniInstance_t *inst, ChassisCmd_t cmd, ChassisLitePositionRef_t *out)
 {
     float Z = (inst->x + inst->y) * 0.5f;
-    float inv_r = 1.0f / inst->wheel_radius;
+    float k = inst->reduction_ratio / inst->wheel_radius;
 
-    MotorSetRef(inst->motor[WHEEL_LF], (cmd.vx + cmd.vy - Z * cmd.w) * inv_r * inst->reduction_ratio);
-    MotorSetRef(inst->motor[WHEEL_LB], (cmd.vx - cmd.vy - Z * cmd.w) * inv_r * inst->reduction_ratio);
-    MotorSetRef(inst->motor[WHEEL_RB], (cmd.vx + cmd.vy + Z * cmd.w) * inv_r * inst->reduction_ratio);
-    MotorSetRef(inst->motor[WHEEL_RF], (cmd.vx - cmd.vy + Z * cmd.w) * inv_r * inst->reduction_ratio);
+    out->drive_speed[WHEEL_LF] = (cmd.vx + cmd.vy - Z * cmd.w) * k;
+    out->drive_speed[WHEEL_LB] = (cmd.vx - cmd.vy - Z * cmd.w) * k;
+    out->drive_speed[WHEEL_RB] = (cmd.vx + cmd.vy + Z * cmd.w) * k;
+    out->drive_speed[WHEEL_RF] = (cmd.vx - cmd.vy + Z * cmd.w) * k;
 }
 
-static ChassisCmd_t mecanumx_forward(ChassisPositionLiteInstance_t *inst)
+static ChassisCmd_t mecanumx_forward(const ChassisLitePositionOmniInstance_t *inst, const ChassisLitePositionRef_t *in)
 {
-    float R = inst->wheel_radius;
-    float inv_reduction_ratio = 1.0f / inst->reduction_ratio;
-    MotorData_s md[WHEEL_NUM];
-    for (int i = 0; i < WHEEL_NUM; i++)
-        md[i] = MotorGetData(inst->motor[i]);
-    float v_lf = md[WHEEL_LF].speed * R * inv_reduction_ratio;
-    float v_lb = md[WHEEL_LB].speed * R * inv_reduction_ratio;
-    float v_rb = md[WHEEL_RB].speed * R * inv_reduction_ratio;
-    float v_rf = md[WHEEL_RF].speed * R * inv_reduction_ratio;
+    float k = inst->wheel_radius / inst->reduction_ratio;
+    float v_lf = in->drive_speed[WHEEL_LF] * k;
+    float v_lb = in->drive_speed[WHEEL_LB] * k;
+    float v_rb = in->drive_speed[WHEEL_RB] * k;
+    float v_rf = in->drive_speed[WHEEL_RF] * k;
 
     ChassisCmd_t cmd;
     cmd.vx = (v_lf + v_lb + v_rb + v_rf) * 0.25f;
     cmd.vy = (v_lf + v_rb - v_rf - v_lb) * 0.25f;
     cmd.w = (v_rb + v_rf - v_lf - v_lb) / (2.0f * (inst->x + inst->y));
+    cmd.enable = 0;
     return cmd;
 }
 
@@ -227,12 +219,14 @@ static ChassisCmd_t mecanumx_forward(ChassisPositionLiteInstance_t *inst)
  * 对外接口
  *============================================================================*/
 
-int8_t ChassisPositionLite_Init(ChassisPositionLiteInstance_t *inst, ChassisPositionLite_Cfg_s *cfg)
+int8_t ChassisLitePositionOmniInit(ChassisLitePositionOmniInstance_t *inst, const ChassisLitePositionOmni_Cfg_s *cfg)
 {
     if (inst == NULL || cfg == NULL)
         return -1;
     if (cfg->wheel_radius <= 0.0f)
         return -2;
+    if (cfg->reduction_ratio <= 0.0f)
+        return -3;
 
     /* 复制配置 */
     inst->wheel_radius = cfg->wheel_radius;
@@ -240,12 +234,6 @@ int8_t ChassisPositionLite_Init(ChassisPositionLiteInstance_t *inst, ChassisPosi
     inst->x = cfg->x;
     inst->y = cfg->y;
     inst->chassis_type = cfg->chassis_type;
-    for (int i = 0; i < WHEEL_NUM; i++)
-    {
-        if (cfg->motor[i] == NULL)
-            return -3;
-        inst->motor[i] = cfg->motor[i];
-    }
 
     /* 计算 r (着地点到中心距离) */
     switch (cfg->chassis_type)
@@ -264,56 +252,64 @@ int8_t ChassisPositionLite_Init(ChassisPositionLiteInstance_t *inst, ChassisPosi
         break;
 
     default:
-        return -5; /* 不支持的底盘类型 */
+        return -5; /* 不支持的轮系（舵轮不走本模块） */
     }
 
     return 0;
 }
 
-void ChassisPositionLite_Inverse(ChassisPositionLiteInstance_t *inst, ChassisCmd_t cmd)
+void ChassisLitePositionOmniInverse(const ChassisLitePositionOmniInstance_t *inst, ChassisCmd_t cmd, ChassisLitePositionRef_t *out)
 {
-    if (inst == NULL)
+    if (inst == NULL || out == NULL)
         return;
+
+    out->valid = 1;
+    for (int i = 0; i < WHEEL_NUM; i++)
+    {
+        out->steer_target[i] = 0.0f; /* 全向/麦轮无舵向 */
+        out->drive_speed[i] = 0.0f;
+    }
 
     switch (inst->chassis_type)
     {
     case CHASSISTYPE_OMNI_T:
-        omnit_inverse(inst, cmd);
+        omnit_inverse(inst, cmd, out);
         break;
     case CHASSISTYPE_OMNI_X:
-        omnix_inverse(inst, cmd);
+        omnix_inverse(inst, cmd, out);
         break;
     case CHASSISTYPE_MECANUM_O:
-        mecanumo_inverse(inst, cmd);
+        mecanumo_inverse(inst, cmd, out);
         break;
     case CHASSISTYPE_MECANUM_X:
-        mecanumx_inverse(inst, cmd);
+        mecanumx_inverse(inst, cmd, out);
         break;
     default:
+        out->valid = 0;
         break;
     }
 }
 
-ChassisCmd_t ChassisPositionLite_Forward(ChassisPositionLiteInstance_t *inst)
+ChassisCmd_t ChassisLitePositionOmniForward(const ChassisLitePositionOmniInstance_t *inst, const ChassisLitePositionRef_t *in)
 {
     ChassisCmd_t cmd = {0};
 
-    if (inst == NULL)
+    if (inst == NULL || in == NULL)
         return cmd;
 
     switch (inst->chassis_type)
     {
     case CHASSISTYPE_OMNI_T:
-        cmd = omnit_forward(inst);
+        cmd = omnit_forward(inst, in);
         break;
     case CHASSISTYPE_OMNI_X:
-        cmd = omnix_forward(inst);
+        cmd = omnix_forward(inst, in);
         break;
     case CHASSISTYPE_MECANUM_O:
-        cmd = mecanumo_forward(inst);
+        cmd = mecanumo_forward(inst, in);
         break;
     case CHASSISTYPE_MECANUM_X:
-        cmd = mecanumx_forward(inst);
+        cmd = mecanumx_forward(inst, in);
         break;
     default:
         break;
@@ -322,4 +318,4 @@ ChassisCmd_t ChassisPositionLite_Forward(ChassisPositionLiteInstance_t *inst)
     return cmd;
 }
 
-#endif /* DRV_CHASSIS_USED */
+#endif /* DRV_CHASSIS_LITE_POSITION_OMNI_USED */
