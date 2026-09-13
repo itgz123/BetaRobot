@@ -10,8 +10,6 @@
 
 #ifdef DRV_AXIS_MIT_LITE_USED
 
-#if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
-
 #include "bsp_dwt.h"
 #include "lib_math.h"
 #include "drv_vofa.h"
@@ -142,9 +140,9 @@ static inline float GenerateMultiSineTorque(const MultiSineParam_s *params, floa
     return params->amplitude * sum;
 }
 
-float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const MotorData_s *mdata, const AxisMitLiteRef_s *ref)
+float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const AxisLiteState_s *state, const AxisMitLiteRef_s *ref)
 {
-    if (inst == NULL || mdata == NULL || ref == NULL)
+    if (inst == NULL || state == NULL || ref == NULL)
     {
         return 0.0f;
     }
@@ -158,8 +156,8 @@ float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const MotorData_s *mdata, 
     }
 
     // 反馈从电机侧转换到输出侧（减速比影响位置/速度/加速度/力矩）
-    float angle_motor = mdata->position;                             // 电机侧 rad
-    float speed_motor = mdata->speed;                                // 电机侧 rad/s
+    float angle_motor = state->position;                             // 电机侧 rad
+    float speed_motor = state->speed;                                // 电机侧 rad/s
     float angle = isfinite(angle_motor) ? angle_motor / gear : 0.0f; // 输出侧 rad
     float speed = isfinite(speed_motor) ? speed_motor / gear : 0.0f; // 输出侧 rad/s
 
@@ -315,7 +313,7 @@ vofa_output:
         /* CH1-CH3: 测量值 */
         VofaSetChannel(1, angle);                // CH1: 反馈位置 (rad)
         VofaSetChannel(2, speed);                // CH2: 反馈速度 (rad/s)
-        VofaSetChannel(3, mdata->torque * gear); // CH3: 轴侧实际力矩 (Nm)
+        VofaSetChannel(3, state->torque * gear); // CH3: 轴侧实际力矩 (Nm)
         /* CH4-CH6: 设定值 */
         VofaSetChannel(4, ref_pos); // CH4: 位置设定值 (rad)
         VofaSetChannel(5, ref_vel); // CH5: 速度设定值 (rad/s)
@@ -333,7 +331,5 @@ vofa_output:
 
     return setref;
 }
-
-#endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */
 
 #endif /* DRV_AXIS_MIT_LITE_USED */
