@@ -147,10 +147,16 @@ static void Mahony_UpdateInternal(MahonyInstance *inst, vector3_t gyro, vector3_
         recip_norm = 1.0f / acc_norm;
         acc = Lib_Math_Vec3Scale(acc, recip_norm);
 
-        /* 预估重力方向在机体坐标系中的分量 */
+        /* 预估重力"上"方向在机体坐标系中的分量（R^T·ẑ 的一半）
+         *   R^T·ẑ = (2(q1q3-q0q2), 2(q0q1+q2q3), 1-2(q1²+q2²))
+         *   取一半 → (q1q3-q0q2, q0q1+q2q3, 0.5-(q1²+q2²))
+         * 第三项必须写成 q0q0 - 0.5f + q3q3：单位四元数下
+         * q0²-q1²-q2²+q3² = 2×(0.5-q1²-q2²) 恰好是正确值的两倍，
+         * 会让 halfv 的 z 分量相对 x/y 偏大一倍，叉积误差方向被扭曲，
+         * 滤波器收敛到约 2 倍倾角上（实测：IMU 倾斜 16.1°，输出 30.1°）。 */
         halfvx = q1q3 - q0q2;
         halfvy = q0q1 + q2q3;
-        halfvz = q0q0 - q1q1 - q2q2 + q3q3;
+        halfvz = q0q0 - 0.5f + q3q3;
 
         /* 加速度计误差 = 测量值 × 预估值（叉积） */
         halfex = acc.y * halfvz - acc.z * halfvy;
