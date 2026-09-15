@@ -354,9 +354,20 @@ static void BMI088_SPIErrCallback(SPIInstance *spi_inst)
  */
 static void BMI088_CheckPendingIT(BMI088Instance *inst)
 {
+    /* 温度必须排在最前，否则会永远饿死：本函数只在 BMI088_IntCallback 里调用，
+     * 而那里在调用前一定刚置上了 ACC 或 GYRO 位。若先判 ACC/GYRO，
+     * 每轮都会清掉它们并启动传输（transfer_busy=1 → 退出 while），
+     * TEMP 位一直留在 mask 里轮不到，温度恒为 0。
+     * 温度每 1.28s 才读一次（约 1/640 次传输），代价是延后一个 acc 样本，
+     * 而 0x22/0x23 与加速度输出寄存器无关，不会污染数据 */
     while (inst->pending_mask != 0 && !inst->transfer_busy)
     {
-        if (inst->pending_mask & BMI088_PENDING_ACC)
+        if (inst->pending_mask & BMI088_PENDING_TEMP)
+        {
+            inst->pending_mask &= (uint8_t)~BMI088_PENDING_TEMP;
+            BMI088_StartSensorDMA(inst, BMI088_SENSOR_TEMP);
+        }
+        else if (inst->pending_mask & BMI088_PENDING_ACC)
         {
             inst->pending_mask &= (uint8_t)~BMI088_PENDING_ACC;
             inst->int_timestamp = inst->pending_t_acc;
@@ -367,11 +378,6 @@ static void BMI088_CheckPendingIT(BMI088Instance *inst)
             inst->pending_mask &= (uint8_t)~BMI088_PENDING_GYRO;
             inst->int_timestamp = inst->pending_t_gyro;
             BMI088_StartSensorDMA(inst, BMI088_SENSOR_GYRO);
-        }
-        else if (inst->pending_mask & BMI088_PENDING_TEMP)
-        {
-            inst->pending_mask &= (uint8_t)~BMI088_PENDING_TEMP;
-            BMI088_StartSensorDMA(inst, BMI088_SENSOR_TEMP);
         }
     }
 }
@@ -757,6 +763,24 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
     inst->gyro_conf = config->gyro_conf;
     inst->work_mode = config->work_mode;
     inst->spi_timeout_ms = config->spi_timeout_ms; /* 完全按 Config 配置的超时时间使用 */
+
+    /* 零偏补偿：陀螺仪零偏是 yaw 漂移的唯一来源（六轴滤波 yaw 不可观测，
+     * 加速度计校正管不到 z 轴），必须在原始数据里减掉。
+     * 不传则保持 0（实例是静态存储，初值已为 0） */
+    if (config->gyro_offset != NULL)
+    {
+        for (uint8_t i = 0; i < BMI088_AXIS_NUM; i++)
+        {
+            inst->gyro_offset[i] = config->gyro_offset[i];
+        }
+    }
+    if (config->acc_offset != NULL)
+    {
+        for (uint8_t i = 0; i < BMI088_AXIS_NUM; i++)
+        {
+            inst->acc_offset[i] = config->acc_offset[i];
+        }
+    }
 
     // 配置 SPI 阻塞模式（AccInit/GyroInit 使用阻塞传输）
     SPI_Config_s spi_cfg = {

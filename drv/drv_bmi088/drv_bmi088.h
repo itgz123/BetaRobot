@@ -82,6 +82,8 @@ typedef struct
     BMI088_GyroConf_e gyro_conf;      // 陀螺仪 ODR+BW 组合配置（见 BMI088_GyroConf_e）
     BMI088_WorkMode_e work_mode;      // 工作模式（轮询/中断）
     uint32_t spi_timeout_ms;          // SPI IT/DMA 传输超时(ms)
+    const float *gyro_offset;         // 陀螺仪零偏 (rad/s)，静止标定值，原始数据减去它；NULL 表示不补偿
+    const float *acc_offset;          // 加速度计零偏 (m/s²)，同上；NULL 表示不补偿
 } BMI088_Config_s;
 /**
  * @brief IMU 数据结构体
