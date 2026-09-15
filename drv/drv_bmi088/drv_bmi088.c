@@ -109,6 +109,7 @@ static uint8_t BMI088_WriteRegWithCheck(BMI088Instance *inst, GPIOInstance *cs, 
 static void BMI088_IntCallback(GPIOInstance *gpio_inst);
 static void BMI088_StartSensorDMA(BMI088Instance *inst, uint8_t sensor_type);
 static void BMI088_SPICpltCallback(SPIInstance *spi_inst);
+static void BMI088_SPIErrCallback(SPIInstance *spi_inst);
 static void BMI088_CheckPendingIT(BMI088Instance *inst);
 /* 插值辅助函数声明 */
 static void BMI088_InterpRaw(const uint8_t *raw_old, const uint8_t *raw_new, uint64_t t_old, uint64_t t_new, uint64_t t_target, uint8_t *out);
@@ -193,19 +194,23 @@ static void BMI088_IntCallback(GPIOInstance *gpio_inst)
 
     uint8_t is_acc = (gpio_inst == inst->int_acc);
 
-    if (!inst->transfer_busy)
+    /* 先登记本次中断（连同它自己的时间戳），再在总线空闲时统一派发。
+     * 注意：新传输只能从这里（EXTI 中断）发起，不能从 BMI088_SPICpltCallback
+     * （运行在 RX DMA 完成中断里）发起 —— 见该函数的注释。 */
+    if (is_acc)
     {
-        inst->int_timestamp = t_now;
-        BMI088_StartSensorDMA(inst, is_acc ? BMI088_SENSOR_ACC : BMI088_SENSOR_GYRO);
-        inst->pending_mask &= (uint8_t)~(is_acc ? BMI088_PENDING_ACC : BMI088_PENDING_GYRO);
+        inst->pending_t_acc = t_now;
+        inst->pending_mask |= BMI088_PENDING_ACC;
     }
     else
     {
-        if (is_acc)
-            inst->pending_t_acc = t_now;
-        else
-            inst->pending_t_gyro = t_now;
-        inst->pending_mask |= (is_acc ? BMI088_PENDING_ACC : BMI088_PENDING_GYRO);
+        inst->pending_t_gyro = t_now;
+        inst->pending_mask |= BMI088_PENDING_GYRO;
+    }
+
+    if (!inst->transfer_busy)
+    {
+        BMI088_CheckPendingIT(inst);
     }
 
     // 喂狗
@@ -249,8 +254,19 @@ static void BMI088_StartSensorDMA(BMI088Instance *inst, uint8_t sensor_type)
 }
 
 /**
- * @brief SPI IT传输完成回调（SPI中断上下文）
- * @note Acc完成后再链式读取温度（限速1.28s），Gyro完成后直接释放总线
+ * @brief SPI 传输完成回调（运行在 RX DMA 完成中断里）
+ * @note Acc 完成后再调度温度读取（限速1.28s）
+ *
+ * @note 本回调**只做记账并释放总线，绝不发起新传输**。
+ *       DMA 全双工收发时本回调挂在 RX 流的完成回调链上
+ *       （HAL: SPI_DMATransmitReceiveCplt → HAL_SPI_TxRxCpltCallback），
+ *       而 TX 流的完成中断因与 RX 流同优先级、IRQ 号更大
+ *       (DMA2_Stream3_IRQn=59 > DMA2_Stream0_IRQn=56) 此时尚未执行，
+ *       hdmatx 的 State 仍是 HAL_DMA_STATE_BUSY。若在此发起下一笔传输，
+ *       HAL_DMA_Start_IT 会返回 HAL_BUSY → HAL_SPI_TransmitReceive_DMA 置
+ *       HAL_SPI_ERROR_DMA 直接返回且不复位 hspi->State（永久停在 BUSY_TX_RX），
+ *       transfer_busy 再也清不掉，整个 BMI088 永久失联。
+ *       因此新传输统一由下一次 EXTI（BMI088_IntCallback）经 CheckPendingIT 发起。
  */
 static void BMI088_SPICpltCallback(SPIInstance *spi_inst)
 {
@@ -277,9 +293,8 @@ static void BMI088_SPICpltCallback(SPIInstance *spi_inst)
             inst->pending_mask |= BMI088_PENDING_TEMP;
         }
 
-        /* 释放总线，由 CheckPendingIT 决定下一个传输 */
+        /* 释放总线，下一笔传输由下一次 EXTI 经 CheckPendingIT 发起 */
         inst->transfer_busy = 0;
-        BMI088_CheckPendingIT(inst);
     }
     else if (inst->current_sensor == BMI088_SENSOR_GYRO)
     {
@@ -295,7 +310,6 @@ static void BMI088_SPICpltCallback(SPIInstance *spi_inst)
             inst->gyro_cnt++;
 
         inst->transfer_busy = 0;
-        BMI088_CheckPendingIT(inst);
     }
     else /* BMI088_SENSOR_TEMP */
     {
@@ -306,12 +320,37 @@ static void BMI088_SPICpltCallback(SPIInstance *spi_inst)
         inst->temperature = BMI088_ParseTempCelsius(spi_inst->rx_buff);
 
         inst->transfer_busy = 0;
-        BMI088_CheckPendingIT(inst);
     }
 }
 
 /**
+ * @brief SPI 传输错误回调（bsp_spi 在传输未能正常发起或 HAL 报错时调用）
+ * @note 这类失败不会再有 BMI088_SPICpltCallback，必须在这里复位传输状态，
+ *       否则 transfer_busy 恒为 1，驱动永久失联（现象：acc_cnt/gyro_cnt 不再增长、
+ *       pending_t_* 每次中断都被重写、euler 恒为 0）。
+ *       这里只丢弃本次传输，不清环形缓冲和 acc_cnt/gyro_cnt，
+ *       已采到的数据与 ReadLatest 的可用性都不受影响。
+ */
+static void BMI088_SPIErrCallback(SPIInstance *spi_inst)
+{
+    BMI088Instance *inst = (BMI088Instance *)spi_inst->parent;
+    if (inst == NULL)
+    {
+        return;
+    }
+
+    // 释放片选，避免总线被一直拉低
+    GPIOSet(inst->cs_acc);
+    GPIOSet(inst->cs_gyro);
+
+    // 丢弃本次传输，等下一次 EXTI 重新发起
+    inst->transfer_busy = 0;
+    inst->pending_mask = 0;
+}
+
+/**
  * @brief 检查并处理待读取的传感器
+ * @note 只允许在 EXTI 中断（BMI088_IntCallback）里调用，见 BMI088_SPICpltCallback 的注释
  */
 static void BMI088_CheckPendingIT(BMI088Instance *inst)
 {
@@ -770,11 +809,13 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
             return -1;
         }
 
-        // 切换为 DMA 模式并挂接 SPI 传输完成回调
+        // 切换为 DMA 模式并挂接 SPI 传输完成/错误回调
+        // err_callback 负责在传输发起失败或 HAL 报错时复位传输状态，避免驱动永久失联
         SPI_Config_s spi_dma_cfg = {
             .spi_e = config->spi_e,
             .work_mode = SPI_DMA_MODE,
             .rx_callback = BMI088_SPICpltCallback,
+            .err_callback = BMI088_SPIErrCallback,
         };
         if (SPIConfig(inst->spi_inst, &spi_dma_cfg) != 0)
         {

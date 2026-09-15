@@ -33,15 +33,16 @@ typedef enum : uint8_t
  */
 typedef struct SPIInstance
 {
-    void *parent;                              // 父实例指针（由 DRV 层设置）
-    BoardSPI_e spi_e;                          // 板载SPI枚举（Config时查找映射）
-    SPI_HandleTypeDef *handle;                 // SPI句柄（Config时自动填充）
-    SPI_Work_Mode_e work_mode;                 // 工作模式
-    uint8_t *rx_buff;                          // 接收缓冲区指针
-    uint16_t buff_size;                        // 缓冲区大小
-    uint16_t rx_len;                           // 接收数据长度
-    uint16_t last_xfer_len;                    // 最近一次收发请求长度
-    void (*rx_callback)(struct SPIInstance *); // DMA接收完成回调
+    void *parent;                               // 父实例指针（由 DRV 层设置）
+    BoardSPI_e spi_e;                           // 板载SPI枚举（Config时查找映射）
+    SPI_HandleTypeDef *handle;                  // SPI句柄（Config时自动填充）
+    SPI_Work_Mode_e work_mode;                  // 工作模式
+    uint8_t *rx_buff;                           // 接收缓冲区指针
+    uint16_t buff_size;                         // 缓冲区大小
+    uint16_t rx_len;                            // 接收数据长度
+    uint16_t last_xfer_len;                     // 最近一次收发请求长度
+    void (*rx_callback)(struct SPIInstance *);  // DMA接收完成回调
+    void (*err_callback)(struct SPIInstance *); // 传输错误回调（启动失败/超时/HAL报错）
 } SPIInstance;
 
 /*------------- 实例定义宏 --------------*/
@@ -70,9 +71,10 @@ typedef struct SPIInstance
  */
 typedef struct
 {
-    BoardSPI_e spi_e;                          // 板载SPI枚举（用于查找硬件映射）
-    SPI_Work_Mode_e work_mode;                 // 工作模式（阻塞/中断/DMA）
-    void (*rx_callback)(struct SPIInstance *); // 接收完成回调（可为NULL，仅DMA/IT模式有效）
+    BoardSPI_e spi_e;                           // 板载SPI枚举（用于查找硬件映射）
+    SPI_Work_Mode_e work_mode;                  // 工作模式（阻塞/中断/DMA）
+    void (*rx_callback)(struct SPIInstance *);  // 接收完成回调（可为NULL，仅DMA/IT模式有效）
+    void (*err_callback)(struct SPIInstance *); // 传输错误回调（可为NULL）
 } SPI_Config_s;
 
 /*------------- 外部接口声明 --------------*/
@@ -98,6 +100,9 @@ int8_t SPIRegister(SPIInstance *instance);
  * @note 填充硬件句柄，设置工作模式和回调，不修改 static 管理数组。
  *       可重复调用以重新配置。
  *       要求在 SPIRegister 之后调用。
+ * @note err_callback 在传输未能正常发起（HAL 返回非 OK、等待就绪超时）或 HAL 报错时
+ *       被调用。此时不会有 rx_callback，上层必须在此复位自己的传输状态并释放片选，
+ *       否则该从机会永久失联。
  */
 int8_t SPIConfig(SPIInstance *instance, const SPI_Config_s *config);
 
