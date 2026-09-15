@@ -19,7 +19,7 @@
  *     // 六轴更新：陀螺仪 (rad/s) + 加速度计 (m/s²) + dt (s)
  *     vector3_t gyro = {gx, gy, gz};
  *     vector3_t acc  = {ax, ay, az};
- *     float dt = 0.001f; // dt 由 APP 层根据 IMU 插值时间戳计算传入
+ *     float dt = 0.001f; // dt 由 APP 层根据 IMU 时间戳计算传入
  *     MahonyUpdate(&mahony, gyro, acc, dt);
  *
  *     // 获取姿态
@@ -92,7 +92,7 @@ void MahonyInit(MahonyInstance *inst, const Mahony_Init_Config_s *config);
  * @param inst Mahony 实例指针
  * @param gyro 陀螺仪数据 (rad/s)
  * @param acc  加速度计数据 (m/s²)
- * @param dt   距上次更新的时间间隔 (s)，由调用方（APP层）根据 BMI088 插值时间戳计算传入
+ * @param dt   距上次更新的时间间隔 (s)，由调用方（APP层）根据 IMU 时间戳计算传入
  *
  * @note 加速度计校正横滚角和俯仰角，偏航角会随时间漂移
  * @note 当合加速度远离 1g 时跳过加速度计校正

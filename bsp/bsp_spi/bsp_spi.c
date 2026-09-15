@@ -102,6 +102,44 @@ static const SPI_ReceiveFunc receive_funcs[] = {
     [SPI_DMA_MODE] = (SPI_ReceiveFunc)HAL_SPI_Receive_DMA,
 };
 
+/**
+ * @brief 传输失败收尾：停掉异步传输、复位 HAL 状态、通知上层
+ * @param instance SPI实例
+ * @param reason   失败原因（仅日志）
+ *
+ * @note 必须做这一步的原因：HAL 的部分失败分支只置 ErrorCode、不复位 hspi->State。
+ *       典型如 HAL_SPI_TransmitReceive_DMA 中 HAL_DMA_Start_IT 返回 HAL_BUSY
+ *       （另一路 DMA 流的完成中断尚未执行，State 还是 BUSY）时，直接
+ *       `SET_BIT(hspi->ErrorCode, HAL_SPI_ERROR_DMA); return HAL_ERROR;`，
+ *       句柄被永久留在 HAL_SPI_STATE_BUSY_TX_RX。
+ *       若不在此复位，后续每次传输都会卡死在本文件等待 State==READY 的循环里，
+ *       而 DRV 层等不到 rx_callback，其传输标志永远清不掉 → 整个从机失联。
+ */
+static void SPI_AbortOnError(SPIInstance *instance, const char *reason)
+{
+    BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "%s (spi_e=%d), state=%d, err=0x%lX",
+           reason, (int)instance->spi_e, (int)instance->handle->State, instance->handle->ErrorCode);
+
+    /* 停掉可能已启动的异步传输（阻塞模式无异步传输，无需处理） */
+    if (instance->work_mode == SPI_DMA_MODE)
+    {
+        (void)HAL_SPI_DMAStop(instance->handle);
+    }
+    else if (instance->work_mode == SPI_IT_MODE)
+    {
+        (void)HAL_SPI_Abort(instance->handle);
+    }
+
+    /* 兜底复位：上面的调用失败或 HAL 走了不复位 State 的分支时，这里强制恢复 */
+    instance->handle->State = HAL_SPI_STATE_READY;
+    instance->handle->ErrorCode = HAL_SPI_ERROR_NONE;
+
+    if (instance->err_callback != NULL)
+    {
+        instance->err_callback(instance);
+    }
+}
+
 /*------------- HAL回调函数重写 --------------*/
 
 /**
@@ -179,6 +217,14 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
                (error_code & HAL_SPI_ERROR_OVR) ? 1 : 0,  // 溢出错误
                (error_code & HAL_SPI_ERROR_FRE) ? 1 : 0,  // 帧错误
                (error_code & HAL_SPI_ERROR_DMA) ? 1 : 0); // DMA错误
+
+        /* 出错时不会再有 rx_callback，必须通知上层复位其传输状态。
+         * 这里不做 DMA 收尾：HAL 的错误回调路径自身已停掉传输并复位了 State，
+         * 在其中断上下文里再调 HAL_DMA_Abort 反而有风险 */
+        if (instance->err_callback != NULL)
+        {
+            instance->err_callback(instance);
+        }
     }
 }
 
@@ -229,6 +275,7 @@ int8_t SPIConfig(SPIInstance *instance, const SPI_Config_s *config)
 
     instance->work_mode = config->work_mode;
     instance->rx_callback = config->rx_callback;
+    instance->err_callback = config->err_callback;
 
     return 0;
 }
@@ -251,14 +298,18 @@ void SPITransmit(SPIInstance *instance, uint8_t *data, uint16_t len, uint32_t ti
         {
             if (timeout_ms > 0 && (DWT_GetTimeUs() - start_time) > timeout_us)
             {
-                BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "SPI busy timeout (spi_e=%d)", instance->spi_e);
+                /* 等不到就绪同样是"传输没发出去"，必须通知上层，否则其传输标志永久卡死 */
+                SPI_AbortOnError(instance, "SPI busy timeout");
                 return;
             }
         }
     }
 
     instance->last_xfer_len = len;
-    s_spi_transmit_funcs[instance->work_mode](instance->handle, data, len, timeout_ms);
+    if (s_spi_transmit_funcs[instance->work_mode](instance->handle, data, len, timeout_ms) != HAL_OK)
+    {
+        SPI_AbortOnError(instance, "SPI transmit start failed");
+    }
 }
 
 void SPIReceive(SPIInstance *instance, uint16_t len, uint32_t timeout_ms)
@@ -285,7 +336,8 @@ void SPIReceive(SPIInstance *instance, uint16_t len, uint32_t timeout_ms)
         {
             if (timeout_ms > 0 && (DWT_GetTimeUs() - start_time) > timeout_us)
             {
-                BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "SPI busy timeout (spi_e=%d)", instance->spi_e);
+                /* 等不到就绪同样是"传输没发出去"，必须通知上层，否则其传输标志永久卡死 */
+                SPI_AbortOnError(instance, "SPI busy timeout");
                 return;
             }
         }
@@ -293,7 +345,10 @@ void SPIReceive(SPIInstance *instance, uint16_t len, uint32_t timeout_ms)
 
     instance->rx_len = 0;
     instance->last_xfer_len = len;
-    receive_funcs[instance->work_mode](instance->handle, instance->rx_buff, len, timeout_ms);
+    if (receive_funcs[instance->work_mode](instance->handle, instance->rx_buff, len, timeout_ms) != HAL_OK)
+    {
+        SPI_AbortOnError(instance, "SPI receive start failed");
+    }
 }
 
 void SPITransmitReceive(SPIInstance *instance, uint8_t *tx_data, uint16_t len, uint32_t timeout_ms)
@@ -320,7 +375,8 @@ void SPITransmitReceive(SPIInstance *instance, uint8_t *tx_data, uint16_t len, u
         {
             if (timeout_ms > 0 && (DWT_GetTimeUs() - start_time) > timeout_us)
             {
-                BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "SPI busy timeout (spi_e=%d)", instance->spi_e);
+                /* 等不到就绪同样是"传输没发出去"，必须通知上层，否则其传输标志永久卡死 */
+                SPI_AbortOnError(instance, "SPI busy timeout");
                 return;
             }
         }
@@ -328,7 +384,10 @@ void SPITransmitReceive(SPIInstance *instance, uint8_t *tx_data, uint16_t len, u
 
     instance->rx_len = 0;
     instance->last_xfer_len = len;
-    transmit_receive_funcs[instance->work_mode](instance->handle, tx_data, instance->rx_buff, len, timeout_ms);
+    if (transmit_receive_funcs[instance->work_mode](instance->handle, tx_data, instance->rx_buff, len, timeout_ms) != HAL_OK)
+    {
+        SPI_AbortOnError(instance, "SPI transmit/receive start failed");
+    }
 }
 
 #endif /* SPI_INSTANCE_NUM > 0 */
