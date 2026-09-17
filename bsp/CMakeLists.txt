@@ -1,5 +1,6 @@
 # bsp 层源文件
 set(MODULE_SOURCES
+    bsp_app/bsp_app.c
     bsp_sys_status/bsp_sys_status.c
     bsp_dwt/bsp_dwt.c
     bsp_gpio/bsp_gpio.c
@@ -18,6 +19,7 @@ set(MODULE_SOURCES
 set(MODULE_INCLUDE_DIRS
     .
     bsp_assert
+    bsp_app
     bsp_sys_status
     bsp_dwt
     bsp_gpio
