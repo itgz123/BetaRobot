@@ -26,9 +26,10 @@
 #define SBUS_DIGITAL_CH_COUNT 2 // 数字通道数量
 
 // SBUS 通道值范围（不同遥控器有不同厂家，不同校准，所以可能不准，但是以下值是sbus协议标准值，只要是sbus协议，解释不准也会在-1 ~ +1范围内）
-#define SBUS_CH_MIN 172    // 通道最小值
-#define SBUS_CH_MAX 1811   // 通道最大值
-#define SBUS_CH_CENTER 992 // 通道中间值
+// 仅作为 SBUS_Config_s.ch_range 的默认参考值，实际校准值由 SBUSConfig 传入
+#define SBUS_CH_MIN 172    // 通道最小值（协议标准值）
+#define SBUS_CH_MAX 1811   // 通道最大值（协议标准值）
+#define SBUS_CH_CENTER 992 // 通道中间值（协议标准值）
 
 // SBUS 帧头和帧尾
 #define SBUS_HEADER 0x0F            // 帧头
@@ -79,6 +80,20 @@ typedef struct
 } SBUS_Data_t;
 
 /**
+ * @brief SBUS 通道原始值范围（校准用）
+ * @note 由 SBUSConfig 配置，归一化采用分段线性映射，结果限幅到 -1.0 ~ 1.0：
+ *         raw >= center: (raw - center) / (max - center)
+ *         raw <  center: (raw - center) / (center - min)
+ *       要求 ch_min < ch_center < ch_max
+ */
+typedef struct
+{
+    uint16_t ch_min;    // 通道原始最小值 (0-2047)
+    uint16_t ch_max;    // 通道原始最大值 (0-2047)
+    uint16_t ch_center; // 通道原始中点 (0-2047)
+} SBUS_ChRange_s;
+
+/**
  * @brief SBUS 实例结构体
  * @note 使用指针指向 BSP 实例，在注册时设置 parent
  */
@@ -90,6 +105,9 @@ typedef struct SBUSInstance
     uint64_t lost_start_time_us; // 丢帧/失控开始时间戳 (us)，0 表示正常
     uint8_t signal_lost;         // 信号丢失确认标志（0: 正常, 1: 失控）
     uint64_t lost_timeout_us;    // 丢帧/失控确认超时 (us)
+    SBUS_ChRange_s ch_range;     // 通道校准范围（Config 时配置）
+    float scale_pos;             // 正向归一化系数 1/(max-center)（Config 时预计算，避免 ISR 除法）
+    float scale_neg;             // 负向归一化系数 1/(center-min)（Config 时预计算，避免 ISR 除法）
 } SBUSInstance;
 
 typedef struct
@@ -98,6 +116,7 @@ typedef struct
     uint16_t daemon_reload;           // daemon 喂狗重载值
     DaemonFaultAction_e daemon_fault; // daemon 离线故障动作
     uint32_t lost_timeout_ms;         // 丢帧/失控确认超时 (ms)，0=立即标志
+    SBUS_ChRange_s ch_range;          // 通道原始值范围（中点/最大/最小），需满足 min < center < max
 } SBUS_Config_s;
 
 /*------------- 实例定义宏 --------------*/
@@ -135,12 +154,12 @@ int8_t SBUSRegister(SBUSInstance *instance);
 /**
  * @brief 配置 SBUS 实例（可重复调用）
  * @param instance SBUS 实例指针
- * @param config   配置结构体指针（含 uart_e/daemon/超时）
+ * @param config   配置结构体指针（含 uart_e/daemon/超时/通道范围校准）
  * @retval 0 成功
  * @retval -1 失败
  *
- * @note 填充 USART 硬件映射，设置 DMA 模式和回调、daemon 看门狗。
- *       可重复调用以更新运行时参数。
+ * @note 填充 USART 硬件映射，设置 DMA 模式和回调、daemon 看门狗，
+ *       并根据 ch_range 预计算通道归一化系数（可重复调用以更新运行时参数，如重新校准）。
  *       要求在 SBUSRegister 之后调用。
  */
 int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config);

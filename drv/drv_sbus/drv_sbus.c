@@ -84,6 +84,14 @@ int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config)
         return -1;
     }
 
+    // 校验通道范围（校准值）
+    const SBUS_ChRange_s *range = &config->ch_range;
+    if ((range->ch_min >= range->ch_center) || (range->ch_center >= range->ch_max))
+    {
+        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "Invalid ch_range: min=%u center=%u max=%u", range->ch_min, range->ch_center, range->ch_max);
+        return -1;
+    }
+
     // 设置 parent 指针，用于 BSP 回调时获取 DRV 实例
     instance->usart_inst->parent = instance;
 
@@ -116,10 +124,22 @@ int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config)
     instance->lost_start_time_us = 0;
     instance->signal_lost = 0;
 
+    // 保存通道范围并预计算归一化系数（中断中只做乘加，不做除法）
+    instance->ch_range = *range;
+    instance->scale_pos = 1.0f / (float)(range->ch_max - range->ch_center);
+    instance->scale_neg = 1.0f / (float)(range->ch_center - range->ch_min);
+
     return 0;
 }
 
-static SBUS_Data_t SBUSDecodeFrame(const uint8_t *data, uint16_t len)
+/**
+ * @brief 解析 SBUS 原始帧
+ * @param inst SBUS 实例指针（提供通道校准范围与归一化系数）
+ * @param data 原始帧数据
+ * @param len  数据长度
+ * @return 解析后的通道数据
+ */
+static SBUS_Data_t SBUSDecodeFrame(const SBUSInstance *inst, const uint8_t *data, uint16_t len)
 {
     SBUS_Data_t result = {0};
 
@@ -153,8 +173,11 @@ static SBUS_Data_t SBUSDecodeFrame(const uint8_t *data, uint16_t len)
     }
 
     // 解析 16 个模拟通道（每通道 11 位）并归一化到 -1.0 ~ 1.0
-    // 归一化公式：(raw - center) / (max - center)
-    static const float scale = 1.0f / (float)(SBUS_CH_MAX - SBUS_CH_CENTER);
+    // 分段归一化：raw >= center 用正向跨度 (max-center)，raw < center 用负向跨度 (center-min)
+    // 系数已在 SBUSConfig 中预计算；超出 min/max 的原始值限幅到 ±1.0
+    const int32_t center = (int32_t)inst->ch_range.ch_center;
+    const float scale_pos = inst->scale_pos;
+    const float scale_neg = inst->scale_neg;
 
     for (uint8_t i = 0; i < SBUS_CHANNEL_COUNT; i++)
     {
@@ -167,7 +190,19 @@ static SBUS_Data_t SBUSDecodeFrame(const uint8_t *data, uint16_t len)
                                   ((uint32_t)frame->raw[1 + byte_off + 1] << (8 - bit_rem)) |
                                   ((uint32_t)frame->raw[1 + byte_off + 2] << (16 - bit_rem))) &
                        0x07FF;
-        result.ch[i] = (float)(raw - SBUS_CH_CENTER) * scale;
+        int32_t offset = (int32_t)raw - center;
+        float ch = (float)offset * (offset >= 0 ? scale_pos : scale_neg);
+
+        // 限幅到 -1.0 ~ 1.0
+        if (ch > 1.0f)
+        {
+            ch = 1.0f;
+        }
+        else if (ch < -1.0f)
+        {
+            ch = -1.0f;
+        }
+        result.ch[i] = ch;
     }
 
     // 使用位域解析数字通道和标志位（字节 23）
@@ -218,7 +253,7 @@ static void SBUSUARTRxCallback(USARTInstance *usart_inst)
     if (sbus_inst != NULL)
     {
         // 在中断上下文中解析原始数据为通道数据
-        sbus_inst->sbus_data = SBUSDecodeFrame(usart_inst->rx_buff, usart_inst->rx_len);
+        sbus_inst->sbus_data = SBUSDecodeFrame(sbus_inst, usart_inst->rx_buff, usart_inst->rx_len);
         DaemonReload(sbus_inst->daemon);
 
         // ---- 信号丢失超时检测 ----
