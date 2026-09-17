@@ -19,11 +19,11 @@
  */
 typedef struct TaskInstance
 {
-    TaskHandle_t handle; // 任务句柄
-    StackType_t *stack;  // 栈缓冲区
-    StaticTask_t *tcb;   // TCB 缓冲区
-    const char *name;    // 任务名称
-    uint32_t stack_size; // 栈大小（字）
+    TaskHandle_t handle;       // 任务句柄
+    StackType_t *stack;        // 栈缓冲区
+    StaticTask_t *tcb;         // TCB 缓冲区
+    const char *name;          // 任务名称
+    const uint32_t stack_size; // 栈大小（字，编译期固定、只读）
 } TaskInstance;
 
 /**
@@ -68,11 +68,11 @@ TaskHandle_t TaskRegister(TaskInstance *inst, const Task_Init_Config_s *config);
  */
 typedef struct QueueInstance
 {
-    QueueHandle_t handle;  // 队列句柄
-    uint8_t *storage;      // 存储区缓冲区
-    StaticQueue_t *buffer; // 队列控制块缓冲区
-    UBaseType_t length;    // 队列长度
-    UBaseType_t item_size; // 数据项大小（字节）
+    QueueHandle_t handle;        // 队列句柄
+    uint8_t *storage;            // 存储区缓冲区
+    StaticQueue_t *buffer;       // 队列控制块缓冲区
+    const UBaseType_t length;    // 队列长度（编译期固定、只读）
+    const UBaseType_t item_size; // 数据项大小（字节，编译期固定、只读）
 } QueueInstance;
 
 /**

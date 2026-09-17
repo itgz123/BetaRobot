@@ -61,7 +61,7 @@ typedef struct
 struct CommProto
 {
     const CommProtoVTable_s *vtable; /* 必须首成员 */
-    uint16_t payload_size;           /* payload 长度（编译期确定，DEF 宏写入） */
+    const uint16_t payload_size;     /* payload 长度（编译期确定，DEF 宏写入、运行期只读） */
     void *media;                     /* 指向 media 实例（发送用，MediaSend 定位后端） */
     ProtoFrameCallback on_frame;     /* 出帧回调（CommConfig 挂接） */
 };
