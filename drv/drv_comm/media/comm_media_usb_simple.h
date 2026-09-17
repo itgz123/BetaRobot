@@ -30,14 +30,14 @@
 /* USB 介质派生结构体（首成员必须为 CommMedia 基类，vtable 约定；字段同 CommMediaUsb） */
 typedef struct
 {
-    CommMedia base;        /* 基类（首成员；发送不持 staging 缓冲，MediaUsbSimpleSend 直接引用 comm 打包缓冲 data） */
-    uint8_t *rx_buff;      /* 接收累积缓冲（完整协议帧，不含分包序号；DEF 宏静态绑定，大小 = rx_buff_sz） */
-    uint16_t rx_frame_len; /* 完整协议帧长（不含分包序号）= rx_buff_sz（DEF 宏写入；接收判定依据 + 短帧透传目标长度） */
-    uint16_t tx_frame_len; /* 完整协议帧长（不含分包序号）= tx_buff_sz（DEF 宏写入；发送分包/透传依据） */
-    uint16_t rx_cnt;       /* 已累积字节数（0..rx_frame_len，上交后归零；长帧重组用） */
-    uint8_t rx_expect_pkt; /* 期望接收的下一分包序号（帧内 0 起递增；长帧重组用） */
-    uint32_t lost_frames;  /* 丢帧计数（短帧长度不符 / 长帧分包错位累加） */
-    uint32_t tx_fail;      /* 发送失败计数（未枚举/ring 满导致 USBTransmit 丢包；只增不清，调试用） */
+    CommMedia base;              /* 基类（首成员；发送不持 staging 缓冲，MediaUsbSimpleSend 直接引用 comm 打包缓冲 data） */
+    uint8_t *rx_buff;            /* 接收累积缓冲（完整协议帧，不含分包序号；DEF 宏静态绑定，大小 = rx_buff_sz） */
+    const uint16_t rx_frame_len; /* 完整协议帧长（不含分包序号）= rx_buff_sz（DEF 宏写入；接收判定依据 + 短帧透传目标长度） */
+    const uint16_t tx_frame_len; /* 完整协议帧长（不含分包序号）= tx_buff_sz（DEF 宏写入；发送分包/透传依据） */
+    uint16_t rx_cnt;             /* 已累积字节数（0..rx_frame_len，上交后归零；长帧重组用） */
+    uint8_t rx_expect_pkt;       /* 期望接收的下一分包序号（帧内 0 起递增；长帧重组用） */
+    uint32_t lost_frames;        /* 丢帧计数（短帧长度不符 / 长帧分包错位累加） */
+    uint32_t tx_fail;            /* 发送失败计数（未枚举/ring 满导致 USBTransmit 丢包；只增不清，调试用） */
 } CommMediaUsbSimple;
 
 /**

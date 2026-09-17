@@ -104,7 +104,7 @@ typedef struct
 {
     const char *module_name;           /* 模块名：编译期字符串常量（存 flash，'\0' 结尾，长度见 module_name_len） */
     const uint8_t module_name_len;     /* 模块名长度（不含 '\0'），编译期推导、只读 */
-    uint8_t times_per_second;          /* 每秒最大条数（上限 255）：LOG_INSTANCE_DEF 传 0 按 255 档计 */
+    const uint8_t times_per_second;    /* 每秒最大条数（上限 255）：LOG_INSTANCE_DEF 传 0 按 255 档计；编译期固定、只读 */
     uint8_t log_cnt;                   /* 计次：本 1 秒窗口内已发送条数 */
     uint64_t last_timestamp_us;        /* 时间戳：上一次记录窗口起点的 us 值 */
     uint64_t level_cnt[LOG_LEVEL_NUM]; /* 本实例各级别累计日志条数（借用成功即计入，含排队；限频/池满丢弃不计） */

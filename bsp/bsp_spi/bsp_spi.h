@@ -38,7 +38,7 @@ typedef struct SPIInstance
     SPI_HandleTypeDef *handle;                  // SPI句柄（Config时自动填充）
     SPI_Work_Mode_e work_mode;                  // 工作模式
     uint8_t *rx_buff;                           // 接收缓冲区指针
-    uint16_t buff_size;                         // 缓冲区大小
+    const uint16_t buff_size;                   // 缓冲区大小（编译期固定、只读）
     uint16_t rx_len;                            // 接收数据长度
     uint16_t last_xfer_len;                     // 最近一次收发请求长度
     void (*rx_callback)(struct SPIInstance *);  // DMA接收完成回调

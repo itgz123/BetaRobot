@@ -37,7 +37,7 @@ typedef struct USARTInstance
     UART_HandleTypeDef *handle;                  // UART句柄（Config时自动填充）
     USART_Work_Mode_e tx_mode;                   // 发送模式
     uint8_t *rx_buff;                            // 接收缓冲区指针
-    uint16_t rx_buff_size;                       // 接收缓冲区大小
+    const uint16_t rx_buff_size;                 // 接收缓冲区大小（编译期固定、只读）
     uint16_t rx_len;                             // 接收数据长度
     void (*rx_callback)(struct USARTInstance *); // 接收完成回调
     void (*tx_callback)(struct USARTInstance *); // 发送完成回调（DMA模式）

@@ -24,15 +24,15 @@ void CommMediaRxHook(CommMedia *media, const uint8_t *data);
 
 typedef struct
 {
-    MediaType_e media_type;       // 介质类型（定义时写入）
-    ProtocolType_e rx_proto_type; // 接收协议类型（定义时写入）
-    ProtocolType_e tx_proto_type; // 发送协议类型（定义时写入）
-    UnpackMode_e unpack_mode;     // 接收解包位置（定义时写入）
-    void *media;                  // 介质派生实例指针（首成员为 CommMedia 基类）
-    void *rx_proto;               // 接收协议派生实例指针（首成员为 CommProto 基类）
-    void *tx_proto;               // 发送协议派生实例指针（首成员为 CommProto 基类）
-    uint8_t *tx_buff;             // 发送打包缓冲（COMM_DEF 静态定义，协议分包写入；大小 = tx_size + 协议开销）
-    uint8_t inited;               // 初始化标志（CommRegister 置位）
+    const MediaType_e media_type;       // 介质类型（编译期固定，定义时写入）
+    const ProtocolType_e rx_proto_type; // 接收协议类型（编译期固定，定义时写入）
+    const ProtocolType_e tx_proto_type; // 发送协议类型（编译期固定，定义时写入）
+    const UnpackMode_e unpack_mode;     // 接收解包位置（编译期固定，定义时写入）
+    void *media;                        // 介质派生实例指针（首成员为 CommMedia 基类）
+    void *rx_proto;                     // 接收协议派生实例指针（首成员为 CommProto 基类）
+    void *tx_proto;                     // 发送协议派生实例指针（首成员为 CommProto 基类）
+    uint8_t *tx_buff;                   // 发送打包缓冲（COMM_DEF 静态定义，协议分包写入；大小 = tx_size + 协议开销）
+    uint8_t inited;                     // 初始化标志（CommRegister 置位）
 } CommInstance;
 
 /**
