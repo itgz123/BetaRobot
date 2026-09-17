@@ -22,7 +22,7 @@
  * 用法：
  *     BSPLogInit();                            // 内含默认实例 g_log 的初始化
  *     BSPLOG(&g_log, LOG_LEVEL_INFO, "hello"); // 直接使用默认实例
- *     LOG_INSTANCE_DEF(g_motor_log, "motor", 20); // 或按模块自定义实例（模块名 + 限频，0 = 不限频）
+ *     LOG_INSTANCE_DEF(g_motor_log, "motor", 20); // 或按模块自定义实例（模块名 + 限频，0 = 禁用该实例）
  *     BSPLOG(&g_motor_log, LOG_LEVEL_INFO, "enc=%d speed=%d", enc, speed);
  *
  * 兼容旧宏（LOGDEBUG/LOGINFO/...）：暂以空宏占位，既有调用点不输出日志；
@@ -104,7 +104,7 @@ typedef struct
 {
     const char *module_name;           /* 模块名：编译期字符串常量（存 flash，'\0' 结尾，长度见 module_name_len） */
     const uint8_t module_name_len;     /* 模块名长度（不含 '\0'），编译期推导、只读 */
-    const uint8_t times_per_second;    /* 每秒最大条数（上限 255）：LOG_INSTANCE_DEF 传 0 按 255 档计；编译期固定、只读 */
+    const uint8_t times_per_second;    /* 每秒最大条数（上限 255）：0 = 禁用该实例（全部丢弃）；编译期固定、只读 */
     uint8_t log_cnt;                   /* 计次：本 1 秒窗口内已发送条数 */
     uint64_t last_timestamp_us;        /* 时间戳：上一次记录窗口起点的 us 值 */
     uint64_t level_cnt[LOG_LEVEL_NUM]; /* 本实例各级别累计日志条数（借用成功即计入，含排队；限频/池满丢弃不计） */
@@ -114,7 +114,7 @@ typedef struct
  * @brief 定义日志实例（编译期声明，替代旧 BSPLogInitInstance 运行时配置）
  * @param name   变量名
  * @param module 模块名（须传字符串字面量，编译期存 flash，如 "motor"）
- * @param limit  每秒最大条数：0 表示 255（最高档，接近不限频）
+ * @param limit  每秒最大条数（上限 255）：0 = 禁用该实例日志（全部丢弃）
  * @note 在 .c 文件顶层使用：LOG_INSTANCE_DEF(g_motor, "motor", 20);
  *       使用 BSPLOG 时传 &变量名。实例为全局符号（非 static），外部 TU 用
  *       extern LOGInstance g_motor; 即可共享（如 bsp_log.c 的 g_log、
@@ -130,7 +130,7 @@ typedef struct
     LOGInstance name = {                                        \
         .module_name = (module),                                \
         .module_name_len = sizeof(module) - 1, /* 字面量长度 */ \
-        .times_per_second = ((limit) ? (limit) : 255)}
+        .times_per_second = (limit)}
 #else
 #define LOG_INSTANCE_DEF(name, module, limit)
 #endif
