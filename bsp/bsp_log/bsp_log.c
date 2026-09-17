@@ -98,9 +98,11 @@ static void LogUartTxCplt(USARTInstance *instance)
 /*============ 内部工具（static） ============*/
 
 /**
- * @brief 限频检查：通过返回 1，超频返回 0（本条丢弃）
+ * @brief 限频检查：通过返回 1，超频/禁用返回 0（本条丢弃）
  * @note 1 秒窗口：窗口内计数达到 times_per_second 后丢弃，距窗口起点满
  *       1 秒重置计数并记录新窗口起点。
+ * @note times_per_second == 0 表示禁用该实例：所有日志丢弃（编译期定值，
+ *       配合 LOG_INSTANCE_DEF 传 0 即可关掉整模块输出）。
  */
 static int BSPLogCheckLimit(LOGInstance *inst)
 {
@@ -108,7 +110,7 @@ static int BSPLogCheckLimit(LOGInstance *inst)
 
     if (inst->times_per_second == 0)
     {
-        return 1; /* 不限频 */
+        return 0; /* 禁用该实例：本条丢弃 */
     }
 
     now_us = DWT_GetTimeUs();
