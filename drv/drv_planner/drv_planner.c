@@ -22,6 +22,8 @@ int8_t PlannerInit(PlannerInstance *inst, const Planner_Init_Config_s *cfg)
     inst->cfg = *cfg;                     // 结构体整体拷贝（仅基本类型，无指针/联合体，安全）
     inst->last_time_us = DWT_GetTimeUs(); // 记录初始化时刻，首次 Calculate 即得到正确 dt
     inst->init_flag = 1;
+    inst->ref_position = 0.0f; // 累加器清零
+    inst->position_valid = 0;  // 未播种：首次 Calculate 会用反馈位置播种
 
     return 0;
 }
@@ -70,8 +72,20 @@ void PlannerCalculate(PlannerInstance *inst, const PlannerInput_s *in, PlannerOu
     }
     ref_acc = Lib_Math_Clamp(ref_acc, -cfg->max_acc, cfg->max_acc);
 
-    // ======== 4. 设定位置：当前位置 + 设定速度积分，再按位置模式处理 ========
-    float ref_pos = in->current_position + (ref_speed * dt);
+    // ======== 4. 设定位置：内部累加器开环积分（不读反馈），再按位置模式处理 ========
+    // 播种：失能期间/视觉交还时（in->seed）用当前反馈位置重置累加器；首次调用
+    // （position_valid=0）也必须播种，否则从 0 开始积分，使能瞬间目标会猛扑向实际位置
+    if (in->seed || !inst->position_valid)
+    {
+        inst->ref_position = in->current_position;
+        inst->position_valid = 1;
+    }
+    else if (dt > 0.0f)
+    {
+        inst->ref_position += ref_speed * dt;
+    }
+
+    float ref_pos = inst->ref_position;
     switch (cfg->position_mode)
     {
     case PLANNER_POS_LIMITED:
@@ -87,9 +101,12 @@ void PlannerCalculate(PlannerInstance *inst, const PlannerInput_s *in, PlannerOu
         break;
     case PLANNER_POS_CONTINUOUS:
     default:
-        // 连续模式：不限幅
+        // 连续模式：不限幅（注意累加器无界，长时间运行会丢浮点精度）
         break;
     }
+    // 写回累加器：LIMITED 防积分饱和（顶到限位继续推不积累"欠账"，反向立即响应），
+    // WRAP 防多圈发散/精度丢失（累加器恒在 [min, max) 内）
+    inst->ref_position = ref_pos;
 
     out->position = ref_pos;
     out->speed = ref_speed;
