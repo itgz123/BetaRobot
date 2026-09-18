@@ -330,7 +330,7 @@ if(NOT EXISTS "${CMAKE_SOURCE_DIR}/app/${APP_NAME}/CMakeLists.txt")
     message(FATAL_ERROR
         "App ${APP_NAME} is not initialized: ${CMAKE_SOURCE_DIR}/app/${APP_NAME}\n"
         "  app 是独立 git 仓库（主仓库不追踪）。请先拉取：\n"
-        "    bash scripts/setup_apps.sh\n"
+        "    bash scripts/setup_project.sh\n"
         "  或在 app/ 下单独 clone 该 app 仓库到 ${APP_NAME}")
 endif()
 
