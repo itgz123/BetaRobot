@@ -48,6 +48,21 @@
       "problemMatcher": []
     },
     {
+      "label": "can tui",
+      "type": "shell",
+      "command": "bash ./scripts/can-utils-tui/can-utils-tui.sh",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "detail": "CAN 调试 TUI（USB-CAN）：启动时选接口/波特率/显示缓冲；t 发送 f 过滤 s 保存 x 退出",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "focus": true
+      },
+      "problemMatcher": []
+    },
+    {
       "label": "start docs",
       "type": "shell",
       "windows": {
