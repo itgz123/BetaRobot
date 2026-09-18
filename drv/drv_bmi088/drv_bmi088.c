@@ -12,12 +12,11 @@
 #if defined(HAL_SPI_MODULE_ENABLED) && defined(HAL_GPIO_MODULE_ENABLED)
 
 #include <string.h>
+#include <math.h>
 #include "bsp_dwt.h"
 #include "bsp_log.h"
-#include "drv_bmi088_heater.h"
 
-/* bmi088 主驱动与加热器共用日志实例：LOG_INSTANCE_DEF 定义全局符号（非 static），
- * drv_bmi088.h extern 声明，heater 复用；日志关闭时宏为空、不分配，BSPLOG 空宏不引用 */
+/* bmi088 日志实例（日志关闭时宏为空、不分配，BSPLOG 空宏不引用） */
 #ifndef DRV_BMI088_LOG_LIMIT
 #define DRV_BMI088_LOG_LIMIT 10
 #endif // !DRV_BMI088_LOG_LIMIT
@@ -114,8 +113,8 @@ static void BMI088_CheckPendingIT(BMI088Instance *inst);
 /* 插值辅助函数声明 */
 static void BMI088_InterpRaw(const uint8_t *raw_old, const uint8_t *raw_new, uint64_t t_old, uint64_t t_new, uint64_t t_target, uint8_t *out);
 static uint8_t BMI088_FindBracket(const uint64_t *t_buf, uint16_t newest, uint16_t n, uint64_t target, uint16_t *out_older, uint16_t *out_newer);
-static void BMI088_RawToAcc(const uint8_t *raw, float *out, BMI088_AccRange_e range, const float *offset);
-static void BMI088_RawToGyro(const uint8_t *raw, float *out, BMI088_GyroRange_e range, const float *offset);
+static void BMI088_RawToAcc(const uint8_t *raw, float *out, BMI088_AccRange_e range);
+static void BMI088_RawToGyro(const uint8_t *raw, float *out, BMI088_GyroRange_e range);
 static float BMI088_ParseTempCelsius(const uint8_t *rx_buff);
 static BMI088_Data_t BMI088_PackData(BMI088Instance *inst, const uint8_t acc_raw[BMI088_RAW_DATA_SIZE], const uint8_t gyro_raw[BMI088_RAW_DATA_SIZE], uint64_t timestamp_us);
 
@@ -215,8 +214,6 @@ static void BMI088_IntCallback(GPIOInstance *gpio_inst)
 
     // 喂狗
     DaemonReload(inst->daemon);
-    // 加热
-    BMI088HeaterStart(inst);
 }
 
 /**
@@ -450,29 +447,31 @@ static void BMI088_InterpRaw(const uint8_t *raw_old, const uint8_t *raw_new, uin
 
 /**
  * @brief 加速度计原始数据 → 物理单位 (m/s²)
+ * @note 只做数据手册灵敏度换算，**不补偿零偏**（标定归 drvlib_bmi088_kalman）
  * @note 使用 BMI088_AxisRaw_u 联合体直接访问 int16 轴数据
  */
-static void BMI088_RawToAcc(const uint8_t *raw, float *out, BMI088_AccRange_e range, const float *offset)
+static void BMI088_RawToAcc(const uint8_t *raw, float *out, BMI088_AccRange_e range)
 {
     const BMI088_AxisRaw_u *axis = (const BMI088_AxisRaw_u *)raw;
     float sen = BMI088_AccSenTable[range];
     for (uint8_t i = 0; i < BMI088_AXIS_NUM; i++)
     {
-        out[i] = (float)axis->axis[i] * sen - offset[i];
+        out[i] = (float)axis->axis[i] * sen;
     }
 }
 
 /**
  * @brief 陀螺仪原始数据 → 物理单位 (rad/s)
+ * @note 只做数据手册灵敏度换算，**不补偿零偏**（标定归 drvlib_bmi088_kalman）
  * @note 使用 BMI088_AxisRaw_u 联合体直接访问 int16 轴数据
  */
-static void BMI088_RawToGyro(const uint8_t *raw, float *out, BMI088_GyroRange_e range, const float *offset)
+static void BMI088_RawToGyro(const uint8_t *raw, float *out, BMI088_GyroRange_e range)
 {
     const BMI088_AxisRaw_u *axis = (const BMI088_AxisRaw_u *)raw;
     float sen = BMI088_GyroSenTable[range];
     for (uint8_t i = 0; i < BMI088_AXIS_NUM; i++)
     {
-        out[i] = (float)axis->axis[i] * sen - offset[i];
+        out[i] = (float)axis->axis[i] * sen;
     }
 }
 
@@ -489,8 +488,8 @@ static float BMI088_ParseTempCelsius(const uint8_t *rx_buff)
 static BMI088_Data_t BMI088_PackData(BMI088Instance *inst, const uint8_t acc_raw[BMI088_RAW_DATA_SIZE], const uint8_t gyro_raw[BMI088_RAW_DATA_SIZE], uint64_t timestamp_us)
 {
     BMI088_Data_t data = {0};
-    BMI088_RawToAcc(acc_raw, data.acc, inst->acc_range, inst->acc_offset);
-    BMI088_RawToGyro(gyro_raw, data.gyro, inst->gyro_range, inst->gyro_offset);
+    BMI088_RawToAcc(acc_raw, data.acc, inst->acc_range);
+    BMI088_RawToGyro(gyro_raw, data.gyro, inst->gyro_range);
     data.time_stamp = timestamp_us;
     return data;
 }
@@ -681,13 +680,6 @@ int8_t BMI088Register(BMI088Instance *inst)
         return -1;
     }
 
-    // 注册 PWM（只注册，Config 时决定是否启动）
-    if (PWMRegister(inst->heater_pwm) != 0)
-    {
-        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "heater_pwm register failed");
-        return -1;
-    }
-
     // 注册 daemon（占位，Config 更新运行参数）
     if (inst->daemon)
     {
@@ -722,7 +714,6 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
     inst->cs_gyro->gpio_e = config->cs_gyro_e;
     inst->int_acc->gpio_e = config->int_acc_e;
     inst->int_gyro->gpio_e = config->int_gyro_e;
-    inst->heater_pwm->tim_e = config->heater_e;
 
     // 配置 CS GPIO（填充映射，无回调）
     {
@@ -748,13 +739,6 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
     GPIOSet(inst->cs_gyro);
     DWT_Delay(BMI088_CS_RELEASE_DELAY_S);
 
-    // 初始化加热 PWM（Config 加热器）
-    if (BMI088_HeaterInit(inst) != 0)
-    {
-        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "heater_pwm init failed");
-        return -1;
-    }
-
     // 保存传感器参数
     inst->acc_range = config->acc_range;
     inst->acc_bwp = config->acc_bwp;
@@ -763,24 +747,6 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
     inst->gyro_conf = config->gyro_conf;
     inst->work_mode = config->work_mode;
     inst->spi_timeout_ms = config->spi_timeout_ms; /* 完全按 Config 配置的超时时间使用 */
-
-    /* 零偏补偿：陀螺仪零偏是 yaw 漂移的唯一来源（六轴滤波 yaw 不可观测，
-     * 加速度计校正管不到 z 轴），必须在原始数据里减掉。
-     * 不传则保持 0（实例是静态存储，初值已为 0） */
-    if (config->gyro_offset != NULL)
-    {
-        for (uint8_t i = 0; i < BMI088_AXIS_NUM; i++)
-        {
-            inst->gyro_offset[i] = config->gyro_offset[i];
-        }
-    }
-    if (config->acc_offset != NULL)
-    {
-        for (uint8_t i = 0; i < BMI088_AXIS_NUM; i++)
-        {
-            inst->acc_offset[i] = config->acc_offset[i];
-        }
-    }
 
     // 配置 SPI 阻塞模式（AccInit/GyroInit 使用阻塞传输）
     SPI_Config_s spi_cfg = {
@@ -794,13 +760,14 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
         return -1;
     }
 
-    // 更新 daemon 运行参数（可重入）
+    /* 更新 daemon 运行参数（可重入）：本层只上报"离线"状态与故障动作，
+     * 不再挂载加热关断回调（加热器已移出本模块，见头文件 TODO） */
     if (inst->daemon)
     {
         Daemon_Config_s daemon_cfg = {
             .reload_count = config->daemon_reload,
             .fault_action = config->daemon_fault,
-            .callback = BMI088_HeaterFaultCallback,
+            .callback = NULL,
             .owner_id = inst,
         };
         DaemonConfig(inst->daemon, &daemon_cfg);
@@ -907,17 +874,16 @@ BMI088_Data_t BMI088ReadBlocking(BMI088Instance *inst)
     for (uint8_t i = 0; i < BMI088_RAW_DATA_SIZE; i++)
         gyro_buf[i] = inst->spi_inst->rx_buff[BMI088_GYRO_RX_DATA_OFF + i];
 
-    /* 读取温度原始数据（2 字节），存入实例供 heater 控制使用 */
+    /* 读取温度原始数据（2 字节），存入实例供 BMI088GetTemperature 使用 */
     BMI088_ReadReg(inst, inst->cs_acc, BMI088_TEMP_M, 2, BMI088_ACC_DUMMY_BYTES);
     /* 提取 11-bit 温度值（数据手册 §5.3.7: Temp_uint11 = (TEMP_MSB*8) + (TEMP_LSB/32)） */
     {
         inst->temperature = BMI088_ParseTempCelsius(inst->spi_inst->rx_buff);
+        inst->last_temp_us = DWT_GetTimeUs(); /* 刷新新鲜度，供 GetTemperature 判定可用性 */
     }
 
     // 喂狗
     DaemonReload(inst->daemon);
-    // 加热
-    BMI088HeaterStart(inst);
 
     return BMI088_PackData(inst, acc_buf, gyro_buf, DWT_GetTimeUs());
 }
@@ -1015,10 +981,25 @@ BMI088_MultiRateData_t BMI088ReadLatest(BMI088Instance *inst)
     if (data.time_stamp_a == 0 || data.time_stamp_g == 0)
         return (BMI088_MultiRateData_t){0};
 
-    BMI088_RawToAcc(inst->acc_raw[a_idx], data.acc, inst->acc_range, inst->acc_offset);
-    BMI088_RawToGyro(inst->gyro_raw[g_idx], data.gyro, inst->gyro_range, inst->gyro_offset);
+    BMI088_RawToAcc(inst->acc_raw[a_idx], data.acc, inst->acc_range);
+    BMI088_RawToGyro(inst->gyro_raw[g_idx], data.gyro, inst->gyro_range);
 
     return data;
+}
+
+/*============================ 温度接口 ============================*/
+
+float BMI088GetTemperature(const BMI088Instance *inst)
+{
+    if (inst == NULL)
+        return NAN;
+    /* last_temp_us == 0 表示本次上电还没成功采到温度：
+     * 此时 inst->temperature 仍是初值 0，会把 0℃ 当成真实温度上报，
+     * 对温补/加热这类消费者是危险的输入，故返回 NAN 明确表示"不可用" */
+    if (inst->last_temp_us == 0)
+        return NAN;
+
+    return inst->temperature;
 }
 
 #endif /* defined(HAL_SPI_MODULE_ENABLED) && defined(HAL_GPIO_MODULE_ENABLED) */

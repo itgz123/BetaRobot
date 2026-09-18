@@ -117,8 +117,9 @@ typedef struct
  * @param limit  每秒最大条数（上限 255）：0 = 禁用该实例日志（全部丢弃）
  * @note 在 .c 文件顶层使用：LOG_INSTANCE_DEF(g_motor, "motor", 20);
  *       使用 BSPLOG 时传 &变量名。实例为全局符号（非 static），外部 TU 用
- *       extern LOGInstance g_motor; 即可共享（如 bsp_log.c 的 g_log、
- *       drv_bmi088.c 的 g_bmi088_log 供 drv_bmi088_heater.c extern 复用）。
+ *       extern LOGInstance g_motor; 即可共享（如 bsp_log.c 的 g_log）。
+ *       仅在"同一模块拆成多个 .c"时才需要共享，跨模块不要共用实例，
+ *       否则模块名/限频/计数会被两个模块互相污染。
  * @note 宏形参名不得与 LOGInstance 字段名（module_name/module_name_len/…）相同：
  *       指定初始化器 .module_name 词法上是 "."+"module_name" 两个 token，若形参也叫
  *       module_name，预处理器会把其中 module_name 当形参替换成实参字符串，产生语法错误。

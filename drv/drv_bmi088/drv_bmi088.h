@@ -2,9 +2,16 @@
  * @file drv_bmi088.h
  * @brief BMI088 六轴 IMU 驱动（加速度计 + 陀螺仪）
  *
+ * @note 本模块只负责与器件通信：寄存器读写/初始化/自检、原始数据 → 物理量
+ *       （按数据手册灵敏度）、时间戳、温度、在线状态。不做零偏/标度/正交等
+ *       标定，也不做姿态解算 —— 标定与滤波见 drvlib_bmi088_kalman。
  * @note 片选由 DRV 层通过 GPIO 接口控制
  * @note 中断模式使用循环缓冲 + 线性插值对齐 acc/gyro 时间戳
  *
+ * @note TODO 加热器已从本模块移出（原先嵌在 IMU 的实例/配置/数据路径里）。
+ *       后续独立为 drv_heater：温度由 BMI088GetTemperature 注入，加热控温
+ *       由 app 任务节拍驱动，TIM8 OPM+RCR 安全链归 bsp_tim。
+ *       旧实现见 git 历史 drv/drv_bmi088/drv_bmi088_heater.c。
  */
 
 #ifndef __DRV_BMI088_H
@@ -17,14 +24,9 @@
 
 #include "bsp_spi.h"
 #include "bsp_gpio.h"
-#include "bsp_tim.h"
 #include "drv_daemon.h"
 #include "bmi088_reg_def.h"
 #include "bsp_log.h"
-
-/* bmi088 主驱动与加热器共用日志实例（drv_bmi088.c 定义，heater 经 extern 复用，
- * 共享模块名/限频/计数）；日志关闭时无定义，BSPLOG 空宏不引用 */
-extern LOGInstance g_bmi088_log;
 
 /**
  * @brief BMI088 工作模式枚举
@@ -61,6 +63,8 @@ typedef enum : uint8_t
  *
  * @note 包含硬件枚举和传感器运行时参数。
  *       硬件枚举由 Config 传给子模块，Register 只负责注册。
+ * @note 不带标定参数：本层输出的是"未补偿的物理量"，零偏/标度等由
+ *       drvlib_bmi088_kalman 统一处理（原先的 gyro_offset/acc_offset 已移除）。
  */
 typedef struct
 {
@@ -70,7 +74,6 @@ typedef struct
     BoardGPIO_e cs_gyro_e;  // 陀螺仪片选GPIO枚举
     BoardGPIO_e int_acc_e;  // 加速度计中断GPIO枚举
     BoardGPIO_e int_gyro_e; // 陀螺仪中断GPIO枚举
-    BoardTIM_e heater_e;    // 加热PWM枚举
 
     /* 传感器运行时参数 */
     uint16_t daemon_reload;           // daemon 喂狗重载值，0 表示禁用
@@ -82,8 +85,6 @@ typedef struct
     BMI088_GyroConf_e gyro_conf;      // 陀螺仪 ODR+BW 组合配置（见 BMI088_GyroConf_e）
     BMI088_WorkMode_e work_mode;      // 工作模式（轮询/中断）
     uint32_t spi_timeout_ms;          // SPI IT/DMA 传输超时(ms)
-    const float *gyro_offset;         // 陀螺仪零偏 (rad/s)，静止标定值，原始数据减去它；NULL 表示不补偿
-    const float *acc_offset;          // 加速度计零偏 (m/s²)，同上；NULL 表示不补偿
 } BMI088_Config_s;
 /**
  * @brief IMU 数据结构体
@@ -132,13 +133,12 @@ typedef struct
 typedef struct BMI088Instance
 {
     /* BSP 实例指针 */
-    SPIInstance *spi_inst;   // SPI 实例
-    GPIOInstance *cs_acc;    // 加速度计片选
-    GPIOInstance *cs_gyro;   // 陀螺仪片选
-    GPIOInstance *int_acc;   // 加速度计中断
-    GPIOInstance *int_gyro;  // 陀螺仪中断
-    PWMInstance *heater_pwm; // 加热 PWM
-    DaemonInstance *daemon;  // 守护进程实例
+    SPIInstance *spi_inst;  // SPI 实例
+    GPIOInstance *cs_acc;   // 加速度计片选
+    GPIOInstance *cs_gyro;  // 陀螺仪片选
+    GPIOInstance *int_acc;  // 加速度计中断
+    GPIOInstance *int_gyro; // 陀螺仪中断
+    DaemonInstance *daemon; // 守护进程实例
 
     /* 发送缓冲区 */
     uint8_t *tx_buff; // 发送缓冲区指针
@@ -157,10 +157,6 @@ typedef struct BMI088Instance
 
     /* 工作模式 */
     BMI088_WorkMode_e work_mode; // 工作模式
-
-    /* 标定偏移量 */
-    float acc_offset[BMI088_AXIS_NUM];  // 加速度计零偏 (m/s²)
-    float gyro_offset[BMI088_AXIS_NUM]; // 陀螺仪零偏 (rad/s)
 
     /*============================ 中断模式字段 ============================*/
 
@@ -207,7 +203,6 @@ typedef struct BMI088Instance
     GPIO_INSTANCE_DEF(name##_int_acc);                             \
     GPIO_INSTANCE_DEF(name##_int_gyro);                            \
     DAEMON_INSTANCE_DEF(name##_daemon);                            \
-    PWM_INSTANCE_DEF(name##_heater);                               \
     static BMI088Instance name = {                                 \
         .spi_inst = &name##_spi,                                   \
         .cs_acc = &name##_cs_acc,                                  \
@@ -215,7 +210,6 @@ typedef struct BMI088Instance
         .int_acc = &name##_int_acc,                                \
         .int_gyro = &name##_int_gyro,                              \
         .daemon = &name##_daemon,                                  \
-        .heater_pwm = &name##_heater,                              \
         .tx_buff = name##_tx_buff}
 
 /*============================ 公开接口声明 ============================*/
@@ -269,6 +263,18 @@ BMI088_Data_t BMI088ReadInt(BMI088Instance *inst);
  * @retval time_stamp_a / time_stamp_g 为 0 表示数据尚未就绪
  */
 BMI088_MultiRateData_t BMI088ReadLatest(BMI088Instance *inst);
+
+/**
+ * @brief 读取最近一次采到的 BMI088 温度
+ * @param inst BMI088实例指针
+ * @return 温度 (℃)；尚无有效读数（从未采到，或 inst 为空）返回 NAN
+ * @note 温度在中断模式由 acc 完成回调限速读取（数据手册 §5.3.7，约 1.28s 一次），
+ *       轮询模式在 BMI088ReadBlocking 里更新，两者都会刷新新鲜度时间戳。
+ *       限速意味着返回值最多滞后约 1.28s；对温度这类慢变量无影响。
+ * @note 供温补/独立加热模块使用：返回 NAN 即"温度不可用"，
+ *       调用方（如加热器看门狗）应据此走安全侧。
+ */
+float BMI088GetTemperature(const BMI088Instance *inst);
 
 #endif /* defined(BSP_SPI_MODULE_ENABLED) && defined(BSP_GPIO_MODULE_ENABLED) */
 
