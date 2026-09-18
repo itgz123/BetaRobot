@@ -6,7 +6,6 @@ set(MODULE_SOURCES
     drv_sbus/drv_sbus.c
     drv_dbus/drv_dbus.c
     drv_bmi088/drv_bmi088.c
-    drv_bmi088/drv_bmi088_heater.c
     drv_daemon/drv_daemon.c
     drv_vofa/drv_vofa.c
     drv_motor/drv_djimotor/drv_djimotor_broadcast.c
