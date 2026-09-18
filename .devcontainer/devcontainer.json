@@ -30,6 +30,6 @@
       ]
     }
   },
-  "postCreateCommand": "bash -c 'if [ ! -f user_cfg.h ]; then cp user_cfg.h.example user_cfg.h; echo \"created user_cfg.h\"; fi && bash scripts/setup_apps.sh'",
+  "postCreateCommand": "bash -c 'if [ ! -f user_cfg.h ]; then cp user_cfg.h.example user_cfg.h; echo \"created user_cfg.h\"; fi; for a in half_rudder_gimbal:BetaRobot-App-Half-Rudder-Gimbal half_rudder_chassis:BetaRobot-App-Half-Rudder-Chassis; do d=${a%%:*}; r=${a#*:}; [ -d \"app/$d/.git\" ] || git clone \"git@github.com:itgz123/$r.git\" \"app/$d\"; done'",
   "postStartCommand": "sudo chmod 666 /dev/bus/usb/*/* /dev/hidraw* 2>/dev/null || true"
 }

@@ -15,7 +15,7 @@
 1. 克隆主仓库：`git clone git@github.com:itgz123/BetaRobot.git`（app 是独立仓库，由下一步自动拉取）
 2. VSCode 打开仓库根目录 → 右下角弹窗选 "Reopen in Container"（或命令面板：Dev Containers: Reopen in Container）
 3. 首次构建自动完成：apt 安装工具 + 下载 ARM 工具链 15.3.rel1 到 `/opt/arm-gnu-toolchain`（需联网，约 300~400 MB）
-4. 自动初始化：复制 `user_cfg.h.example` → `user_cfg.h`，并执行 `scripts/setup_apps.sh` 拉取独立 app 仓库到 `app/`
+4. 自动初始化：复制 `user_cfg.h.example` → `user_cfg.h`，并拉取独立 app 仓库到 `app/`（见 `devcontainer.json` 的 `postCreateCommand`）
 5. 之后操作与 Windows 完全一致：`Ctrl+Shift+B` 编译；任务面板选 "download dap"；`F5` 调试
 
 ### 容器内常用命令
@@ -42,6 +42,6 @@ cmake --build --preset Debug --target download_dap   # 用 DAPlink 烧录
   `cmake -E rm -rf build` 后重新 `cmake --preset default` 即可
 - app 仓库拉取失败（ssh-agent 未转发）：容器内执行
   `git config --global url."https://github.com/".insteadOf "git@github.com:"` 后重新执行
-  `bash scripts/setup_apps.sh`
+  `git clone git@github.com:itgz123/BetaRobot-App-Half-Rudder-Gimbal.git app/half_rudder_gimbal`（另一个 app 同理）
 - 想用文档站点任务：容器内 `sudo apt-get install -y nodejs npm` 后运行 "start docs"
 - 非 1000 宿主 UID：改 `.devcontainer/Dockerfile` 顶部 `USER_UID`/`USER_GID`（或依赖 `updateRemoteUserUID` 自动对齐）
