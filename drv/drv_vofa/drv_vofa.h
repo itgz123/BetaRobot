@@ -17,7 +17,7 @@
 
 // 用户通道数量（不含时间戳，编译时固定）
 #ifndef VOFA_CHANNELS
-#define VOFA_CHANNELS 15
+#define VOFA_CHANNELS 25
 #endif
 
 /*------------- API 声明 --------------*/
