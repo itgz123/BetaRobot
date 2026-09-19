@@ -17,6 +17,9 @@
 #
 # 接口、波特率、显示缓冲都在启动时问；给了参数（或设了 CAN_TUI_BUF）的那一项就不问了。
 #
+# TUI 里每帧一行：TIME DIR TYP FMT CLS FLG ID LEN DATA（按 ? 看逐列说明），
+# ↑/↓ 可以往回翻历史。
+#
 # 环境变量：
 #   CAN_TUI_BUF       显示缓冲帧数，默认 2000（进 TUI 后按 b 也能改，最小 10）
 #   CAN_TUI_LOG_DIR   日志目录，默认 ~/can-logs
@@ -31,7 +34,9 @@ set -u
 
 # ---------------------------------------------------------------- 常量
 
-FRAME_RE='^\(([0-9]+)\.([0-9]+)\)[[:space:]]+([^[:space:]]+)[[:space:]]+([0-9A-Fa-f]{1,8})#(.*)$'
+# candump -L 的一行：(单调秒.微秒) 接口 帧体。只在这里切出「前缀」，
+# 帧体本身交给 parse_frame 按字节拆——帧体的格式花样多，一个正则塞不下
+FRAME_PRE_RE='^\(([0-9]+)\.([0-9]+)\)[[:space:]]+[^[:space:]]+[[:space:]]+(.+)$'
 # 只留和 CAN 有关的行，挡掉 dmesg 里 cannot / scan 之类的噪音
 CAN_KLOG_RE='can[0-9]+|slcan|vcan|vxcan|gs_usb|kvaser|peak_usb|pcan|mcp25[0-9x]|canable|es58x|f81601|can[ _-]?(device|driver|controller|bus|interface)'
 # candump 的诊断输出（stderr 也接进来了），这类行才值得显示
@@ -49,7 +54,7 @@ else
   [[ $RCVBUF =~ ^[0-9]+$ ]] || RCVBUF=1048576
 fi
 DRAW_MS=100                 # 重绘间隔
-MAX_BYTES=8                 # 数据区最多显示多少字节
+DATA_MAX=8                  # 数据区最多显示多少字节（draw 里按终端宽度重算）
 
 # 颜色（非 tty 输出时留空）
 if [ -t 1 ]; then
@@ -390,7 +395,13 @@ STTY_SAVED=""
 NOW_MS=0 LAST_DRAW=0
 TZ_OFF=0
 BAR_FULL="" BAR_EMPTY="" SEP=""
-_R="" _T="" _H="" _KT=""
+SCROLL=0                              # 用 ↑ 往回翻了多少帧（0 = 跟着最新帧）
+_ESC=""                               # esc_seq 认出来的转义序列（UP/DOWN/ESC/空）
+DRAW_COLS=80                          # draw 里的终端宽度（渲染时按它砍行）
+_R="" _T="" _H="" _KT="" _TIME="" _TR=""
+# parse_frame 的输出（一帧一组，故意用全局，省得每帧 fork 子 shell）
+P_TS=0 P_US="" P_ID="" P_IDV=0 P_LEN=0 P_DATA=""
+P_TYP="DAT" P_FMT="STD" P_CLS="CC" P_FLG="" P_DIR=""
 
 # 时间：EPOCHREALTIME 免 fork；没有就退回 date
 if [ -n "${EPOCHREALTIME-}" ]; then
@@ -433,6 +444,37 @@ init_bar() {
 # bar <已填充> <总宽> → _BAR
 bar() { printf -v _BAR '%s%s' "${BAR_FULL:0:$1}" "${BAR_EMPTY:0:$(( $2 - $1 ))}"; }
 
+# 按「显示列」砍行 → _TR。中英混排的行光用 ${s:0:$DRAW_COLS} 是按字符砍的，
+# 中文一个字占 2 列，砍出来照样撑出终端宽度（然后绕行，把整个屏幕顶乱）。
+# UTF-8 下字节数恒 ≥ 显示列数，所以按字节砍一定不超宽；代价是最多把最后一个
+# 汉字砍成半个，终端当坏字节丢掉即可，一行里少一个字无所谓。
+# 砍完还得看一眼尾巴：正好切在汉字中间的话，留下的半截 UTF-8 序列在终端上
+# 就是一个 "�"。数一下尾巴上挂了几个续字节（0x80-0xBF），和首字节该带的个数
+# 对不上说明是半截的，连同首字节一起丢掉
+trunc_cols() {
+  local LC_ALL=C
+  # 注意：LC_ALL 必须单独一句。写成 local LC_ALL=C n=${#1} 的话，${#1} 还是按
+  # 原来的 locale 算的（按字符），和下面按字节砍对不上，中文短串会漏出去撑爆行
+  local n=${#1} c t k=0 want=0
+  if ((n <= DRAW_COLS)); then _TR=$1; return; fi
+  _TR=${1:0:$DRAW_COLS}
+  t=$_TR
+  while [ -n "$t" ]; do
+    printf -v c '%d' "'${t: -1}"
+    ((c >= 128 && c < 192)) || break
+    t=${t%?}
+    k=$((k + 1))
+  done
+  [ -n "$t" ] || return
+  printf -v c '%d' "'${t: -1}"
+  ((c >= 192 && c < 224)) && want=1
+  ((c >= 224 && c < 240)) && want=2
+  ((c >= 240)) && want=3
+  ((want > 0 && k != want)) || return
+  _TR=$t
+  _TR=${_TR%?}
+}
+
 # 改显示缓冲大小，保留最近 min(现有帧数, 新容量) 帧
 set_bufcap() {
   local new=$1 old=$BUF_CAP keep=$RING_CNT i idx
@@ -461,11 +503,76 @@ apply_bufcap() {
 
 # ---------------------------------------------------------------- 过滤
 
-# 把 12 34 56 换成分隔写法，避免每帧 fork
+# 把 DEADBEEF 画成 "DE AD BE EF"，避免每帧 fork；超过 DATA_MAX 字节就截断加省略号
 spaced_hex() {
-  local s=$1 i n=${#1} max=$MAX_BYTES out=""
-  for ((i = 0; i < n && i / 2 < max; i += 2)); do out+="${s:i:2} "; done
-  _H=${out% }
+  local s=$1 n=$((${#1} / 2)) max=$DATA_MAX i out=""
+  ((max < 1)) && max=1
+  ((n < max)) && max=$n
+  for ((i = 0; i < max; i++)); do out+="${s:i*2:2} "; done
+  out=${out% }
+  ((n > max)) && out+=" …"
+  _H=$out
+}
+
+# ---------------------------------------------------------------- 解析帧
+
+# candump -L 的帧体长这样（can-utils 2025.01 snprintf_canframe 的原样输出）：
+#   123#DEADBEEF              标准帧（ID 3 位）
+#   12345678#11               扩展帧（ID 8 位）
+#   123#DEADBEEF01020304_9    经典帧带原始 DLC（只有 8 字节数据时才会挂 _x）
+#   123#R / 123#R8            远程帧，R 后面是请求的字节数（0 就不写）
+#   123##1DEADBEEF            FD 帧（两个 #），第二个 # 后面一位是 flags 半字节：
+#                               bit0 = BRS（数据段变速） bit1 = ESI（错误状态）
+#   20000000#0000000000000000 错误帧（ID 带 CAN_ERR_FLAG 0x20000000）
+# 行尾的 " R"/" T" 是 candump -x 补的方向（收到 / 本机发出），老版本没有这个选项
+#
+# 结果写全局 P_*，返回 0 表示这行确实是帧
+parse_frame() {
+  local line=$1 body id rest rd
+  P_TS=0 P_US="" P_ID="" P_IDV=0 P_LEN=-1 P_DATA=""
+  P_TYP="DAT" P_FMT="STD" P_CLS="CC" P_FLG="" P_DIR=""
+
+  [[ $line =~ $FRAME_PRE_RE ]] || return 1
+  P_TS=$((10#${BASH_REMATCH[1]})); P_US=${BASH_REMATCH[2]}
+  body=${BASH_REMATCH[3]}
+
+  case "$body" in
+    *' T') P_DIR="TX"; body=${body%' T'} ;;
+    *' R') P_DIR="RX"; body=${body%' R'} ;;
+  esac
+
+  id=${body%%#*}
+  ((${#id} < ${#body})) || return 1        # 没有 #，不是帧
+  # 只有 3 位（标准）和 8 位（扩展）两种；别的一律不认（CAN XL 的 ID 是 5 位）
+  case "${#id}" in
+    3) P_FMT="STD" ;;
+    8) P_FMT="EXT" ;;
+    *) return 1 ;;
+  esac
+  [[ $id =~ ^[0-9A-Fa-f]+$ ]] || return 1
+  P_ID=$id
+  P_IDV=$((16#$id))
+  ((P_IDV >= 0x20000000)) && P_TYP="ERR"   # 带 CAN_ERR_FLAG 就是错误帧
+
+  rest=${body:$(( ${#id} + 1 ))}
+  case "$rest" in
+    '#'[0-9A-Fa-f]*) P_CLS="FD" P_FLG=${rest:1:1} P_DATA=${rest:2} ;;
+    R) P_TYP="RTR" P_LEN=0 ;;
+    R[0-9A-Fa-f]) P_TYP="RTR" rd=${rest:1:1} P_LEN=$((16#$rd)) ;;
+    *) P_DATA=$rest ;;
+  esac
+
+  # 数据部分只能是十六进制，尾巴上那个 _<原始DLC> 先摘掉
+  if [[ $P_DATA == *_* ]]; then
+    [[ ${P_DATA##*_} =~ ^[0-9A-Fa-f]$ ]] || return 1
+    P_DATA=${P_DATA%%_*}
+  fi
+  [[ $P_DATA =~ ^[0-9A-Fa-f]*$ ]] || return 1
+
+  ((P_LEN < 0)) && P_LEN=$((${#P_DATA} / 2))
+  # 错误帧的 ID 是「错误位 + 错误码」，套 STD/EXT 没意义
+  [ "$P_TYP" = "ERR" ] && P_FMT="-"
+  return 0
 }
 
 rule_hit() { # $1=规则下标 $2=数值 ID
@@ -530,7 +637,7 @@ filter_add() { # $1=+/-  $2=规则本体
       ;;
   esac
   R_PRE+=("$pre"); R_TXT+=("$pre$spec"); R_TYPE+=("$type"); R_A+=("$a"); R_B+=("$b")
-  RING_HEAD=0; RING_CNT=0 # 缓冲里存的是按旧规则筛过的，清掉免得误导
+  RING_HEAD=0; RING_CNT=0; SCROLL=0 # 缓冲里存的是按旧规则筛过的，清掉免得误导
   STATUS="已添加 $pre$spec（显示缓冲已清空）"
   return 0
 }
@@ -544,7 +651,7 @@ filter_del() { # $1=序号(从 1 开始)
     R_TYPE[j]=${R_TYPE[$((j + 1))]}; R_A[j]=${R_A[$((j + 1))]}; R_B[j]=${R_B[$((j + 1))]}
   done
   unset 'R_PRE[-1]' 'R_TXT[-1]' 'R_TYPE[-1]' 'R_A[-1]' 'R_B[-1]'
-  RING_HEAD=0; RING_CNT=0
+  RING_HEAD=0; RING_CNT=0; SCROLL=0
   STATUS="已删除第 $i 条规则"
 }
 
@@ -559,19 +666,18 @@ flush_log() {
 
 process_frame() {
   local line=$1
-  if [[ $line =~ $FRAME_RE ]]; then
-    local fid=${BASH_REMATCH[4]} data=${BASH_REMATCH[5]}
-    local idv=$((16#$fid)) dlc=$((${#data} / 2))
+  if parse_frame "$line"; then
     # 总帧数、日志、负载统计的都是「总线上收到的帧」，必须放在 PAUSED / 过滤
     # 判断之前——挪到后面的话，一加显示过滤负载就假降
     TOTAL=$((TOTAL + 1))
     LOG_PENDING+="$line"$'\n'
     # 位计数：标准帧 47+8*dlc，扩展帧 67+8*dlc（不含填充位，只作负载估算）
-    if ((idv > 0x7FF)); then BITS_ACC=$((BITS_ACC + 67 + 8 * dlc)); else
-      BITS_ACC=$((BITS_ACC + 47 + 8 * dlc))
+    if ((P_IDV > 0x7FF)); then BITS_ACC=$((BITS_ACC + 67 + 8 * P_LEN)); else
+      BITS_ACC=$((BITS_ACC + 47 + 8 * P_LEN))
     fi
-    ((PAUSED)) && return
-    filter_ok "$idv" || return
+    # 回滚时也停：缓冲一边被翻一边被新帧挤掉的话，历史根本读不成
+    ((PAUSED || SCROLL)) && return
+    filter_ok "$P_IDV" || return
     SHOWN=$((SHOWN + 1))
     local idx=$(((RING_HEAD + RING_CNT) % BUF_CAP))
     RING[idx]="$line"
@@ -596,41 +702,95 @@ process_frame() {
 
 render_frame() {
   local line=$1
-  if [[ $line =~ $FRAME_RE ]]; then
-    local ts=$((10#${BASH_REMATCH[1]})) us=${BASH_REMATCH[2]}
-    local fid=${BASH_REMATCH[4]} data=${BASH_REMATCH[5]}
-    local t=$(((ts + TZ_OFF) % 86400))
-    ((t < 0)) && t=$((t + 86400))
-    local c=$(((16#$fid) % 6))
-    local col
-    case "$c" in
-      0) col=36 ;; 1) col=33 ;; 2) col=32 ;;
-      3) col=35 ;; 4) col=34 ;; *) col=31 ;;
-    esac
-    spaced_hex "$data"
-    printf -v _R '%02d:%02d:%02d.%03d  \033[%dm%8s\033[0m  %s' \
-      "$((t / 3600))" "$((t % 3600 / 60))" "$((t % 60))" "$((10#${us:0:3}))" \
-      "$col" "${fid^^}" "$_H"
-  else
-    _R=$line
+  parse_frame "$line" || {
+    # 不是帧（candump 的报错/丢帧提示）：只有这种行长度不可控，按显示宽度砍一刀，
+    # 末尾补个颜色复位。砍的位置离行首的颜色码远得很，不会砍进转义里
+    trunc_cols "$line"
+    _R="$_TR${C_RST}"
+    return
+  }
+
+  local t=$(((P_TS + TZ_OFF) % 86400))
+  ((t < 0)) && t=$((t + 86400))
+  printf -v _TIME '%02d:%02d:%02d.%03d' \
+    "$((t / 3600))" "$((t % 3600 / 60))" "$((t % 60))" "$((10#${P_US:0:3}))"
+
+  # 方向：TX 是本机发出的。只有 candump -x 标得出来，老版本显示 --
+  local dir="--" dcol="$C_DIM"
+  case "$P_DIR" in
+    TX) dir="TX" dcol=$C_GRN ;;
+    RX) dir="RX" dcol="" ;;
+  esac
+
+  # 帧类型：数据 / 远程 / 错误
+  local tcol=""
+  case "$P_TYP" in
+    ERR) tcol=$C_RED ;;
+    RTR) tcol=$C_YEL ;;
+  esac
+
+  # FD 的 flags 半字节：bit0=BRS bit1=ESI（经典帧没有这两位，显示 -）
+  local flg="-" f=0 fl=""
+  if [ "$P_CLS" = "FD" ]; then
+    f=$((16#${P_FLG:-0}))
+    ((f & 1)) && fl+="B"
+    ((f & 2)) && fl+="E"
+    [ -n "$fl" ] && flg=$fl
   fi
+
+  local data=""
+  case "$P_TYP" in
+    RTR) data="${C_DIM}[RTR]${C_RST}" ;;
+    *)
+      spaced_hex "$P_DATA"
+      data=$_H
+      ;;
+  esac
+
+  local c=$((P_IDV % 6)) col
+  case "$c" in
+    0) col=36 ;; 1) col=33 ;; 2) col=32 ;;
+    3) col=35 ;; 4) col=34 ;; *) col=31 ;;
+  esac
+
+  # 列宽全是 3，跟表头（draw 里那串）逐列对齐；数据前面一共占 46 列
+  # 数据字节数由 DATA_MAX（draw 里按终端宽度算）兜住，所以整行必然塞得下，
+  # 不用再砍——砍字符串是按字节砍的，砍在颜色转义中间会把屏幕搞花
+  printf -v _R '%s %s%-3s%s %s%-3s%s %-3s %-3s %-3s \033[%dm%8s\033[0m %3d %s' \
+    "$_TIME" "$dcol" "$dir" "$C_RST" "$tcol" "$P_TYP" "$C_RST" \
+    "$P_FMT" "$P_CLS" "$flg" "$col" "${P_ID^^}" "$P_LEN" "$data"
 }
 
 draw() {
   local rows=${LINES:-0} cols=${COLUMNS:-0}
   ((rows == 0)) && rows=$(tput lines 2>/dev/null || echo 24)
   ((cols == 0)) && cols=$(tput cols 2>/dev/null || echo 80)
-  if ((rows < 12 || cols < 40)); then return; fi
+  # 固定表头 46 列，加上一格数据、加上 RTR 那几个字（[RTR] 有 5 列），
+  # 再窄就画不下了——画出来会绕行，把屏幕搞花
+  if ((rows < 12 || cols < 52)); then return; fi
+  DRAW_COLS=$cols
 
-  local h=$((rows - 8)) # 数据区行数
+  local h=$((rows - 9)) # 数据区行数（第 5 行让给表头）
   local out=$'\033[H'
   local s i
 
+  # 数据区能塞下多少字节：前面固定占 46 列，每个字节画成 "AA " 占 3 列。
+  # 截断时尾巴还多个 " …"（2 列），所以按 49 而不是 48 起算
+  DATA_MAX=$(((cols - 49) / 3))
+  ((DATA_MAX < 1)) && DATA_MAX=1
+  ((DATA_MAX > 64)) && DATA_MAX=64
+
+  # 回滚指示放在行首，省得被右边截掉
+  local scl=""
+  ((SCROLL >= RING_CNT)) && SCROLL=$((RING_CNT > 0 ? RING_CNT - 1 : 0))
+  ((SCROLL)) && scl="${C_REV} 回滚 $SCROLL 帧 ${C_RST}"
+
   # 1 状态行
-  printf -v s ' %s%s%s  %s bit/s  负载 %d.%d%%%s   收到 %d 帧(%d/s)   显示 %d' \
-    "$C_BLD" "$IFACE" "$C_RST" "$BITRATE" "$((LOAD_X10 / 10))" "$((LOAD_X10 % 10))" \
+  printf -v s '%s %s%s%s  %s bit/s  负载 %d.%d%%%s   收到 %d 帧(%d/s)   显示 %d' \
+    "$scl" "$C_BLD" "$IFACE" "$C_RST" "$BITRATE" "$((LOAD_X10 / 10))" "$((LOAD_X10 % 10))" \
     "$C_DIM" "$TOTAL" "$FPS" "$SHOWN"
-  printf -v _T '\033[1;1H\033[K%s' "${s:0:$cols}"; out+="$_T"
+  trunc_cols "$s"
+  printf -v _T '\033[1;1H\033[K%s' "$_TR"; out+="$_T"
 
   # 2 缓冲区 + 进度条
   local pct=0
@@ -640,7 +800,8 @@ draw() {
   bar "$((pct * w / 100))" "$w"
   printf -v s ' 缓冲区 %d/%d [%s] %d%%   日志 %s' \
     "$RING_CNT" "$BUF_CAP" "$_BAR" "$pct" "$(basename "$LOGFILE")"
-  printf -v _T '\033[2;1H\033[K%s' "${s:0:$cols}"; out+="$_T"
+  trunc_cols "$s"
+  printf -v _T '\033[2;1H\033[K%s' "$_TR"; out+="$_T"
 
   # 3 过滤规则
   if ((${#R_TXT[@]} == 0)); then
@@ -649,38 +810,54 @@ draw() {
     s=' 过滤'
     for ((i = 0; i < ${#R_TXT[@]}; i++)); do s+=" [$((i + 1))]${R_TXT[$i]}"; done
   fi
-  printf -v _T '\033[3;1H\033[K%s' "${s:0:$cols}"; out+="$_T"
+  trunc_cols "$s"
+  printf -v _T '\033[3;1H\033[K%s' "$_TR"; out+="$_T"
 
   # 4 分隔
-  printf -v _T '\033[4;1H\033[K%s%.*s%s' "$C_DIM" "$cols" "$SEP" "$C_RST"
+  # 注意别用 printf 的 %.*s 截：它的精度按字节算，而 "─" 是 3 字节 1 列，
+  # 截出来只有三分之一宽（${s:0:n} 才是按字符，正好一格一个）
+  printf -v _T '\033[4;1H\033[K%s%s%s' "$C_DIM" "${SEP:0:$cols}" "$C_RST"
   out+="$_T"
 
-  # 5.. 数据区（新帧在最下面）
-  local n=$RING_CNT
-  ((n > h)) && n=$h
+  # 5 表头（宽度和数据行 render_frame 里那串格式一模一样，改一个记得改另一个）
+  printf -v s '%-12s %-3s %-3s %-3s %-3s %-3s %8s %3s %s' \
+    TIME DIR TYP FMT CLS FLG ID LEN DATA
+  trunc_cols "$s"
+  printf -v _T '\033[5;1H\033[K%s%s%s' "$C_DIM" "$_TR" "$C_RST"
+  out+="$_T"
+
+  # 6.. 数据区（新帧在最下面；回滚时窗口整体往回退）
+  local end=$((RING_CNT - SCROLL))
+  ((end < 0)) && end=0
+  local n=$h
+  ((n > end)) && n=$end
   local blank=$((h - n)) idx
   for ((i = 0; i < h; i++)); do
     if ((i < blank)); then
-      printf -v _T '\033[%d;1H\033[K' "$((5 + i))"
+      printf -v _T '\033[%d;1H\033[K' "$((6 + i))"
       out+="$_T"
     else
-      idx=$(((RING_HEAD + RING_CNT - n + (i - blank)) % BUF_CAP))
+      idx=$(((RING_HEAD + end - n + (i - blank)) % BUF_CAP))
       render_frame "${RING[$idx]}"
-      printf -v _T '\033[%d;1H\033[K%s' "$((5 + i))" "${_R:0:$cols}"
+      printf -v _T '\033[%d;1H\033[K%s' "$((6 + i))" "$_R"
       out+="$_T"
     fi
   done
 
   # rows-3 消息/问题，rows-2 输入行
   if ((INPUT_MODE)); then
-    printf -v _T '\033[%d;1H\033[K%s%s%s' "$((rows - 3))" "$C_YEL" "$INPUT_PROMPT" "$C_RST"
+    trunc_cols "$INPUT_PROMPT"
+    printf -v _T '\033[%d;1H\033[K%s%s%s' "$((rows - 3))" "$C_YEL" "$_TR" "$C_RST"
     out+="$_T"
-    printf -v _T '\033[%d;1H\033[K> %s' "$((rows - 2))" "$INPUT"
+    trunc_cols "> $INPUT"
+    printf -v _T '\033[%d;1H\033[K%s' "$((rows - 2))" "$_TR"
     out+="$_T"
   else
-    printf -v _T '\033[%d;1H\033[K%s' "$((rows - 3))" " ${STATUS:0:$((cols - 1))}"
+    trunc_cols " $STATUS"
+    printf -v _T '\033[%d;1H\033[K%s' "$((rows - 3))" "$_TR"
     out+="$_T"
-    printf -v _T '\033[%d;1H\033[K%s' "$((rows - 2))" " 日志(全部帧): $LOGFILE"
+    trunc_cols " 日志(全部帧): $LOGFILE"
+    printf -v _T '\033[%d;1H\033[K%s' "$((rows - 2))" "$_TR"
     out+="$_T"
   fi
 
@@ -691,7 +868,8 @@ draw() {
   # rows 底栏
   local foot=' t 发送  f 过滤  s 保存  x 退出  b 缓冲  p 暂停  c 清屏  ? 帮助'
   ((PAUSED)) && foot=' t 发送  f 过滤  s 保存  x 退出  b 缓冲  p 继续  c 清屏  ? 帮助  [已暂停显示]'
-  printf -v _T '\033[%d;1H\033[K%s%s%s' "$rows" "$C_REV" "${foot:0:$cols}" "$C_RST"
+  trunc_cols "$foot"
+  printf -v _T '\033[%d;1H\033[K%s%s%s' "$rows" "$C_REV" "$_TR" "$C_RST"
   out+="$_T"
 
   # 光标：输入时停在输入行末尾，否则藏起来
@@ -710,6 +888,52 @@ begin_input() { # $1=问题 $2=处理函数名
   INPUT_MODE=1 INPUT="" INPUT_PROMPT=$1 INPUT_ACTION=$2
 }
 
+# ↑/↓ 翻历史。<delta> 正数=往回翻（看更老的），负数=往最新翻
+# 翻上去之后新帧不再进显示缓冲（日志照记），否则一边读一边被新帧挤掉，历史根本看不成
+scroll_by() {
+  if ((RING_CNT == 0)); then SCROLL=0; return; fi
+  SCROLL=$((SCROLL + $1))
+  ((SCROLL < 0)) && SCROLL=0
+  ((SCROLL > RING_CNT - 1)) && SCROLL=$((RING_CNT - 1))
+  if ((SCROLL)); then
+    STATUS="已回滚 $SCROLL 帧（按 ↓ 回到底部；期间新帧不进显示缓冲，日志照记）"
+  else
+    STATUS="回到最新，继续跟随"
+  fi
+}
+
+# 认方向键。read -n1 一次只给 1 个字节，方向键是 ESC [ A / ESC [ B 三个字节
+# （终端在应用光标模式下发 ESC O A / ESC O B），后面两个得自己补齐。
+# 结果放 _ESC 给调用方分派：
+#   ESC  —— 光杆 ESC（后面 5ms 没跟东西），是「取消」
+#   UP/DOWN —— 上下键
+#   空   —— 别的转义序列（左右键、功能键…）。得吞掉，不然 ESC 后面的 '[' 'A'
+#          会一个字节一个字节漏进输入框，把正在输的 ID 搞成 "[A123#..."
+# 判断得靠超时而不是长度：ESC [ 后面跟几个字节没准，唯独光杆 ESC 是「没有后续」。
+esc_seq() {
+  local c="" seq="" i
+  _ESC=""
+  read -t 0.005 -rsn1 -u 0 c || { _ESC="ESC"; return 0; }
+  case "$c" in
+    '[' | 'O')
+      # CSI/SS3 序列到 0x40-0x7E 的终止字符为止
+      for ((i = 0; i < 8; i++)); do
+        read -t 0.005 -rsn1 -u 0 c || break
+        seq+=$c
+        case "$c" in
+          [A-Za-z] | '~') break ;;
+        esac
+      done
+      case "$seq" in
+        A) _ESC="UP" ;;
+        B) _ESC="DOWN" ;;
+      esac
+      ;;
+    *) _ESC="" ;; # ESC 后面跟了普通字符：一并吞掉
+  esac
+  return 0
+}
+
 input_key() {
   case "$1" in
     # 注意：read -n1 会把行分隔符剥掉，回车拿到的是空串
@@ -720,7 +944,15 @@ input_key() {
       "$act" "$text"
       ;;
     $'\177' | $'\b') INPUT=${INPUT%?} ;;
-    $'\033') INPUT_MODE=0 INPUT_ACTION="" STATUS="已取消" ;;
+    $'\033')
+      esc_seq
+      case "$_ESC" in
+        UP) scroll_by 1 ;;
+        DOWN) scroll_by -1 ;;
+        ESC) INPUT_MODE=0 INPUT_ACTION="" STATUS="已取消" ;;
+        # 其余转义序列吞掉：既不能漏进输入框，也不该顺手把输入取消掉
+      esac
+      ;;
     *) INPUT+="$1" ;;
   esac
 }
@@ -744,7 +976,7 @@ act_filter() {
   local r=${1// /}
   [ -z "$r" ] && { STATUS="已取消"; return; }
   case "$r" in
-    c | C) R_PRE=() R_TXT=() R_TYPE=() R_A=() R_B=(); RING_HEAD=0; RING_CNT=0; STATUS="过滤规则已清空" ;;
+    c | C) R_PRE=() R_TXT=() R_TYPE=() R_A=() R_B=(); RING_HEAD=0; RING_CNT=0; SCROLL=0; STATUS="过滤规则已清空" ;;
     '!'*) filter_del "${r:1}" ;;
     '+'* | '-'*) filter_add "${r:0:1}" "${r:1}" ;;
     *) STATUS="规则要带 +/- 前缀（+ 显示 / - 排除）" ;;
@@ -784,8 +1016,19 @@ show_help() {
   tput clear 2>/dev/null || printf '\033[2J\033[H'
   cat <<'EOF'
 
-  数据区：本地时间 | CAN ID | 数据字节。只显示通过过滤的帧；
-          日志文件始终记录全部帧（不受过滤影响）。
+  数据区  TIME DIR TYP FMT CLS FLG  ID  LEN DATA
+          TIME  收到这一帧的本地时间（时:分:秒.毫秒）
+          DIR   方向：RX 总线上的帧 / TX 本机发出的帧 / --
+                方向靠 candump -x，老版本 can-utils 没这个选项就显示 --
+          TYP   帧类型：DAT 数据帧 / RTR 远程帧 / ERR 错误帧
+          FMT   帧格式：STD 标准帧（11 位 ID）/ EXT 扩展帧（29 位 ID）
+          CLS   帧类别：CC 经典 CAN / FD CAN FD
+          FLG   FD 帧的标志：B 带 BRS（数据段变速） E 带 ESI（错误状态）
+          ID    十六进制标识符（按 ID 上色）
+          LEN   数据字节数；RTR 是请求的字节数
+          DATA  数据字节，超宽截断成 …
+
+          只显示通过过滤的帧；日志文件始终记录全部帧（不受过滤影响）。
 
   发送（按 t）  <ID>#<数据>，全十六进制
       123#DEADBEEF      标准帧 123，8 字节
@@ -815,6 +1058,7 @@ show_help() {
                 真实帧率时，说明 TUI 跟不上、帧丢了，负载读数会跟着偏低。
 
   其它          p 暂停/继续显示（暂停时仍在记日志）  c 清屏  x 退出
+                ↑/↓ 往回翻历史 / 回到底部
 
   （键盘上 1/2/3/4 和上面几个键等效，习惯数字的照旧能用）
 
@@ -845,8 +1089,15 @@ main_key() {
         PAUSED=1 STATUS="显示已暂停（日志仍在记录）"
       fi
       ;;
-    c | C) RING_HEAD=0 RING_CNT=0 STATUS="显示缓冲已清空" ;;
+    c | C) RING_HEAD=0 RING_CNT=0 SCROLL=0 STATUS="显示缓冲已清空" ;;
     '?' | h | H) show_help ;;
+    $'\033')
+      esc_seq
+      case "$_ESC" in
+        UP) scroll_by 1 ;;
+        DOWN) scroll_by -1 ;;
+      esac
+      ;;
   esac
 }
 
@@ -891,10 +1142,13 @@ tui() {
   fi
   init_bar
 
-  # 起 candump：-L 输出日志格式，stdbuf 强制行缓冲，否则管道里会攒够 4K 才吐
-  local pre=()
+  # 起 candump：-L 输出日志格式，stdbuf 强制行缓冲，否则管道里会攒够 4K 才吐。
+  # -x 让它在行尾补一个 " R"/" T"（收到 / 本机发出），用来填方向那一列；
+  # 老版本 can-utils 没这个选项，探一下，没有就拉倒（方向显示成 --）
+  local pre=() xflag=()
   command -v stdbuf >/dev/null 2>&1 && pre=(stdbuf -oL)
-  coproc DUMP { "${pre[@]}" candump -L -r "$RCVBUF" "$IFACE" 2>&1; }
+  if candump -h 2>&1 | grep -qE '^[[:space:]]*-x([[:space:]]|$)'; then xflag=(-x); fi
+  coproc DUMP { "${pre[@]}" candump -L "${xflag[@]}" -r "$RCVBUF" "$IFACE" 2>&1; }
   DUMP_FD=${DUMP[0]}
 
   tput smcup 2>/dev/null
