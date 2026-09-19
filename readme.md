@@ -10,13 +10,27 @@
 curl -fsSLO https://github.com/itgz123/BetaRobot/releases/download/config_project/setup_project.sh && bash setup_project.sh
 ```
 
-`Windows`：
+`Windows`（`PowerShell`，Win10/11 默认）：
+
+```powershell
+curl.exe -fsSLO https://github.com/itgz123/BetaRobot/releases/download/config_project/setup_project.bat
+.\setup_project.bat
+```
+
+`Windows`（`cmd`）：
 
 ```bat
 curl.exe -fsSLO https://github.com/itgz123/BetaRobot/releases/download/config_project/setup_project.bat && setup_project.bat
 ```
 
-> 上面这条给 `cmd` 用。`PowerShell 5.1` 里 `curl` 是 `Invoke-WebRequest` 的别名、`&&` 也不是合法语法，得分两步：先 `curl.exe -fsSLO <上面的地址>`，再 `.\setup_project.bat`（当前目录的脚本要带 `.\`）。
+> 两个终端有三点差别，混用会报错：`PowerShell` 里 `curl` 是 `Invoke-WebRequest` 的别名（必须写 `curl.exe`）、`&&` 不是合法语句分隔符（得分两行）、当前目录的脚本要加 `.\` 前缀。`cmd` 才可以一行写完。
+
+> 仓库是公开的，脚本克隆时依次尝试 `SSH(22)` → `SSH(443)` → `HTTPS`，任一成功即停，所以没配 SSH 密钥也能用。
+> 若连 `github.com` 整个不通，用镜像前缀重跑（三选一）：
+>
+> - `cmd`：`set BETAROBOT_GIT_MIRROR=https://<镜像>/`，再运行 `setup_project.bat`
+> - `PowerShell`：`$env:BETAROBOT_GIT_MIRROR='https://<镜像>/'`，再运行 `.\setup_project.bat`
+> - `bash`：`BETAROBOT_GIT_MIRROR=https://<镜像>/ bash setup_project.sh`
 
 ### 文档：
 

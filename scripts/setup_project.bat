@@ -5,17 +5,36 @@ rem
 rem Usage: setup_project.bat [main-repo-dir] [app-name]
 rem        run with no arguments to be prompted for both.
 rem
-rem Prerequisite: SSH access to GitHub is configured (the repos are private).
+rem Both repos are public. Cloning channels are tried in order until one works:
+rem   1. SSH      git@github.com:...                (needs a registered SSH key)
+rem   2. SSH/443  ssh://git@ssh.github.com:443/...  (same key, for networks that block port 22)
+rem   3. HTTPS    https://github.com/...            (no key needed)
+rem   4. mirror   %BETAROBOT_GIT_MIRROR% + the HTTPS URL
+rem When github.com is unreachable, set a mirror prefix (trailing slash optional)
+rem and run again, e.g.:
+rem   set BETAROBOT_GIT_MIRROR=https://ghfast.top/
+rem   setup_project.bat
 rem
 rem Keep this file ASCII-only: cmd reads it with the console codepage, and the
 rem Chinese version of the generated header lives in user_cfg.h.example.
 
-setlocal
+setlocal enabledelayedexpansion
 
-set "MAIN_REPO_URL=git@github.com:itgz123/BetaRobot.git"
-set "APP_REPO_URL=git@github.com:itgz123/BetaRobot-App-Example.git"
+set "OWNER=itgz123"
+set "MAIN_REPO_SLUG=%OWNER%/BetaRobot"
+set "APP_REPO_SLUG=%OWNER%/BetaRobot-App-Example"
 set "MAIN_DIR=%~1"
 set "APP_NAME=%~2"
+set "MIRROR=%BETAROBOT_GIT_MIRROR%"
+
+rem Every channel has to fail fast: hanging on a password / host-key prompt leaves
+rem no chance for the next channel. Respect an already configured GIT_SSH_COMMAND.
+if not defined GIT_SSH_COMMAND set "GIT_SSH_COMMAND=ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10"
+set "GIT_TERMINAL_PROMPT=0"
+
+rem Normalise the mirror prefix to exactly one trailing slash.
+if defined MIRROR if "!MIRROR:~-1!"=="/" set "MIRROR=!MIRROR:~0,-1!"
+if defined MIRROR set "MIRROR=!MIRROR!/"
 
 where git >nul 2>&1
 if errorlevel 1 (
@@ -38,9 +57,11 @@ if exist "%MAIN_DIR%\.git" (
     echo "%MAIN_DIR%" already exists - skipped
 ) else (
     echo Cloning main repo into "%MAIN_DIR%" ...
-    git clone "%MAIN_REPO_URL%" "%MAIN_DIR%"
+    call :clone_repo "%MAIN_REPO_SLUG%" "%MAIN_DIR%"
     if errorlevel 1 (
-        echo ERROR: failed to clone the main repo. Check your SSH access to GitHub.
+        echo ERROR: failed to clone the main repo on every channel.
+        echo        If github.com is unreachable, set BETAROBOT_GIT_MIRROR to a
+        echo        working GitHub mirror prefix and run this script again.
         pause
         exit /b 1
     )
@@ -53,9 +74,11 @@ if exist "%APP_DIR%\.git" (
 ) else (
     echo Cloning app template into "%APP_DIR%" ...
     if not exist "%MAIN_DIR%\app" mkdir "%MAIN_DIR%\app"
-    git clone "%APP_REPO_URL%" "%APP_DIR%"
+    call :clone_repo "%APP_REPO_SLUG%" "%APP_DIR%"
     if errorlevel 1 (
-        echo ERROR: failed to clone the app repo. Check your SSH access to GitHub.
+        echo ERROR: failed to clone the app repo on every channel.
+        echo        If github.com is unreachable, set BETAROBOT_GIT_MIRROR to a
+        echo        working GitHub mirror prefix and run this script again.
         pause
         exit /b 1
     )
@@ -97,3 +120,34 @@ echo   cmake --preset default
 echo   cmake --build --preset Debug
 echo.
 pause
+exit /b 0
+
+rem ---------------------------------------------------------------------------
+rem :clone_repo <owner/name> <dest>
+rem Walks the channels above; returns 0 as soon as one succeeds, 1 if all fail.
+rem ---------------------------------------------------------------------------
+:clone_repo
+call :try_channel "git@github.com:%~1.git" "%~2"
+if not errorlevel 1 exit /b 0
+call :try_channel "ssh://git@ssh.github.com:443/%~1.git" "%~2"
+if not errorlevel 1 exit /b 0
+call :try_channel "https://github.com/%~1.git" "%~2"
+if not errorlevel 1 exit /b 0
+if defined MIRROR (
+    call :try_channel "!MIRROR!https://github.com/%~1.git" "%~2"
+    if not errorlevel 1 exit /b 0
+)
+exit /b 1
+
+rem ---------------------------------------------------------------------------
+rem :try_channel <url> <dest>
+rem ---------------------------------------------------------------------------
+:try_channel
+echo     trying %~1
+git clone "%~1" "%~2"
+if not errorlevel 1 exit /b 0
+rem A failed attempt leaves a half-cloned tree behind, which would make git
+rem refuse the next channel ("destination path ... not an empty directory").
+rem Only a .git-bearing dir can be ours here - the caller skipped real repos.
+if exist "%~2\.git" rmdir /s /q "%~2"
+exit /b 1
