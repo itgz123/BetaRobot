@@ -1,19 +1,17 @@
 /**
  * @file lib_mahony.c
- * @brief Mahony 姿态解算滤波器实现
+ * @brief 通用 Mahony 互补滤波内核实现
  *
- * @note 基于 Mahony 互补滤波算法
+ * @note 分层、err 的定义、参数分区全在 lib_mahony.h 的头注释里，本文件只记
+ *       实现层面的取舍
  * @note 参考：Mahony et al. "Nonlinear Complementary Filters on
  *       the Special Orthogonal Group" IEEE TAC 2008
- * @note 使用 lib_math 类型封装：quaternion_t / euler_t / vector3_t
  *
- * 算法流程：
- * 1. 归一化加速度计（和磁力计）测量值
- * 2. 从四元数预估重力/磁场方向（机体坐标系）
- * 3. 测量值与预估值的叉积 = 姿态误差
- * 4. PI 控制器用误差修正陀螺仪数据
- * 5. 一阶龙格-库塔积分更新四元数
- * 6. 四元数归一化
+ * 内核流程（模型部分在调用方）：
+ * 1. 取调用方给的参考误差 err（= 机体系「量测 × 估计」）
+ * 2. PI 控制器用误差修正陀螺仪角速率
+ * 3. 一阶（欧拉）积分更新四元数
+ * 4. 四元数归一化
  */
 
 #include "lib_mahony.h"
@@ -21,23 +19,17 @@
 
 #ifdef LIB_MAHONY_USED
 
-/*============================ 默认参数 ============================*/
+/*============================ 内部常量 ============================*/
 
-#define MAHONY_DT_MIN (1e-7f)             /* 最小 dt (s)                  */
-#define MAHONY_ACC_NORM_TARGET (9.80665f) /* 重力加速度 (m/s²)           */
-#define MAHONY_ACC_NORM_TOLERANCE (0.3f)  /* 加速度模长容差比例（加速度值在 0.7g ~ 1.3g 之间才用加速度计校正）           */
+/* 内核常量是 #ifndef 可覆盖的：在 app_cfg.h（或任何先于本文件包含的头文件、
+ * 编译选项 -D）里定义同名宏即可覆盖，不必改算法源码。
+ * 覆盖点只需早于本文件包含 —— 本 .c 在常量之前就 #include "app_cfg.h"。
+ * ⚠ 覆盖值要带类型后缀（如 1e-6f 而不是 1e-6），否则会在 float 表达式里走 double。 */
 
-/*============================ 私有函数声明 ============================*/
-
-/**
- * @brief Mahony 滤波器内部通用更新
- * @param inst    实例指针
- * @param gyro    陀螺仪数据 (rad/s)
- * @param acc     加速度计数据 (m/s²)
- * @param mag     磁力计数据（未使用时传 {0,0,0}）
- * @param use_mag 是否融合磁力计
- */
-static void Mahony_UpdateInternal(MahonyInstance *inst, vector3_t gyro, vector3_t acc, vector3_t mag, uint8_t use_mag, float dt);
+/* 最小 dt (s)：dt 小于它直接跳过本帧（防零步长、防同一采样被重复积分） */
+#ifndef MAHONY_DT_MIN
+#define MAHONY_DT_MIN (1e-7f)
+#endif // !MAHONY_DT_MIN
 
 /*============================ 公开接口实现 ============================*/
 
@@ -60,26 +52,88 @@ void MahonyInit(MahonyInstance *inst, const Mahony_Init_Config_s *config)
     inst->integral_fb.z = 0.0f;
 }
 
-void MahonyUpdate(MahonyInstance *inst, vector3_t gyro, vector3_t acc, float dt)
+vector3_t MahonyErr(const MahonyInstance *inst, vector3_t meas, vector3_t ref)
 {
+    vector3_t err = {0.0f, 0.0f, 0.0f};
+
     if (inst == NULL)
     {
-        return;
+        return err;
     }
 
-    vector3_t mag = {0.0f, 0.0f, 0.0f};
-    Mahony_UpdateInternal(inst, gyro, acc, mag, 0, dt);
+    /* 世界系参考方向 → 机体系估计：est = R^T·ref
+     * Lib_Math_QuatRotateVector 是 q⊗v⊗q⁻¹（把机体系向量转到世界系），
+     * 取共轭即反向（世界系 → 机体系）。四元数全程归一化，共轭即逆。
+     * 注意别把这一步写成"用 R 而不是 R^T"——那样误差方向会反。 */
+    vector3_t est = Lib_Math_QuatRotateVector(Lib_Math_QuatConjugate(inst->quat), ref);
+
+    /* 误差 = 量测 × 估计（叉积，顺序不能反）；两者都是单位向量时模长 = sin(夹角) */
+    err = Lib_Math_Vec3Cross(meas, est);
+
+    return err;
 }
 
-void MahonyUpdateMag(MahonyInstance *inst, vector3_t gyro, vector3_t acc,
-                     vector3_t mag, float dt)
+void MahonyUpdate(MahonyInstance *inst, vector3_t gyro, vector3_t err, float dt)
 {
     if (inst == NULL)
     {
         return;
     }
 
-    Mahony_UpdateInternal(inst, gyro, acc, mag, 1, dt);
+    /* ======================== 1. 校验 dt ======================== */
+
+    if (dt < MAHONY_DT_MIN)
+    {
+        return;
+    }
+
+    /* ======================== 2. 误差取半 ========================
+     * q̇ = ½·q⊗ω 的那个 ½：传统嵌入式 Mahony 实现把它折进误差向量，本内核按同一
+     * 口径取半，这样 kp / ki 的整定值（六轴 0.5~1.0）可以直接沿用。
+     * err 为零向量时下面三项为零 → 退化为纯陀螺积分。 */
+
+    const float hex = 0.5f * err.x;
+    const float hey = 0.5f * err.y;
+    const float hez = 0.5f * err.z;
+
+    /* ======================== 3. PI 控制器修正角速率 ======================== */
+
+    if (inst->ki > 0.0f)
+    {
+        /* 积分项累积（ki = 0 时整个积分通路不参与，见头注释） */
+        inst->integral_fb.x += inst->ki * hex * dt;
+        inst->integral_fb.y += inst->ki * hey * dt;
+        inst->integral_fb.z += inst->ki * hez * dt;
+
+        /* 比例 + 积分修正角速率 */
+        gyro.x += inst->kp * hex + inst->integral_fb.x;
+        gyro.y += inst->kp * hey + inst->integral_fb.y;
+        gyro.z += inst->kp * hez + inst->integral_fb.z;
+    }
+    else
+    {
+        /* 仅比例修正 */
+        gyro.x += inst->kp * hex;
+        gyro.y += inst->kp * hey;
+        gyro.z += inst->kp * hez;
+    }
+
+    /* ======================== 4. 四元数更新（一阶积分）================ */
+
+    const float q0 = inst->quat.w;
+    const float q1 = inst->quat.x;
+    const float q2 = inst->quat.y;
+    const float q3 = inst->quat.z;
+
+    quaternion_t q_new;
+    q_new.w = q0 + (-q1 * gyro.x - q2 * gyro.y - q3 * gyro.z) * (0.5f * dt);
+    q_new.x = q1 + (q0 * gyro.x + q2 * gyro.z - q3 * gyro.y) * (0.5f * dt);
+    q_new.y = q2 + (q0 * gyro.y - q1 * gyro.z + q3 * gyro.x) * (0.5f * dt);
+    q_new.z = q3 + (q0 * gyro.z + q1 * gyro.y - q2 * gyro.x) * (0.5f * dt);
+
+    /* ======================== 5. 四元数归一化 ======================== */
+
+    inst->quat = Lib_Math_QuatNormalize(q_new);
 }
 
 void MahonyReset(MahonyInstance *inst)
@@ -94,150 +148,6 @@ void MahonyReset(MahonyInstance *inst)
     inst->integral_fb.x = 0.0f;
     inst->integral_fb.y = 0.0f;
     inst->integral_fb.z = 0.0f;
-}
-
-/*============================ 私有函数实现 ============================*/
-
-static void Mahony_UpdateInternal(MahonyInstance *inst, vector3_t gyro, vector3_t acc, vector3_t mag, uint8_t use_mag, float dt)
-{
-    float recip_norm;
-    float q0, q1, q2, q3;
-    float q0q0, q0q1, q0q2, q0q3;
-    float q1q1, q1q2, q1q3;
-    float q2q2, q2q3, q3q3;
-    float hx, hy, bx, bz;
-    float halfvx, halfvy, halfvz;
-    float halfwx, halfwy, halfwz;
-    float halfex, halfey, halfez;
-    float qa, qb, qc;
-
-    /* ======================== 1. 校验 dt ======================== */
-
-    if (dt < MAHONY_DT_MIN)
-    {
-        return;
-    }
-
-    /* ======================== 2. 预计算四元数乘积项 ======================== */
-
-    q0 = inst->quat.w;
-    q1 = inst->quat.x;
-    q2 = inst->quat.y;
-    q3 = inst->quat.z;
-
-    q0q0 = q0 * q0;
-    q0q1 = q0 * q1;
-    q0q2 = q0 * q2;
-    q0q3 = q0 * q3;
-    q1q1 = q1 * q1;
-    q1q2 = q1 * q2;
-    q1q3 = q1 * q3;
-    q2q2 = q2 * q2;
-    q2q3 = q2 * q3;
-    q3q3 = q3 * q3;
-
-    /* ======================== 3. 归一化加速度计 ======================== */
-
-    float acc_norm = Lib_Math_Vec3Length(acc);
-
-    /* 检查合加速度是否接近 1g，跳过自由落体/剧烈运动时的校正 */
-    if (Lib_Math_Fabs(acc_norm - MAHONY_ACC_NORM_TARGET) <
-        MAHONY_ACC_NORM_TARGET * MAHONY_ACC_NORM_TOLERANCE)
-    {
-        recip_norm = 1.0f / acc_norm;
-        acc = Lib_Math_Vec3Scale(acc, recip_norm);
-
-        /* 预估重力"上"方向在机体坐标系中的分量（R^T·ẑ 的一半）
-         *   R^T·ẑ = (2(q1q3-q0q2), 2(q0q1+q2q3), 1-2(q1²+q2²))
-         *   取一半 → (q1q3-q0q2, q0q1+q2q3, 0.5-(q1²+q2²))
-         * 第三项必须写成 q0q0 - 0.5f + q3q3：单位四元数下
-         * q0²-q1²-q2²+q3² = 2×(0.5-q1²-q2²) 恰好是正确值的两倍，
-         * 会让 halfv 的 z 分量相对 x/y 偏大一倍，叉积误差方向被扭曲，
-         * 滤波器收敛到约 2 倍倾角上（实测：IMU 倾斜 16.1°，输出 30.1°）。 */
-        halfvx = q1q3 - q0q2;
-        halfvy = q0q1 + q2q3;
-        halfvz = q0q0 - 0.5f + q3q3;
-
-        /* 加速度计误差 = 测量值 × 预估值（叉积） */
-        halfex = acc.y * halfvz - acc.z * halfvy;
-        halfey = acc.z * halfvx - acc.x * halfvz;
-        halfez = acc.x * halfvy - acc.y * halfvx;
-    }
-    else
-    {
-        halfex = 0.0f;
-        halfey = 0.0f;
-        halfez = 0.0f;
-    }
-
-    /* ======================== 4. 磁力计校正 ======================== */
-
-    if (use_mag)
-    {
-        /* 归一化磁力计 */
-        float mag_len = Lib_Math_Vec3Length(mag);
-        if (mag_len < 1e-3f)
-        {
-            return;
-        }
-        mag = Lib_Math_Vec3Scale(mag, 1.0f / mag_len);
-
-        /* 旋转磁力计到世界坐标系，得到水平磁场分量 */
-        hx = (q0q0 + q1q1 - q2q2 - q3q3) * mag.x + 2.0f * (q1q2 - q0q3) * mag.y + 2.0f * (q1q3 + q0q2) * mag.z;
-        hy = 2.0f * (q1q2 + q0q3) * mag.x + (q0q0 - q1q1 + q2q2 - q3q3) * mag.y + 2.0f * (q2q3 - q0q1) * mag.z;
-
-        /* 参考磁场方向：水平分量指向北，垂直分量指向地 */
-        bx = Lib_Math_Sqrt(hx * hx + hy * hy);
-        bz = 2.0f * (q1q3 - q0q2) * mag.x + 2.0f * (q2q3 + q0q1) * mag.y + (q0q0 - q1q1 - q2q2 + q3q3) * mag.z;
-
-        /* 预估磁场方向在机体坐标系中的分量 */
-        halfwx = bx * (0.5f - q2q2 - q3q3) + bz * (q1q3 - q0q2);
-        halfwy = bx * (q1q2 - q0q3) + bz * (q0q1 + q2q3);
-        halfwz = bx * (q0q2 + q1q3) + bz * (0.5f - q1q1 - q2q2);
-
-        /* 累加磁力计误差（叉积） */
-        halfex += mag.y * halfwz - mag.z * halfwy;
-        halfey += mag.z * halfwx - mag.x * halfwz;
-        halfez += mag.x * halfwy - mag.y * halfwx;
-    }
-
-    /* ======================== 5. PI 控制器修正角速度 ======================== */
-
-    if (inst->ki > 0.0f)
-    {
-        /* 积分项累积 */
-        inst->integral_fb.x += inst->ki * halfex * dt;
-        inst->integral_fb.y += inst->ki * halfey * dt;
-        inst->integral_fb.z += inst->ki * halfez * dt;
-
-        /* 比例 + 积分修正角速度 */
-        gyro.x += inst->kp * halfex + inst->integral_fb.x;
-        gyro.y += inst->kp * halfey + inst->integral_fb.y;
-        gyro.z += inst->kp * halfez + inst->integral_fb.z;
-    }
-    else
-    {
-        /* 仅比例修正 */
-        gyro.x += inst->kp * halfex;
-        gyro.y += inst->kp * halfey;
-        gyro.z += inst->kp * halfez;
-    }
-
-    /* ======================== 6. 四元数更新（一阶龙格-库塔）================ */
-
-    qa = q0;
-    qb = q1;
-    qc = q2;
-
-    q0 += (-qb * gyro.x - qc * gyro.y - q3 * gyro.z) * (0.5f * dt);
-    q1 += (qa * gyro.x + qc * gyro.z - q3 * gyro.y) * (0.5f * dt);
-    q2 += (qa * gyro.y - qb * gyro.z + q3 * gyro.x) * (0.5f * dt);
-    q3 += (qa * gyro.z + qb * gyro.y - qc * gyro.x) * (0.5f * dt);
-
-    /* ======================== 7. 四元数归一化 ======================== */
-
-    quaternion_t q_new = {q0, q1, q2, q3};
-    inst->quat = Lib_Math_QuatNormalize(q_new);
 }
 
 #endif /* LIB_MAHONY_USED */

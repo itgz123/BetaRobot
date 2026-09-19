@@ -155,13 +155,14 @@ function(build_app app_name)
         ${HAL_FREERTOS_SOURCES}
     )
 
-    # ---- 导入 app/hal/lib/bsp/drv 模块 ----
+    # ---- 导入 app/hal/lib/bsp/drv/drvlib 模块 ----
     # 注意：hal 模块变量名不能用 HAL_INCLUDE_PATHS / HAL_C_SOURCES（已被 CubeMX 变量占用）
     import_module("${app_dir}"               APP_SOURCE_FILES   APP_INCLUDE_PATHS)
     import_module("${CMAKE_SOURCE_DIR}/lib"  LIB_SOURCE_FILES   LIB_INCLUDE_PATHS)
     import_module("${CMAKE_SOURCE_DIR}/hal"  HAL_MODULE_SOURCES HAL_MODULE_INCLUDE_PATHS)
     import_module("${CMAKE_SOURCE_DIR}/bsp"  BSP_SOURCE_FILES   BSP_INCLUDE_PATHS)
     import_module("${CMAKE_SOURCE_DIR}/drv"  DRV_SOURCE_FILES   DRV_INCLUDE_PATHS)
+    import_module("${CMAKE_SOURCE_DIR}/drvlib" DRVLIB_SOURCE_FILES DRVLIB_INCLUDE_PATHS)
 
     # ---- 启动文件使用 board_config 下的，而非 CubeMX 生成的 ----
     set(STARTUP_FILE)
@@ -194,6 +195,7 @@ function(build_app app_name)
         ${LIB_SOURCE_FILES}
         ${BSP_SOURCE_FILES}
         ${DRV_SOURCE_FILES}
+        ${DRVLIB_SOURCE_FILES}
         "${CMAKE_SOURCE_DIR}/bsp/bsp_map/${app_board}/bsp_map.c"
         ${STARTUP_FILE}
     )
@@ -211,6 +213,7 @@ function(build_app app_name)
         ${HAL_MODULE_INCLUDE_PATHS}
         ${BSP_INCLUDE_PATHS}
         ${DRV_INCLUDE_PATHS}
+        ${DRVLIB_INCLUDE_PATHS}
         ${HAL_INCLUDE_PATHS}
         # bsp_map 路径（各模块通过 #include "bsp_map.h" 引用）
         "${CMAKE_SOURCE_DIR}/bsp/bsp_map/${app_board}"
