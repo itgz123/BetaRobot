@@ -30,6 +30,8 @@ export default defineConfig({
             { text: '代码要求', link: '/project_docs/代码要求' },
             { text: 'Pages开发文档', link: '/project_docs/Pages开发文档' },
             { text: '设计思路和原因', link: '/project_docs/设计思路和原因' },
+            { text: 'CubeMX_FreeRTOS配置指南', link: '/project_docs/CubeMX_FreeRTOS配置指南' },
+            { text: 'Cortex-M7内存使用注意事项', link: '/project_docs/independence_docs/Cortex-M7内存使用注意事项' },
           ]
         }
       ],
