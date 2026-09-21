@@ -13,6 +13,11 @@ set(MODULE_SOURCES
     drv_motor/drv_rsmotor/drv_rsmotor.c
     drv_motor/drv_lkmotor/drv_lkmotor.c
     drv_motor/drv_lkmotor/drv_lkmotor_broadcast.c
+    drvs_motor/drvs_dmmotor/drvs_dmmotor.c
+    drvs_motor/drvs_rsmotor/drvs_rsmotor.c
+    drvs_motor/drvs_lkmotor/drvs_lkmotor.c
+    drvs_motor/drvs_djimotor_broadcast/drvs_djimotor_broadcast.c
+    drvs_motor/drvs_lkmotor_broadcast/drvs_lkmotor_broadcast.c
     drv_axis_lite/drv_axis_mit_lite.c
     drv_planner/drv_planner.c
     drv_pid/drv_pid.c
@@ -45,6 +50,11 @@ set(MODULE_INCLUDE_DIRS
     drv_motor/drv_dmmotor
     drv_motor/drv_rsmotor
     drv_motor/drv_lkmotor
+    drvs_motor/drvs_dmmotor
+    drvs_motor/drvs_rsmotor
+    drvs_motor/drvs_lkmotor
+    drvs_motor/drvs_djimotor_broadcast
+    drvs_motor/drvs_lkmotor_broadcast
     drv_axis_lite
     drv_planner
     drv_pid
