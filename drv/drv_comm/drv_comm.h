@@ -92,6 +92,9 @@ int8_t CommSend(CommInstance *inst, const uint8_t *payload);
  * @param rx_proto_       接收协议名 token：拼接 COMM_##rx_proto_##_DEF（协议 DEF 宏）、
  *                        PROTO_##rx_proto_（协议类型 id）、PROTO_##rx_proto_##_OVERHEAD（开销）
  * @param tx_proto_       发送协议名 token（同上三件套）
+ * @note 开销宏是函数式：宏内以 PROTO_##x##_OVERHEAD(rx_size/tx_size) 调用，本实例的 payload
+ *       字节数作为实参传入 —— 固定开销协议忽略之，汉明码这类开销随长度变的协议必须用它算。
+ *       整个展开必须是整数常量表达式（媒体缓冲与 tx_buff 都是静态数组维度）。
  * @param rx_type_        接收 payload 结构体类型（线协议字节布局契约）
  * @param rx_size         接收 payload 约定长度（协议文档值，非 sizeof(rx_type_)；
  *                        宏内 _Static_assert 校验 sizeof(rx_type_) == rx_size，不符即编译报错）
@@ -144,11 +147,11 @@ int8_t CommSend(CommInstance *inst, const uint8_t *payload);
     _Static_assert(sizeof(tx_type_) == (tx_size),                                                             \
                    "COMM tx: sizeof(" #tx_type_ ") == " #tx_size " FAILED, layout != wire-protocol len");     \
     COMM_##media_type_##_DEF(name##_media,                                                                    \
-                             (rx_size) + PROTO_##rx_proto_##_OVERHEAD,                                        \
-                             (tx_size) + PROTO_##tx_proto_##_OVERHEAD);                                       \
+                             (rx_size) + PROTO_##rx_proto_##_OVERHEAD(rx_size),                               \
+                             (tx_size) + PROTO_##tx_proto_##_OVERHEAD(tx_size));                              \
     COMM_PROTO_##rx_proto_##_DEF(name##_rx_proto, name##_media, rx_size);                                     \
     COMM_PROTO_##tx_proto_##_DEF(name##_tx_proto, name##_media, tx_size);                                     \
-    static uint8_t name##_tx_buff[(tx_size) + PROTO_##tx_proto_##_OVERHEAD] = {0};                            \
+    static uint8_t name##_tx_buff[(tx_size) + PROTO_##tx_proto_##_OVERHEAD(tx_size)] = {0};                   \
     CommInstance name = {                                                                                     \
         .media_type = media_type_,                                                                            \
         .rx_proto_type = PROTO_##rx_proto_,                                                                   \
