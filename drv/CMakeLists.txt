@@ -33,6 +33,7 @@ set(MODULE_SOURCES
     drv_comm/proto/comm_proto.c
     drv_comm/proto/comm_proto_raw.c
     drv_comm/proto/comm_proto_custom.c
+    drv_comm/proto/comm_proto_ext.c
     # comm结束
 )
 

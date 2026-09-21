@@ -46,21 +46,34 @@ motor
 
 #### lib
 
-|           |                                                        |
-| --------- | ------------------------------------------------------ |
-| axis      | 离心力，科里奥利力                                     |
-| axis_lite | 摩擦，重力，惯量                                       |
-| gimbal    | 综合axis                                               |
-| shoot     | 热量计算，射速，射频，子弹数量剩余，异常处理（退弹等） |
-| 里程计    |                                                        |
-| mit       |                                                        |
-| pid       |                                                        |
-| planner   |                                                        |
-| dh_matrix |                                                        |
+##### 1. mit
 
-底盘：运动学正逆解，功率控制有无，类型，位控/力控
+##### 2. pid
+
+##### 3. planner
+
+##### 4. dh_matrix
+
+---
+
+##### 1. axis
+
+1. 反馈：pid/mit
+2. 前馈：摩擦，重力，惯量（离心力，科里奥利力）
+3. 命名：
 
 ```
-drv_chassis/drv_chassis_<position/force>_<type> // 有功率控制
-drv_chassis_lite/drv_chassis_lite_<position/force>_<type> // 无功率控制
+axis_[pid/mit]_[lite/无]
 ```
+
+##### 2. gimbal
+
+综合axis，使用dh_matrix简化运动学计算
+
+##### 3. shoot
+
+1. 功能：热量计算，射速，射频，子弹数量剩余，异常处理（退弹等）
+
+##### 4. chassis
+
+1. 功能：运动学正逆解，功率控制有无，类型，位控/力控，里程计

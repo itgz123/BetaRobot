@@ -3,6 +3,8 @@ set(MODULE_SOURCES
     lib_crc/lib_crc.c
     lib_crc/lib_crc_tables.c
     lib_format/lib_format.c
+    lib_hamming/lib_hamming.c
+    lib_hamming/lib_hamming_ext.c
     lib_kf/lib_kf.c
     lib_mahony/lib_mahony.c
     lib_math/lib_math.c
@@ -17,6 +19,7 @@ set(MODULE_INCLUDE_DIRS
     lib_crc
     lib_dh_matrix
     lib_format
+    lib_hamming
     lib_kf
     lib_mahony
     lib_math

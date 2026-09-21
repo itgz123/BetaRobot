@@ -10,6 +10,7 @@
 /* 内置协议后端（预注册进注册表） */
 #include "comm_proto_raw.h"
 #include "comm_proto_custom.h"
+#include "comm_proto_ext.h"
 
 #ifdef DRV_COMM_USED
 
@@ -48,12 +49,18 @@ static int8_t BackendCustomInit(void *proto)
     return CommProtoCustomInit((CommProtoCustom *)proto);
 }
 
-/* 注册表：内置 RAW/CUSTOM 静态预注册，app 自定义协议经 CommProtoRegisterBackend 追加 */
+static int8_t BackendExtInit(void *proto)
+{
+    return CommProtoExtInit((CommProtoExt *)proto);
+}
+
+/* 注册表：内置 RAW/CUSTOM/EXT 静态预注册，app 自定义协议经 CommProtoRegisterBackend 追加 */
 static CommProtoBackend_t s_backends[COMM_PROTO_BACKEND_MAX] = {
     {PROTO_RAW, BackendRawInit},
     {PROTO_CUSTOM, BackendCustomInit},
+    {PROTO_EXT, BackendExtInit},
 };
-static uint8_t s_backend_cnt = 2;
+static uint8_t s_backend_cnt = 3;
 
 int8_t CommProtoRegisterBackend(const CommProtoBackend_t *backend)
 {

@@ -11,7 +11,7 @@
  * 基类不感知介质物理限制（属 media 层），不解析 payload 内容（属引擎/应用）。
  *
  * 协议扩展（支持 app 自定义协议，驱动零改动）：一个协议 = 类型 id + 开销宏 +
- * DEF 宏 + 派生结构体 + vtable + Init。内置 RAW/CUSTOM 预注册进后端注册表；
+ * DEF 宏 + 派生结构体 + vtable + Init。内置 RAW/CUSTOM/EXT 预注册进后端注册表；
  * app 自定义协议在 app 层定义（id 取 PROTO_USER 起），启动时调用
  * CommProtoRegisterBackend 登记，COMM_DEF 传协议名 token 即可接线（见下方注册表）。
  */
@@ -30,14 +30,20 @@ typedef enum : uint8_t
 {
     PROTO_RAW = 0,     /* 空协议：payload 占 100%，无任何开销 */
     PROTO_CUSTOM,      /* 自定义帧协议（帧头+seq+CRC8+帧尾，见 comm_proto_custom.h） */
+    PROTO_EXT,         /* 扩展缩短汉明码 + CRC8（见 comm_proto_ext.h） */
     PROTO_USER = 0x80, /* app 自定义协议 id 起始 */
 } ProtocolType_e;
 
 /* 每个协议定义自己的开销宏（字节）：整帧长度 = payload_size + 开销。
  * COMM_DEF 按协议名 token 拼接 PROTO_##name##_OVERHEAD 取开销，内置与自定义协议都须定义
- * （内置见下；自定义见各 app 协议头，如 app_proto_demo.h 的 PROTO_DEMO_OVERHEAD）。 */
-#define PROTO_RAW_OVERHEAD 0    /* 空协议：无帧头/长度域/校验，payload 占 100% */
-#define PROTO_CUSTOM_OVERHEAD 4 /* 自定义帧协议：帧头(1) + seq(1) + CRC8(1) + 帧尾(1) */
+ * （内置见下；自定义见各 app 协议头，如 app_proto_visual.h 的 PROTO_VISUAL_OVERHEAD）。
+ *
+ * @note 开销宏统一为**函数式**：PROTO_##name##_OVERHEAD(payload_size)，COMM_DEF 会把本实例
+ *       的 payload 字节数传进来。固定开销的协议忽略该参数（写 `(size) 4` 之类）；
+ *       开销随 payload 长度变的协议（如 PROTO_EXT 的汉明码膨胀）必须用它算 —— 且必须能在
+ *       编译期展开成整数常量表达式（帧长/缓冲大小都是静态数组维度）。 */
+#define PROTO_RAW_OVERHEAD(payload_size) 0    /* 空协议：无帧头/长度域/校验，payload 占 100% */
+#define PROTO_CUSTOM_OVERHEAD(payload_size) 4 /* 自定义帧协议：帧头(1) + seq(1) + CRC8(1) + 帧尾(1) */
 
 typedef struct CommProto CommProto;
 
@@ -75,7 +81,7 @@ void ProtoReset(CommProto *self);
  *             协议后端注册表
  *============================================*/
 
-/* 注册表容量（内置 RAW/CUSTOM 已占 2 项；可在 app_cfg.h 覆盖加大） */
+/* 注册表容量（内置 RAW/CUSTOM/EXT 已占 3 项；可在 app_cfg.h 覆盖加大） */
 #ifndef COMM_PROTO_BACKEND_MAX
 #define COMM_PROTO_BACKEND_MAX 8
 #endif
