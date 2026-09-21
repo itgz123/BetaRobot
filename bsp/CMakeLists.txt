@@ -12,6 +12,7 @@ set(MODULE_SOURCES
     bsp_can/bsp_fdcan.c
     bsp_can/bsp_bxcan.c
     bsp_freertos/bsp_freertos.c
+    bsp_freertos_status/bsp_freertos_status.c
     bsp_usb/bsp_usb.c
 )
 
@@ -31,5 +32,6 @@ set(MODULE_INCLUDE_DIRS
     bsp_adc
     bsp_can
     bsp_freertos
+    bsp_freertos_status
     bsp_usb
 )
