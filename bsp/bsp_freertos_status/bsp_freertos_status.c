@@ -11,6 +11,10 @@
  * @note 任务快照走 uxTaskGetSystemState() + 静态数组（详见头文件说明）：
  *       不用 vTaskList / vTaskGetRunTimeStats（它们要动态分配 + sprintf），
  *       也不用格式化字符串——快照直接按字段抄进结构体，调试器展开就能看。
+ *
+ * @note 运行时间两列：run_time_pct 是自开机平均占用率（内核口径），
+ *       run_time_pct_recent 是最近一个刷新窗口（默认 1 s）的占用率，
+ *       后者由本模块对上一轮快照做差分得到（见 prv_recent_pct）。
  */
 
 #include "bsp_freertos_status.h"
@@ -39,6 +43,43 @@ static TickType_t s_last_refresh_tick = 0;
  * 内部的 pvPortMalloc），所以静态分配下也能取任务快照 */
 static TaskStatus_t s_task_status[BSP_FREERTOS_STATUS_TASK_MAX];
 
+#if (BSP_FREERTOS_STATUS_HAS_RUN_TIME_STATS == 1)
+/* 上一轮快照的累计运行计数：用来算"最近一个刷新窗口"的占用率。按句柄配对（不是按
+ * 数组下标），任务新建/删除时不会串台。只服务于计算，不进 bsp_freertos_status */
+static TaskHandle_t s_prev_handle[BSP_FREERTOS_STATUS_TASK_MAX];
+static uint32_t s_prev_run_time[BSP_FREERTOS_STATUS_TASK_MAX];
+static uint32_t s_prev_total_run_time = 0;
+static uint32_t s_prev_count = 0;
+
+/**
+ * @brief 算某个任务在最近一个刷新窗口内的占用率
+ * @param handle      任务句柄（与上一轮配对用）
+ * @param run_time_us 本轮的累计运行计数
+ * @param window_us   窗口长度（挂钟 µs）
+ * @return 占用率（%）；首轮、任务新建、窗口为 0 时返回 0
+ */
+static uint32_t prv_recent_pct(TaskHandle_t handle, uint32_t run_time_us, uint32_t window_us)
+{
+    uint32_t j;
+
+    if (window_us == 0u)
+    {
+        return 0u;
+    }
+
+    for (j = 0u; j < s_prev_count; j++)
+    {
+        if (s_prev_handle[j] == handle)
+        {
+            /* 差值本身是 32 位减法，回绕安全；乘 100 用 64 位避免溢出 */
+            return (uint32_t)(((uint64_t)(run_time_us - s_prev_run_time[j]) * 100u) / window_us);
+        }
+    }
+
+    return 0u; /* 本轮才出现的任务：没有基线，下一轮才有值 */
+}
+#endif /* BSP_FREERTOS_STATUS_HAS_RUN_TIME_STATS == 1 */
+
 /**
  * @brief 取一份任务快照，逐字段抄进 bsp_freertos_status.tasks[]
  * @note 任务数超过 BSP_FREERTOS_STATUS_TASK_MAX 时整个快照不刷新（保留上一次的），
@@ -49,8 +90,12 @@ static void prv_refresh_task_table(void)
     UBaseType_t i;
     UBaseType_t n;
     uint32_t total_run_time = 0;
-    uint32_t total_div_100 = 0;
     uint32_t stack_free_min = 0xFFFFFFFFu;
+
+#if (BSP_FREERTOS_STATUS_HAS_RUN_TIME_STATS == 1)
+    uint32_t total_div_100;
+    uint32_t window_us;
+#endif
 
     if (uxTaskGetNumberOfTasks() > (UBaseType_t)BSP_FREERTOS_STATUS_TASK_MAX)
     {
@@ -76,7 +121,10 @@ static void prv_refresh_task_table(void)
 #if (BSP_FREERTOS_STATUS_HAS_RUN_TIME_STATS == 1)
     /* 先除 100 再相除（同内核写法）：避免"先乘 100"在 32 位计数下溢出 */
     total_div_100 = total_run_time / 100u;
+    /* 窗口长度 = 本轮与上一轮的挂钟差；首轮还没有基线，记 0（此时各任务也配不上对） */
+    window_us = (s_prev_count > 0u) ? (total_run_time - s_prev_total_run_time) : 0u;
     bsp_freertos_status.run_time_total_us = total_run_time;
+    bsp_freertos_status.run_time_window_us = window_us;
 #endif
 
     for (i = 0u; i < n; i++)
@@ -105,6 +153,7 @@ static void prv_refresh_task_table(void)
 #if (BSP_FREERTOS_STATUS_HAS_RUN_TIME_STATS == 1)
         task->run_time_us = s_task_status[i].ulRunTimeCounter;
         task->run_time_pct = (total_div_100 > 0u) ? (s_task_status[i].ulRunTimeCounter / total_div_100) : 0u;
+        task->run_time_pct_recent = prv_recent_pct(task->handle, task->run_time_us, window_us);
 #endif
 
         /* 当前正在跑的任务：vTaskGetInfo 只对 pxCurrentTCB 填 eRunning，据此定位 */
@@ -118,6 +167,18 @@ static void prv_refresh_task_table(void)
             stack_free_min = task->stack_free_words;
         }
     }
+
+#if (BSP_FREERTOS_STATUS_HAS_RUN_TIME_STATS == 1)
+    /* 记录本轮基线供下一轮差分。放最后：本轮结果只依赖上一轮的数据，
+     * 窗口内任务被删/新建都不会让本轮的占用率串台 */
+    for (i = 0u; i < n; i++)
+    {
+        s_prev_handle[i] = bsp_freertos_status.tasks[i].handle;
+        s_prev_run_time[i] = bsp_freertos_status.tasks[i].run_time_us;
+    }
+    s_prev_count = (uint32_t)n;
+    s_prev_total_run_time = total_run_time;
+#endif
 
     bsp_freertos_status.stack_free_min_words = stack_free_min;
 }

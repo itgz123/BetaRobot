@@ -45,7 +45,7 @@
  *       | rtos-views 视图                         | 本模块            | 说明                                        |
  *       | --------------------------------------- | ----------------- | ------------------------------------------- |
  *       | 任务列表（名字/状态/优先级/栈余量/时间） | tasks[]           | 本模块多基础优先级、栈余量全局最小值、当前任务 |
- *       | 运行时间 / CPU 占用                      | tasks[].run_time_*| 计数源同为 DWT（强符号由本模块提供，见下）   |
+ *       | 运行时间 / CPU 占用                      | tasks[].run_time_*| 计数源同为 DWT（强符号由本模块提供，见下）；本模块还多一列"最近窗口"占用率 |
  *       | 栈溢出 / 栈水位                          | tasks[] + 钩子计数| 本模块另有溢出历史与溢出任务名               |
  *       | 事件计数（idle/tick 次数、malloc 失败）  | 钩子计数字段      | 内核不保存这些，只有目标侧能给               |
  *       | 运行时（不停机）刷新                     | 周期刷新          | rtos-views 必须停机                          |
@@ -92,6 +92,18 @@
  *       BSP_DWT_USED 时，本模块提供 getRunTimeCounterValue() /
  *       configureTimerForRunTimeStats() 强符号（覆盖 CubeMX 生成的返回 0 的
  *       __weak 版本），计数源为 DWT 微秒计数——否则 run_time_us / pct 会全是 0。
+ *
+ * @note 两个占用率的区别（都以 tasks[].run_time_us 为分子，内核在每次上下文切换时
+ *       累加，中断里花的时间不属于任何任务）：
+ *       - run_time_pct = run_time_us / run_time_total_us：**自 DWT_Init 以来的平均**，
+ *         分母是挂钟总量（内核 vTaskGetRunTimeStats 也是这么算的）。跑久了尖峰会被摊平。
+ *       - run_time_pct_recent = 本窗口增量 / run_time_window_us：**最近一个刷新周期**
+ *         （默认 1 s，即 BSP_FREERTOS_STATUS_PERIOD_MS）的占用率，看偶发尖峰用；
+ *         按句柄与上一轮配对，任务新建/删除那一轮记 0，下一轮起有效；首轮 window 为 0。
+ *       - 空闲任务的这两列就是**系统空闲率**（近 1 秒的空闲率看 run_time_pct_recent），
+ *         反推中断开销 = 100% - Σ(所有任务占用率)。
+ *       - 32 位 µs 计数约 71.6 分钟回绕一次：差值计算不受影响，但单个任务累计 CPU 时间
+ *         超过 71.6 分钟后 run_time_pct 会失真（连续跑十几小时才可能遇到）。
  *
  * @note 用法（调试）：
  *       1. 打开开关后什么都不用做：钩子由内核调用，结构体由空闲钩子周期刷新，
@@ -168,7 +180,8 @@ typedef struct
     UBaseType_t base_priority;          /* 基础优先级（TaskInstance 里配的那个） */
     uint32_t stack_free_words;          /* 栈剩余最小值（字，1 字 = 4 字节）：越接近 0 越危险 */
     uint32_t run_time_us;               /* 累计运行计数（µs，DWT）；统计关闭时恒 0 */
-    uint32_t run_time_pct;              /* 占系统总运行时间的百分比 */
+    uint32_t run_time_pct;              /* 自开机以来的平均占用率（%）：任务累计 / 挂钟总量 */
+    uint32_t run_time_pct_recent;       /* 最近一个刷新窗口内的占用率（%）：看尖峰用，见下方 @note */
     uint32_t task_number;               /* 内核给的任务序号（uxTCBNumber） */
     StackType_t *stack_base;            /* 栈底地址（可对照 .map / ld 看地址范围） */
     TaskHandle_t handle;                /* 任务句柄 = TCB 地址（想手挖内核字段时用） */
@@ -203,7 +216,8 @@ typedef struct
     uint32_t current_task_idx;     /* 当前运行任务在 tasks[] 里的下标（BSP_FREERTOS_STATUS_NO_TASK = 没找到） */
     uint32_t stack_free_min_words; /* 所有任务里最小的栈余量（字）：一眼看有没有任务快溢出了 */
 #if (BSP_FREERTOS_STATUS_HAS_RUN_TIME_STATS == 1)
-    uint32_t run_time_total_us; /* 系统总运行计数（µs）：run_time_pct 的分母 */
+    uint32_t run_time_total_us;  /* 自 DWT_Init 起的挂钟时间（µs）：run_time_pct 的分母 */
+    uint32_t run_time_window_us; /* 最近一次刷新窗口的实际长度（µs）：run_time_pct_recent 的分母，首轮为 0 */
 #endif
     BSP_FreeRTOSTaskStatus_s tasks[BSP_FREERTOS_STATUS_TASK_MAX];
 #endif
