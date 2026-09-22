@@ -6,6 +6,7 @@ set(MODULE_SOURCES
     bsp_gpio/bsp_gpio.c
     bsp_log/bsp_log.c
     bsp_spi/bsp_spi.c
+    bsp_i2c/bsp_i2c.c
     bsp_tim/bsp_tim.c
     bsp_usart/bsp_usart.c
     bsp_adc/bsp_adc.c
@@ -27,6 +28,7 @@ set(MODULE_INCLUDE_DIRS
     bsp_log
     bsp_module
     bsp_spi
+    bsp_i2c
     bsp_tim
     bsp_usart
     bsp_adc
