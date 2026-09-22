@@ -29,7 +29,7 @@
 ---
 
 以上复制来自docs  
-当前drv很多不符合这个架构，慢慢修改（drv_axis_lite,drv_chassis,drv_chassis_lite,drv_motor,）  
+当前drv很多不符合这个架构，慢慢修改（drv_axis_lite,drv_motor）  
 先用drvs前缀，避免重名，等app全部依赖drvs/drvlib之后，删除原来的drv，改drvs为drv
 
 ---

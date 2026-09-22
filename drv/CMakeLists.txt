@@ -1,8 +1,5 @@
 # drv 层源文件
 set(MODULE_SOURCES
-    drv_chassis_lite/drv_chassis_lite_position_omni.c
-    drv_chassis_lite/drv_chassis_lite_position_half_rudder.c
-    drv_chassis_lite/drv_chassis_lite_position_all_rudder.c
     drv_sbus/drv_sbus.c
     drv_dbus/drv_dbus.c
     drv_bmi088/drv_bmi088.c
@@ -40,8 +37,6 @@ set(MODULE_SOURCES
 # drv 层头文件路径
 set(MODULE_INCLUDE_DIRS
     drv_bmi088
-    drv_chassis
-    drv_chassis_lite
     drv_sbus
     drv_dbus
     drv_daemon
