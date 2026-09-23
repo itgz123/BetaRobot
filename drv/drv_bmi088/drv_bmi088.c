@@ -28,10 +28,11 @@ LOG_INSTANCE_DEF(g_bmi088_log, "drv_bmi088", DRV_BMI088_LOG_LIMIT);
 #define BMI088_ACC_PWR_UP_DELAY_S 0.00045f // 加速度计上电等待 (450µs，数据手册§3)
 #define BMI088_GYRO_RESET_DELAY_S 0.035f   // 陀螺仪软复位延时   (35ms，数据手册30ms+余量)
 
-#define BMI088_WRITE_CHECK_INIT_S 0.001f       // 写验证初始等待    (1ms, DWT_Delay微秒)
-#define BMI088_WRITE_CHECK_TIMEOUT_US 10000    // 写验证超时时间   (10ms, DWT_GetTimeUs微秒比较)
-#define BMI088_CS_RELEASE_DELAY_S 0.08f        // CS释放后等待时间(s)
-#define SPI_BLOCK_TIMEOUT_MS 100               // SPI BLOCK传输超时(ms)
+#define BMI088_WRITE_CHECK_INIT_S 0.001f    // 写验证初始等待    (1ms, DWT_Delay微秒)
+#define BMI088_WRITE_CHECK_TIMEOUT_US 10000 // 写验证超时时间   (10ms, DWT_GetTimeUs微秒比较)
+#define BMI088_CS_RELEASE_DELAY_S 0.08f     // CS释放后等待时间(s)
+// SPI 传输超时统一取 Config 的 spi_timeout_ms（原先 BLOCK 用写死的 100ms、
+// IT/DMA 用 Config 值，两套超时）；BLOCK 直接透传给 HAL，IT/DMA 用于等总线就绪
 #define BMI088_TEMP_UPDATE_INTERVAL_US 1280000 // 温度读取间隔 (1.28s，数据手册§5.3.7)
 
 /*============================ SPI通信宏定义 ============================*/
@@ -106,9 +107,10 @@ static void BMI088_WriteReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg,
 static uint8_t BMI088_WriteRegWithCheck(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint8_t data);
 /* 中断模式私有函数 */
 static void BMI088_IntCallback(GPIOInstance *gpio_inst);
+static void BMI088_SpiAbort(BMI088Instance *inst);
 static void BMI088_StartSensorDMA(BMI088Instance *inst, uint8_t sensor_type);
 static void BMI088_SPICpltCallback(SPIInstance *spi_inst);
-static void BMI088_SPIErrCallback(SPIInstance *spi_inst);
+static void BMI088_SPIErrCallback(SPIInstance *spi_inst, SPI_ErrReason_e reason);
 static void BMI088_CheckPendingIT(BMI088Instance *inst);
 /* 插值辅助函数声明 */
 static void BMI088_InterpRaw(const uint8_t *raw_old, const uint8_t *raw_new, uint64_t t_old, uint64_t t_new, uint64_t t_target, uint8_t *out);
@@ -122,6 +124,8 @@ static BMI088_Data_t BMI088_PackData(BMI088Instance *inst, const uint8_t acc_raw
 /**
  * @brief 加速度计读取寄存器
  * @note 数据存入 inst->spi_inst.rx_buff，从 rx_buff[2] 开始为有效数据
+ * @note 阻塞传输固定在任务上下文调用（初始化与轮询模式），失败只告警不回滚：
+ *       调用方的判据（CHIP_ID 比对 / 写验证）读到的就是残留数据，会照常判失败
  */
 static void BMI088_ReadReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint16_t len, uint8_t dummy)
 {
@@ -136,7 +140,12 @@ static void BMI088_ReadReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, 
     inst->tx_len = 1 + dummy + len;
 
     GPIOReset(cs);
-    SPITransmitReceive(inst->spi_inst, inst->tx_buff, inst->tx_len, SPI_BLOCK_TIMEOUT_MS);
+    if (SPITransmitReceive(inst->spi_inst, inst->tx_buff, inst->tx_len,
+                           BSP_BLOCK_MODE, inst->spi_timeout_ms) != BSP_OK)
+    {
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_WARNING, "%s read 0x%02X failed",
+               (cs == inst->cs_acc) ? "Acc" : "Gyro", reg);
+    }
     GPIOSet(cs);
 }
 
@@ -151,7 +160,12 @@ static void BMI088_WriteReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg,
     inst->tx_len = BMI088_SPI_WRITE_LEN;
 
     GPIOReset(cs);
-    SPITransmit(inst->spi_inst, inst->tx_buff, inst->tx_len, SPI_BLOCK_TIMEOUT_MS);
+    if (SPITransmit(inst->spi_inst, inst->tx_buff, inst->tx_len,
+                    BSP_BLOCK_MODE, inst->spi_timeout_ms) != BSP_OK)
+    {
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_WARNING, "%s write 0x%02X failed",
+               (cs == inst->cs_acc) ? "Acc" : "Gyro", reg);
+    }
     GPIOSet(cs);
 }
 
@@ -217,6 +231,26 @@ static void BMI088_IntCallback(GPIOInstance *gpio_inst)
 }
 
 /**
+ * @brief 丢弃本次传输并释放总线（发起失败 / 传输出错共用的收尾）
+ * @param inst BMI088实例
+ *
+ * @note 两处失败路径收尾动作完全相同，故收在一处：由 BMI088_StartSensorDMA 的同步
+ *       失败分支与 BMI088_SPIErrCallback（异步错误）共同调用。
+ * @note 只丢弃本次传输，不清环形缓冲和 acc_cnt/gyro_cnt：已采到的数据与
+ *       ReadLatest 的可用性都不受影响。
+ */
+static void BMI088_SpiAbort(BMI088Instance *inst)
+{
+    // 释放片选，避免总线被一直拉低
+    GPIOSet(inst->cs_acc);
+    GPIOSet(inst->cs_gyro);
+
+    // 丢弃本次传输，等下一次 EXTI 重新发起
+    inst->transfer_busy = 0;
+    inst->pending_mask = 0;
+}
+
+/**
  * @brief 启动传感器 SPI IT 读取
  */
 static void BMI088_StartSensorDMA(BMI088Instance *inst, uint8_t sensor_type)
@@ -247,7 +281,18 @@ static void BMI088_StartSensorDMA(BMI088Instance *inst, uint8_t sensor_type)
     }
 
     GPIOReset(cs);
-    SPITransmitReceive(inst->spi_inst, inst->tx_buff, inst->tx_len, inst->spi_timeout_ms);
+    /* timeout_ms = 0：本函数跑在 DRDY EXTI 里，只判一次总线就绪，忙即放弃本次采样。
+     * 绝不能在这里等就绪（旧版传 spi_timeout_ms，且 timeout_ms==0 时还是个死循环）：
+     * 中断里等 HAL tick 等不到，卡死时就是永久死等。真卡死由任务上下文的
+     * BMI088ReadLatest → SPIRecoverTxIfStuck 复位。
+     * transfer_busy 已经保证不会与上一笔并发，所以这里的"忙"只可能是异常残留。 */
+    if (SPITransmitReceive(inst->spi_inst, inst->tx_buff, inst->tx_len,
+                           BSP_DMA_MODE, 0) != BSP_OK)
+    {
+        /* 发起失败不会有 BMI088_SPICpltCallback，必须在这里就地收尾，
+         * 让下一次 EXTI 重新发起（err_callback 只管"已经启动的传输"出的错） */
+        BMI088_SpiAbort(inst);
+    }
 }
 
 /**
@@ -321,28 +366,29 @@ static void BMI088_SPICpltCallback(SPIInstance *spi_inst)
 }
 
 /**
- * @brief SPI 传输错误回调（bsp_spi 在传输未能正常发起或 HAL 报错时调用）
+ * @brief SPI 传输错误回调（bsp_spi 在已启动的传输出错 / 被强制收尾时调用）
+ * @param spi_inst SPI 实例（parent 指向 BMI088Instance）
+ * @param reason   出错原因（SPI_ERR_HW 硬件错 / SPI_ERR_ABORT 被 bsp 卡死自恢复中止）
+ *
  * @note 这类失败不会再有 BMI088_SPICpltCallback，必须在这里复位传输状态，
  *       否则 transfer_busy 恒为 1，驱动永久失联（现象：acc_cnt/gyro_cnt 不再增长、
  *       pending_t_* 每次中断都被重写、euler 恒为 0）。
- *       这里只丢弃本次传输，不清环形缓冲和 acc_cnt/gyro_cnt，
- *       已采到的数据与 ReadLatest 的可用性都不受影响。
+ *       两种原因的处理相同（都是丢弃本次传输），故收在 BMI088_SpiAbort 里。
+ * @note 可能跑在 ISR（SPI_ERR_HW）也可能跑在任务上下文（SPI_ERR_ABORT，由
+ *       BMI088ReadLatest → SPIRecoverTxIfStuck 触发），因此只能做置标志这类无阻塞动作。
  */
-static void BMI088_SPIErrCallback(SPIInstance *spi_inst)
+static void BMI088_SPIErrCallback(SPIInstance *spi_inst, SPI_ErrReason_e reason)
 {
     BMI088Instance *inst = (BMI088Instance *)spi_inst->parent;
+
+    (void)reason;
+
     if (inst == NULL)
     {
         return;
     }
 
-    // 释放片选，避免总线被一直拉低
-    GPIOSet(inst->cs_acc);
-    GPIOSet(inst->cs_gyro);
-
-    // 丢弃本次传输，等下一次 EXTI 重新发起
-    inst->transfer_busy = 0;
-    inst->pending_mask = 0;
+    BMI088_SpiAbort(inst);
 }
 
 /**
@@ -637,22 +683,17 @@ int8_t BMI088Register(BMI088Instance *inst)
         return -1;
     }
 
-    // 防重复注册检查（通过检查 SPI parent 是否已设置）
-    if (inst->spi_inst && inst->spi_inst->parent == inst)
-    {
-        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "Instance already registered!");
-        return -1;
-    }
-
-    // 设置 parent 指针
-    inst->spi_inst->parent = inst;
+    /* 不做本层的防重复注册检查：SPI 实例的 parent 改由 SPIConfig 写入（读直接读、
+     * 写必须用函数），不能再用它当"已注册"标志；而各子模块自己都有防重
+     * （SPIRegister / GPIORegister / DaemonRegister 都会拒绝重复注册并打日志），
+     * 重复调用本函数的首个失败点就会被拦住。 */
     inst->cs_acc->parent = inst;
     inst->cs_gyro->parent = inst;
     inst->int_acc->parent = inst;
     inst->int_gyro->parent = inst;
 
     // 注册 SPI（只注册，Config 时设置硬件句柄）
-    if (SPIRegister(inst->spi_inst) != 0)
+    if (SPIRegister(inst->spi_inst) != BSP_OK)
     {
         BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "SPI register failed");
         return -1;
@@ -748,15 +789,16 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
     inst->work_mode = config->work_mode;
     inst->spi_timeout_ms = config->spi_timeout_ms; /* 完全按 Config 配置的超时时间使用 */
 
-    // 配置 SPI 阻塞模式（AccInit/GyroInit 使用阻塞传输）
+    /* 配置 SPI（模式不再在这里定：每次收发调用传参）。
+     * parent 经 Config 写入，SPI 回调据此取回本实例。 */
     SPI_Config_s spi_cfg = {
         .spi_e = config->spi_e,
-        .work_mode = SPI_BLOCK_MODE,
+        .parent = inst,
         .rx_callback = NULL,
     };
-    if (SPIConfig(inst->spi_inst, &spi_cfg) != 0)
+    if (SPIConfig(inst->spi_inst, &spi_cfg) != BSP_OK)
     {
-        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "SPI block mode config failed");
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "SPI config failed");
         return -1;
     }
 
@@ -800,17 +842,17 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
             return -1;
         }
 
-        // 切换为 DMA 模式并挂接 SPI 传输完成/错误回调
-        // err_callback 负责在传输发起失败或 HAL 报错时复位传输状态，避免驱动永久失联
-        SPI_Config_s spi_dma_cfg = {
+        // 挂接 SPI 传输完成/错误回调（传输模式由每次 SPITransmitReceive 调用传参决定）
+        // err_callback 负责在已启动的传输出错或被强制收尾时复位传输状态，避免驱动永久失联
+        SPI_Config_s spi_cb_cfg = {
             .spi_e = config->spi_e,
-            .work_mode = SPI_DMA_MODE,
+            .parent = inst,
             .rx_callback = BMI088_SPICpltCallback,
             .err_callback = BMI088_SPIErrCallback,
         };
-        if (SPIConfig(inst->spi_inst, &spi_dma_cfg) != 0)
+        if (SPIConfig(inst->spi_inst, &spi_cb_cfg) != BSP_OK)
         {
-            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "SPI DMA mode config failed");
+            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "SPI callback config failed");
             return -1;
         }
 
@@ -968,6 +1010,14 @@ BMI088_MultiRateData_t BMI088ReadLatest(BMI088Instance *inst)
     BMI088_MultiRateData_t data = {0};
     if (inst == NULL)
         return data;
+
+    /* 传输卡死自恢复（每控制周期一次，放在所有提前返回之前 —— 卡死的表现正是
+     * acc_cnt/gyro_cnt 不再增长，若放在下面那些判据之后，最需要它的场景恰好走不到）。
+     * INT 模式的传输由 DRDY 中断发起，那里不能等 HAL tick、也就无法真正 Abort；
+     * 本函数是任务上下文里唯一"每周期必经"的入口，把复位搬到这里。
+     * 总线健康时它只做一次 DWT 读，开销可忽略。 */
+    (void)SPIRecoverTxIfStuck(inst->spi_inst, 0);
+
     if (inst->acc_cnt == 0 || inst->gyro_cnt == 0)
         return data;
 

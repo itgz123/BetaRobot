@@ -126,6 +126,22 @@ void _start(void)
     FMT_CALL(b, "id0=0x%lX id1=0x%lX", (unsigned long)0x201ul, (unsigned long)0x7FFul);
     chk("两个 %lX 并存", b, "id0=0x201 id1=0x7FF");
 
+    /* bsp_spi.c 的启动失败日志（两个 %s 连用 + 5 个 %d + 1 个 %lX）。
+     * 两个 %s 必须按顺序吃掉两个参数槽：错位的话后面 5 个 %d 与 %lX 全部对不上，
+     * 会把 DMA 流状态打成别的字段值，比不打印更误导（本次 A.6 排查就靠这几个数）。 */
+    FMT_CALL(b, "SPI %s %s (spi_e=%d, mode=%d, spi=%d, tx_dma=%d, rx_dma=%d, err=0x%lX)!",
+             "transmit/receive", "start failed", 0, 2, 2, 3, 1, err);
+    chk("SPI 启动失败日志（%s×2 + %d×5 + %lX）", b,
+        "SPI transmit/receive start failed (spi_e=0, mode=2, spi=2, tx_dma=3, rx_dma=1, err=0x10)!");
+
+    /* BLOCK 分支 + 该口没有 DMA 的现场（tx_state/rx_state 传 -1）。
+     * 注意 `%d` 打的是十进制：日志里"没有这一路 DMA"显示为 -1（结构体里存的
+     * 0xFF 只给调试器看，不进日志）。 */
+    FMT_CALL(b, "SPI %s %s (spi_e=%d, mode=%d, spi=%d, tx_dma=%d, rx_dma=%d, err=0x%lX)!",
+             "transmit", "failed", 0, 0, 1, -1, -1, err);
+    chk("SPI BLOCK 失败日志（phase=failed / 无 DMA 口）", b,
+        "SPI transmit failed (spi_e=0, mode=0, spi=1, tx_dma=-1, rx_dma=-1, err=0x10)!");
+
     /* ---- 回归点：%ld 按 32 位、%lld 按 64 位 ---- */
 
     FMT_CALL(b, "a=%ld b=%lld", (i32)-5, (i64)-1234567890123ll);

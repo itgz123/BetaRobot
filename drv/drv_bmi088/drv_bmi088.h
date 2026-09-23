@@ -84,7 +84,7 @@ typedef struct
     BMI088_GyroRange_e gyro_range;    // 陀螺仪量程
     BMI088_GyroConf_e gyro_conf;      // 陀螺仪 ODR+BW 组合配置（见 BMI088_GyroConf_e）
     BMI088_WorkMode_e work_mode;      // 工作模式（轮询/中断）
-    uint32_t spi_timeout_ms;          // SPI IT/DMA 传输超时(ms)
+    uint32_t spi_timeout_ms;          // SPI 传输超时(ms)：BLOCK 透传 HAL，IT/DMA 用于等总线就绪
 } BMI088_Config_s;
 /**
  * @brief IMU 数据结构体
@@ -128,7 +128,8 @@ typedef struct
 
 /**
  * @brief BMI088 实例结构体
- * @note 使用指针指向 BSP 实例，在注册时设置 parent
+ * @note 使用指针指向 BSP 实例；SPI 的 parent 由 SPIConfig 写入（不再由本驱动直写），
+ *       GPIO 的 parent 仍由本驱动在注册时直写（bsp_gpio 尚未按同一模板迁移）
  */
 typedef struct BMI088Instance
 {
@@ -144,7 +145,7 @@ typedef struct BMI088Instance
     uint8_t *tx_buff; // 发送缓冲区指针
     uint8_t tx_len;   // 发送数据长度
 
-    uint32_t spi_timeout_ms; // SPI IT/DMA 传输超时(ms)（Config 写入）
+    uint32_t spi_timeout_ms; // SPI 传输超时(ms)（Config 写入；IT/DMA 的 DRDY 中断发起固定传 0）
 
     /* 加速度计配置 */
     BMI088_AccRange_e acc_range; // 量程
@@ -189,7 +190,8 @@ typedef struct BMI088Instance
  * @brief BMI088实例静态定义宏
  * @param name 实例名称
  *
- * @note 使用 BSP 层的实例定义宏，parent 在注册时设置
+ * @note 使用 BSP 层的实例定义宏；SPI 的 parent 由 SPIConfig 写入，
+ *       GPIO 的 parent 在 BMI088Register 里设置
  *       中断模式字段由 BMI088Config 初始化
  *
  * @example
@@ -261,6 +263,9 @@ BMI088_Data_t BMI088ReadInt(BMI088Instance *inst);
  * @return BMI088_MultiRateData_t
  * @note 专为 Kalman 等需要多速率融合的算法设计，保留各自的原始时间戳
  * @retval time_stamp_a / time_stamp_g 为 0 表示数据尚未就绪
+ * @note **必须在任务上下文调用**：本函数兼作 SPI 传输卡死的自愈入口
+ *       （SPIRecoverTxIfStuck，见 bsp_spi.md），内部可能真正中止 SPI 硬件。
+ *       每控制周期调一次即可；总线健康时开销是一次 DWT 读。
  */
 BMI088_MultiRateData_t BMI088ReadLatest(BMI088Instance *inst);
 
@@ -276,6 +281,6 @@ BMI088_MultiRateData_t BMI088ReadLatest(BMI088Instance *inst);
  */
 float BMI088GetTemperature(const BMI088Instance *inst);
 
-#endif /* defined(BSP_SPI_MODULE_ENABLED) && defined(BSP_GPIO_MODULE_ENABLED) */
+#endif /* defined(HAL_SPI_MODULE_ENABLED) && defined(HAL_GPIO_MODULE_ENABLED) */
 
 #endif /* __DRV_BMI088_H */
