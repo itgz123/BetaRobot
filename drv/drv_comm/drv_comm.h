@@ -40,9 +40,11 @@ typedef struct
  */
 typedef struct
 {
-    void *media_cfg;                  /* 介质后端配置指针（USART → USART_Config_s*；NULL 跳过介质配置） */
+    void *media_cfg;                  /* 介质后端配置指针（USART → CommMediaUsartConfig_s*；NULL 跳过介质配置） */
     ProtoFrameCallback on_frame;      /* 出帧消费回调（NULL 表示不修改） */
-    uint16_t daemon_reload;           /* 链路对端看门狗重载值（单位：daemon 周期，默认 ms；0 = 禁用不监控，恒在线） */
+    uint16_t daemon_reload;           /* 链路对端看门狗超时（ms）；0 = 不监控（DaemonIsOnline 恒报在线）。
+                                         后端挂了 vtable->offline 钩子时，0 会被 Config 提升为
+                                         DRV_COMM_DAEMON_RELOAD_DEFAULT（禁用会把自恢复一起禁掉），见 CommConfig */
     DaemonFaultAction_e daemon_fault; /* 链路对端离线故障动作（见 DaemonFaultAction_e） */
 } CommConfig_s;
 
@@ -63,13 +65,16 @@ int8_t CommRegister(CommInstance *inst);
  * @brief 配置 comm 实例（可重入：可反复调用改介质参数 / 看门狗 / 出帧回调）
  * @param inst CommInstance 指针（须先 CommRegister）
  * @param cfg  CommConfig_s 配置（media_cfg / on_frame 均可为 NULL，NULL 则跳过对应项；
- *            daemon_reload/daemon_fault 为标量，每次调用都会写入，0 表示禁用监控）
+ *            daemon_reload/daemon_fault 为标量，每次调用都会写入）
  * @retval 0 成功；-1 失败（参数非法 / 未注册 / 配置失败 / 类型未支持）
  *
  * @note media_cfg 经 media 后端下发（USART → MediaUsartConfig → bsp USARTConfig），
- *       运行中可再次调用以切换波特率/发送模式等；daemon_reload>0 启用链路对端看门狗
- *       （收到完整合法帧喂狗，见 CommIsOnline）；on_frame 直接覆盖挂到接收协议
- *       rx_proto->on_frame，可运行期修改消费逻辑。
+ *       运行中可再次调用以切换波特率/发送模式等；链路对端看门狗按 daemon_reload 判离线
+ *       （收到完整合法帧喂狗，查询用 DaemonIsOnline(media->daemon)）。后端挂了 offline 钩子
+ *       （如 USART 接收停摆重启）时**配 0 会被提升为默认值**而非禁用 —— 自恢复就搭在这个
+ *       回调上，禁用会把它一起关掉；没挂该钩子的后端（USB / CAN 系）配 0 就是字面意义的
+ *       不监控，不做提升；on_frame 直接覆盖挂到接收协议 rx_proto->on_frame，
+ *       可运行期修改消费逻辑。
  */
 int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg);
 

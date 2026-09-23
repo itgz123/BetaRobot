@@ -105,7 +105,7 @@ typedef struct
 
 /**
  * @brief DBUS 实例结构体
- * @note 使用指针指向 BSP 实例，在注册时设置 parent
+ * @note 使用指针指向 BSP 实例，Config 时把 parent（反向指针）写入 BSP 实例
  */
 typedef struct DBUSInstance
 {
@@ -120,7 +120,7 @@ typedef struct DBUSInstance
 typedef struct
 {
     BoardUART_e uart_e;               // 板载UART枚举（用于查找硬件映射）
-    uint16_t daemon_reload;           // daemon 喂狗重载值
+    uint16_t daemon_reload;           // daemon 喂狗重载值（0 会被 Config 提升为默认值，见 DBUSConfig）
     DaemonFaultAction_e daemon_fault; // daemon 离线故障动作
     uint32_t lost_timeout_ms;         // 丢帧/失控确认超时 (ms)，0=立即标志
 } DBUS_Config_s;
@@ -131,7 +131,7 @@ typedef struct
  * @param name 实例名称
  *
  * @note 使用 BSP 层的 USART_INSTANCE_DEF 宏定义底层实例
- *       parent 指针在注册时设置，指向 DBUSInstance 自身
+ *       parent 指针在 Config 时经 USART_Config_s.parent 设置，指向 DBUSInstance 自身
  *
  * @example
  *   DBUS_INSTANCE_DEF(dbus_inst);
@@ -167,6 +167,11 @@ int8_t DBUSRegister(DBUSInstance *instance);
  * @note 填充 USART 硬件映射，设置 DMA 模式和回调、daemon 看门狗。
  *       可重复调用以更新运行时参数。
  *       要求在 DBUSRegister 之后调用。
+ * @note 接收停摆（bsp 续收最终失败、rx_armed 被清）后的自动重启由 daemon 离线回调完成：
+ *       无帧可喂狗 → DaemonTask（任务上下文）回调 → 调 bsp 的 USARTRecoverRxIfStalled，
+ *       以 DRV_DBUS_RX_RESTART_PERIOD_MS 为限频周期（判据、重启参数、限频基准都在 bsp 内）。
+ *       daemon_reload 配 0（本义禁用监控、DaemonTask 会跳过本实例）会被内部提升为默认值，
+ *       故该保护不会因少配一个字段而静默失效。
  */
 int8_t DBUSConfig(DBUSInstance *instance, const DBUS_Config_s *config);
 

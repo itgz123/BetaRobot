@@ -95,7 +95,7 @@ typedef struct
 
 /**
  * @brief SBUS 实例结构体
- * @note 使用指针指向 BSP 实例，在注册时设置 parent
+ * @note 使用指针指向 BSP 实例，Config 时把 parent（反向指针）写入 BSP 实例
  */
 typedef struct SBUSInstance
 {
@@ -113,7 +113,7 @@ typedef struct SBUSInstance
 typedef struct
 {
     BoardUART_e uart_e;               // 板载UART枚举（用于查找硬件映射）
-    uint16_t daemon_reload;           // daemon 喂狗重载值
+    uint16_t daemon_reload;           // daemon 喂狗重载值（0 会被 Config 提升为默认值，见 SBUSConfig）
     DaemonFaultAction_e daemon_fault; // daemon 离线故障动作
     uint32_t lost_timeout_ms;         // 丢帧/失控确认超时 (ms)，0=立即标志
     SBUS_ChRange_s ch_range;          // 通道原始值范围（中点/最大/最小），需满足 min < center < max
@@ -125,7 +125,7 @@ typedef struct
  * @param name 实例名称
  *
  * @note 使用 BSP 层的 USART_INSTANCE_DEF 宏定义底层实例
- *       parent 指针在注册时设置，指向 SBUSInstance 自身
+ *       parent 指针在 Config 时经 USART_Config_s.parent 设置，指向 SBUSInstance 自身
  *
  * @example
  *   SBUS_INSTANCE_DEF(sbus_inst);
@@ -161,6 +161,11 @@ int8_t SBUSRegister(SBUSInstance *instance);
  * @note 填充 USART 硬件映射，设置 DMA 模式和回调、daemon 看门狗，
  *       并根据 ch_range 预计算通道归一化系数（可重复调用以更新运行时参数，如重新校准）。
  *       要求在 SBUSRegister 之后调用。
+ * @note 接收停摆（bsp 续收最终失败、rx_armed 被清）后的自动重启由 daemon 离线回调完成：
+ *       无帧可喂狗 → DaemonTask（任务上下文）回调 → 调 bsp 的 USARTRecoverRxIfStalled，
+ *       以 DRV_SBUS_RX_RESTART_PERIOD_MS 为限频周期（判据、重启参数、限频基准都在 bsp 内）。
+ *       daemon_reload 配 0（本义禁用监控、DaemonTask 会跳过本实例）会被内部提升为默认值，
+ *       故该保护不会因少配一个字段而静默失效。
  */
 int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config);
 

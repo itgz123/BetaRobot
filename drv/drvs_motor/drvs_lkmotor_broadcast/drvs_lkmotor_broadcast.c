@@ -224,8 +224,8 @@ int8_t DrvsLKMotorBroadcastConfig(DrvsLKMotorBroadcast_s *inst,
     /* daemon：只当通信看门狗用，不挂回调
      * （广播模式无协议级恢复帧；旧驱动的回调是 reset PID，那属于算法层，
      *   且掉线期间 daemon 每个 tick 都会调用一次回调，不适合做重发）
-     * @note reload_count = 0 时 DaemonTask 整条跳过、DaemonIsOnline 恒报离线，
-     *       app 若要轮询在线状态必须配非 0。 */
+     * @note reload_count = 0 表示"不监控"：DaemonTask 整条跳过该实例，DaemonIsOnline
+     *       随之恒报在线（不复位、也不报掉线）。app 若要轮询真实的在线状态必须配非 0。 */
     if (inst->daemon)
     {
         Daemon_Config_s daemon_cfg = {

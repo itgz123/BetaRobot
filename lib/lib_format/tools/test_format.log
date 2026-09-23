@@ -1,0 +1,10 @@
+PASS  %lX 后跟 4 个 %d
+PASS  %lX 后跟 6 个 %d
+PASS  %lX 后跟 1 个 %d
+PASS  两个 %lX 并存
+PASS  %ld 32 位 / %lld 64 位
+PASS  %llu 仍为 64 位
+PASS  %llX 仍为 64 位
+PASS  %X 32 位
+
+结果: 全部通过

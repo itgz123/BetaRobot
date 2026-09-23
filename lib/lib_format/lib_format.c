@@ -4,7 +4,8 @@
  *
  * @note 支持整数 %d %u %x %X 与字符串 %s，均可带固定宽度（见 lib_format.h）。
  *       整数默认 32 位（int/uint32_t，8/16 位参数经默认整数提升可用）；
- *       带 l/ll 长度修饰符（%lld/%llu/%llx 等）按 64 位（int64_t/uint64_t）读取。
+ *       带 ll 长度修饰符（%lld/%llu/%llx 等）按 64 位（int64_t/uint64_t）读取；
+ *       单个 l 按 32 位（与目标 ABI 一致，见下方解析处的说明）。
  *       对外只暴露 LibFormatEx 一个函数（LIBFORMAT 宏内部调用）。
  *       十进制整数转换全程零除法指令：
  *       - 千分位分块查表：拆成最多 7 组 3 位数，每组各查一次
@@ -20,7 +21,16 @@
 
 #include "lib_format.h"
 #include "lib_math_int64.h"
+
+/* 配置入口（同 lib_math_trig_lut 的惯例）：
+ *   固件编译——include app_cfg.h（lib 层可包含的唯一 app 文件）取 LIB_FORMAT_USED；
+ *   PC 独立检验（tools/test_format.c）——定义 LIB_FORMAT_STANDALONE 跳过 app_cfg.h
+ *   （PC 端不引入工程配置）。 */
+#ifdef LIB_FORMAT_STANDALONE
+#define LIB_FORMAT_USED /* PC 独立检验：不引入 app_cfg.h，直接启用 */
+#else
 #include "app_cfg.h"
+#endif
 
 #ifdef LIB_FORMAT_USED
 
@@ -221,15 +231,20 @@ static int BSPFmtV(char *out, size_t cap, const char *fmt, size_t fmt_len, va_li
             width = width * 10 + (*f - '0');
             f++;
         }
-        /* 长度修饰符：l/ll → 64 位整数（int64_t/uint64_t，本模块统一 long long 语义）；
-         * 无修饰符 → 32 位（int/uint32_t）。其余修饰符(h/z/...)不识别，按字面输出。 */
+        /* 长度修饰符（按 C 标准语义，与目标 ABI 一致）：
+         *   ll → 64 位（int64_t/uint64_t，对应 long long）
+         *   l  → 32 位（int32_t/uint32_t，本工程 arm-none-eabi 上 int/long 均为 32 位）
+         * 其余修饰符(h/z/...)不识别，按字面输出。
+         * 注意：曾把 l 也当 64 位，导致 %lX 在 32 位实参上多读一个参数槽——
+         * arm-none-eabi 的 va_arg(uint64_t) 生成 ldrd（读 8 字节、推进 8 字节），
+         * 结果是 err 值高半为垃圾、且同一格式串后续所有转换全部错位。 */
         int is64 = 0;
         if (f < flim && *f == 'l')
         {
-            is64 = 1;
             f++;
             if (f < flim && *f == 'l')
             {
+                is64 = 1; /* 只有 ll 才是 64 位 */
                 f++;
             }
         }

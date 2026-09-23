@@ -40,20 +40,21 @@ typedef void (*offline_callback)(void *);
 /* daemon结构体定义 */
 typedef struct daemon_ins
 {
-    uint16_t reload_count;            // 重载值（喂狗超时阈值）；0 = 禁用（不监控，等效恒在线）
+    uint16_t reload_count;            // 喂狗超时阈值（毫秒）；0 = 禁用（不监控，等效恒在线）
     DaemonFaultAction_e fault_action; // 离线故障动作, 见 DaemonFaultAction_e
     offline_callback callback;        // 异常处理函数,当模块发生异常时会被调用
-    uint16_t temp_count;              // 当前值,减为零说明模块离线或异常
+    uint16_t temp_count;              // 剩余量(ms，向上取整)：由 DaemonTask 按实耗时间换算。
+                                      // == 0 ⟺ 距上次喂狗已满 reload_count 毫秒（与 DaemonTask 的离线判定等价）
     void *owner_id;                   // daemon实例的地址,初始化的时候填入
     uint8_t is_online;                // 当前在线状态,用于检测状态转换
-    uint64_t last_reload_us;          // 上次喂狗时间戳 (us)，由 DWT 获取
+    uint64_t last_reload_us;          // 上次喂狗时间戳 (us)，由 DWT 获取；离线判据的基准
 } DaemonInstance;
 
 /*------------- 配置结构体 --------------*/
 
 typedef struct
 {
-    uint16_t reload_count;            // 重载值（喂狗超时阈值）
+    uint16_t reload_count;            // 喂狗超时阈值（毫秒）
     DaemonFaultAction_e fault_action; // 离线故障动作, 见 DaemonFaultAction_e
     offline_callback callback;        // 异常处理函数（可为NULL）
     void *owner_id;                   // 所属模块实例指针
@@ -75,6 +76,18 @@ typedef struct
 void DaemonConfig(DaemonInstance *inst, const Daemon_Config_s *config);
 void DaemonRegister(DaemonInstance *inst);
 void DaemonReload(DaemonInstance *instance);
+
+/**
+ * @brief 查询模块是否在线（非阻塞）
+ * @param instance daemon 实例
+ * @retval 1 在线：reload_count 毫秒内喂过狗（见 temp_count 的等价说明）
+ * @retval 0 离线：距上次喂狗已满 reload_count 毫秒；或 instance == NULL
+ *
+ * @note reload_count == 0（禁用监控）恒返回 1（等效恒在线），与"没监控就不该拦控制"的
+ *       调用惯例一致（如 app_chassis 的 GimbalCommIsOnline）；DAEMON_USED 未启用时同样返回 1。
+ * @note 判据与 DaemonTask 的离线判定严格等价（同一阈值、同一时间基准），不会出现
+ *       "查询说离线、故障动作还没触发"的错位。
+ */
 uint8_t DaemonIsOnline(DaemonInstance *instance);
 void DaemonTask(void);
 void DaemonInit(void);

@@ -216,7 +216,8 @@ int8_t DrvsLKMotorConfig(DrvsLKMotor_s *inst, const DrvsLKMotorConfig_s *cfg)
 
     /* daemon：只当通信看门狗用，不挂回调
      * （模块已不持有使能状态，无从判断该不该重发 0x88；由 app 在 DaemonIsOnline
-     *   变化时自己调 SendCmd 决定。注意 reload_count = 0 时 DaemonIsOnline 恒报离线） */
+     *   变化时自己调 SendCmd 决定。注意 reload_count = 0 表示"不监控"，
+     *   那时 DaemonIsOnline 恒报在线、不会给出真实状态） */
     if (inst->daemon)
     {
         Daemon_Config_s daemon_cfg = {
