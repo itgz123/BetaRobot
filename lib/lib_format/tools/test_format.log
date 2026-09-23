@@ -2,6 +2,8 @@ PASS  %lX 后跟 4 个 %d
 PASS  %lX 后跟 6 个 %d
 PASS  %lX 后跟 1 个 %d
 PASS  两个 %lX 并存
+PASS  SPI 启动失败日志（%s×2 + %d×5 + %lX）
+PASS  SPI BLOCK 失败日志（phase=failed / 无 DMA 口）
 PASS  %ld 32 位 / %lld 64 位
 PASS  %llu 仍为 64 位
 PASS  %llX 仍为 64 位
