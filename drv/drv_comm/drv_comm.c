@@ -17,6 +17,7 @@
 
 #include "drv_comm.h"
 #include "drv_daemon.h" /* 链路对端看门狗：注册/配置/喂狗统一在 comm 层 */
+#include "bsp_log.h"
 // 介质后端 Register/Config（协议后端经注册表 CommProtoBackendFind 分发，见 CommRegister）
 #include "comm_media_usart.h"
 #include "comm_media_usb.h"
@@ -25,6 +26,22 @@
 #include "comm_media_can_idseq.h"
 
 #ifdef DRV_COMM_USED
+
+/* daemon_reload 配 0 时的兜底值（单位：毫秒，即 100ms）：
+ * 0 的本义是"禁用监控"——DaemonTask 会整个跳过该实例，等于把介质后端的离线自恢复
+ * （如 USART 的接收停摆重启，见 CommMediaVTable_s.offline）一起禁掉。故 Config 把 0 提升为该值。
+ * 该值同时是"多久没收到完整合法帧判离线"的阈值（离线日志 / fault_action / 对端在线查询都按它）。 */
+#ifndef DRV_COMM_DAEMON_RELOAD_DEFAULT
+#define DRV_COMM_DAEMON_RELOAD_DEFAULT 100
+#endif
+/* 兜底值自身不能再是 0 —— 否则"把 0 提升为兜底值"等于没提升，离线自恢复又会静默失效 */
+_Static_assert(DRV_COMM_DAEMON_RELOAD_DEFAULT != 0,
+               "DRV_COMM_DAEMON_RELOAD_DEFAULT must be non-zero (0 would silently disable offline self-heal)");
+
+#ifndef DRV_COMM_LOG_LIMIT
+#define DRV_COMM_LOG_LIMIT 10
+#endif                                                     // !DRV_COMM_LOG_LIMIT
+LOG_INSTANCE_DEF(g_comm_log, "drv_comm", DRV_COMM_LOG_LIMIT); // comm 日志实例
 
 /* 从 CommInstance 取介质/协议基类指针（void* 指向派生实例，首成员即基类） */
 #define COMM_INSTANCE_MEDIA(inst) ((CommMedia *)((inst)->media))
@@ -36,11 +53,15 @@
 /**
  * @brief 接收数据入队（UNPACK_IN_TASK 模式：不阻塞中断）
  * @todo 完整实现：接收队列（bsp_freertos）+ 共享 RX 任务解包（下一轮）
+ * @note CommRegister 已在注册期拒绝 UNPACK_IN_TASK（本函数是空实现），走到这里说明
+ *       接线被绕过。仍要报错而不是静默丢帧：后者表现为"链路看着通、就是收不到"，
+ *       是最难查的一类故障。
  */
 static void CommRxPush(CommInstance *inst, const uint8_t *data)
 {
     (void)inst;
     (void)data;
+    BSPLOG(&g_comm_log, LOG_LEVEL_ERROR, "UNPACK_IN_TASK not implemented yet, frame dropped!");
 }
 
 /**
@@ -59,7 +80,7 @@ void CommMediaRxHook(CommMedia *media, const uint8_t *data)
         return;
 
     /* 链路对端看门狗喂狗：各 media 后端仅在收齐一帧完整合法数据后才调用本入口，
-     * 故凡到达此处即代表对端持续在线；reload==0（未启用监控）由 DaemonTask 跳过 */
+     * 故凡到达此处即代表对端持续在线（未配置 / 未登记看门狗时本入口空转） */
     if (media->daemon != NULL)
         DaemonReload(media->daemon);
 
@@ -71,7 +92,7 @@ void CommMediaRxHook(CommMedia *media, const uint8_t *data)
     switch (inst->unpack_mode)
     {
     case UNPACK_IN_TASK:
-        CommRxPush(inst, data); /* 搬入接收队列，由 RX 任务解包+回调（待实现） */
+        CommRxPush(inst, data); /* 待实现；CommRegister 已拒绝该模式，正常不可达 */
         break;
     case UNPACK_IN_ISR:
     default:
@@ -94,6 +115,15 @@ int8_t CommRegister(CommInstance *inst)
 
     if (inst == NULL || inst->media == NULL || inst->rx_proto == NULL || inst->tx_proto == NULL)
         return -1;
+
+    /* 接收队列 + 共享 RX 任务解包（UNPACK_IN_TASK）尚未实现：注册期就明确拒绝。
+     * 放行的代价是每一帧都在 CommRxPush 里被丢弃，而调用方只看到"注册成功、
+     * 链路健康、收不到数据"，属最难定位的一类故障。 */
+    if (inst->unpack_mode == UNPACK_IN_TASK)
+    {
+        BSPLOG(&g_comm_log, LOG_LEVEL_ERROR, "UNPACK_IN_TASK not implemented yet, use UNPACK_IN_ISR!");
+        return -1;
+    }
 
     media = COMM_INSTANCE_MEDIA(inst);
     rx_proto = COMM_INSTANCE_RX_PROTO(inst);
@@ -147,8 +177,8 @@ int8_t CommRegister(CommInstance *inst)
     /* 建立反向指针：media 回指所属 comm 实例（接收分发据此反查 rx_proto） */
     media->parent = inst;
 
-    /* 登记链路对端看门狗：实例经 DEF 宏内嵌于 media（media->daemon）。armed（reload>0）
-     * 由 CommConfig 决定（reload==0 时 DaemonTask 跳过，等效禁用），故此处仅登记一次 */
+    /* 登记链路对端看门狗：实例经 DEF 宏内嵌于 media（media->daemon）。
+     * reload_count 由 CommConfig 决定（配 0 会被提升为默认值，见那里），故此处仅登记一次 */
     if (media->daemon != NULL)
         DaemonRegister(media->daemon);
 
@@ -173,7 +203,7 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
     case MEDIA_USART:
         if (cfg->media_cfg != NULL)
         {
-            if (MediaUsartConfig((CommMediaUsart *)inst->media, (USART_Config_s *)cfg->media_cfg) != 0)
+            if (MediaUsartConfig((CommMediaUsart *)inst->media, (CommMediaUsartConfig_s *)cfg->media_cfg) != 0)
                 return -1;
         }
         break;
@@ -198,13 +228,30 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
     }
 
     /* 2. 链路对端看门狗参数（统一配置，可重入：反复调用改 reload/fault）。
-     *    reload==0 → DaemonConfig 置 0，DaemonTask 跳过该实例 = 禁用监控（恒在线）。
-     *    owner_id 填 comm 实例，离线日志/回调据此识别所属链路 */
+     *    owner_id 填 comm 实例，离线日志/回调据此识别所属链路。
+     *    callback 取介质后端的 offline 钩子（如 USART 的接收停摆重启；无则 NULL） */
     if (media->daemon != NULL)
     {
+        uint16_t daemon_reload = cfg->daemon_reload;
+        offline_callback offline_hook = (media->vtable != NULL) ? media->vtable->offline : NULL;
+
+        /* reload==0 本义是禁用监控（DaemonTask 跳过该实例 = 恒在线）。只有**挂了 offline
+         * 自恢复钩子**的后端才提升：那种后端（USART）"没收到帧"是它唯一能拿到的任务上下文
+         * 周期时基，禁用等于把自恢复一起禁掉。
+         * 没有 offline 钩子的后端（USB / USB_SIMPLE / CAN_PKT0 / CAN_IDSEQ）的 daemon 只
+         * 用来判对端在线，配 0 就是调用方真想不监控 —— 那种情况下静默改成监控属于把契约反转，
+         * 故不提升（见 comm_media.h 的 vtable.offline 说明）。 */
+        if (daemon_reload == 0 && offline_hook != NULL)
+        {
+            daemon_reload = DRV_COMM_DAEMON_RELOAD_DEFAULT;
+            BSPLOG(&g_comm_log, LOG_LEVEL_WARNING,
+                   "daemon_reload=0 disables offline self-heal, forced to %u", daemon_reload);
+        }
+
         Daemon_Config_s daemon_cfg = {
-            .reload_count = cfg->daemon_reload,
+            .reload_count = daemon_reload,
             .fault_action = cfg->daemon_fault,
+            .callback = offline_hook,
             .owner_id = inst,
         };
         DaemonConfig(media->daemon, &daemon_cfg);

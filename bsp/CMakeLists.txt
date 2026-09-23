@@ -25,8 +25,8 @@ set(MODULE_INCLUDE_DIRS
     bsp_sys_status
     bsp_dwt
     bsp_gpio
+    bsp_common
     bsp_log
-    bsp_module
     bsp_spi
     bsp_i2c
     bsp_tim

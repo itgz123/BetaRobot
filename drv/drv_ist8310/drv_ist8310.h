@@ -89,7 +89,7 @@ typedef struct
     BoardGPIO_e rstn_e; // 复位 GPIO 枚举；**填 GPIO_NUM_MAX 表示未接**（无复位能力）
 
     /* 器件运行时参数 */
-    uint16_t daemon_reload;               // daemon 喂狗重载值，0 表示禁用
+    uint16_t daemon_reload;               // daemon 喂狗超时（ms），0 表示禁用（不监控：DaemonIsOnline 恒报在线）
     DaemonFaultAction_e daemon_fault;     // daemon 离线故障动作
     IST8310_WorkMode_e work_mode;         // 采样由谁驱动（轮询/中断）
     I2C_Work_Mode_e i2c_mode;             // 传输怎么做（阻塞/IT/DMA），与 work_mode 正交

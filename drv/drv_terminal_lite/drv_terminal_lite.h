@@ -60,6 +60,9 @@
 #ifndef TERMINAL_LITE_LOG_LIMIT
 #define TERMINAL_LITE_LOG_LIMIT 10 // 模块日志限频（条/秒）
 #endif
+#ifndef TERMINAL_LITE_RX_RESTART_PERIOD_MS
+#define TERMINAL_LITE_RX_RESTART_PERIOD_MS 100 // 接收停摆后的自检/重启周期（ms）；同时是小任务的空闲唤醒周期
+#endif
 
 /*============================================
  *              类型定义

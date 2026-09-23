@@ -154,7 +154,11 @@ extern uint64_t level_cnt[LOG_LEVEL_NUM];
 #define BSPLOG_FILTER(level) ((level) < LOG_FILTER_LEVEL)
 
 /* 核心实现（bsp_log.c）：限频检查 + 组装 "[颜色][分级][时间戳][模块名]:内容[重置]\r\n"
- * 并经日志串口 DMA 发送。BSPLOG 只做编译期过滤后把参数透传给本函数。 */
+ * 并经日志串口 DMA 发送。BSPLOG 只做编译期过滤后把参数透传给本函数。
+ * @note 日志串口尚未配置（BSPLogInit 未跑 / 其 USARTConfig 失败）时本函数直接丢弃：
+ *       没有传输层就没有地方可发，硬发只会触发"实例未配置"错误日志，
+ *       而那条错误日志同样发不出去、会滞留在 WAIT_SEND 队列里等下一次成功发送
+ *       时以旧时间戳冒出来。 */
 void BSPLogV(LOGInstance *inst, LOG_LEVEL level, const char *fmt, ...);
 
 /* 发送日志：过滤（level 低于 LOG_FILTER_LEVEL 整条剔除）+ 透传参数给 BSPLogV */

@@ -250,6 +250,23 @@ static void TerminalLiteRxHook(USARTInstance *instance)
     }
 }
 
+/**
+ * @brief 接收停摆自恢复（任务上下文，由小任务空闲超时触发）
+ * @note 接收停摆（bsp 续收最终失败、rx_armed 被清）后 rx_callback 不再触发，小任务的通知
+ *       也再不会来 —— 只能靠空闲超时醒来时自检。判据（`rx_armed == 0` 才是真停摆，
+ *       用户只是没敲命令不算）、限频与重启参数都在 bsp 的 USARTRecoverRxIfStalled 里，
+ *       四条 UART 链路共用同一份实现；这里只给限频周期。
+ * @note bsp 禁止在 ISR 里重启接收（Abort 要自旋等 HAL tick），本函数在任务上下文，正合适。
+ */
+static void TerminalLiteRxRecover(void)
+{
+    /* 接收在跑 / 未到限频周期 → BSP_BUSY，空转；只有真重启成功才打日志 */
+    if (USARTRecoverRxIfStalled(&s_tl_uart, TERMINAL_LITE_RX_RESTART_PERIOD_MS) == BSP_OK)
+    {
+        BSPLOG(&g_terminal_lite_log, LOG_LEVEL_WARNING, "RX stalled, receive restarted");
+    }
+}
+
 // 小任务：收字节组行 → 行齐就地解析 tlget/tlset → 事件入队（原 task_byte/parse_line 已内联）
 static void TerminalLiteTaskFunc(void *argument)
 {
@@ -297,8 +314,13 @@ static void TerminalLiteTaskFunc(void *argument)
         }
         if (!line_ready)
         {
-            // 环形空且无完整行：阻塞等下次 RX 通知（clearOnExit=pdTRUE：通知清零，不攒批）
-            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+            // 环形空且无完整行：限时等下次 RX 通知（clearOnExit=pdTRUE：通知清零，不攒批）。
+            // 超时唤醒（返回 0）= 这段时间一个字节都没来，顺带做一次接收停摆自检：
+            // 接收停摆时 RX 通知永远不会来，只有这个超时能把小任务叫醒去重启它。
+            if (ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(TERMINAL_LITE_RX_RESTART_PERIOD_MS)) == 0)
+            {
+                TerminalLiteRxRecover();
+            }
             continue;
         }
 
@@ -416,15 +438,53 @@ static const char *err_text(TerminalLiteErr_e err)
 }
 
 // 前置：调用方已在临界区（task）或处于 ISR（TX 完成回调）
-// 置 SEND 并启动 DMA 发送一个槽（调用方须已临界 / 处于 ISR，s_tx_now 不被并发改）
+// 启动 DMA 发送一个槽，成功才置 SEND/认领（调用方须已临界 / 处于 ISR，s_tx_now 不被并发改）
 static void tx_start_slot(TerminalLiteTxBuf_s *tb)
 {
-    tb->state = TL_TX_SEND;
-    s_tx_now = tb;
-    if (USARTTransmit(&s_tl_uart, (uint8_t *)tb->data, tb->len, 0) != 0)
+    /* 顺序刻意是"先启动、成功才认领"：置 SEND/s_tx_now 在前的话，一个早先挂起、此刻才被
+     * 响应的 UART 错误中断会在启动窗口里看到"本槽在途"，把尚未交给 DMA 的它当成被中止的
+     * 那次释放掉，而外层照旧把 DMA 启动了 —— 槽随即可能被别的发送借走、边发边被改写。
+     * 反过来没有窗口：DMA 完成中断至少要等一帧的传输时间，抢不到这两行之前。 */
+    if (USARTTransmit(&s_tl_uart, (const uint8_t *)tb->data, tb->len, BSP_DMA_MODE, 0) != BSP_OK)
     {
         // DMA 启动失败：归还本槽；后续若有 WAIT_SEND 由下次完成回调补发
         tb->state = TL_TX_FREE;
+        BSPLOG(&g_terminal_lite_log, LOG_LEVEL_WARNING, "DMA send start failed, dropped!");
+        return;
+    }
+
+    tb->state = TL_TX_SEND;
+    s_tx_now = tb;
+}
+
+/* UART 错误回调（ISR 或**任务上下文**；后者来自 bsp 的发送卡死自恢复 USART_RecoverTx）：
+ * 若本次发送已被中止（HAL/Abort 已把状态置回 READY），不会再有待归还的完成回调，
+ * 须释放在途槽，否则它永久停在 SEND、反复出错会耗光发送槽池（终端静默）。
+ * 若发送仍在途（gState 非 READY），错在接收侧，此刻不能释放 DMA 还在读的缓冲——
+ * 那种残留由下一次发送完成回调兜底归还。
+ *
+ * 幂等：重复调用须无副作用（同一次错误可能既走硬件错误又走卡死恢复）。
+ *
+ * 这里刻意**不**补发 WAIT_SEND：本回调可能在 USARTTransmit 调用栈内被触发（卡死恢复），
+ * 补发等于嵌套调用 USARTTransmit，外层失败后还会写 s_tx_now / 槽状态，会把内层刚启动的
+ * 槽覆盖掉。积压的 WAIT_SEND 由下一次发送完成回调（TxCplt）带出；
+ * 期间若再没有一次 TerminalLiteSend，这些槽就一直挂在 WAIT_SEND，直到下一次发送触发。 */
+static void TerminalLiteErrHandler(USARTInstance *instance, USART_ErrReason_e reason)
+{
+    /* RX_STALLED 与本函数无关：接收停摆由小任务的空闲超时自检 + TerminalLiteRxRecover 处理 */
+    if (reason == USART_ERR_RX_STALLED)
+        return;
+
+    if (s_tx_now == NULL)
+        return;
+
+    /* TX_ABORT：bsp 已强止发送并把 gState 复位；HW：错误位都在接收侧，
+     * gState 非 READY 说明发送仍在途，不能归还 DMA 正在读的缓冲 */
+    if (reason == USART_ERR_TX_ABORT ||
+        (instance != NULL && instance->handle != NULL &&
+         instance->handle->gState == HAL_UART_STATE_READY))
+    {
+        s_tx_now->state = TL_TX_FREE;
         s_tx_now = NULL;
     }
 }
@@ -453,6 +513,14 @@ void TerminalLiteSend(const char *fmt, ...)
 {
     if (!fmt || !s_tl_uart.handle)
         return;
+
+    /* 发送卡死自检：放在最前（早于借槽），因为本模块的发送链一旦卡住就再也调用不到
+     * USARTTransmit —— 在途槽永远停在 SEND、新内容全部转 WAIT_SEND、槽池占满后
+     * 连借都借不到，终端彻底静默。只有每条发送必经的这里能把状态复位、
+     * 并借 err_callback 归还那个 SEND 槽。
+     * 本函数是 TX 唯一写者，故这里仍满足"单写者"约定；从 ISR 调用也安全
+     * （bsp 入口直接返回 BSP_BUSY），空闲时只做一次 DWT 读。 */
+    (void)USARTRecoverTxIfStuck(&s_tl_uart, 0);
 
     // 借空闲槽；WRITE 期间 DMA/完成回调不会碰该槽，格式化可在临界区外做
     TerminalLiteTxBuf_s *tb = NULL;
@@ -552,14 +620,20 @@ void TerminalLiteInit(const TerminalLiteCmd_s *table, uint8_t cnt)
 
     s_exec_q_h = QueueRegister(&s_exec_q);
 
-    USARTRegister(&s_tl_uart);
     USART_Config_s usart_cfg = {
         .uart_e = TERMINAL_LITE_UART,
-        .tx_mode = USART_DMA_MODE,
+        .parent = NULL,
         .rx_callback = TerminalLiteRxHook,
         .tx_callback = TerminalLiteTxCplt,
+        .err_callback = TerminalLiteErrHandler,
     };
-    USARTConfig(&s_tl_uart, &usart_cfg);
+    if (USARTRegister(&s_tl_uart) == BSP_OK && USARTConfig(&s_tl_uart, &usart_cfg) == BSP_OK)
+    {
+        // 启动接收常开流（Config 不再自动启动接收，收满一行由 TerminalLiteRxHook 取走）。
+        // 不因失败而 return / 跳过小任务：小任务的空闲超时自检会按同一套参数反复重启它
+        // （TerminalLiteRxRecover），此刻放弃反而把自恢复一起关掉了。失败由 bsp 打 ERROR 日志。
+        (void)USARTReceive(&s_tl_uart, s_tl_uart.rx_buff_size, BSP_DMA_MODE, 0);
+    }
 
     Task_Init_Config_s task_cfg = {
         .func = TerminalLiteTaskFunc,

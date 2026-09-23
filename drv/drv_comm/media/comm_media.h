@@ -8,8 +8,9 @@
  *           （CommMediaRxHook，经 parent 反查），media 基类不做接收分发
  *   - 归属：一个 media 只属于一个 comm 实例（经 parent 反查）
  *   - 看门狗：基类持有 daemon 指针（DEF 宏内嵌 name##_daemon），监控链路对端是否持续发帧——
- *             收到完整合法帧即在 comm 层接收入口（CommMediaRxHook）喂狗；armed（reload>0）
- *             由 CommConfig 统一配置，未配（reload==0）等效禁用恒在线。
+ *             收到完整合法帧即在 comm 层接收入口（CommMediaRxHook）喂狗；阈值由 CommConfig
+ *             统一配置（后端挂了 offline 钩子时，配 0 会被提升为默认值——离线自恢复就搭在
+ *             这个回调上；没挂钩子的后端配 0 即字面意义上的不监控）。
  * 基类不解析内容（SOF/CRC/comm_id 属协议层），不感知介质物理限制（属后端）。
  */
 
@@ -38,6 +39,13 @@ typedef struct CommMedia CommMedia;
 typedef struct
 {
     int8_t (*send)(CommMedia *self, const uint8_t *data); /* 发送任意长度数据单元 */
+
+    /* 链路离线自恢复（可为 NULL）：daemon 判离线时在 DaemonTask（任务上下文）被调用，
+     * 参数为 CommConfig 写入的 owner_id（comm 实例）。
+     * 用途：介质收到数据才喂狗，故"离线"是介质唯一能拿到的任务上下文周期时基——
+     * USART 后端据此重启停摆的接收（ISR 里不能重启，见 bsp_usart 的 Abort 约束）。
+     * 后端须自行判"是链路没数据（接收正常）还是接收停摆"，并对重复调用限频。 */
+    offline_callback offline;
 } CommMediaVTable_s;
 
 /* 介质基类（派生结构体内嵌作首成员） */
@@ -47,8 +55,9 @@ struct CommMedia
     void *parent;                    /* 指向 comm 实例（接收分发经此反查） */
     void *media;                     /* 指向 bsp 实例 */
     DaemonInstance *daemon;          /* 链路对端看门狗实例（DEF 宏内嵌 name##_daemon 并绑定）：
-                                      * 收到完整合法帧即在 CommMediaRxHook 喂狗；armed（reload>0）
-                                      * 由 CommConfig 统一配置，reload==0 等效禁用。NULL 表示不监控 */
+                                      * 收到完整合法帧即在 CommMediaRxHook 喂狗；阈值由 CommConfig
+                                      * 统一配置（挂了 vtable->offline 时配 0 会被提升为默认值，
+                                      * 见 CommConfig）。NULL 表示不监控 */
 };
 
 /* 公共接口 */

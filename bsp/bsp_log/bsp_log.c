@@ -87,11 +87,69 @@ static void LogUartTxCplt(USARTInstance *instance)
     {
         if (s_log_buf[i].buf_state == LOG_BUF_WAIT_SEND)
         {
+            /* 与 BSPLogV 同款：先置 SEND、启动成功才认领（s_tx_buf 此刻必为 NULL） */
             s_log_buf[i].buf_state = LOG_BUF_SEND;
-            s_tx_buf = &s_log_buf[i];
-            USARTTransmit(&s_log_uart, (uint8_t *)s_log_buf[i].buf_pool, s_log_buf[i].buf_len, 0);
+            if (USARTTransmit(&s_log_uart, (const uint8_t *)s_log_buf[i].buf_pool, s_log_buf[i].buf_len,
+                              BSP_DMA_MODE, 0) != BSP_OK)
+            {
+                /* 启动失败：立即归还本槽（后续 WAIT_SEND 由下一次发送完成回调接续） */
+                s_log_buf[i].buf_state = LOG_BUF_FREE;
+            }
+            else
+            {
+                s_tx_buf = &s_log_buf[i];
+            }
             break;
         }
+    }
+}
+
+/* 是否已有缓冲在发送中（SEND）：同一时刻至多一个，用作"能否直接发送"的就绪判据 */
+static uint8_t LogBufSending(void)
+{
+    uint8_t i;
+
+    for (i = 0; i < LOG_BUF_NUM; i++)
+    {
+        if (s_log_buf[i].buf_state == LOG_BUF_SEND)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* UART 错误回调（ISR 或**任务上下文**；后者来自 bsp 的发送卡死自恢复 USART_RecoverTx）：
+ * 若本次发送已被中止（HAL/Abort 已把状态置回 READY），就不会再有完成回调，
+ * 须归还在途缓冲，否则它永久停在 SEND、反复出错会耗光缓冲池。
+ * 反过来若发送仍在途（gState 非 READY），说明错在接收侧，不能动这个缓冲——
+ * 那种情况下的残留由下一次发送完成回调兜底归还。
+ *
+ * 幂等：硬件错误可能连续触发，bsp 的卡死恢复也可能与它叠加，重复调用须无副作用。
+ *
+ * 这里刻意**不**补发 WAIT_SEND：本回调可能是在 USARTTransmit 的调用栈内被触发的
+ * （卡死恢复路径），补发等于嵌套调用 USARTTransmit；而外层失败后还会写 s_tx_buf /
+ * buf_state，会把内层刚启动的那个槽覆盖掉——那个槽就永久停在 SEND，堵死整条日志链。
+ * 积压的 WAIT_SEND 由下一次发送完成回调（TxCplt）带出即可，不必在这里抢；
+ * 期间若再没有任何一条日志发出去，这些槽就一直挂在 WAIT_SEND，直到下一条日志触发发送。 */
+static void LogUartErrHandler(USARTInstance *instance, USART_ErrReason_e reason)
+{
+    /* RX_STALLED 与本模块无关（日志实例只发不收，没启动接收） */
+    if (reason == USART_ERR_RX_STALLED)
+        return;
+
+    if (s_tx_buf == NULL)
+        return;
+
+    /* TX_ABORT：bsp 刚强止了本次发送并把 gState 复位为 READY，rx 已确知不会再来完成回调；
+     * HW：HAL 的错误位都在接收侧，gState 非 READY 恰恰说明"有一次健康的发送仍在途"，
+     *     那种情况不能动这个缓冲（残留由下一次 TxCplt 兜底归还）*/
+    if (reason == USART_ERR_TX_ABORT ||
+        (instance != NULL && instance->handle != NULL &&
+         instance->handle->gState == HAL_UART_STATE_READY))
+    {
+        s_tx_buf->buf_state = LOG_BUF_FREE; /* 归还，后续由新的日志重新调度 */
+        s_tx_buf = NULL;
     }
 }
 
@@ -187,18 +245,23 @@ LOG_INSTANCE_DEF(g_log, "bsp_log", BSP_LOG_LOG_LIMIT);
 
 void BSPLogInit(void)
 {
-    if (USARTRegister(&s_log_uart) != 0)
+    USART_Config_s cfg = {
+        .uart_e = LOG_UART,
+        .parent = NULL,
+        .rx_callback = NULL,
+        .tx_callback = LogUartTxCplt,
+        .err_callback = LogUartErrHandler,
+    };
+
+    if (USARTRegister(&s_log_uart) != BSP_OK)
     {
         return;
     }
-    USART_Config_s cfg = {
-        .uart_e = LOG_UART,
-        .tx_mode = USART_DMA_MODE,
-        .rx_callback = NULL,
-        .tx_callback = LogUartTxCplt,
-        .timeout_ms = 0,
-    };
-    USARTConfig(&s_log_uart, &cfg);
+    /* 只发不收：不需要 USARTReceive，也不会再被要求配 RX DMA */
+    if (USARTConfig(&s_log_uart, &cfg) != BSP_OK)
+    {
+        return;
+    }
     BSPLOG(&g_log, LOG_LEVEL_INFO, "你好！"); // 测试中文（需要指定文件编码和串口接收都是UTF-8）
 }
 
@@ -211,6 +274,24 @@ void BSPLogV(LOGInstance *inst, LOG_LEVEL level, const char *fmt, ...)
     va_list args;
     int n;
     uint8_t i;
+    BSP_Status_e ret;
+
+    /* 日志传输层尚未就绪（BSPLogInit 未跑，或该串口 Config 失败）：无处可发，直接丢弃。
+     * 必须在这里拦住，不能让下面的 USARTTransmit 去挡——它在实例未配置时会打一条错误日志，
+     * 而那条日志走的是同一个串口，会以 WAIT_SEND 滞留到下一次成功发送时才冒出来
+     * （时间戳还是旧的），看起来像"启动顺序反了"。
+     * 典型场景：BSPLogInit 里 USARTRegister 成功、USARTConfig 还没跑的瞬间自己打的日志。 */
+    if (s_log_uart.handle == NULL)
+    {
+        return;
+    }
+
+    /* 发送卡死自检：放在最前（早于限频与借槽），因为本模块的发送链一旦卡住就再也
+     * 调用不到 USARTTransmit —— 在途槽永远停在 SEND、新日志全部转 WAIT_SEND、
+     * 池满后连排都不排，整条链静默。只有每帧必经的这里能把状态复位、并借 err_callback
+     * 归还那个 SEND 槽。ISR 里调用是安全的：bsp 入口直接返回 BSP_BUSY 不动作。
+     * 空闲时它只做一次 DWT 读，开销可忽略。 */
+    (void)USARTRecoverTxIfStuck(&s_log_uart, 0);
 
     if (!BSPLogCheckLimit(inst))
     {
@@ -277,20 +358,39 @@ void BSPLogV(LOGInstance *inst, LOG_LEVEL level, const char *fmt, ...)
         }
         lb->buf_len = (uint16_t)len; /* 记录长度，供 WAIT_SEND 出队 */
 
-        /* 提交：WRITE → SEND 允许 DMA 读取；uart 空闲直发，忙则排队（内联原 BSPLogMediaSend） */
-        lb->buf_state = LOG_BUF_SEND;
-        if (USARTIsReady(&s_log_uart))
+        /* 提交：WRITE → SEND 允许 DMA 读取；uart 空闲直发，忙则排队（内联原 BSPLogMediaSend）。
+         * 就绪判据用本模块自己的"SEND 槽是否存在"而不是去问 uart 状态：同一时刻至多一个
+         * SEND，据此判断即无 IsReady→Transmit 之间被打断的窗口（该窗口会让两个缓冲同时
+         * 交给 DMA）。有 SEND 在途时必然处于发送中，不会再有完成回调抢跑。 */
+        if (LogBufSending())
         {
-            s_tx_buf = lb; /* 传输层持有直到 DMA 完成，完成回调归还 */
-            if (USARTTransmit(&s_log_uart, (uint8_t *)buf, (uint16_t)len, 0) != 0)
-            {
-                lb->buf_state = LOG_BUF_FREE; /* 启动失败：立即归还 */
-                s_tx_buf = NULL;
-            }
+            /* 走到这里说明确实有帧在途（上面那次自检刚判过、卡死的话槽已被归还），
+             * 排队等完成回调扫描发送 */
+            lb->buf_state = LOG_BUF_WAIT_SEND;
         }
         else
         {
-            lb->buf_state = LOG_BUF_WAIT_SEND; /* 排队，完成回调扫描发送 */
+            /* 先置 SEND、再启动、**成功后才认领**（s_tx_buf = lb）：
+             *   - 置 SEND 在前：中断里再进来的 BSPLOG 看到"有槽在发"即排队，不会与本帧
+             *     抢着启动 DMA；
+             *   - 认领在后：本帧尚未交给 DMA 时 s_tx_buf 仍为 NULL，这期间到来的
+             *     err_callback（发送卡死自恢复可能就在 USARTTransmit 调用栈内触发）
+             *     会直接返回，不会把本帧当成"被中止的那次"释放掉。若提前认领，一个挂起
+             *     已久、此刻才被响应的错误中断会把本槽置 FREE 交给别的日志，而外层照旧
+             *     把 DMA 启动起来了（边发边被改写）；
+             *   - 于是失败分支只需回写 lb->buf_state：s_tx_buf 从未指向它，也没人动过它
+             *     （SEND 态的槽不可被借用）。 */
+            lb->buf_state = LOG_BUF_SEND;
+            ret = USARTTransmit(&s_log_uart, (const uint8_t *)buf, (uint16_t)len, BSP_DMA_MODE, 0);
+            if (ret != BSP_OK)
+            {
+                /* 忙：排队等完成回调；其它失败（参数/硬件）：丢弃本条、立即归还槽 */
+                lb->buf_state = (ret == BSP_BUSY) ? LOG_BUF_WAIT_SEND : LOG_BUF_FREE;
+            }
+            else
+            {
+                s_tx_buf = lb; /* 传输层持有直到 DMA 完成，完成回调归还 */
+            }
         }
     }
 }
