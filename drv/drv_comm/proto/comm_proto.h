@@ -59,8 +59,8 @@ typedef void (*ProtoFrameCallback)(const uint8_t *payload);
 typedef struct
 {
     int8_t (*pack)(CommProto *self, const uint8_t *payload, uint8_t *out_buff); /* 打包 payload → out_buff */
-    const uint8_t *(*unpack)(CommProto *self, const uint8_t *data);             /* 只解包：返回解出的 payload 指针，NULL 丢弃 */
-    void (*reset)(CommProto *self);                                             /* 重置解包状态 */
+    const uint8_t *(*unpack)(CommProto *self, const uint8_t *data); /* 只解包：返回解出的 payload 指针，NULL 丢弃 */
+    void (*reset)(CommProto *self);                                 /* 重置解包状态 */
 } CommProtoVTable_s;
 
 /* 协议基类（派生结构体内嵌作首成员） */

@@ -36,14 +36,13 @@
  * @note 要求 (m+1) 为 8 的倍数，否则码字按字节取整会有跨块余位，须改用
  *       LIB_HAMMING_CODE_BYTES(位) 版本自行按位排布。
  * @note E ≥ P，差值即汉明码膨胀；调用方据此在编译期定帧长与缓冲。 */
-#define LIB_HAMMING_EXT_BYTES(payload_bytes, m)                                      \
-    (LIB_HAMMING_BYTE_BLKS((payload_bytes), (m)) *                                   \
+#define LIB_HAMMING_EXT_BYTES(payload_bytes, m)                                                                        \
+    (LIB_HAMMING_BYTE_BLKS((payload_bytes), (m)) *                                                                     \
      (LIB_HAMMING_BYTE_BLK_DATA((payload_bytes), (m)) + (((m) + 1u) / 8u)))
 
 /* 编译期校验扩展码字节块规划可用（(m+1) 须为 8 的倍数） */
-#define LIB_HAMMING_EXT_CHECK_M(m)                                       \
-    _Static_assert(((m) + 1u) % 8u == 0u,                                \
-                   "lib_hamming_ext: (m+1) must be a multiple of 8")
+#define LIB_HAMMING_EXT_CHECK_M(m)                                                                                     \
+    _Static_assert(((m) + 1u) % 8u == 0u, "lib_hamming_ext: (m+1) must be a multiple of 8")
 
 /*============================================
  *        任意 bit 长度（扩展缩短码）
@@ -60,8 +59,8 @@
  * @return 0 成功；-1 参数非法；-2 缓冲不足（不写缓冲）
  * @note 末块不足 k_s 位补零；code 尾部非整字节位会被清零。
  */
-int8_t LIB_Hamming_ExtEncode(const uint8_t *data, uint32_t data_bits, const LIB_Hamming_Cfg_t *cfg,
-                             uint8_t *code, uint32_t code_cap_bits, uint32_t *code_bits);
+int8_t LIB_Hamming_ExtEncode(const uint8_t *data, uint32_t data_bits, const LIB_Hamming_Cfg_t *cfg, uint8_t *code,
+                             uint32_t code_cap_bits, uint32_t *code_bits);
 
 /**
  * @brief 解码任意 bit 长度数据（扩展缩短汉明码，纠 1 检 2）
@@ -74,7 +73,7 @@ int8_t LIB_Hamming_ExtEncode(const uint8_t *data, uint32_t data_bits, const LIB_
  * @return 0 成功；-1 参数非法（含 code_bits 不匹配）
  * @note 仅当确认为单 bit 错并纠正时才输出纠错后的数据；检出不可纠的块输出原始数据位。
  */
-int8_t LIB_Hamming_ExtDecode(const uint8_t *code, uint32_t code_bits, uint32_t data_bits,
-                             const LIB_Hamming_Cfg_t *cfg, uint8_t *data, LIB_Hamming_Stat_t *stat);
+int8_t LIB_Hamming_ExtDecode(const uint8_t *code, uint32_t code_bits, uint32_t data_bits, const LIB_Hamming_Cfg_t *cfg,
+                             uint8_t *data, LIB_Hamming_Stat_t *stat);
 
 #endif /* __LIB_HAMMING_EXT_H */

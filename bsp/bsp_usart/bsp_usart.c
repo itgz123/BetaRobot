@@ -426,8 +426,8 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
         s_usart_status[idx].err_ore++;
     if (error_code & HAL_UART_ERROR_DMA)
         s_usart_status[idx].err_dma++;
-    if (error_code & ~(uint32_t)(HAL_UART_ERROR_PE | HAL_UART_ERROR_FE | HAL_UART_ERROR_NE |
-                                 HAL_UART_ERROR_ORE | HAL_UART_ERROR_DMA))
+    if (error_code & ~(uint32_t)(HAL_UART_ERROR_PE | HAL_UART_ERROR_FE | HAL_UART_ERROR_NE | HAL_UART_ERROR_ORE |
+                                 HAL_UART_ERROR_DMA))
         s_usart_status[idx].err_other++;
 
     /* 状态快照 */
@@ -447,12 +447,9 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 
     /* ③ 上报（保留解码日志，便于直接看出是哪种错） */
     BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "Error detected, code=0x%lX (PE:%d FE:%d NE:%d ORE:%d DMA:%d)",
-           (unsigned long)error_code,
-           (error_code & HAL_UART_ERROR_PE) ? 1 : 0,
-           (error_code & HAL_UART_ERROR_FE) ? 1 : 0,
-           (error_code & HAL_UART_ERROR_NE) ? 1 : 0,
-           (error_code & HAL_UART_ERROR_ORE) ? 1 : 0,
-           (error_code & HAL_UART_ERROR_DMA) ? 1 : 0);
+           (unsigned long)error_code, (error_code & HAL_UART_ERROR_PE) ? 1 : 0,
+           (error_code & HAL_UART_ERROR_FE) ? 1 : 0, (error_code & HAL_UART_ERROR_NE) ? 1 : 0,
+           (error_code & HAL_UART_ERROR_ORE) ? 1 : 0, (error_code & HAL_UART_ERROR_DMA) ? 1 : 0);
 
     if (instance != NULL && instance->err_callback != NULL)
         instance->err_callback(instance, USART_ERR_HW);
@@ -488,8 +485,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
  */
 BSP_Status_e USARTRegister(USARTInstance *instance)
 {
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR,
-                           BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_usart_idx >= UART_INSTANCE_NUM, BSP_PARAM_ERR,
                            BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Exceeded max instance count!"));
 
@@ -519,10 +515,8 @@ BSP_Status_e USARTConfig(USARTInstance *instance, const USART_Config_s *config)
     uint8_t old_idx = UART_NUM_MAX;
     uint8_t new_idx;
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR,
-                           BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, BSP_PARAM_ERR,
-                           BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, BSP_PARAM_ERR, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Config is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config->uart_e >= UART_NUM_MAX, BSP_PARAM_ERR,
                            BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "uart_e out of range!"));
 
@@ -583,8 +577,8 @@ BSP_Status_e USARTConfig(USARTInstance *instance, const USART_Config_s *config)
     return BSP_OK;
 }
 
-BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_t len,
-                           BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
+BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode,
+                           uint32_t timeout_ms)
 {
     uint8_t idx;
 
@@ -642,7 +636,8 @@ BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_
                         BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "UART TX ready timeout, state reset (uart_e=%d)!",
                                (int)instance->uart_e);
                     else
-                        BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "UART TX ready timeout, reset skipped (ISR/critical) (uart_e=%d)!",
+                        BSPLOG(&g_usart_log, LOG_LEVEL_ERROR,
+                               "UART TX ready timeout, reset skipped (ISR/critical) (uart_e=%d)!",
                                (int)instance->uart_e);
                     return USART_TxFailThenRet(instance, BSP_TIMEOUT);
                 }
@@ -691,22 +686,20 @@ BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_
     return BSP_OK;
 }
 
-BSP_Status_e USARTReceive(USARTInstance *instance, uint16_t len,
-                          BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
+BSP_Status_e USARTReceive(USARTInstance *instance, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
 {
     uint8_t idx;
     BSP_Status_e ret;
     HAL_StatusTypeDef st;
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR,
-                           BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR, BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL || instance->rx_buff == NULL, BSP_PARAM_ERR,
                            BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Handle is NULL, call USARTConfig first!"));
     BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, BSP_PARAM_ERR,
                            BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
-    BSP_RETURN_IF_TRUE_LOG(len == 0 || len > instance->rx_buff_size, BSP_PARAM_ERR,
-                           BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Invalid receive len=%d (buff=%d)!",
-                                  len, instance->rx_buff_size));
+    BSP_RETURN_IF_TRUE_LOG(
+        len == 0 || len > instance->rx_buff_size, BSP_PARAM_ERR,
+        BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Invalid receive len=%d (buff=%d)!", len, instance->rx_buff_size));
 
     idx = USART_HuartToIndex(instance->handle);
 
@@ -919,8 +912,7 @@ BSP_Status_e USARTRecoverTxIfStuck(USARTInstance *instance, uint32_t stuck_ms)
 
     /* 非 READY 但没超过阈值：可能只是一次正常的在途发送 */
     now_us = DWT_GetTimeUs();
-    if (s_tx_ready_us[idx] == 0 ||
-        (now_us - s_tx_ready_us[idx]) <= ((uint64_t)stuck_ms * 1000u))
+    if (s_tx_ready_us[idx] == 0 || (now_us - s_tx_ready_us[idx]) <= ((uint64_t)stuck_ms * 1000u))
         return BSP_BUSY;
 
     /* 超过阈值仍非 READY = 卡死：该次发送的完成回调（DMA TC 中断）丢了、或在错误路径上
@@ -931,8 +923,8 @@ BSP_Status_e USARTRecoverTxIfStuck(USARTInstance *instance, uint32_t stuck_ms)
     (void)USART_RecoverTx(instance);
 
     s_tx_ready_us[idx] = DWT_GetTimeUs(); /* 刚复位，重新计时 */
-    BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "UART TX stuck >%dms, state reset (uart_e=%d)!",
-           (int)stuck_ms, (int)instance->uart_e);
+    BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "UART TX stuck >%dms, state reset (uart_e=%d)!", (int)stuck_ms,
+           (int)instance->uart_e);
     return BSP_OK;
 }
 

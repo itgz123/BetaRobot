@@ -98,29 +98,29 @@ typedef struct
                                  * 在重新枚举后兜底。 */
     uint32_t rx_ok;             /* 收帧次数 */
     /* 自恢复计数 */
-    uint32_t tx_stuck;          /* 判定 TX 卡死（已执行收尾动作）次数 */
-    uint32_t tx_recover_ok;     /* 卡死收尾后成功恢复出队次数 */
-    uint32_t tx_recover_fail;   /* 卡死收尾后仍出不了队次数 */
-    uint32_t rx_stalled;        /* 判定 RX 停摆（已尝试重新武装）次数 */
-    uint32_t rx_recover_ok;     /* RX 重新武装被中间件接受次数（是否真恢复看后续 rx_ok） */
-    uint32_t rx_rearm_fail;     /* RX 重新武装被**拒**次数。判据取 USBD_CDC_ReceivePacket 的返回，
-                                 * 而它只在 pClassData 为空时返回 FAIL（其余一律 OK），
-                                 * 也就是说这一支真正记录的是"重新武装时设备已回到未初始化"
-                                 * （主机断开/复位），**不是**端点层武装失败 —— 端点是否真武装
-                                 * 成功它根本不报告：`(void)USBD_LL_PrepareReceive(...)` 把 HAL
-                                 * 的返回丢掉了。故本计数与 rx_recover_ok 都只是"中间件收没收下请求"，
-                                 * "是否真的恢复了"要看 rx_ok 是否继续增长（见 bsp_usb.md）。 */
-    uint32_t dev_state_drop;    /* 枚举状态下降沿次数（主机串口关闭 / 拔出） */
+    uint32_t tx_stuck;        /* 判定 TX 卡死（已执行收尾动作）次数 */
+    uint32_t tx_recover_ok;   /* 卡死收尾后成功恢复出队次数 */
+    uint32_t tx_recover_fail; /* 卡死收尾后仍出不了队次数 */
+    uint32_t rx_stalled;      /* 判定 RX 停摆（已尝试重新武装）次数 */
+    uint32_t rx_recover_ok;   /* RX 重新武装被中间件接受次数（是否真恢复看后续 rx_ok） */
+    uint32_t rx_rearm_fail;   /* RX 重新武装被**拒**次数。判据取 USBD_CDC_ReceivePacket 的返回，
+                               * 而它只在 pClassData 为空时返回 FAIL（其余一律 OK），
+                               * 也就是说这一支真正记录的是"重新武装时设备已回到未初始化"
+                               * （主机断开/复位），**不是**端点层武装失败 —— 端点是否真武装
+                               * 成功它根本不报告：`(void)USBD_LL_PrepareReceive(...)` 把 HAL
+                               * 的返回丢掉了。故本计数与 rx_recover_ok 都只是"中间件收没收下请求"，
+                               * "是否真的恢复了"要看 rx_ok 是否继续增长（见 bsp_usb.md）。 */
+    uint32_t dev_state_drop;  /* 枚举状态下降沿次数（主机串口关闭 / 拔出） */
     /* 实时快照 */
-    uint8_t dev_state;     /* USBD_HandleTypeDef.dev_state（最近一次采样） */
-    uint8_t dev_speed;     /* USBD_HandleTypeDef.dev_speed（最近一次采样） */
-    uint8_t tx_state;      /* hcdc->TxState（非 0 = 有包在途；0xFF = 句柄未就绪） */
-    uint8_t tx_claim;      /* 正在提交一包的上下文标志 */
-    uint16_t tx_head;      /* ring 生产者位置 */
-    uint16_t tx_tail;      /* ring 消费者位置 */
-    uint16_t ring_used;    /* ring 已占用字节数（= 待发量；长期不减说明发送卡住） */
-    uint64_t rx_last_us;   /* 最近一次收帧时刻（DWT 微秒） */
-    uint64_t last_err_us;  /* 最近一次错误/停滞时刻（DWT 微秒） */
+    uint8_t dev_state;    /* USBD_HandleTypeDef.dev_state（最近一次采样） */
+    uint8_t dev_speed;    /* USBD_HandleTypeDef.dev_speed（最近一次采样） */
+    uint8_t tx_state;     /* hcdc->TxState（非 0 = 有包在途；0xFF = 句柄未就绪） */
+    uint8_t tx_claim;     /* 正在提交一包的上下文标志 */
+    uint16_t tx_head;     /* ring 生产者位置 */
+    uint16_t tx_tail;     /* ring 消费者位置 */
+    uint16_t ring_used;   /* ring 已占用字节数（= 待发量；长期不减说明发送卡住） */
+    uint64_t rx_last_us;  /* 最近一次收帧时刻（DWT 微秒） */
+    uint64_t last_err_us; /* 最近一次错误/停滞时刻（DWT 微秒） */
 } USB_Status_s;
 
 /* 调试时 Watch 查看；volatile 保证调试器读到实时值、ISR 内写不被优化 */
@@ -281,7 +281,7 @@ static void USB_ProcessTxLocked(USBInstance *inst)
 
     /* 计算到环尾的连续数据量 */
     avail = (inst->tx_head > inst->tx_tail) ? (uint16_t)(inst->tx_head - inst->tx_tail)
-                                           : (uint16_t)(APP_TX_DATA_SIZE - inst->tx_tail);
+                                            : (uint16_t)(APP_TX_DATA_SIZE - inst->tx_tail);
     len = (avail > USB_TX_BUF_SIZE) ? USB_TX_BUF_SIZE : avail;
 
     memcpy(inst->tx_buf, &inst->tx_ring[inst->tx_tail], len);
@@ -387,10 +387,9 @@ BSP_Status_e USBRegister(USBInstance *instance)
 {
     uint8_t i;
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR,
-                          BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_usb_idx >= USB_INSTANCE_NUM, BSP_PARAM_ERR,
-                          BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Exceeded max instance count!"));
+                           BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Exceeded max instance count!"));
 
     /* 防重复注册 */
     for (i = 0; i < s_usb_idx; i++)
@@ -414,9 +413,8 @@ BSP_Status_e USBConfig(USBInstance *instance, const USB_Config_s *config)
     uint8_t i;
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR,
-                          BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Config: instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, BSP_PARAM_ERR,
-                          BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Config is NULL!"));
+                           BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Config: instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, BSP_PARAM_ERR, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Config is NULL!"));
 
     /* 验证实例已注册 */
     for (i = 0; i < s_usb_idx; i++)
@@ -427,8 +425,7 @@ BSP_Status_e USBConfig(USBInstance *instance, const USB_Config_s *config)
             break;
         }
     }
-    BSP_RETURN_IF_TRUE_LOG(!found, BSP_PARAM_ERR,
-                          BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Instance not registered!"));
+    BSP_RETURN_IF_TRUE_LOG(!found, BSP_PARAM_ERR, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Instance not registered!"));
 
     /* 设置回调与反向指针 */
     instance->rx_callback = config->rx_callback;
@@ -533,7 +530,7 @@ BSP_Status_e USBRecoverTxIfStuck(USBInstance *instance, uint32_t stuck_ms)
     uint8_t idx;
 
     BSP_RETURN_IF_TRUE_LOG(inst == NULL, BSP_PARAM_ERR,
-                          BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "RecoverTx: no active instance!"));
+                           BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "RecoverTx: no active instance!"));
 
     if (stuck_ms == 0)
         stuck_ms = USB_TX_STUCK_DEFAULT_MS;
@@ -573,8 +570,8 @@ BSP_Status_e USBRecoverTxIfStuck(USBInstance *instance, uint32_t stuck_ms)
         s_usb_status[idx].tx_stuck++;
         s_usb_status[idx].last_err_us = now;
     }
-    BSPLOG(&g_usb_log, LOG_LEVEL_WARNING, "TX stuck: %u bytes pending for >%ums, forcing flush",
-           USB_RingUsed(inst), stuck_ms);
+    BSPLOG(&g_usb_log, LOG_LEVEL_WARNING, "TX stuck: %u bytes pending for >%ums, forcing flush", USB_RingUsed(inst),
+           stuck_ms);
 
     /* ① 中止 CDC IN 端点上的在途传输。
      *    注意：这一步对"主机把端点停掉了/根本没在轮询"是治本的；对"纯 TxState 卡住"
@@ -622,7 +619,7 @@ BSP_Status_e USBRecoverRxIfStalled(USBInstance *instance, uint32_t period_ms)
     uint8_t armed;
 
     BSP_RETURN_IF_TRUE_LOG(inst == NULL, BSP_PARAM_ERR,
-                          BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "RecoverRx: no active instance!"));
+                           BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "RecoverRx: no active instance!"));
 
     if (period_ms == 0)
         period_ms = USB_RX_STALL_DEFAULT_MS;
@@ -690,7 +687,7 @@ BSP_Status_e USBReenumerate(USBInstance *instance)
     USBInstance *inst = (instance != NULL) ? instance : (USBInstance *)s_active_inst;
 
     BSP_RETURN_IF_TRUE_LOG(inst == NULL, BSP_PARAM_ERR,
-                          BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Reenumerate: no active instance!"));
+                           BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Reenumerate: no active instance!"));
 
     hpcd = USB_GetPcd();
     if (hpcd == NULL)

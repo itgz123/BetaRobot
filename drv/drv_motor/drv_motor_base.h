@@ -314,8 +314,10 @@ typedef struct
  * @note 使用下面的宏必须确保所有电机派生类的 base 成员都是结构体的第一个成员
  * @note MotorDisable需要调用PIDReset
  * @note DaemonCallback需要重新给电机发送使能
- * @note MotorSetZero对于增量编码器，在初始化时候保持静止或者用光电门的gpio回调中配置 position_offset = -MotorGetAngle(inst)（在 xxxMotorConfig 中设置）
- * @note MotorSetZero对于绝对式编码器，只要机械安装后读取零点时偏置，然后在 xxxMotorConfig 中配置 position_offset = fixed_offset 固定偏置即可
+ * @note MotorSetZero对于增量编码器，在初始化时候保持静止或者用光电门的gpio回调中配置 position_offset =
+ * -MotorGetAngle(inst)（在 xxxMotorConfig 中设置）
+ * @note MotorSetZero对于绝对式编码器，只要机械安装后读取零点时偏置，然后在 xxxMotorConfig 中配置 position_offset =
+ * fixed_offset 固定偏置即可
  * @note MotorSendCmd 用于发送模式命令（使能/失能/归零/清除错误等），
  *       命令码由各电机品牌定义。DJI 电机可将 send_cmd 设为 NULL，宏会判空。
  */

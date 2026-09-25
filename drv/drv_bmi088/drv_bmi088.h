@@ -176,8 +176,8 @@ typedef struct BMI088Instance
     BMI088_GyroConf_e gyro_conf;   // 陀螺仪 ODR+BW 组合配置（见 BMI088_GyroConf_e）
 
     /* 工作模式 */
-    BMI088_WorkMode_e work_mode;   // 采样由谁驱动（轮询/中断）
-    BSP_Transfer_Mode_e spi_mode;  // 传输怎么做（阻塞/IT/DMA），每次调用透传给 bsp
+    BMI088_WorkMode_e work_mode;  // 采样由谁驱动（轮询/中断）
+    BSP_Transfer_Mode_e spi_mode; // 传输怎么做（阻塞/IT/DMA），每次调用透传给 bsp
 
     /*============================ 中断模式字段 ============================*/
 
@@ -191,8 +191,8 @@ typedef struct BMI088Instance
     volatile uint8_t xfer_error; // 当前这笔异步传输已失败（错误回调在中断里置位）
 
     /* --- 失败计数与恢复记账（仅调试/日志） --- */
-    uint8_t fail_count;                // 连续失败次数，成功即清零
-    volatile uint8_t recover_request;  // 任务上下文需执行 SPI 卡死自恢复（失败攒够阈值后置位）
+    uint8_t fail_count;               // 连续失败次数，成功即清零
+    volatile uint8_t recover_request; // 任务上下文需执行 SPI 卡死自恢复（失败攒够阈值后置位）
 
     /* --- 中断时间戳缓存 --- */
     uint64_t int_timestamp;  // 当前 SPI 读取对应的 INT 触发时间
@@ -216,8 +216,8 @@ typedef struct BMI088Instance
      * 若把节拍门控也写在 last_temp_us 上（旧版就是），调度时它就被刷新了，而温度值要到
      * 下一次 EXTI 发起的那笔传输完成才更新 —— 中间这段 getter 会把 0℃ 初值（或传输失败
      * 后的陈温）当成有效温度发出去，温补型消费者会因此吃到一次假的 ΔT。 */
-    uint64_t last_temp_sched_us;               // 最近一次发起温度读取的时刻 (us)：节拍门控
-    uint64_t last_temp_us;                     // 最近一次成功读回温度的时刻 (us)：新鲜度判据
+    uint64_t last_temp_sched_us; // 最近一次发起温度读取的时刻 (us)：节拍门控
+    uint64_t last_temp_us;       // 最近一次成功读回温度的时刻 (us)：新鲜度判据
 } BMI088Instance;
 
 /*============================ 实例定义宏 ============================*/
@@ -233,22 +233,21 @@ typedef struct BMI088Instance
  * @example
  *   BMI088_INSTANCE_DEF(bmi088);
  */
-#define BMI088_INSTANCE_DEF(name)                                  \
-    static uint8_t name##_tx_buff[BMI088_BUFF_SIZE] DMA_RAM = {0}; \
-    SPI_INSTANCE_DEF(name##_spi, BMI088_BUFF_SIZE);                \
-    GPIO_INSTANCE_DEF(name##_cs_acc);                              \
-    GPIO_INSTANCE_DEF(name##_cs_gyro);                             \
-    GPIO_INSTANCE_DEF(name##_int_acc);                             \
-    GPIO_INSTANCE_DEF(name##_int_gyro);                            \
-    DAEMON_INSTANCE_DEF(name##_daemon);                            \
-    static BMI088Instance name = {                                 \
-        .spi_inst = &name##_spi,                                   \
-        .cs_acc = &name##_cs_acc,                                  \
-        .cs_gyro = &name##_cs_gyro,                                \
-        .int_acc = &name##_int_acc,                                \
-        .int_gyro = &name##_int_gyro,                              \
-        .daemon = &name##_daemon,                                  \
-        .tx_buff = name##_tx_buff}
+#define BMI088_INSTANCE_DEF(name)                                                                                      \
+    static uint8_t name##_tx_buff[BMI088_BUFF_SIZE] DMA_RAM = {0};                                                     \
+    SPI_INSTANCE_DEF(name##_spi, BMI088_BUFF_SIZE);                                                                    \
+    GPIO_INSTANCE_DEF(name##_cs_acc);                                                                                  \
+    GPIO_INSTANCE_DEF(name##_cs_gyro);                                                                                 \
+    GPIO_INSTANCE_DEF(name##_int_acc);                                                                                 \
+    GPIO_INSTANCE_DEF(name##_int_gyro);                                                                                \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
+    static BMI088Instance name = {.spi_inst = &name##_spi,                                                             \
+                                  .cs_acc = &name##_cs_acc,                                                            \
+                                  .cs_gyro = &name##_cs_gyro,                                                          \
+                                  .int_acc = &name##_int_acc,                                                          \
+                                  .int_gyro = &name##_int_gyro,                                                        \
+                                  .daemon = &name##_daemon,                                                            \
+                                  .tx_buff = name##_tx_buff}
 
 /*============================ 公开接口声明 ============================*/
 

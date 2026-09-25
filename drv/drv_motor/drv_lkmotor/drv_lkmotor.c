@@ -94,9 +94,8 @@ void LKMotor_SendModeCmd(void *inst, uint8_t cmd)
     if (!motor->base.can)
         return;
 
-    CAN_Pack_s pack = {.id = (uint16_t)(LK_CAN_ID_BASE + motor->motor_id),
-                       .frame_type = CAN_STANDARD_DATA_FRAME,
-                       .len = 8};
+    CAN_Pack_s pack = {
+        .id = (uint16_t)(LK_CAN_ID_BASE + motor->motor_id), .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
     memset(pack.data, 0x00, 8);
     pack.data[0] = cmd;
     MotorCanTransmit(motor->base.can, &pack, motor->base.timeout_ms, &motor->base.tx_fail);
@@ -212,7 +211,7 @@ MotorData_s LKMotor_GetData(void *inst)
         }
     }
 
-    base->data_all.position_cnt += wraps;                                                                     // ① 累加（单位 = 线值回绕次数）
+    base->data_all.position_cnt += wraps; // ① 累加（单位 = 线值回绕次数）
     double angle = ((double)base->data_all.position_cnt * (double)LK_WRAP_SPAN_RAD) + (double)position_single // ① 累加
                    + (double)base->position_offset;                                                           // ② 偏置
 
@@ -478,7 +477,9 @@ static void LKMotor_Calculate(LKMotorInstance *inst)
         {
             position_feedforward = *setting->position_feedforward_ptr;
         }
-        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr) ? *setting->angle_external_ptr : md.position;
+        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr)
+                      ? *setting->angle_external_ptr
+                      : md.position;
         setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, position_feedforward);
     }
 
@@ -490,7 +491,9 @@ static void LKMotor_Calculate(LKMotorInstance *inst)
         {
             speed_feedforward = *setting->speed_feedforward_ptr;
         }
-        measure = (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr) ? *setting->speed_external_ptr : md.speed;
+        measure = (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr)
+                      ? *setting->speed_external_ptr
+                      : md.speed;
         output = PIDCalculate(&ctrl->pid_speed, setpoint, measure, speed_feedforward);
     }
     else
@@ -595,9 +598,8 @@ void LKMotor_Send(void *inst)
     iq_f = Lib_Math_Clamp(iq_f, -LK_IQ_RAW_MAX, LK_IQ_RAW_MAX);
     int16_t iq_raw = (int16_t)(iq_f >= 0.0f ? iq_f + 0.5f : iq_f - 0.5f);
 
-    CAN_Pack_s pack = {.id = (uint16_t)(LK_CAN_ID_BASE + motor->motor_id),
-                       .frame_type = CAN_STANDARD_DATA_FRAME,
-                       .len = 8};
+    CAN_Pack_s pack = {
+        .id = (uint16_t)(LK_CAN_ID_BASE + motor->motor_id), .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
     pack.data[0] = LK_CMD_TORQUE; // 0xA1
     pack.data[1] = 0x00;
     pack.data[2] = 0x00;

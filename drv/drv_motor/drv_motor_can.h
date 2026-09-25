@@ -42,7 +42,8 @@
  *       bsp 层的 per-CAN 计数（`s_bxcan_status[].tx_fail` / `s_fdcan_status[].tx_fail`）
  *       是另一条独立的观测通道，不替代上面这个归属。
  */
-static inline BSP_Status_e MotorCanTransmit(CANInstance *can, const CAN_Pack_s *pack, uint32_t timeout_ms, uint32_t *tx_fail)
+static inline BSP_Status_e MotorCanTransmit(CANInstance *can, const CAN_Pack_s *pack, uint32_t timeout_ms,
+                                            uint32_t *tx_fail)
 {
     BSP_Status_e status = CANTransmit(can, pack, timeout_ms, NULL, NULL);
 

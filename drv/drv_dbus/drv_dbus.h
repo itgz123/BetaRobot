@@ -109,8 +109,8 @@ typedef struct
      *     不是"这一帧的帧内标志"。正常帧整份覆盖时随之清零。
      *   - failsafe：本协议无从得知，恒 0。保留字段只为与 SBUS 的 DBUS_Data_t/SBUS_Data_t
      *     对称、便于上层写通用遥控处理；**不要**拿它当失控判据。 */
-    uint8_t frame_lost;           // 本帧被驱动拒绝 (0: 本帧有效, 1: 拒绝，通道数据为上一帧)
-    uint8_t failsafe;             // 恒 0（DBUS 帧内无失控位，见上）
+    uint8_t frame_lost; // 本帧被驱动拒绝 (0: 本帧有效, 1: 拒绝，通道数据为上一帧)
+    uint8_t failsafe;   // 恒 0（DBUS 帧内无失控位，见上）
 } DBUS_Data_t;
 
 /**
@@ -154,12 +154,12 @@ typedef struct
  * @example
  *   DBUS_INSTANCE_DEF(dbus_inst);
  */
-#define DBUS_INSTANCE_DEF(name)                       \
-    USART_INSTANCE_DEF(name##_uart, DBUS_FRAME_SIZE); \
-    DAEMON_INSTANCE_DEF(name##_daemon);               \
-    static DBUSInstance name = {                      \
-        .usart_inst = &name##_uart,                   \
-        .daemon = &name##_daemon,                     \
+#define DBUS_INSTANCE_DEF(name)                                                                                        \
+    USART_INSTANCE_DEF(name##_uart, DBUS_FRAME_SIZE);                                                                  \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
+    static DBUSInstance name = {                                                                                       \
+        .usart_inst = &name##_uart,                                                                                    \
+        .daemon = &name##_daemon,                                                                                      \
     }
 
 /*------------- 外部接口声明 --------------*/

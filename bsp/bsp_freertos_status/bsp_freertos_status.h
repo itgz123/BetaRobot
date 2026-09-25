@@ -44,14 +44,15 @@
  *
  *       | rtos-views 视图                         | 本模块            | 说明                                        |
  *       | --------------------------------------- | ----------------- | ------------------------------------------- |
- *       | 任务列表（名字/状态/优先级/栈余量/时间） | tasks[]           | 本模块多基础优先级、栈余量全局最小值、当前任务 |
- *       | 运行时间 / CPU 占用                      | tasks[].run_time_*| 计数源同为 DWT（强符号由本模块提供，见下）；本模块还多一列"最近窗口"占用率 |
- *       | 栈溢出 / 栈水位                          | tasks[] + 钩子计数| 本模块另有溢出历史与溢出任务名               |
- *       | 事件计数（idle/tick 次数、malloc 失败）  | 钩子计数字段      | 内核不保存这些，只有目标侧能给               |
- *       | 运行时（不停机）刷新                     | 周期刷新          | rtos-views 必须停机                          |
- *       | 队列 / 信号量 / 互斥量                   | 未实现            | 见下方"队列视图"                             |
- *       | 堆                                       | 不适用            | 全静态分配没有堆，free_heap 字段也不编译     |
- *       | 定时器（Tmr Svc）                        | 不适用            | configUSE_TIMERS 未开                        |
+ *       | 任务列表（名字/状态/优先级/栈余量/时间） | tasks[]           | 本模块多基础优先级、栈余量全局最小值、当前任务
+ * | | 运行时间 / CPU 占用                      | tasks[].run_time_*| 计数源同为
+ * DWT（强符号由本模块提供，见下）；本模块还多一列"最近窗口"占用率 | | 栈溢出 / 栈水位                          |
+ * tasks[] + 钩子计数| 本模块另有溢出历史与溢出任务名               | | 事件计数（idle/tick 次数、malloc 失败）  |
+ * 钩子计数字段      | 内核不保存这些，只有目标侧能给               | | 运行时（不停机）刷新                     |
+ * 周期刷新          | rtos-views 必须停机                          | | 队列 / 信号量 / 互斥量                   |
+ * 未实现            | 见下方"队列视图"                             | | 堆                                       |
+ * 不适用            | 全静态分配没有堆，free_heap 字段也不编译     | | 定时器（Tmr Svc）                        |
+ * 不适用            | configUSE_TIMERS 未开                        |
  *
  * @note 队列视图（唯一真正缺的项）：内核把队列登记在 xQueueRegistry[] 里（queue.c，
  *       源码注释原文是 "just a means for kernel aware debuggers"），但**没人调用
@@ -245,10 +246,11 @@ void BSP_FreeRTOSStatusRefresh(void);
 /* 以下 4 个函数由 FreeRTOS 内核在对应时机调用，本模块提供强符号实现覆盖
  * CubeMX 生成的 __weak 空实现；签名由内核固定，调用点参数 xTask 未使用 */
 
-void vApplicationIdleHook(void);                                          /* configUSE_IDLE_HOOK == 1 时每轮空闲调用 */
-void vApplicationTickHook(void);                                          /* configUSE_TICK_HOOK == 1 时每个 Tick 在中断里调用 */
-void vApplicationMallocFailedHook(void);                                  /* configUSE_MALLOC_FAILED_HOOK == 1 时分配失败调用 */
-void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName); /* configCHECK_FOR_STACK_OVERFLOW > 0 时栈溢出调用 */
+void vApplicationIdleHook(void);         /* configUSE_IDLE_HOOK == 1 时每轮空闲调用 */
+void vApplicationTickHook(void);         /* configUSE_TICK_HOOK == 1 时每个 Tick 在中断里调用 */
+void vApplicationMallocFailedHook(void); /* configUSE_MALLOC_FAILED_HOOK == 1 时分配失败调用 */
+void vApplicationStackOverflowHook(TaskHandle_t xTask,
+                                   char *pcTaskName); /* configCHECK_FOR_STACK_OVERFLOW > 0 时栈溢出调用 */
 
 #endif /* BSP_FREERTOS_STATUS_USED */
 

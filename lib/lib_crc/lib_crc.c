@@ -86,7 +86,8 @@ uint32_t LIB_CRC_Direct(const LIB_CRC_Algo_t *algo, const uint8_t *data, uint32_
         {
             crc ^= data[i] << (width - 8);
             for (uint8_t bit = 0; bit < 8; bit++)
-                crc = (crc & (1u << (width - 1))) ? (uint32_t)(((crc << 1) ^ poly) & mask) : (uint32_t)((crc << 1) & mask);
+                crc = (crc & (1u << (width - 1))) ? (uint32_t)(((crc << 1) ^ poly) & mask)
+                                                  : (uint32_t)((crc << 1) & mask);
         }
     }
 

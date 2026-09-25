@@ -181,8 +181,7 @@ int8_t DrvsLKMotorBroadcastRegister(DrvsLKMotorBroadcast_s *inst)
  * @brief 配置 LK 广播电机并挂到组（可重复调用）
  * @note 要求先 Register。失败路径不动组成员关系。
  */
-int8_t DrvsLKMotorBroadcastConfig(DrvsLKMotorBroadcast_s *inst,
-                                  const DrvsLKMotorBroadcastConfig_s *cfg)
+int8_t DrvsLKMotorBroadcastConfig(DrvsLKMotorBroadcast_s *inst, const DrvsLKMotorBroadcastConfig_s *cfg)
 {
     if (!inst || !cfg || !cfg->group)
         return -1;

@@ -205,6 +205,10 @@ def gen_c_file(quarter_sizes, full_sizes, out_path) -> None:
         '#include "lib_math_trig_lut.h"',
         "",
     ]
+    # 表体每行 12 个 float、由生成器按定宽排布，clang-format 会按 120 列重排，
+    # 导致每次重新生成都与之冲突；整段关掉格式化。
+    lines.append("/* 以下为生成器排版的定宽内容，重排会与下次生成冲突，故关闭格式化 */")
+    lines.append("// clang-format off")
     lines.append("#ifdef LIB_MATH_TRIG_LUT_USED")
     lines.append("")
     lines.append("#if LIB_MATH_TRIG_TABLE_KIND == 0   /* QUARTER：四分之一周期表 */")
@@ -216,6 +220,7 @@ def gen_c_file(quarter_sizes, full_sizes, out_path) -> None:
     lines.append("#endif /* LIB_MATH_TRIG_TABLE_KIND */")
     lines.append("")
     lines.append("#endif /* LIB_MATH_TRIG_LUT_USED */")
+    lines.append("// clang-format on")
     lines.append("")
     with open(out_path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(lines))

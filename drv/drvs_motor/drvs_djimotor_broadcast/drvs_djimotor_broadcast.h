@@ -227,7 +227,7 @@ struct DrvsDJIMotorBroadcastGroup
     BoardCAN_e can_e;                                  // 首个成员确定，后续成员必须一致
     uint32_t tx_fail;                                  // 组播帧发送失败累计：CANTransmit 入队失败（返回非 BSP_OK）
                                                        // + 逐帧失败（tx_complete_callback 报 result != BSP_OK，
-                                                       // 见 .c 的 TxHook）。一帧带 4 个电机，失败只记在组上，不摊到各电机
+    // 见 .c 的 TxHook）。一帧带 4 个电机，失败只记在组上，不摊到各电机
 };
 
 /*============================================
@@ -260,12 +260,12 @@ typedef struct
 /*============================================
  *              单电机实例 / 广播组定义宏
  *============================================*/
-#define DRVS_DJIMOTOR_BROADCAST_INSTANCE_DEF(name) \
-    CAN_INSTANCE_DEF(name##_can);                  \
-    DAEMON_INSTANCE_DEF(name##_daemon);            \
-    static DrvsDJIMotorBroadcast_s name = {        \
-        .can = &name##_can,                        \
-        .daemon = &name##_daemon,                  \
+#define DRVS_DJIMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                     \
+    CAN_INSTANCE_DEF(name##_can);                                                                                      \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
+    static DrvsDJIMotorBroadcast_s name = {                                                                            \
+        .can = &name##_can,                                                                                            \
+        .daemon = &name##_daemon,                                                                                      \
     }
 
 /**
@@ -273,8 +273,7 @@ typedef struct
  * @note  先定义再传给 `cfg.group`。
  *        定义出来即全零：四个槽位皆空、成员数为 0，can_e 由第一个成员的 Config 落定。
  */
-#define DRVS_DJIMOTOR_BROADCAST_GROUP_DEF(name) \
-    static DrvsDJIMotorBroadcastGroup_s name = {0}
+#define DRVS_DJIMOTOR_BROADCAST_GROUP_DEF(name) static DrvsDJIMotorBroadcastGroup_s name = {0}
 
 /*============================================
  *              公共接口
@@ -290,8 +289,7 @@ int8_t DrvsDJIMotorBroadcastRegister(DrvsDJIMotorBroadcast_s *inst);
  * @note  换组/换槽会先释放旧槽位（旧组该槽位改为空 → 该槽位后续下发 0 扭矩）
  * @note  任何失败路径都不会改动组成员关系
  */
-int8_t DrvsDJIMotorBroadcastConfig(DrvsDJIMotorBroadcast_s *inst,
-                                   const DrvsDJIMotorBroadcastConfig_s *cfg);
+int8_t DrvsDJIMotorBroadcastConfig(DrvsDJIMotorBroadcast_s *inst, const DrvsDJIMotorBroadcastConfig_s *cfg);
 
 /**
  * @brief 设置扭矩设定值 (Nm)

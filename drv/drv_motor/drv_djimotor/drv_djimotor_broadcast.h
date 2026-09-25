@@ -127,12 +127,12 @@ typedef struct
  *              单电机实例定义宏
  *============================================*/
 
-#define DJIMOTOR_BROADCAST_INSTANCE_DEF(name) \
-    CAN_INSTANCE_DEF(name##_can);             \
-    DAEMON_INSTANCE_DEF(name##_daemon);       \
-    static DJIMotorBroadcastInstance name = { \
-        .base.can = &name##_can,              \
-        .base.daemon = &name##_daemon,        \
+#define DJIMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                          \
+    CAN_INSTANCE_DEF(name##_can);                                                                                      \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
+    static DJIMotorBroadcastInstance name = {                                                                          \
+        .base.can = &name##_can,                                                                                       \
+        .base.daemon = &name##_daemon,                                                                                 \
     }
 
 int8_t DJIMotorBroadcastRegister(DJIMotorBroadcastInstance *inst);

@@ -250,8 +250,8 @@ static void MediaCanPkt0ProbeBus(CANInstance *can)
     s_can_recover_us[idx] = now;
 
     if (CANRecover(can) == BSP_HW_ERR)
-        BSPLOG(&g_media_can_pkt0_log, LOG_LEVEL_ERROR,
-               "CANRecover failed (can_e=%u), bus still unavailable", (unsigned)idx);
+        BSPLOG(&g_media_can_pkt0_log, LOG_LEVEL_ERROR, "CANRecover failed (can_e=%u), bus still unavailable",
+               (unsigned)idx);
 }
 
 /* bsp 接收适配钩子：每包 = [pkt_idx][数据片]，按分包序号连续重组整帧。
@@ -320,8 +320,7 @@ int8_t MediaCanPkt0Register(CommMediaCanPkt0 *media)
         return -1;
     if (media->rx_frame_len == 0 || media->tx_frame_len == 0)
         return -1; /* 收发协议帧长须非 0 */
-    if (media->rx_frame_len > CAN_MEDIA_PKT0_MAX_FRAME_FD ||
-        media->tx_frame_len > CAN_MEDIA_PKT0_MAX_FRAME_FD)
+    if (media->rx_frame_len > CAN_MEDIA_PKT0_MAX_FRAME_FD || media->tx_frame_len > CAN_MEDIA_PKT0_MAX_FRAME_FD)
         return -1; /* 帧长超 FD 序号空间（1B 序号 × 63B/包 = 16128；mode 未定，放宽到 FD 上限，
                     * Config 按所选 mode 精确校验） */
 
@@ -366,13 +365,11 @@ int8_t MediaCanPkt0Config(CommMediaCanPkt0 *media, CommMediaCanPkt0Config_s *cfg
         return -1;
 
     /* 帧类型：本后端为数据分包，仅允许标准/扩展数据帧（FD 帧无 RTR，数据帧天然兼容） */
-    if (cfg->frame_type != CAN_STANDARD_DATA_FRAME &&
-        cfg->frame_type != CAN_EXTENDED_DATA_FRAME)
+    if (cfg->frame_type != CAN_STANDARD_DATA_FRAME && cfg->frame_type != CAN_EXTENDED_DATA_FRAME)
         return -1;
 
     /* 帧格式 mode：仅三种合法值；BxCAN 非 CLASSIC 由 bsp 拒绝（此处不做硬件判断） */
-    if (cfg->mode != CAN_FRAME_FORMAT_CLASSIC &&
-        cfg->mode != CAN_FRAME_FORMAT_FD &&
+    if (cfg->mode != CAN_FRAME_FORMAT_CLASSIC && cfg->mode != CAN_FRAME_FORMAT_FD &&
         cfg->mode != CAN_FRAME_FORMAT_FD_BRS)
         return -1;
 

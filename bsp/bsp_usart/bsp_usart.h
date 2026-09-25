@@ -94,11 +94,9 @@ typedef struct USARTInstance
  * @example
  *   USART_INSTANCE_DEF(sbus_uart, 64);
  */
-#define USART_INSTANCE_DEF(name, buff_sz)                 \
-    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0}; \
-    static USARTInstance name = {                         \
-        .rx_buff = name##_rx_buff,                        \
-        .rx_buff_size = buff_sz}
+#define USART_INSTANCE_DEF(name, buff_sz)                                                                              \
+    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};                                                              \
+    static USARTInstance name = {.rx_buff = name##_rx_buff, .rx_buff_size = buff_sz}
 
 /*------------- 配置结构体 --------------*/
 
@@ -163,8 +161,8 @@ BSP_Status_e USARTConfig(USARTInstance *instance, const USART_Config_s *config);
  * @note tx_callback 内续发是允许的（HAL 已把 gState 置回 READY），但不得在回调内调
  *       USARTConfig / USARTReceive。
  */
-BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_t len,
-                           BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
+BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode,
+                           uint32_t timeout_ms);
 
 /**
  * @brief 启动接收（模式每次调用传参）
@@ -187,8 +185,7 @@ BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_
  * @note 这是底层"启动"接口：停摆后的自恢复请用 USARTRecoverRxIfStalled —— 它按 bsp 记着的
  *       rx_xfer_len/rx_mode 重启、自带限频与停摆判据，上层不必再各写一份。
  */
-BSP_Status_e USARTReceive(USARTInstance *instance, uint16_t len,
-                          BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
+BSP_Status_e USARTReceive(USARTInstance *instance, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
 
 /**
  * @brief 接收停摆自恢复（幂等；各链路的 daemon 回调 / 空闲超时里调用）

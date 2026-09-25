@@ -7,6 +7,8 @@
 #include "lib_crc_tables.h"
 #include "app_cfg.h"
 
+/* 以下为生成器排版的定宽内容，重排会与下次生成冲突，故关闭格式化 */
+// clang-format off
 #ifdef LIB_CRC_TABLES_USED
 
 /* 查表 (poly=0x00000007, width=8, refin=0) */
@@ -338,3 +340,4 @@ const LIB_CRC_Table_t LIB_CRC_TBL_CRC32 = {
 };
 
 #endif /* LIB_CRC_TABLES_USED */
+// clang-format on

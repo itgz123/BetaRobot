@@ -53,10 +53,9 @@ typedef struct
  * @example
  *   COMM_PROTO_CUSTOM_DEF(proto_cmd, uart_comm, 8);
  */
-#define COMM_PROTO_CUSTOM_DEF(name, media_, payload_sz) \
-    static CommProtoCustom name = {                     \
-        .base.payload_size = payload_sz,                \
-        .base.media = (void *)&media_} /* 尾部无分号，调用处加 */
+#define COMM_PROTO_CUSTOM_DEF(name, media_, payload_sz)                                                                \
+    static CommProtoCustom name = {.base.payload_size = payload_sz,                                                    \
+                                   .base.media = (void *)&media_} /* 尾部无分号，调用处加 */
 
 /**
  * @brief 初始化自定义帧协议后端（挂 vtable + 清零收发序列状态）

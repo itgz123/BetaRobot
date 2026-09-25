@@ -36,10 +36,10 @@
 
 #include "lib_math_trig.h"
 
-#define PI_D      (3.14159265358979323846264338327950288)
-#define TWO_PI_D  (2.0 * PI_D)
+#define PI_D (3.14159265358979323846264338327950288)
+#define TWO_PI_D (2.0 * PI_D)
 #define QUARTER_D (0.5 * PI_D)
-#define EPS_F32   (1.1920928955078125e-07)   /* 2^-23 */
+#define EPS_F32 (1.1920928955078125e-07) /* 2^-23 */
 
 #ifndef TEST_MODE_A_TARGET
 #define TEST_MODE_A_TARGET EPS_F32
@@ -47,8 +47,8 @@
 
 static double g_sin_max = 0.0, g_cos_max = 0.0, g_tan_max = 0.0;
 static double g_sin_rms = 0.0, g_cos_rms = 0.0, g_tan_rms = 0.0;
-static double g_cons_max = 0.0;      /* CosLUT(θ) 与 SinLUT(θ+π/2) 一致性       */
-static double g_sincos_max = 0.0;    /* SinCosLUT 输出与单独调用一致性           */
+static double g_cons_max = 0.0;   /* CosLUT(θ) 与 SinLUT(θ+π/2) 一致性       */
+static double g_sincos_max = 0.0; /* SinCosLUT 输出与单独调用一致性           */
 static unsigned long g_n_sin = 0, g_n_cos = 0, g_n_tan = 0;
 
 static void upd(double e, double *mx, double *rms, unsigned long *n)
@@ -64,14 +64,14 @@ static void upd(double e, double *mx, double *rms, unsigned long *n)
 /*---------- Mode A：纯插值 + 表量化误差 ----------*/
 static double mode_a_max(void)
 {
-    const int S = LIB_MATH_TRIG_TABLE_SIZE;   /* QUARTER: M；FULL: N */
-    const int K = 32;                         /* 每个区间 32 个采样偏移 */
+    const int S = LIB_MATH_TRIG_TABLE_SIZE; /* QUARTER: M；FULL: N */
+    const int K = 32;                       /* 每个区间 32 个采样偏移 */
     double mx = 0.0;
     long k;
 
     for (k = 0; k <= (long)S * K; k++)
     {
-        double u = (double)k / (double)K;     /* [0, S]，含所有表索引点 */
+        double u = (double)k / (double)K; /* [0, S]，含所有表索引点 */
         long i = (long)floor(u);
         double frac = u - (double)i;
         if (i >= S)
@@ -79,7 +79,7 @@ static double mode_a_max(void)
             i = S - 1;
             frac = 1.0;
         }
-#if LIB_MATH_TRIG_TABLE_KIND == 1   /* FULL */
+#if LIB_MATH_TRIG_TABLE_KIND == 1 /* FULL */
         double v0 = (double)Lib_Math_FullSinTable[i];
         double v1 = (double)Lib_Math_FullSinTable[i + 1];
 #else
@@ -87,7 +87,7 @@ static double mode_a_max(void)
         double v1 = (double)Lib_Math_SinTable[i + 1];
 #endif
         double got = v0 + frac * (v1 - v0);
-#if LIB_MATH_TRIG_TABLE_KIND == 1   /* FULL */
+#if LIB_MATH_TRIG_TABLE_KIND == 1 /* FULL */
         double ref = sin(u / (double)S * TWO_PI_D);
 #else
         double ref = sin(u / (double)S * QUARTER_D);
@@ -161,15 +161,14 @@ int main(void)
 {
     const int M = LIB_MATH_TRIG_TABLE_SIZE;
     const int num = (4 * M * 16 > (1 << 16)) ? 4 * M * 16 : (1 << 16);
-    static const double special[] = {0.0, QUARTER_D, PI_D, 3.0 * QUARTER_D,
-                                     TWO_PI_D - 1e-3, QUARTER_D - 1e-4,
-                                     QUARTER_D + 1e-4, -1e-4, 1e-4,
-                                     -PI_D, -TWO_PI_D, TWO_PI_D + 1e-3};
+    static const double special[] = {
+        0.0,   QUARTER_D, PI_D,  3.0 * QUARTER_D, TWO_PI_D - 1e-3, QUARTER_D - 1e-4, QUARTER_D + 1e-4,
+        -1e-4, 1e-4,      -PI_D, -TWO_PI_D,       TWO_PI_D + 1e-3};
     size_t k;
     double modeb_gate;
     int fail = 0;
 
-#if LIB_MATH_TRIG_TABLE_KIND == 1   /* FULL */
+#if LIB_MATH_TRIG_TABLE_KIND == 1 /* FULL */
     printf("=== test_trig_lut: KIND=FULL(2π完整周期), SIZE = %d ===\n", M);
 #else
     printf("=== test_trig_lut: KIND=QUARTER(四分之一), SIZE = %d ===\n", M);
@@ -180,8 +179,8 @@ int main(void)
     {
         double ma = mode_a_max();
         int ok = ma < TEST_MODE_A_TARGET;
-        printf("ModeA 纯插值+量化 max = %.3e   目标 < %.3e  [%s]\n",
-               ma, (double)TEST_MODE_A_TARGET, ok ? "PASS" : "FAIL");
+        printf("ModeA 纯插值+量化 max = %.3e   目标 < %.3e  [%s]\n", ma, (double)TEST_MODE_A_TARGET,
+               ok ? "PASS" : "FAIL");
         if (!ok)
         {
             fail = 1;
@@ -197,14 +196,14 @@ int main(void)
     }
     printf("  grid %-22s %10d pts\n", "特殊边界点", (int)(sizeof(special) / sizeof(special[0])));
 
-    printf("ModeB sin  整管 max = %.3e  rms = %.3e  (%lu pts)\n",
-           g_sin_max, sqrt(g_sin_rms / (double)g_n_sin), g_n_sin);
-    printf("ModeB cos  整管 max = %.3e  rms = %.3e  (%lu pts)\n",
-           g_cos_max, sqrt(g_cos_rms / (double)g_n_cos), g_n_cos);
+    printf("ModeB sin  整管 max = %.3e  rms = %.3e  (%lu pts)\n", g_sin_max, sqrt(g_sin_rms / (double)g_n_sin),
+           g_n_sin);
+    printf("ModeB cos  整管 max = %.3e  rms = %.3e  (%lu pts)\n", g_cos_max, sqrt(g_cos_rms / (double)g_n_cos),
+           g_n_cos);
     if (g_n_tan > 0)
     {
-        printf("ModeB tan  整管 max = %.3e  rms = %.3e  (%lu pts, |cos|>1e-3)\n",
-               g_tan_max, sqrt(g_tan_rms / (double)g_n_tan), g_n_tan);
+        printf("ModeB tan  整管 max = %.3e  rms = %.3e  (%lu pts, |cos|>1e-3)\n", g_tan_max,
+               sqrt(g_tan_rms / (double)g_n_tan), g_n_tan);
     }
     printf("一致性 cos(x)=sin(x+pi/2)   max = %.3e\n", g_cons_max);
     printf("一致性 SinCos 与单独调用    max = %.3e\n", g_sincos_max);

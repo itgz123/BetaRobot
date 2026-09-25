@@ -15,6 +15,8 @@
  * PC 独立检验（tools/test_trig_lut.sh）定义 LIB_MATH_TRIG_LUT_STANDALONE 跳过。 */
 #include "lib_math_trig_lut.h"
 
+/* 以下为生成器排版的定宽内容，重排会与下次生成冲突，故关闭格式化 */
+// clang-format off
 #ifdef LIB_MATH_TRIG_LUT_USED
 
 #if LIB_MATH_TRIG_TABLE_KIND == 0   /* QUARTER：四分之一周期表 */
@@ -2014,3 +2016,4 @@ const float Lib_Math_FullSinTable[8193] = {
 #endif /* LIB_MATH_TRIG_TABLE_KIND */
 
 #endif /* LIB_MATH_TRIG_LUT_USED */
+// clang-format on

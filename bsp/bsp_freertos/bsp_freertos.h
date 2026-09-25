@@ -31,15 +31,15 @@ typedef struct TaskInstance
  * @param name_       实例名称（snake_case）
  * @param stack_sz    栈大小（单位：字，1字=4字节）
  */
-#define TASK_INSTANCE_DEF(name_, stack_sz)      \
-    static StackType_t name_##_stack[stack_sz]; \
-    static StaticTask_t name_##_tcb;            \
-    static TaskInstance name_ = {               \
-        .handle = NULL,                         \
-        .stack = name_##_stack,                 \
-        .tcb = &name_##_tcb,                    \
-        .name = #name_,                         \
-        .stack_size = stack_sz,                 \
+#define TASK_INSTANCE_DEF(name_, stack_sz)                                                                             \
+    static StackType_t name_##_stack[stack_sz];                                                                        \
+    static StaticTask_t name_##_tcb;                                                                                   \
+    static TaskInstance name_ = {                                                                                      \
+        .handle = NULL,                                                                                                \
+        .stack = name_##_stack,                                                                                        \
+        .tcb = &name_##_tcb,                                                                                           \
+        .name = #name_,                                                                                                \
+        .stack_size = stack_sz,                                                                                        \
     }
 
 /**
@@ -81,15 +81,15 @@ typedef struct QueueInstance
  * @param len        队列长度
  * @param item_type  数据项类型
  */
-#define QUEUE_INSTANCE_DEF(name_, len, item_type)            \
-    static uint8_t name_##_storage[len * sizeof(item_type)]; \
-    static StaticQueue_t name_##_buffer;                     \
-    static QueueInstance name_ = {                           \
-        .handle = NULL,                                      \
-        .storage = name_##_storage,                          \
-        .buffer = &name_##_buffer,                           \
-        .length = len,                                       \
-        .item_size = sizeof(item_type),                      \
+#define QUEUE_INSTANCE_DEF(name_, len, item_type)                                                                      \
+    static uint8_t name_##_storage[len * sizeof(item_type)];                                                           \
+    static StaticQueue_t name_##_buffer;                                                                               \
+    static QueueInstance name_ = {                                                                                     \
+        .handle = NULL,                                                                                                \
+        .storage = name_##_storage,                                                                                    \
+        .buffer = &name_##_buffer,                                                                                     \
+        .length = len,                                                                                                 \
+        .item_size = sizeof(item_type),                                                                                \
     }
 
 /**

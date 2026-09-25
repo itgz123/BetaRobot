@@ -42,7 +42,7 @@ _Static_assert(DRV_COMM_DAEMON_RELOAD_DEFAULT != 0,
 
 #ifndef DRV_COMM_LOG_LIMIT
 #define DRV_COMM_LOG_LIMIT 10
-#endif                                                     // !DRV_COMM_LOG_LIMIT
+#endif                                                        // !DRV_COMM_LOG_LIMIT
 LOG_INSTANCE_DEF(g_comm_log, "drv_comm", DRV_COMM_LOG_LIMIT); // comm 日志实例
 
 /* 从 CommInstance 取介质/协议基类指针（void* 指向派生实例，首成员即基类） */
@@ -265,8 +265,8 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
         if (daemon_reload == 0 && offline_hook != NULL)
         {
             daemon_reload = DRV_COMM_DAEMON_RELOAD_DEFAULT;
-            BSPLOG(&g_comm_log, LOG_LEVEL_WARNING,
-                   "daemon_reload=0 disables offline self-heal, forced to %u", daemon_reload);
+            BSPLOG(&g_comm_log, LOG_LEVEL_WARNING, "daemon_reload=0 disables offline self-heal, forced to %u",
+                   daemon_reload);
         }
 
         Daemon_Config_s daemon_cfg = {

@@ -35,10 +35,9 @@ typedef struct
  * @example
  *   COMM_PROTO_RAW_DEF(proto_comm, uart_comm, 32);
  */
-#define COMM_PROTO_RAW_DEF(name, media_, payload_sz) \
-    static CommProtoRaw name = {                     \
-        .base.payload_size = payload_sz,             \
-        .base.media = (void *)&media_} /* 尾部无分号，调用处加 */
+#define COMM_PROTO_RAW_DEF(name, media_, payload_sz)                                                                   \
+    static CommProtoRaw name = {.base.payload_size = payload_sz,                                                       \
+                                .base.media = (void *)&media_} /* 尾部无分号，调用处加 */
 
 /**
  * @brief 初始化空协议后端

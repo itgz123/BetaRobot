@@ -40,7 +40,8 @@ int8_t PWMRegister(PWMInstance *instance)
 {
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "PWM instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_pwm_idx >= PWM_INSTANCE_NUM, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "PWM exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(s_pwm_idx >= PWM_INSTANCE_NUM, -1,
+                           BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "PWM exceeded max instance count!"));
 
     // 防重复注册检查
     for (uint8_t i = 0; i < s_pwm_idx; i++)
@@ -66,7 +67,8 @@ int8_t PWMConfig(PWMInstance *instance, const PWM_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "PWM instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "PWM config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->tim_e >= TIM_NUM_MAX, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "PWM tim_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(config->tim_e >= TIM_NUM_MAX, -1,
+                           BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "PWM tim_e out of range!"));
 
     // 填充枚举和硬件映射
     instance->tim_e = config->tim_e;
@@ -134,7 +136,8 @@ int8_t EncoderRegister(EncoderInstance *instance)
 {
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "Encoder instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_encoder_idx >= ENCODER_INSTANCE_NUM, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "Encoder exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(s_encoder_idx >= ENCODER_INSTANCE_NUM, -1,
+                           BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "Encoder exceeded max instance count!"));
 
     // 防重复注册检查
     for (uint8_t i = 0; i < s_encoder_idx; i++)
@@ -160,7 +163,8 @@ int8_t EncoderConfig(EncoderInstance *instance, const Encoder_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "Encoder instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "Encoder config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->tim_e >= TIM_NUM_MAX, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "Encoder tim_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(config->tim_e >= TIM_NUM_MAX, -1,
+                           BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "Encoder tim_e out of range!"));
 
     // 填充枚举和硬件映射
     instance->tim_e = config->tim_e;

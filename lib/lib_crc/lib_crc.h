@@ -117,8 +117,8 @@ uint32_t LIB_CRC_TableCalc(const LIB_CRC_Table_t *tbl, const uint8_t *data, uint
  *   LIB_CRC_GenTable(my_crc.algo, my_crc_table);// 4. 生成表（生成时设置算法）
  *   uint32_t c = LIB_CRC_TableCalc(&my_crc, data, len); // 5. 通用查表计算
  *   // 兜底：uint32_t d = LIB_CRC_Direct(my_crc.algo, data, len); */
-#define LIB_CRC_CUSTOM_DEF(name)       \
-    static uint32_t name##_table[256]; \
+#define LIB_CRC_CUSTOM_DEF(name)                                                                                       \
+    static uint32_t name##_table[256];                                                                                 \
     static LIB_CRC_Table_t name = {NULL, name##_table}
 
 #endif /* __LIB_CRC_H */

@@ -93,6 +93,7 @@ void MITInit(MITInstance *instance, const MIT_Init_Config_s *config);
  * @note MIT 控制公式：
  *       output = kp * (pos_set - pos_measure) + kd * (speed_set - speed_measure) + feedforward
  */
-float MITCalculate(MITInstance *instance, float speed_set, float speed_measure, float pos_set, float pos_measure, float feedforward);
+float MITCalculate(MITInstance *instance, float speed_set, float speed_measure, float pos_set, float pos_measure,
+                   float feedforward);
 
 #endif /* __LIB_MIT_H */

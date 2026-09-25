@@ -99,8 +99,8 @@ static int8_t ExtPack(CommProto *self, const uint8_t *payload, uint8_t *out_buff
     out_buff[1] = p->tx_seq++; /* 发送 seq 自增（255→0 自然回卷） */
 
     /* 先过汉明码：payload(N B) → 编码区(E B) */
-    if (LIB_Hamming_ExtEncode(payload, (uint32_t)self->payload_size * 8u, &p->cfg, &out_buff[2],
-                              enc_bits, &code_bits) != 0)
+    if (LIB_Hamming_ExtEncode(payload, (uint32_t)self->payload_size * 8u, &p->cfg, &out_buff[2], enc_bits,
+                              &code_bits) != 0)
         return -1;
     if (code_bits != enc_bits)
         return -1; /* 编译期算出的 E 与 lib 的分块结果不符（不该发生） */
@@ -161,8 +161,7 @@ static const uint8_t *ExtUnpack(CommProto *self, const uint8_t *data)
         /* 不符 ⇒ 采信汉明纠错前先复核：把纠错后的 payload 重编码，能重现原 CRC 才算纠对。
          * 这一步同时挡掉 SECDED 的 ≥3 位错误纠，以及错在 seq / CRC 字节自身的情况。 */
         p->reenc_buff[0] = data[1]; /* seq 原样带入，保持 CRC 范围一致 */
-        if (LIB_Hamming_ExtEncode(p->rx_buff, pay_bits, &p->cfg, &p->reenc_buff[1], enc_bits,
-                                  &code_bits) != 0 ||
+        if (LIB_Hamming_ExtEncode(p->rx_buff, pay_bits, &p->cfg, &p->reenc_buff[1], enc_bits, &code_bits) != 0 ||
             code_bits != enc_bits)
         {
             p->rx_err++;
@@ -216,8 +215,7 @@ int8_t CommProtoExtInit(CommProtoExt *proto)
     proto->cfg.m = (uint8_t)PROTO_EXT_M;
     proto->cfg.k_s = (uint16_t)(PROTO_EXT_BLK_BYTES(proto->base.payload_size) * 8u);
     /* 每块数据位数须落在合法缩短码范围 1..2^m-1-m（不合法则编解码会拒绝，提前挡掉） */
-    if (proto->cfg.k_s < 1u ||
-        proto->cfg.k_s > (uint16_t)((1u << proto->cfg.m) - 1u - proto->cfg.m))
+    if (proto->cfg.k_s < 1u || proto->cfg.k_s > (uint16_t)((1u << proto->cfg.m) - 1u - proto->cfg.m))
         return -1;
     proto->enc_bytes = (uint16_t)E;
 

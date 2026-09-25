@@ -141,8 +141,7 @@ static void VofaErrHandler(USARTInstance *instance, USART_ErrReason_e reason)
     /* TX_ABORT：bsp 已强止发送并把 gState 复位；HW：错误位都在接收侧，
      * gState 非 READY 说明发送仍在途，不能归还 DMA 正在读的缓冲 */
     if (reason == USART_ERR_TX_ABORT ||
-        (instance != NULL && instance->handle != NULL &&
-         instance->handle->gState == HAL_UART_STATE_READY))
+        (instance != NULL && instance->handle != NULL && instance->handle->gState == HAL_UART_STATE_READY))
     {
         s_buff_state[s_active_buff] = BUFF_IDLE;
     }
@@ -171,8 +170,9 @@ void VofaInit(void)
         return;
     }
 
-    BSPLOG(&g_vofa_log, LOG_LEVEL_INFO, "Initialized, UART: %d, Channels: %d (ch0=timestamp, ch1~%d=user), Triple-buffer DMA",
-           VOFA_UART, VOFA_CHANNELS, VOFA_CHANNELS);
+    BSPLOG(&g_vofa_log, LOG_LEVEL_INFO,
+           "Initialized, UART: %d, Channels: %d (ch0=timestamp, ch1~%d=user), Triple-buffer DMA", VOFA_UART,
+           VOFA_CHANNELS, VOFA_CHANNELS);
 }
 
 void VofaSetChannel(uint8_t ch, float value)
@@ -285,7 +285,8 @@ void VofaSend(void)
     /* 没有空闲缓冲区，保持当前索引 —— 该槽当前非 IDLE（PENDING/ACTIVE），
      * 下次 VofaSend 的入口检查会丢弃当帧、VofaSetChannel 也会因状态检查失效，
      * 直到某个槽被完成回调释放。这两个丢弃都是有意的（见 VofaSend 入口注释）。 */
-    BSPLOG(&g_vofa_log, LOG_LEVEL_WARNING, "No idle buffer, VofaSend/SetChannel will be ignored until buffer available!");
+    BSPLOG(&g_vofa_log, LOG_LEVEL_WARNING,
+           "No idle buffer, VofaSend/SetChannel will be ignored until buffer available!");
 }
 
 #else // !(defined(VOFA_USED)) && (defined(VOFA_UART))

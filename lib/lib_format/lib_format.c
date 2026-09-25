@@ -267,8 +267,7 @@ static int BSPFmtV(char *out, size_t cap, const char *fmt, size_t fmt_len, va_li
 
         switch (spec)
         {
-        case 'd':
-        {
+        case 'd': {
             if (is64)
             {
                 int64_t v = va_arg(args, int64_t);
@@ -312,8 +311,7 @@ static int BSPFmtV(char *out, size_t cap, const char *fmt, size_t fmt_len, va_li
                 numlen = BSPU32ToHex(va_arg(args, uint32_t), numbuf, (spec == 'X'));
             }
             break;
-        case 's':
-        {
+        case 's': {
             const char *s = va_arg(args, const char *);
             int n = 0;
 

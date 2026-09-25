@@ -109,9 +109,12 @@ const float BMI088_GyroSenTable[BMI088_GYRO_RANGE_NUM] = {
 static int8_t BMI088_WaitXfer(BMI088Instance *inst);
 static void BMI088_NoteFailure(BMI088Instance *inst);
 static void BMI088_ServiceRecover(BMI088Instance *inst);
-static int8_t BMI088_ReadReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint16_t len, uint8_t dummy, BSP_Transfer_Mode_e mode);
-static int8_t BMI088_WriteReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint8_t data, BSP_Transfer_Mode_e mode);
-static uint8_t BMI088_WriteRegWithCheck(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint8_t data, BSP_Transfer_Mode_e mode);
+static int8_t BMI088_ReadReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint16_t len, uint8_t dummy,
+                             BSP_Transfer_Mode_e mode);
+static int8_t BMI088_WriteReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint8_t data,
+                              BSP_Transfer_Mode_e mode);
+static uint8_t BMI088_WriteRegWithCheck(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint8_t data,
+                                        BSP_Transfer_Mode_e mode);
 /* 中断模式私有函数 */
 static void BMI088_IntCallback(GPIOInstance *gpio_inst);
 static void BMI088_SpiAbort(BMI088Instance *inst);
@@ -122,14 +125,16 @@ static void BMI088_SPITxCpltCallback(SPIInstance *spi_inst);
 static void BMI088_SPIErrCallback(SPIInstance *spi_inst, SPI_ErrReason_e reason);
 static void BMI088_CheckPendingIT(BMI088Instance *inst);
 /* 插值辅助函数声明 */
-static void BMI088_InterpRaw(const uint8_t *raw_old, const uint8_t *raw_new, uint64_t t_old, uint64_t t_new, uint64_t t_target, uint8_t *out);
-static uint8_t BMI088_FindBracket(const uint64_t *t_buf, uint16_t newest, uint16_t n, uint64_t target, uint16_t *out_older, uint16_t *out_newer);
+static void BMI088_InterpRaw(const uint8_t *raw_old, const uint8_t *raw_new, uint64_t t_old, uint64_t t_new,
+                             uint64_t t_target, uint8_t *out);
+static uint8_t BMI088_FindBracket(const uint64_t *t_buf, uint16_t newest, uint16_t n, uint64_t target,
+                                  uint16_t *out_older, uint16_t *out_newer);
 static void BMI088_RawToAcc(const uint8_t *raw, float *out, BMI088_AccRange_e range);
 static void BMI088_RawToGyro(const uint8_t *raw, float *out, BMI088_GyroRange_e range);
 static float BMI088_ParseTempCelsius(const uint8_t *rx_buff);
 static void BMI088_PackRaw(BMI088Instance *inst, const uint8_t acc_raw[BMI088_RAW_DATA_SIZE],
-                           const uint8_t gyro_raw[BMI088_RAW_DATA_SIZE],
-                           uint64_t ts_a, uint64_t ts_g, BMI088_Data_t *out);
+                           const uint8_t gyro_raw[BMI088_RAW_DATA_SIZE], uint64_t ts_a, uint64_t ts_g,
+                           BMI088_Data_t *out);
 /* 三条读取路径（由 BMI088Read 按 work_mode / read_mode 分派） */
 static BMI088_Data_t BMI088_ReadPolling(BMI088Instance *inst);
 static BMI088_Data_t BMI088_ReadInterp(BMI088Instance *inst);
@@ -159,7 +164,8 @@ static int8_t BMI088_WaitXfer(BMI088Instance *inst)
         }
         if ((DWT_GetTimeUs() - start_us) > timeout_us)
         {
-            BSPLOG(&g_bmi088_log, LOG_LEVEL_WARNING, "Async xfer timeout (%dms), frame dropped", (int)inst->spi_timeout_ms);
+            BSPLOG(&g_bmi088_log, LOG_LEVEL_WARNING, "Async xfer timeout (%dms), frame dropped",
+                   (int)inst->spi_timeout_ms);
             return -1;
         }
     }
@@ -230,7 +236,8 @@ static void BMI088_ServiceRecover(BMI088Instance *inst)
  * @note 只能传 IT/DMA 且运行在任务上下文时才安全；中断里要用 bsp 接口直接发起并传
  *       timeout_ms = 0（见 BMI088_StartSensorDMA）。
  */
-static int8_t BMI088_ReadReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint16_t len, uint8_t dummy, BSP_Transfer_Mode_e mode)
+static int8_t BMI088_ReadReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint16_t len, uint8_t dummy,
+                             BSP_Transfer_Mode_e mode)
 {
     if (len > BMI088_RAW_DATA_SIZE)
     {
@@ -262,8 +269,7 @@ static int8_t BMI088_ReadReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg
     {
         /* 启动失败不会有完成回调，bsp_spi 只按返回码上报（不像 bsp_i2c 会回调 err_callback），
          * 失败计数只能由调用方记（轮询一整帧记一次，见 BMI088_ReadPolling） */
-        BSPLOG(&g_bmi088_log, LOG_LEVEL_WARNING, "%s read 0x%02X failed",
-               (cs == inst->cs_acc) ? "Acc" : "Gyro", reg);
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_WARNING, "%s read 0x%02X failed", (cs == inst->cs_acc) ? "Acc" : "Gyro", reg);
         return -1;
     }
 
@@ -278,7 +284,8 @@ static int8_t BMI088_ReadReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg
  * @note data 按值拷进实例自带的静态 tx_buff，异步模式下缓冲生存期天然覆盖到回调结束，
  *       与 drv_ist8310 一样不存在"不能传栈变量"的约束。
  */
-static int8_t BMI088_WriteReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint8_t data, BSP_Transfer_Mode_e mode)
+static int8_t BMI088_WriteReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint8_t data,
+                              BSP_Transfer_Mode_e mode)
 {
     memset(inst->tx_buff, BMI088_SPI_DUMMY_BYTE, BMI088_BUFF_SIZE);
     inst->tx_buff[0] = reg & BMI088_SPI_WRITE_MASK;
@@ -301,8 +308,7 @@ static int8_t BMI088_WriteReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t re
 
     if (st != BSP_OK)
     {
-        BSPLOG(&g_bmi088_log, LOG_LEVEL_WARNING, "%s write 0x%02X failed",
-               (cs == inst->cs_acc) ? "Acc" : "Gyro", reg);
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_WARNING, "%s write 0x%02X failed", (cs == inst->cs_acc) ? "Acc" : "Gyro", reg);
         return -1;
     }
 
@@ -316,7 +322,8 @@ static int8_t BMI088_WriteReg(BMI088Instance *inst, GPIOInstance *cs, uint8_t re
  * @note 读写自身的返回值**有意忽略**：本函数的判据是"读回来的值对不对"，
  *       读失败只会让 rx_buff 保持残留值 → 同样判为校验失败，语义不变。
  */
-static uint8_t BMI088_WriteRegWithCheck(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint8_t data, BSP_Transfer_Mode_e mode)
+static uint8_t BMI088_WriteRegWithCheck(BMI088Instance *inst, GPIOInstance *cs, uint8_t reg, uint8_t data,
+                                        BSP_Transfer_Mode_e mode)
 {
     (void)BMI088_WriteReg(inst, cs, reg, data, mode);
 
@@ -326,7 +333,8 @@ static uint8_t BMI088_WriteRegWithCheck(BMI088Instance *inst, GPIOInstance *cs, 
     uint8_t rx_off = (cs == inst->cs_acc) ? BMI088_ACC_RX_DATA_OFF : BMI088_GYRO_RX_DATA_OFF;
     do
     {
-        (void)BMI088_ReadReg(inst, cs, reg, 1, (cs == inst->cs_acc) ? BMI088_ACC_DUMMY_BYTES : BMI088_GYRO_DUMMY_BYTES, mode);
+        (void)BMI088_ReadReg(inst, cs, reg, 1, (cs == inst->cs_acc) ? BMI088_ACC_DUMMY_BYTES : BMI088_GYRO_DUMMY_BYTES,
+                             mode);
         if (inst->spi_inst->rx_buff[rx_off] == data)
         {
             return 0;
@@ -447,8 +455,7 @@ static void BMI088_StartSensorDMA(BMI088Instance *inst, uint8_t sensor_type)
      * 见 bsp_spi.md §2.A.4）。真卡死由任务上下文的
      * BMI088_ServiceRecover（事件驱动）+ BMI088Read 里的周期检查复位。
      * transfer_busy 已经保证不会与上一笔并发，所以这里的"忙"只可能是异常残留。 */
-    if (SPITransmitReceive(inst->spi_inst, inst->tx_buff, inst->tx_len,
-                           inst->spi_mode, 0) != BSP_OK)
+    if (SPITransmitReceive(inst->spi_inst, inst->tx_buff, inst->tx_len, inst->spi_mode, 0) != BSP_OK)
     {
         /* 发起失败不会有 BMI088_SPICpltCallback，必须在这里就地收尾，
          * 让下一次 EXTI 重新发起（err_callback 只管"已经启动的传输"出的错） */
@@ -657,8 +664,8 @@ static void BMI088_CheckPendingIT(BMI088Instance *inst)
  * @param out_newer 输出：较新样本索引
  * @return 1=找到, 0=未找到
  */
-static uint8_t BMI088_FindBracket(const uint64_t *t_buf, uint16_t newest, uint16_t n,
-                                  uint64_t target, uint16_t *out_older, uint16_t *out_newer)
+static uint8_t BMI088_FindBracket(const uint64_t *t_buf, uint16_t newest, uint16_t n, uint64_t target,
+                                  uint16_t *out_older, uint16_t *out_newer)
 {
     for (uint16_t s = 0; s < n - 1; s++)
     {
@@ -686,7 +693,8 @@ static uint8_t BMI088_FindBracket(const uint64_t *t_buf, uint16_t newest, uint16
  * @param out      插值结果 [6]
  * @note 使用 BMI088_AxisRaw_u 联合体直接操作 int16 轴数据
  */
-static void BMI088_InterpRaw(const uint8_t *raw_old, const uint8_t *raw_new, uint64_t t_old, uint64_t t_new, uint64_t t_target, uint8_t *out)
+static void BMI088_InterpRaw(const uint8_t *raw_old, const uint8_t *raw_new, uint64_t t_old, uint64_t t_new,
+                             uint64_t t_target, uint8_t *out)
 {
     if (t_new <= t_old)
     {
@@ -706,7 +714,8 @@ static void BMI088_InterpRaw(const uint8_t *raw_old, const uint8_t *raw_new, uin
 
     for (uint8_t i = 0; i < BMI088_AXIS_NUM; i++)
     {
-        int16_t v_out = (int16_t)((float)old->axis[i] + ((float)new->axis[i] - (float)old->axis[i]) * ratio + BMI088_INTERP_ROUND);
+        int16_t v_out =
+            (int16_t)((float)old->axis[i] + ((float)new->axis[i] - (float)old->axis[i]) * ratio + BMI088_INTERP_ROUND);
         result->axis[i] = v_out;
     }
 }
@@ -757,8 +766,8 @@ static float BMI088_ParseTempCelsius(const uint8_t *rx_buff)
  *       轮询与插值两条路把两个时间戳填成同一个值，取最新那条填各自的实际时刻。
  */
 static void BMI088_PackRaw(BMI088Instance *inst, const uint8_t acc_raw[BMI088_RAW_DATA_SIZE],
-                           const uint8_t gyro_raw[BMI088_RAW_DATA_SIZE],
-                           uint64_t ts_a, uint64_t ts_g, BMI088_Data_t *out)
+                           const uint8_t gyro_raw[BMI088_RAW_DATA_SIZE], uint64_t ts_a, uint64_t ts_g,
+                           BMI088_Data_t *out)
 {
     BMI088_RawToAcc(acc_raw, out->acc, inst->acc_range);
     BMI088_RawToGyro(gyro_raw, out->gyro, inst->gyro_range);
@@ -800,7 +809,8 @@ static uint8_t BMI088_AccInit(BMI088Instance *inst)
     }
 
     // 5. 开启加速度计
-    if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_ACC_PWR_CTRL_REG, BMI088_ACC_ENABLE_ON, BSP_BLOCK_MODE) != 0)
+    if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_ACC_PWR_CTRL_REG, BMI088_ACC_ENABLE_ON, BSP_BLOCK_MODE) !=
+        0)
     {
         BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "acc_pwr_ctrl write failed");
         return 1;
@@ -808,21 +818,24 @@ static uint8_t BMI088_AccInit(BMI088Instance *inst)
     DWT_Delay(BMI088_ACC_PWR_UP_DELAY_S); // 数据手册§3: 写 ACC_PWR_CTRL 后等 450µs
 
     // 6. 退出挂起模式
-    if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_ACC_PWR_CONF_REG, BMI088_ACC_PWR_SAVE_ACTIVE, BSP_BLOCK_MODE) != 0)
+    if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_ACC_PWR_CONF_REG, BMI088_ACC_PWR_SAVE_ACTIVE,
+                                 BSP_BLOCK_MODE) != 0)
     {
         BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "acc_pwr_conf write failed");
         return 1;
     }
 
     // 7. 写入量程配置
-    if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_ACC_RANGE_REG, (uint8_t)inst->acc_range, BSP_BLOCK_MODE) != 0)
+    if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_ACC_RANGE_REG, (uint8_t)inst->acc_range, BSP_BLOCK_MODE) !=
+        0)
     {
         BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "acc_range write failed");
         return 1;
     }
 
     // 8. 写入滤波器和ODR配置
-    if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_ACC_CONF_REG, inst->acc_bwp | inst->acc_odr, BSP_BLOCK_MODE) != 0)
+    if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_ACC_CONF_REG, inst->acc_bwp | inst->acc_odr,
+                                 BSP_BLOCK_MODE) != 0)
     {
         BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "acc_conf write failed");
         return 1;
@@ -836,14 +849,16 @@ static uint8_t BMI088_AccInit(BMI088Instance *inst)
     if (inst->work_mode == BMI088_MODE_INT)
     {
         // 9. 配置 INT1 引脚
-        if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_INT1_IO_CTRL_REG, BMI088_INT1_OUT | BMI088_INT1_LVL_HIGH, BSP_BLOCK_MODE) != 0)
+        if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_INT1_IO_CTRL_REG,
+                                     BMI088_INT1_OUT | BMI088_INT1_LVL_HIGH, BSP_BLOCK_MODE) != 0)
         {
             BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "int1_io_ctrl write failed");
             return 1;
         }
 
         // 10. 配置中断映射
-        if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_INT_MAP_DATA_REG, BMI088_INT1_DRDY, BSP_BLOCK_MODE) != 0)
+        if (BMI088_WriteRegWithCheck(inst, inst->cs_acc, BMI088_INT_MAP_DATA_REG, BMI088_INT1_DRDY, BSP_BLOCK_MODE) !=
+            0)
         {
             BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "int_map_data write failed");
             return 1;
@@ -871,14 +886,16 @@ static uint8_t BMI088_GyroInit(BMI088Instance *inst)
     }
 
     // 3. 写入量程配置
-    if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_RANGE_REG, (uint8_t)inst->gyro_range, BSP_BLOCK_MODE) != 0)
+    if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_RANGE_REG, (uint8_t)inst->gyro_range,
+                                 BSP_BLOCK_MODE) != 0)
     {
         BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "gyro_range write failed");
         return 1;
     }
 
     // 4. 写入带宽配置（使用组合值 OR BMI088_GYRO_BW_MUST_SET）
-    if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_BANDWIDTH_REG, inst->gyro_conf | BMI088_GYRO_BW_MUST_SET, BSP_BLOCK_MODE) != 0)
+    if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_BANDWIDTH_REG,
+                                 inst->gyro_conf | BMI088_GYRO_BW_MUST_SET, BSP_BLOCK_MODE) != 0)
     {
         BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "gyro_bandwidth write failed");
         return 1;
@@ -897,21 +914,25 @@ static uint8_t BMI088_GyroInit(BMI088Instance *inst)
     if (inst->work_mode == BMI088_MODE_INT)
     {
         // 6. 配置中断控制
-        if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_INT_CTRL_REG, BMI088_GYRO_INT_DATA_EN, BSP_BLOCK_MODE) != 0)
+        if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_INT_CTRL_REG, BMI088_GYRO_INT_DATA_EN,
+                                     BSP_BLOCK_MODE) != 0)
         {
             BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "gyro_int_ctrl write failed");
             return 1;
         }
 
         // 7. 配置 INT3 引脚（推挽输出 + 高电平有效，INT4 保持复位默认）
-        if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_INT3_INT4_IO_CONF_REG, BMI088_INT4_OD_OPEN_DRAIN | BMI088_INT4_LVL_HIGH | BMI088_INT3_LVL_HIGH, BSP_BLOCK_MODE) != 0)
+        if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_INT3_INT4_IO_CONF_REG,
+                                     BMI088_INT4_OD_OPEN_DRAIN | BMI088_INT4_LVL_HIGH | BMI088_INT3_LVL_HIGH,
+                                     BSP_BLOCK_MODE) != 0)
         {
             BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "int3_int4_io_conf write failed");
             return 1;
         }
 
         // 8. 配置 INT3 中断映射
-        if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_INT3_INT4_IO_MAP_REG, BMI088_INT3_DATA, BSP_BLOCK_MODE) != 0)
+        if (BMI088_WriteRegWithCheck(inst, inst->cs_gyro, BMI088_GYRO_INT3_INT4_IO_MAP_REG, BMI088_INT3_DATA,
+                                     BSP_BLOCK_MODE) != 0)
         {
             BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "int3_int4_io_map write failed");
             return 1;
@@ -995,10 +1016,8 @@ int8_t BMI088Register(BMI088Instance *inst)
  */
 int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
 {
-    BSP_RETURN_IF_TRUE_LOG(inst == NULL, -1,
-                           BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1,
-                           BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(inst == NULL, -1, BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "Config is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config->spi_e >= SPI_NUM_MAX, -1,
                            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "spi_e out of range!"));
     BSP_RETURN_IF_TRUE_LOG(config->cs_acc_e >= GPIO_NUM_MAX || config->cs_gyro_e >= GPIO_NUM_MAX, -1,
@@ -1011,21 +1030,22 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
      * 而 HAL tick 源（TIM14/TIM23）的 NVIC 优先级数值不小于外设中断的 5，抢占不了该
      * EXTI，中断里 tick 不前进、超时判据永不成立，从机一不响应就是死循环。
      * 这个组合没有合法用途，直接拒绝而不是留个上电就卡的实例 */
-    BSP_RETURN_IF_TRUE_LOG(config->work_mode == BMI088_MODE_INT && config->spi_mode == BSP_BLOCK_MODE, -1,
-                           BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "INT mode cannot use BSP_BLOCK_MODE (blocking SPI in EXTI)!"));
+    BSP_RETURN_IF_TRUE_LOG(
+        config->work_mode == BMI088_MODE_INT && config->spi_mode == BSP_BLOCK_MODE, -1,
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "INT mode cannot use BSP_BLOCK_MODE (blocking SPI in EXTI)!"));
     BSP_RETURN_IF_TRUE_LOG(config->acc_range >= BMI088_ACC_RANGE_NUM, -1,
                            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "Invalid acc_range=%d!", (int)config->acc_range));
     BSP_RETURN_IF_TRUE_LOG(config->gyro_range >= BMI088_GYRO_RANGE_NUM, -1,
                            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "Invalid gyro_range=%d!", (int)config->gyro_range));
-    BSP_RETURN_IF_TRUE_LOG(config->gyro_conf > BMI088_GYRO_CONF_100_32, -1,
-                           BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "Invalid gyro_conf=0x%02X!", (unsigned)config->gyro_conf));
+    BSP_RETURN_IF_TRUE_LOG(
+        config->gyro_conf > BMI088_GYRO_CONF_100_32, -1,
+        BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "Invalid gyro_conf=0x%02X!", (unsigned)config->gyro_conf));
     BSP_RETURN_IF_TRUE_LOG(config->spi_timeout_ms == 0, -1,
                            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "spi_timeout_ms must be > 0!"));
     /* 中断模式没接 DRDY 就等于没有数据来源，直接拒绝配置而不是留个哑巴实例 */
     BSP_RETURN_IF_TRUE_LOG(config->work_mode == BMI088_MODE_INT &&
                                (config->int_acc_e >= GPIO_NUM_MAX || config->int_gyro_e >= GPIO_NUM_MAX),
-                           -1,
-                           BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "INT mode requires valid int_acc_e/int_gyro_e!"));
+                           -1, BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "INT mode requires valid int_acc_e/int_gyro_e!"));
 
     // 预存硬件枚举到子实例（Config 时填充映射）
     inst->spi_inst->spi_e = config->spi_e;
@@ -1182,8 +1202,8 @@ static BMI088_Data_t BMI088_ReadPolling(BMI088Instance *inst)
     /* 读取加速度计原始数据（X/Y/Z 三轴，6 字节），必须**先拷走**再发起下一笔：
      * rx_buff 是三个传感器共用的同一块缓冲 */
     uint8_t acc_buf[BMI088_RAW_DATA_SIZE];
-    if (BMI088_ReadReg(inst, inst->cs_acc, BMI088_ACCEL_XOUT_L, BMI088_RAW_DATA_SIZE,
-                       BMI088_ACC_DUMMY_BYTES, inst->spi_mode) != 0)
+    if (BMI088_ReadReg(inst, inst->cs_acc, BMI088_ACCEL_XOUT_L, BMI088_RAW_DATA_SIZE, BMI088_ACC_DUMMY_BYTES,
+                       inst->spi_mode) != 0)
     {
         BMI088_NoteFailure(inst);
         return (BMI088_Data_t){0};
@@ -1192,8 +1212,8 @@ static BMI088_Data_t BMI088_ReadPolling(BMI088Instance *inst)
 
     /* 读取陀螺仪原始数据（X/Y/Z 三轴，6 字节） */
     uint8_t gyro_buf[BMI088_RAW_DATA_SIZE];
-    if (BMI088_ReadReg(inst, inst->cs_gyro, BMI088_GYRO_X_L, BMI088_RAW_DATA_SIZE,
-                       BMI088_GYRO_DUMMY_BYTES, inst->spi_mode) != 0)
+    if (BMI088_ReadReg(inst, inst->cs_gyro, BMI088_GYRO_X_L, BMI088_RAW_DATA_SIZE, BMI088_GYRO_DUMMY_BYTES,
+                       inst->spi_mode) != 0)
     {
         BMI088_NoteFailure(inst);
         return (BMI088_Data_t){0};
@@ -1260,8 +1280,7 @@ static BMI088_Data_t BMI088_ReadInterp(BMI088Instance *inst)
         uint16_t a_older, a_newer;
         if (BMI088_FindBracket(inst->t_acc, a_newest, acc_n, best_ts, &a_older, &a_newer))
         {
-            BMI088_InterpRaw(inst->acc_raw[a_older], inst->acc_raw[a_newer],
-                             inst->t_acc[a_older], inst->t_acc[a_newer],
+            BMI088_InterpRaw(inst->acc_raw[a_older], inst->acc_raw[a_newer], inst->t_acc[a_older], inst->t_acc[a_newer],
                              best_ts, best_acc);
         }
         else
@@ -1278,9 +1297,8 @@ static BMI088_Data_t BMI088_ReadInterp(BMI088Instance *inst)
         uint16_t g_older, g_newer;
         if (BMI088_FindBracket(inst->t_gyro, g_newest, gyro_n, best_ts, &g_older, &g_newer))
         {
-            BMI088_InterpRaw(inst->gyro_raw[g_older], inst->gyro_raw[g_newer],
-                             inst->t_gyro[g_older], inst->t_gyro[g_newer],
-                             best_ts, best_gyro);
+            BMI088_InterpRaw(inst->gyro_raw[g_older], inst->gyro_raw[g_newer], inst->t_gyro[g_older],
+                             inst->t_gyro[g_newer], best_ts, best_gyro);
         }
         else
         {

@@ -28,20 +28,20 @@
 static int g_checks = 0;
 static int g_fails = 0;
 
-#define CHECK(cond, ...)                       \
-    do                                         \
-    {                                          \
-        g_checks++;                            \
-        if (!(cond))                           \
-        {                                      \
-            g_fails++;                         \
-            if (g_fails <= 30)                 \
-            {                                  \
-                printf("FAIL %d: ", __LINE__); \
-                printf(__VA_ARGS__);           \
-                printf("\n");                  \
-            }                                  \
-        }                                      \
+#define CHECK(cond, ...)                                                                                               \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        g_checks++;                                                                                                    \
+        if (!(cond))                                                                                                   \
+        {                                                                                                              \
+            g_fails++;                                                                                                 \
+            if (g_fails <= 30)                                                                                         \
+            {                                                                                                          \
+                printf("FAIL %d: ", __LINE__);                                                                         \
+                printf(__VA_ARGS__);                                                                                   \
+                printf("\n");                                                                                          \
+            }                                                                                                          \
+        }                                                                                                              \
     } while (0)
 
 static uint32_t g_rng = 0x12345678u;
@@ -108,8 +108,7 @@ static void test_params(void)
     cfg.m = 8;
     cfg.k_s = 1;
     CHECK(LIB_Hamming_EncodeBlock(data, &cfg, code) == LIB_HAMMING_BAD_ARG, "m=8 拒绝");
-    CHECK(LIB_Hamming_DecodeBlock(NULL, &cfg, NULL, NULL, NULL) == LIB_HAMMING_BAD_ARG,
-          "DecodeBlock NULL 拒绝");
+    CHECK(LIB_Hamming_DecodeBlock(NULL, &cfg, NULL, NULL, NULL) == LIB_HAMMING_BAD_ARG, "DecodeBlock NULL 拒绝");
 
     cfg.m = 4;
     cfg.k_s = 8;
@@ -251,8 +250,7 @@ static void test_single_error(void)
                     memcpy(tmp, code, sizeof(tmp));
                     flip_bit(tmp, i);
                     st = LIB_Hamming_DecodeBlock(tmp, &cfg, out, NULL, &pos);
-                    CHECK(st == LIB_HAMMING_CORRECTED && pos == (int16_t)i &&
-                              bits_equal(out, data, ks),
+                    CHECK(st == LIB_HAMMING_CORRECTED && pos == (int16_t)i && bits_equal(out, data, ks),
                           "std 单错 m=%u ks=%u i=%u st=%d pos=%d", m, ks, i, (int)st, (int)pos);
                 }
 
@@ -264,29 +262,25 @@ static void test_single_error(void)
                     uint32_t ebits = 0;
                     LIB_Hamming_Stat_t stat;
 
-                    CHECK(LIB_Hamming_ExtEncode(data, ks, &cfg, ecode, sizeof(ecode) * 8u, &ebits) == 0 &&
-                              ebits == n_e,
+                    CHECK(LIB_Hamming_ExtEncode(data, ks, &cfg, ecode, sizeof(ecode) * 8u, &ebits) == 0 && ebits == n_e,
                           "ext 编码 m=%u ks=%u", m, ks);
 
                     for (i = 0; i < n_e; i++)
                     {
                         memcpy(tmp, ecode, sizeof(tmp));
                         flip_bit(tmp, i);
-                        CHECK(LIB_Hamming_ExtDecode(tmp, n_e, ks, &cfg, eout, &stat) == 0 &&
-                                  bits_equal(eout, data, ks),
+                        CHECK(LIB_Hamming_ExtDecode(tmp, n_e, ks, &cfg, eout, &stat) == 0 && bits_equal(eout, data, ks),
                               "ext 单错数据 m=%u ks=%u i=%u", m, ks, i);
                         if (i == n_s)
                         {
                             /* 翻的是总校验位本身：数据无错，不算纠正 */
                             CHECK(stat.corrected == 0u && stat.detected == 0u,
-                                  "ext 总校验位错 m=%u ks=%u corr=%u det=%u", m, ks,
-                                  stat.corrected, stat.detected);
+                                  "ext 总校验位错 m=%u ks=%u corr=%u det=%u", m, ks, stat.corrected, stat.detected);
                         }
                         else
                         {
                             CHECK(stat.corrected == 1u && stat.detected == 0u,
-                                  "ext 单错 m=%u ks=%u i=%u corr=%u det=%u", m, ks, i,
-                                  stat.corrected, stat.detected);
+                                  "ext 单错 m=%u ks=%u i=%u corr=%u det=%u", m, ks, i, stat.corrected, stat.detected);
                         }
                     }
                 }
@@ -336,8 +330,7 @@ static void test_double_error(void)
                     flip_bit(tmp, i);
                     flip_bit(tmp, j);
                     st = LIB_Hamming_DecodeBlock(tmp, &cfg, out, NULL, &pos);
-                    CHECK(st == LIB_HAMMING_CORRECTED || st == LIB_HAMMING_DETECTED,
-                          "std 双错状态异常 m=%u", m);
+                    CHECK(st == LIB_HAMMING_CORRECTED || st == LIB_HAMMING_DETECTED, "std 双错状态异常 m=%u", m);
                 }
             }
 
@@ -357,10 +350,9 @@ static void test_double_error(void)
                         memcpy(tmp, ecode, sizeof(tmp));
                         flip_bit(tmp, i);
                         flip_bit(tmp, j);
-                        CHECK(LIB_Hamming_ExtDecode(tmp, n_e, k, &cfg, eout, &stat) == 0 &&
-                                  stat.detected == 1u && stat.corrected == 0u,
-                              "ext 双错未检出 m=%u i=%u j=%u corr=%u det=%u", m, i, j,
-                              stat.corrected, stat.detected);
+                        CHECK(LIB_Hamming_ExtDecode(tmp, n_e, k, &cfg, eout, &stat) == 0 && stat.detected == 1u &&
+                                  stat.corrected == 0u,
+                              "ext 双错未检出 m=%u i=%u j=%u corr=%u det=%u", m, i, j, stat.corrected, stat.detected);
                     }
                 }
             }
@@ -396,9 +388,8 @@ static void test_posfromsyndrome(void)
         int16_t pos;
         LIB_Hamming_Status_t st;
     } cases[] = {
-        {3, 0, LIB_HAMMING_OK}, {5, 1, LIB_HAMMING_OK}, {6, 2, LIB_HAMMING_OK},
-        {1, 3, LIB_HAMMING_OK}, {2, 4, LIB_HAMMING_OK}, {4, 5, LIB_HAMMING_OK},
-        {7, -1, LIB_HAMMING_DETECTED},
+        {3, 0, LIB_HAMMING_OK}, {5, 1, LIB_HAMMING_OK}, {6, 2, LIB_HAMMING_OK},        {1, 3, LIB_HAMMING_OK},
+        {2, 4, LIB_HAMMING_OK}, {4, 5, LIB_HAMMING_OK}, {7, -1, LIB_HAMMING_DETECTED},
     };
     LIB_Hamming_Cfg_t cfg = {3, 3};
     size_t i;
@@ -408,8 +399,8 @@ static void test_posfromsyndrome(void)
         int16_t pos = -2;
         LIB_Hamming_Status_t st = LIB_Hamming_PosFromSyndrome(cases[i].sy, &cfg, &pos);
 
-        CHECK(st == cases[i].st && pos == cases[i].pos, "PosFromSyndrome(%u) st=%d pos=%d",
-              cases[i].sy, (int)st, (int)pos);
+        CHECK(st == cases[i].st && pos == cases[i].pos, "PosFromSyndrome(%u) st=%d pos=%d", cases[i].sy, (int)st,
+              (int)pos);
     }
     {
         int16_t pos = -2;
@@ -482,8 +473,7 @@ static void test_column_table(void)
 
                 CHECK(got == want, "列值表 m=%u k_s=%u pos=%u got=%u want=%u", m, k_s, pos, got, want);
                 /* 顺带锚定反查公式：表中每个值都必须反查回它自己的位置 */
-                CHECK(LIB_Hamming_PosFromSyndrome(want, &cfg, &back) == LIB_HAMMING_OK &&
-                          back == (int16_t)pos,
+                CHECK(LIB_Hamming_PosFromSyndrome(want, &cfg, &back) == LIB_HAMMING_OK && back == (int16_t)pos,
                       "列反查 m=%u k_s=%u pos=%u -> %d", m, k_s, pos, (int)back);
             }
 
@@ -492,8 +482,7 @@ static void test_column_table(void)
             {
                 int16_t back = -2;
 
-                CHECK(LIB_Hamming_PosFromSyndrome((uint8_t)(1u << j), &cfg, &back) ==
-                              LIB_HAMMING_OK &&
+                CHECK(LIB_Hamming_PosFromSyndrome((uint8_t)(1u << j), &cfg, &back) == LIB_HAMMING_OK &&
                           back == (int16_t)(cfg.k_s + j),
                       "校验列反查 m=%u k_s=%u j=%u -> %d", m, k_s, j, (int)back);
             }
@@ -515,10 +504,8 @@ static void test_padding_and_lengths(void)
     uint32_t i;
 
     fill_random(data, data_bits);
-    CHECK(LIB_Hamming_Encode(data, data_bits, &cfg, code, BUFB * 8u, &cb) == 0 && cb == 2u * n_s,
-          "补零用例编码长度");
-    CHECK(LIB_Hamming_Decode(code, cb, data_bits, &cfg, out, NULL) == 0 &&
-              bits_equal(out, data, data_bits),
+    CHECK(LIB_Hamming_Encode(data, data_bits, &cfg, code, BUFB * 8u, &cb) == 0 && cb == 2u * n_s, "补零用例编码长度");
+    CHECK(LIB_Hamming_Decode(code, cb, data_bits, &cfg, out, NULL) == 0 && bits_equal(out, data, data_bits),
           "补零往返");
 
     /* 标准码：翻块1 的补零位（绝对位置 n_s + 1..3）→ 纠回且输出数据不变 */
@@ -529,9 +516,8 @@ static void test_padding_and_lengths(void)
 
         memcpy(tmp, code, sizeof(tmp));
         flip_bit(tmp, n_s + i);
-        CHECK(LIB_Hamming_Decode(tmp, cb, data_bits, &cfg, out, &stat) == 0 &&
-                  stat.corrected == 1u && stat.detected == 0u &&
-                  bits_equal(out, data, data_bits),
+        CHECK(LIB_Hamming_Decode(tmp, cb, data_bits, &cfg, out, &stat) == 0 && stat.corrected == 1u &&
+                  stat.detected == 0u && bits_equal(out, data, data_bits),
               "补零位单错 %u", i);
     }
 
@@ -542,8 +528,7 @@ static void test_padding_and_lengths(void)
         uint32_t ebits = 0;
         LIB_Hamming_Stat_t stat;
 
-        CHECK(LIB_Hamming_ExtEncode(data, data_bits, &cfg, ecode, BUFB * 8u, &ebits) == 0 &&
-                  ebits == 2u * n_e,
+        CHECK(LIB_Hamming_ExtEncode(data, data_bits, &cfg, ecode, BUFB * 8u, &ebits) == 0 && ebits == 2u * n_e,
               "ext 补零编码长度");
 
         for (i = 1; i < 4u; i++)
@@ -552,9 +537,8 @@ static void test_padding_and_lengths(void)
 
             memcpy(tmp, ecode, sizeof(tmp));
             flip_bit(tmp, n_e + i); /* 块1 补零位绝对位置 */
-            CHECK(LIB_Hamming_ExtDecode(tmp, ebits, data_bits, &cfg, eout, &stat) == 0 &&
-                      stat.corrected == 1u && stat.detected == 0u &&
-                      bits_equal(eout, data, data_bits),
+            CHECK(LIB_Hamming_ExtDecode(tmp, ebits, data_bits, &cfg, eout, &stat) == 0 && stat.corrected == 1u &&
+                      stat.detected == 0u && bits_equal(eout, data, data_bits),
                   "ext 补零位单错 %u", i);
         }
 
@@ -565,8 +549,8 @@ static void test_padding_and_lengths(void)
             memcpy(tmp, ecode, sizeof(tmp));
             flip_bit(tmp, n_e + 0u);
             flip_bit(tmp, n_e + 1u);
-            CHECK(LIB_Hamming_ExtDecode(tmp, ebits, data_bits, &cfg, eout, &stat) == 0 &&
-                      stat.detected == 1u && stat.corrected == 0u,
+            CHECK(LIB_Hamming_ExtDecode(tmp, ebits, data_bits, &cfg, eout, &stat) == 0 && stat.detected == 1u &&
+                      stat.corrected == 0u,
                   "ext 同块双错应检出 det=%u corr=%u", stat.detected, stat.corrected);
         }
 
@@ -577,9 +561,8 @@ static void test_padding_and_lengths(void)
             memcpy(tmp, ecode, sizeof(tmp));
             flip_bit(tmp, 0u);       /* 块0 数据位0 */
             flip_bit(tmp, n_e + 1u); /* 块1 补零位1 */
-            CHECK(LIB_Hamming_ExtDecode(tmp, ebits, data_bits, &cfg, eout, &stat) == 0 &&
-                      stat.corrected == 2u && stat.detected == 0u &&
-                      bits_equal(eout, data, data_bits),
+            CHECK(LIB_Hamming_ExtDecode(tmp, ebits, data_bits, &cfg, eout, &stat) == 0 && stat.corrected == 2u &&
+                      stat.detected == 0u && bits_equal(eout, data, data_bits),
                   "ext 跨块双错应各自纠正 corr=%u det=%u", stat.corrected, stat.detected);
         }
     }
@@ -612,18 +595,14 @@ static void test_lengths(void)
 
         fill_random(data, bits);
 
-        CHECK(LIB_Hamming_Encode(data, bits, &cfg, code, BUFB * 8u, &cb) == 0 && cb == req,
-              "长度编码 bits=%u", bits);
-        CHECK(LIB_Hamming_Decode(code, cb, bits, &cfg, out, NULL) == 0 &&
-                  bits_equal(out, data, bits),
+        CHECK(LIB_Hamming_Encode(data, bits, &cfg, code, BUFB * 8u, &cb) == 0 && cb == req, "长度编码 bits=%u", bits);
+        CHECK(LIB_Hamming_Decode(code, cb, bits, &cfg, out, NULL) == 0 && bits_equal(out, data, bits),
               "长度往返 bits=%u", bits);
 
         memset(code, 0, sizeof(code));
-        CHECK(LIB_Hamming_ExtEncode(data, bits, &cfg, code, BUFB * 8u, &ebits) == 0 &&
-                  ebits == ereq,
+        CHECK(LIB_Hamming_ExtEncode(data, bits, &cfg, code, BUFB * 8u, &ebits) == 0 && ebits == ereq,
               "ext 长度编码 bits=%u", bits);
-        CHECK(LIB_Hamming_ExtDecode(code, ebits, bits, &cfg, out, NULL) == 0 &&
-                  bits_equal(out, data, bits),
+        CHECK(LIB_Hamming_ExtDecode(code, ebits, bits, &cfg, out, NULL) == 0 && bits_equal(out, data, bits),
               "ext 长度往返 bits=%u", bits);
     }
 }
@@ -645,16 +624,15 @@ static void test_multiblock_position(void)
     /* 块 3 的数据位 2 翻错 → 绝对位置 3*13 + 2 */
     memcpy(tmp, ecode, sizeof(tmp));
     flip_bit(tmp, 3u * 13u + 2u);
-    CHECK(LIB_Hamming_ExtDecode(tmp, ebits, bits, &cfg, eout, &stat) == 0 &&
-              stat.corrected == 1u && stat.first_err_pos == (int32_t)(3u * 13u + 2u) &&
-              bits_equal(eout, data, bits),
+    CHECK(LIB_Hamming_ExtDecode(tmp, ebits, bits, &cfg, eout, &stat) == 0 && stat.corrected == 1u &&
+              stat.first_err_pos == (int32_t)(3u * 13u + 2u) && bits_equal(eout, data, bits),
           "多块绝对错误位置 corr=%u pos=%d", stat.corrected, stat.first_err_pos);
 
     /* 块 4 的总校验位翻错 → 数据无错、不计纠正 */
     memcpy(tmp, ecode, sizeof(tmp));
     flip_bit(tmp, 4u * 13u + 12u);
-    CHECK(LIB_Hamming_ExtDecode(tmp, ebits, bits, &cfg, eout, &stat) == 0 &&
-              stat.corrected == 0u && stat.detected == 0u && bits_equal(eout, data, bits),
+    CHECK(LIB_Hamming_ExtDecode(tmp, ebits, bits, &cfg, eout, &stat) == 0 && stat.corrected == 0u &&
+              stat.detected == 0u && bits_equal(eout, data, bits),
           "多块总校验位错 corr=%u det=%u", stat.corrected, stat.detected);
 }
 
@@ -688,8 +666,7 @@ static void test_buffers(void)
     /* code_bits 不匹配 → 拒绝 */
     CHECK(LIB_Hamming_Decode(code, req - 1u, bits, &cfg, out, NULL) == -1, "code_bits 少应拒绝");
     CHECK(LIB_Hamming_Decode(code, req + 1u, bits, &cfg, out, NULL) == -1, "code_bits 多应拒绝");
-    CHECK(LIB_Hamming_Decode(code, req, bits, &cfg, out, NULL) == 0 && bits_equal(out, data, bits),
-          "合法解码");
+    CHECK(LIB_Hamming_Decode(code, req, bits, &cfg, out, NULL) == 0 && bits_equal(out, data, bits), "合法解码");
 }
 
 /* ---------- 8. 随机 Monte-Carlo ---------- */
@@ -743,8 +720,7 @@ static void test_compile_time_macros(void)
 
     for (m = 2u; m <= LIB_HAMMING_M_MAX; m++)
     {
-        CHECK(LIB_HAMMING_FULL_K(m) == full_k(m), "宏 FULL_K(%u)=%u 与运行期不等", m,
-              (unsigned)LIB_HAMMING_FULL_K(m));
+        CHECK(LIB_HAMMING_FULL_K(m) == full_k(m), "宏 FULL_K(%u)=%u 与运行期不等", m, (unsigned)LIB_HAMMING_FULL_K(m));
 
         for (bits = 1u; bits <= 400u; bits++)
         {
@@ -756,16 +732,12 @@ static void test_compile_time_macros(void)
             CHECK(ks == cfg.k_s, "宏 FIT_KS(%u,%u)=%u 与 Fit 的 %u 不等", bits, m, ks, cfg.k_s);
             CHECK(LIB_HAMMING_BLOCK_CNT(bits, ks) == (bits + ks - 1u) / ks, "块数宏错");
 
-            CHECK(LIB_HAMMING_CODE_BITS(bits, cfg.k_s, m, 0) ==
-                      LIB_Hamming_RequiredBits(bits, &cfg, 0),
-                  "标准码长宏 %u != 运行期 %u (bits=%u m=%u)",
-                  LIB_HAMMING_CODE_BITS(bits, cfg.k_s, m, 0),
+            CHECK(LIB_HAMMING_CODE_BITS(bits, cfg.k_s, m, 0) == LIB_Hamming_RequiredBits(bits, &cfg, 0),
+                  "标准码长宏 %u != 运行期 %u (bits=%u m=%u)", LIB_HAMMING_CODE_BITS(bits, cfg.k_s, m, 0),
                   LIB_Hamming_RequiredBits(bits, &cfg, 0), bits, m);
-            CHECK(LIB_HAMMING_CODE_BITS(bits, cfg.k_s, m, 1) ==
-                      LIB_Hamming_RequiredBits(bits, &cfg, 1),
+            CHECK(LIB_HAMMING_CODE_BITS(bits, cfg.k_s, m, 1) == LIB_Hamming_RequiredBits(bits, &cfg, 1),
                   "扩展码长宏 != 运行期 (bits=%u m=%u)", bits, m);
-            CHECK(LIB_HAMMING_CODE_BYTES(bits, cfg.k_s, m, 1) ==
-                      (LIB_Hamming_RequiredBits(bits, &cfg, 1) + 7u) / 8u,
+            CHECK(LIB_HAMMING_CODE_BYTES(bits, cfg.k_s, m, 1) == (LIB_Hamming_RequiredBits(bits, &cfg, 1) + 7u) / 8u,
                   "码字字节数宏错 (bits=%u m=%u)", bits, m);
         }
     }
@@ -792,8 +764,7 @@ static void test_byte_block_plan(void)
         /* 用规划出的 k_s = 8s 走运行期函数，码长必须正好等于 E*8 位 */
         cfg.m = m;
         cfg.k_s = (uint16_t)(s * 8u);
-        CHECK(LIB_Hamming_RequiredBits(p * 8u, &cfg, 1) == E * 8u,
-              "规划 E=%u 与运行期码长 %u 不等 p=%u", E,
+        CHECK(LIB_Hamming_RequiredBits(p * 8u, &cfg, 1) == E * 8u, "规划 E=%u 与运行期码长 %u 不等 p=%u", E,
               LIB_Hamming_RequiredBits(p * 8u, &cfg, 1), p);
     }
 }

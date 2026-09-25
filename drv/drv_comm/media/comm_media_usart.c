@@ -210,8 +210,7 @@ int8_t MediaUsartConfig(CommMediaUsart *media, CommMediaUsartConfig_s *cfg)
     /* 4. 启动接收常开流（bsp 的 USARTConfig 不再自动启动接收） */
     if (USARTReceive(usart, rx_len, cfg->rx_mode, 0) != BSP_OK)
     {
-        BSPLOG(&g_media_usart_log, LOG_LEVEL_ERROR,
-               "receive start failed (mode=%d, len=%u), offline hook will retry",
+        BSPLOG(&g_media_usart_log, LOG_LEVEL_ERROR, "receive start failed (mode=%d, len=%u), offline hook will retry",
                (int)cfg->rx_mode, rx_len);
         return -1;
     }

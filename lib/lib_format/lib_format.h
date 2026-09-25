@@ -91,7 +91,6 @@ int LibFormatV(char *out, size_t cap, const char *fmt, size_t fmt_len, va_list a
  *       int n = LIBFORMAT(buf, sizeof(buf), "motor=%d speed=%u\n", id, speed);
  *       以上例子，如果格式化之后结果大于sizeof(buf)，后面消息将被截断
  */
-#define LIBFORMAT(out, cap, fmt, ...) \
-    LibFormatEx(out, cap, fmt, sizeof(fmt) - 1, ##__VA_ARGS__)
+#define LIBFORMAT(out, cap, fmt, ...) LibFormatEx(out, cap, fmt, sizeof(fmt) - 1, ##__VA_ARGS__)
 
 #endif /* __LIB_FORMAT_H */

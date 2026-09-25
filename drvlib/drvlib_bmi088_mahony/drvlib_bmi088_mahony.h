@@ -281,12 +281,10 @@ typedef struct BMI088MahonyInstance
  *
  * @example BMI088_MAHONY_INSTANCE_DEF(imu);
  */
-#define BMI088_MAHONY_INSTANCE_DEF(name) \
-    BMI088_INSTANCE_DEF(name##_imu);     \
-    MAHONY_INSTANCE_DEF(name##_mahony);  \
-    static BMI088MahonyInstance name = { \
-        .imu = &name##_imu,              \
-        .mahony = &name##_mahony}
+#define BMI088_MAHONY_INSTANCE_DEF(name)                                                                               \
+    BMI088_INSTANCE_DEF(name##_imu);                                                                                   \
+    MAHONY_INSTANCE_DEF(name##_mahony);                                                                                \
+    static BMI088MahonyInstance name = {.imu = &name##_imu, .mahony = &name##_mahony}
 
 /*============================ 公开接口 ============================*/
 

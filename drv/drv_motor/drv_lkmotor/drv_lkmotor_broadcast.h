@@ -83,8 +83,8 @@ typedef struct
 {
     LKMotorBroadcastInstance *motors[LK_BROADCAST_SLOTS]; // 组内 4 个电机指针
     uint8_t motor_init_flag[LK_BROADCAST_SLOTS];          // 槽位是否已占用
-    uint32_t tx_fail;                                     // 组播帧发送失败累计（由 MotorCanTransmit 累加，见 drv_motor_can.h）
-                                                          // 组播帧一帧带 4 个槽位，失败只记在组上，不摊到各电机
+    uint32_t tx_fail; // 组播帧发送失败累计（由 MotorCanTransmit 累加，见 drv_motor_can.h）
+                      // 组播帧一帧带 4 个槽位，失败只记在组上，不摊到各电机
 } LKMotorBroadcastSendGroup_s;
 
 /*============================================
@@ -156,12 +156,12 @@ typedef struct
 /*============================================
  *              单电机实例定义宏
  *============================================*/
-#define LKMOTOR_BROADCAST_INSTANCE_DEF(name) \
-    CAN_INSTANCE_DEF(name##_can);            \
-    DAEMON_INSTANCE_DEF(name##_daemon);      \
-    static LKMotorBroadcastInstance name = { \
-        .base.can = &name##_can,             \
-        .base.daemon = &name##_daemon,       \
+#define LKMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                           \
+    CAN_INSTANCE_DEF(name##_can);                                                                                      \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
+    static LKMotorBroadcastInstance name = {                                                                           \
+        .base.can = &name##_can,                                                                                       \
+        .base.daemon = &name##_daemon,                                                                                 \
     }
 
 /*============================================

@@ -96,7 +96,8 @@ int8_t GPIORegister(GPIOInstance *instance)
 {
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_gpio_idx >= GPIO_INSTANCE_NUM, -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "Exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(s_gpio_idx >= GPIO_INSTANCE_NUM, -1,
+                           BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "Exceeded max instance count!"));
 
     // 防重复注册检查
     for (uint8_t i = 0; i < s_gpio_idx; i++)
@@ -121,13 +122,15 @@ int8_t GPIOConfig(GPIOInstance *instance, const GPIO_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->gpio_e >= GPIO_NUM_MAX, -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "gpio_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(config->gpio_e >= GPIO_NUM_MAX, -1,
+                           BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "gpio_e out of range!"));
 
     // 填充枚举和硬件映射
     instance->gpio_e = config->gpio_e;
     instance->map = gpio_map[instance->gpio_e];
 
-    BSP_RETURN_IF_TRUE_LOG(instance->map.port == NULL || !GPIOIsSingleBitPin(instance->map.pin), -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "Invalid GPIO map, check bsp_cfg mapping!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->map.port == NULL || !GPIOIsSingleBitPin(instance->map.pin), -1,
+                           BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "Invalid GPIO map, check bsp_cfg mapping!"));
 
     uint8_t pin_idx = GPIOPinToIndex(instance->map.pin);
     BSP_RETURN_IF_TRUE_LOG(pin_idx >= 16, -1, BSPLOG(&g_gpio_log, LOG_LEVEL_ERROR, "Invalid pin index!"));

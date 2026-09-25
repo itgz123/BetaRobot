@@ -66,25 +66,25 @@ void APP_TaskDelayReport(const char *name, uint64_t dt_us);
  * @note 任务实例仍由 TASK_INSTANCE_DEF 声明、TaskRegister 注册。
  * @example APP_TASK_DEF(Chassis, CHASSIS_FREQ_MS, AppChassisRun);
  */
-#define APP_TASK_DEF(name_, freq_ms_, run_)                                              \
-    ITCM_RAM static __attribute__((noreturn)) void Start##name_##Task(void *argument)    \
-    {                                                                                    \
-        static uint64_t start;                                                           \
-        static uint64_t dt;                                                              \
-        TickType_t xLastWakeTime = xTaskGetTickCount();     /* 周期锚点(绝对唤醒时刻) */ \
-        const TickType_t xPeriod = pdMS_TO_TICKS(freq_ms_); /* 任务周期(tick) */         \
-        APP_TaskStartLog(#name_);                                                        \
-        for (;;)                                                                         \
-        {                                                                                \
-            vTaskDelayUntil(&xLastWakeTime, xPeriod); /* 固定周期唤醒，避免周期漂移 */   \
-            start = DWT_GetTimeUs();                                                     \
-            run_();                                                                      \
-            dt = DWT_GetTimeUs() - start;                                                \
-            if (dt > 1000UL * (freq_ms_))                                                \
-            {                                                                            \
-                APP_TaskDelayReport(#name_, dt);                                         \
-            }                                                                            \
-        }                                                                                \
+#define APP_TASK_DEF(name_, freq_ms_, run_)                                                                            \
+    ITCM_RAM static __attribute__((noreturn)) void Start##name_##Task(void *argument)                                  \
+    {                                                                                                                  \
+        static uint64_t start;                                                                                         \
+        static uint64_t dt;                                                                                            \
+        TickType_t xLastWakeTime = xTaskGetTickCount();     /* 周期锚点(绝对唤醒时刻) */                               \
+        const TickType_t xPeriod = pdMS_TO_TICKS(freq_ms_); /* 任务周期(tick) */                                       \
+        APP_TaskStartLog(#name_);                                                                                      \
+        for (;;)                                                                                                       \
+        {                                                                                                              \
+            vTaskDelayUntil(&xLastWakeTime, xPeriod); /* 固定周期唤醒，避免周期漂移 */                                 \
+            start = DWT_GetTimeUs();                                                                                   \
+            run_();                                                                                                    \
+            dt = DWT_GetTimeUs() - start;                                                                              \
+            if (dt > 1000UL * (freq_ms_))                                                                              \
+            {                                                                                                          \
+                APP_TaskDelayReport(#name_, dt);                                                                       \
+            }                                                                                                          \
+        }                                                                                                              \
     }
 
 #endif /* __BSP_APP_H */

@@ -97,7 +97,8 @@ typedef struct
     uint32_t rx_id;              /* 接收 ID 段基址（过滤段起点；Config 写入；CAN_ID_UNUSED = 不接收） */
 
     /* CAN 收发参数（Config 写入） */
-    CAN_Filter_s can_filter;     /* 接收过滤器（每实例一份，RANGE 段匹配 [rx_id, rx_id+分包数)；bsp 为指针存储，须常驻实例） */
+    CAN_Filter_s
+        can_filter; /* 接收过滤器（每实例一份，RANGE 段匹配 [rx_id, rx_id+分包数)；bsp 为指针存储，须常驻实例） */
     CAN_Frame_Type_e frame_type; /* 帧类型（标准/扩展数据帧；收发共用） */
     CAN_Mode_Type_e mode;        /* CAN 帧格式：CLASSIC(8B/帧)/FD/FD_BRS(64B/帧)；分包片长与接收防御按此 */
 } CommMediaCanIdseq;
@@ -120,18 +121,17 @@ typedef struct
  * @example
  *   COMM_MEDIA_CAN_IDSEQ_DEF(can_comm_media, 16, 16); 协议帧 16B，帧长 > 8B 时自动分包
  */
-#define COMM_MEDIA_CAN_IDSEQ_DEF(name, rx_buff_sz, tx_buff_sz) \
-    CAN_INSTANCE_DEF(name##_can);                              \
-    DAEMON_INSTANCE_DEF(name##_daemon);                        \
-    static uint8_t name##_rx_buff[(rx_buff_sz)] = {0};         \
-    static uint8_t name##_tx_buff[(tx_buff_sz)] = {0};         \
-    static CommMediaCanIdseq name = {                          \
-        .base.media = &name##_can,                             \
-        .base.daemon = &name##_daemon,                         \
-        .rx_buff = name##_rx_buff,                             \
-        .tx_buff = name##_tx_buff,                             \
-        .rx_frame_len = (rx_buff_sz),                          \
-        .tx_frame_len = (tx_buff_sz)}
+#define COMM_MEDIA_CAN_IDSEQ_DEF(name, rx_buff_sz, tx_buff_sz)                                                         \
+    CAN_INSTANCE_DEF(name##_can);                                                                                      \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
+    static uint8_t name##_rx_buff[(rx_buff_sz)] = {0};                                                                 \
+    static uint8_t name##_tx_buff[(tx_buff_sz)] = {0};                                                                 \
+    static CommMediaCanIdseq name = {.base.media = &name##_can,                                                        \
+                                     .base.daemon = &name##_daemon,                                                    \
+                                     .rx_buff = name##_rx_buff,                                                        \
+                                     .tx_buff = name##_tx_buff,                                                        \
+                                     .rx_frame_len = (rx_buff_sz),                                                     \
+                                     .tx_frame_len = (tx_buff_sz)}
 
 /**
  * @brief 注册 CAN IDSEQ 介质后端（不可重入：仅可调用一次）

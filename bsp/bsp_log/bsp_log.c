@@ -138,8 +138,8 @@ static void LogUartTxCplt(USARTInstance *instance)
         {
             /* 与 BSPLogV 同款：先置 SEND、启动成功才认领（s_tx_buf 此刻必为 NULL） */
             s_log_buf[i].buf_state = LOG_BUF_SEND;
-            if (USARTTransmit(&s_log_uart, (const uint8_t *)s_log_buf[i].buf_pool, s_log_buf[i].buf_len,
-                              BSP_DMA_MODE, 0) != BSP_OK)
+            if (USARTTransmit(&s_log_uart, (const uint8_t *)s_log_buf[i].buf_pool, s_log_buf[i].buf_len, BSP_DMA_MODE,
+                              0) != BSP_OK)
             {
                 /* 启动失败：立即归还本槽（后续 WAIT_SEND 由下一次发送完成回调接续） */
                 s_log_buf[i].buf_state = LOG_BUF_FREE;
@@ -204,8 +204,7 @@ static uint8_t LogReclaimOrphanSend(USARTInstance *instance)
 {
     uint8_t i, reclaimed = 0;
 
-    if (instance == NULL || instance->handle == NULL ||
-        instance->handle->gState != HAL_UART_STATE_READY)
+    if (instance == NULL || instance->handle == NULL || instance->handle->gState != HAL_UART_STATE_READY)
     {
         return 0; /* 非空闲：可能有在途传输，别动 */
     }
@@ -271,8 +270,7 @@ static void LogUartErrHandler(USARTInstance *instance, USART_ErrReason_e reason)
      * HW：HAL 的错误位都在接收侧，gState 非 READY 恰恰说明"有一次健康的发送仍在途"，
      *     那种情况不能动这个缓冲（残留由下一次 TxCplt 兜底归还）*/
     if (reason == USART_ERR_TX_ABORT ||
-        (instance != NULL && instance->handle != NULL &&
-         instance->handle->gState == HAL_UART_STATE_READY))
+        (instance != NULL && instance->handle != NULL && instance->handle->gState == HAL_UART_STATE_READY))
     {
         s_tx_buf->buf_state = LOG_BUF_FREE; /* 归还，后续由新的日志重新调度 */
         s_tx_buf = NULL;

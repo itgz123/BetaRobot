@@ -25,8 +25,9 @@
 #define SBUS_CHANNEL_COUNT 16   // 模拟通道数量
 #define SBUS_DIGITAL_CH_COUNT 2 // 数字通道数量
 
-// SBUS 通道值范围（不同遥控器有不同厂家，不同校准，所以可能不准，但是以下值是sbus协议标准值，只要是sbus协议，解释不准也会在-1 ~ +1范围内）
-// 仅作为 SBUS_Config_s.ch_range 的默认参考值，实际校准值由 SBUSConfig 传入
+// SBUS
+// 通道值范围（不同遥控器有不同厂家，不同校准，所以可能不准，但是以下值是sbus协议标准值，只要是sbus协议，解释不准也会在-1
+// ~ +1范围内） 仅作为 SBUS_Config_s.ch_range 的默认参考值，实际校准值由 SBUSConfig 传入
 #define SBUS_CH_MIN 172    // 通道最小值（协议标准值）
 #define SBUS_CH_MAX 1811   // 通道最大值（协议标准值）
 #define SBUS_CH_CENTER 992 // 通道中间值（协议标准值）
@@ -130,12 +131,12 @@ typedef struct
  * @example
  *   SBUS_INSTANCE_DEF(sbus_inst);
  */
-#define SBUS_INSTANCE_DEF(name)                       \
-    USART_INSTANCE_DEF(name##_uart, SBUS_FRAME_SIZE); \
-    DAEMON_INSTANCE_DEF(name##_daemon);               \
-    static SBUSInstance name = {                      \
-        .usart_inst = &name##_uart,                   \
-        .daemon = &name##_daemon,                     \
+#define SBUS_INSTANCE_DEF(name)                                                                                        \
+    USART_INSTANCE_DEF(name##_uart, SBUS_FRAME_SIZE);                                                                  \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
+    static SBUSInstance name = {                                                                                       \
+        .usart_inst = &name##_uart,                                                                                    \
+        .daemon = &name##_daemon,                                                                                      \
     }
 
 /*------------- 外部接口声明 --------------*/

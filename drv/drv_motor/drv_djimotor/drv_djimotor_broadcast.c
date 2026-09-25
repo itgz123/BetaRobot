@@ -67,30 +67,33 @@
  *============================================*/
 /* pos_scale = M_2PI / 8192 ≈ 0.000767, current_scale = 电流量程A / 电流量程raw */
 const DJIMotorBroadcastParams_s dji_motor_broadcast_params[DJI_MODEL_NUM] = {
-    [DJI_MODEL_M3508] = {
-        .current_max = C620_CURRENT_MAX,
-        .current_max_a = C620_CURRENT_MAX_A,
-        .encoder_resolution = DJI_ENCODER_RESOLUTION,
-        .pos_scale = M_2PI / DJI_ENCODER_RESOLUTION,
-        .current_scale = C620_CURRENT_MAX_A / C620_CURRENT_MAX,
-        .inv_current_scale = (float)C620_CURRENT_MAX / C620_CURRENT_MAX_A,
-    },
-    [DJI_MODEL_M2006] = {
-        .current_max = C610_CURRENT_MAX,
-        .current_max_a = C610_CURRENT_MAX_A,
-        .encoder_resolution = DJI_ENCODER_RESOLUTION,
-        .pos_scale = M_2PI / DJI_ENCODER_RESOLUTION,
-        .current_scale = C610_CURRENT_MAX_A / C610_CURRENT_MAX,
-        .inv_current_scale = (float)C610_CURRENT_MAX / C610_CURRENT_MAX_A,
-    },
-    [DJI_MODEL_GM6020] = {
-        .current_max = GM6020_CURRENT_MAX,
-        .current_max_a = GM6020_CURRENT_MAX_A,
-        .encoder_resolution = DJI_ENCODER_RESOLUTION,
-        .pos_scale = M_2PI / DJI_ENCODER_RESOLUTION,
-        .current_scale = GM6020_CURRENT_MAX_A / GM6020_CURRENT_MAX,
-        .inv_current_scale = (float)GM6020_CURRENT_MAX / GM6020_CURRENT_MAX_A,
-    },
+    [DJI_MODEL_M3508] =
+        {
+            .current_max = C620_CURRENT_MAX,
+            .current_max_a = C620_CURRENT_MAX_A,
+            .encoder_resolution = DJI_ENCODER_RESOLUTION,
+            .pos_scale = M_2PI / DJI_ENCODER_RESOLUTION,
+            .current_scale = C620_CURRENT_MAX_A / C620_CURRENT_MAX,
+            .inv_current_scale = (float)C620_CURRENT_MAX / C620_CURRENT_MAX_A,
+        },
+    [DJI_MODEL_M2006] =
+        {
+            .current_max = C610_CURRENT_MAX,
+            .current_max_a = C610_CURRENT_MAX_A,
+            .encoder_resolution = DJI_ENCODER_RESOLUTION,
+            .pos_scale = M_2PI / DJI_ENCODER_RESOLUTION,
+            .current_scale = C610_CURRENT_MAX_A / C610_CURRENT_MAX,
+            .inv_current_scale = (float)C610_CURRENT_MAX / C610_CURRENT_MAX_A,
+        },
+    [DJI_MODEL_GM6020] =
+        {
+            .current_max = GM6020_CURRENT_MAX,
+            .current_max_a = GM6020_CURRENT_MAX_A,
+            .encoder_resolution = DJI_ENCODER_RESOLUTION,
+            .pos_scale = M_2PI / DJI_ENCODER_RESOLUTION,
+            .current_scale = GM6020_CURRENT_MAX_A / GM6020_CURRENT_MAX,
+            .inv_current_scale = (float)GM6020_CURRENT_MAX / GM6020_CURRENT_MAX_A,
+        },
 };
 
 const uint16_t can_tx_id[DJI_MODEL_NUM][2] = {
@@ -519,7 +522,9 @@ static void DJIMotorBroadcast_Calculate(DJIMotorBroadcastInstance *inst)
         {
             position_feedforward = *setting->position_feedforward_ptr;
         }
-        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr) ? *setting->angle_external_ptr : md.position;
+        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr)
+                      ? *setting->angle_external_ptr
+                      : md.position;
         setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, position_feedforward);
     }
 
@@ -531,7 +536,9 @@ static void DJIMotorBroadcast_Calculate(DJIMotorBroadcastInstance *inst)
         {
             speed_feedforward = *setting->speed_feedforward_ptr;
         }
-        measure = (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr) ? *setting->speed_external_ptr : md.speed;
+        measure = (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr)
+                      ? *setting->speed_external_ptr
+                      : md.speed;
         output = PIDCalculate(&ctrl->pid_speed, setpoint, measure, speed_feedforward);
     }
     else
@@ -674,8 +681,7 @@ void DJIMotorBroadcast_Send(void *inst)
             int16_t cur = 0;
             DJIMotorBroadcastInstance *m = group->motors[i];
             // 只有匹配当前 tx_id 的电机才填充数据
-            if (group->motor_init_flag[i] && m && m->base.enable &&
-                m->base.can && m->tx_id == current_tx_id)
+            if (group->motor_init_flag[i] && m && m->base.enable && m->base.can && m->tx_id == current_tx_id)
             {
                 // 根据电机型号限幅到电流原始值范围
                 uint16_t current_max = dji_motor_broadcast_params[m->base.model].current_max;

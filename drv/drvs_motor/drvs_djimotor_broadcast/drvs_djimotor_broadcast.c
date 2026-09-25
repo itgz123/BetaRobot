@@ -78,8 +78,7 @@ static const DrvsDJIMotorBroadcastParams_s s_dji_params[DRVS_DJI_MODEL_NUM] = {
         },
 };
 
-_Static_assert(sizeof(s_dji_params) / sizeof(s_dji_params[0]) == DRVS_DJI_MODEL_NUM,
-               "DJI 参数表长度必须等于型号数");
+_Static_assert(sizeof(s_dji_params) / sizeof(s_dji_params[0]) == DRVS_DJI_MODEL_NUM, "DJI 参数表长度必须等于型号数");
 
 /*============================================
  *              CAN 接收回调（ISR）
@@ -194,8 +193,7 @@ int8_t DrvsDJIMotorBroadcastRegister(DrvsDJIMotorBroadcast_s *inst)
  * @brief 配置 DJI 广播电机并挂到组（可重复调用）
  * @note 要求先 Register。失败路径不动组成员关系。
  */
-int8_t DrvsDJIMotorBroadcastConfig(DrvsDJIMotorBroadcast_s *inst,
-                                   const DrvsDJIMotorBroadcastConfig_s *cfg)
+int8_t DrvsDJIMotorBroadcastConfig(DrvsDJIMotorBroadcast_s *inst, const DrvsDJIMotorBroadcastConfig_s *cfg)
 {
     if (!inst || !cfg || !cfg->group)
         return -1;
