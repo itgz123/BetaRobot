@@ -48,6 +48,24 @@
       "problemMatcher": []
     },
     {
+      "label": "format",
+      "type": "shell",
+      "windows": {
+        "command": "scripts/format-code.cmd"
+      },
+      "linux": {
+        "command": "bash scripts/format-code.sh"
+      },
+      "osx": {
+        "command": "bash scripts/format-code.sh"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "detail": "用 clang-format 就地格式化主仓库全部 .c/.h（风格见根目录 .clang-format）。文件表取自 git ls-files，故 app/（独立 clone 的嵌套仓库）与 gitignore 文件天然不在列表里，另排除 cubemx/",
+      "problemMatcher": []
+    },
+    {
       "label": "can tui",
       "type": "shell",
       "command": "bash ./scripts/can-utils-tui/can-utils-tui.sh",
