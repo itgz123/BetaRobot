@@ -256,7 +256,9 @@ void BMI088KalmanUpdate(BMI088KalmanInstance *inst)
     if (inst == NULL || inst->imu == NULL)
         return;
 
-    BMI088_MultiRateData_t m = BMI088ReadLatest(inst->imu);
+    /* Kalman 是多速率融合：acc 与 gyro 各自独立参与预测/更新，插值会把两条流的
+     * 真实节奏（各自的 dt）抹平，故取各自最新一帧、保留独立时间戳 */
+    BMI088_Data_t m = BMI088Read(inst->imu, BMI088_READ_LATEST);
 
     /* ---- 温度：原始值直接进 data（给 VOFA/终端看），补偿用滤过的版本 ----
      * 首次拿到有效温度直接装载，否则滤波器从 0 冷启动会产生一段假 ΔT

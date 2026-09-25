@@ -183,7 +183,9 @@ void BMI088MahonyUpdate(BMI088MahonyInstance *inst)
     if (inst == NULL || inst->imu == NULL || inst->mahony == NULL)
         return;
 
-    BMI088_MultiRateData_t m = BMI088ReadLatest(inst->imu);
+    /* Mahony 是单速率姿态解算：acc 与 gyro 必须落在同一时刻，故取插值对齐后的帧
+     * （两条流时间戳相等；Kalman 那种多速率融合才用 BMI088_READ_LATEST） */
+    BMI088_Data_t m = BMI088Read(inst->imu, BMI088_READ_INTERP);
 
     /* ---- 温度：原始值直接进 data（给 VOFA/终端看），补偿用滤过的版本 ----
      * 首次拿到有效温度直接装载，否则滤波器从 0 冷启动会产生一段假 ΔT
