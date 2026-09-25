@@ -115,12 +115,14 @@ void _start(void)
              err, 0, 0, 1, 0, 0, 1);
     chk("%lX 后跟 6 个 %d", b, "code=0x10 (BERR:0 ARLO:0 AF:1 OVR:0 DMA:0 TIMEOUT:1)");
 
-    /* bsp_i2c.c:227 那一类格式串。
+    /* bsp_i2c.c 的强制收尾日志（1 个 %s + 2 个 %d + 1 个 %02X + 1 个 %lX + 3 个 %d）。
      * 注意期望值里 State=5 打印为 "0x5" 而非 "0x05"：lib_format 的宽度是
      * **最大**长度（超了从高位截断），不是最小宽度，%02X 不补零——见 lib_format.h。
-     * 这里要验的是 %lX 之后的 lock=%d 没错位，不是补零。 */
-    FMT_CALL(b, "state=0x%02X, err=0x%lX, lock=%d", 5u, err, 1);
-    chk("%lX 后跟 1 个 %d", b, "state=0x5, err=0x10, lock=1");
+     * 这里要验的是 %s 与 %lX 之后各字段都没错位，不是补零。 */
+    FMT_CALL(b, "I2C %s (i2c_e=%d, state=0x%02X, err=0x%lX, lock=%d, tx_dma=%d, rx_dma=%d)",
+             "mem read busy timeout", 1, 5u, err, 1, 2, 3);
+    chk("i2c 收尾日志（%s + %d×2 + %02X + %lX + %d×3）", b,
+        "I2C mem read busy timeout (i2c_e=1, state=0x5, err=0x10, lock=1, tx_dma=2, rx_dma=3)");
 
     /* bsp_can 的 filter ID / Tx timeout 那一类格式串 */
     FMT_CALL(b, "id0=0x%lX id1=0x%lX", (unsigned long)0x201ul, (unsigned long)0x7FFul);

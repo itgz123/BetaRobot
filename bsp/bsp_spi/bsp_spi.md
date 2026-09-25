@@ -355,7 +355,7 @@ UART 的发送链每帧都要调一次 `USARTTransmit`（因此复位可以挂�
 
 | 模块          | 调用点                                | 备注                                                     |
 | ------------- | ------------------------------------- | -------------------------------------------------------- |
-| `drv_bmi088`  | `BMI088ReadLatest` 开头               | 每控制周期必经；放在 `acc_cnt == 0` 等提前返回之前，否则没有可用配对时永远够不到 |
+| `drv_bmi088`  | `BMI088Read` 开头                     | 每控制周期必经；放在 `acc_cnt == 0` 等提前返回之前，否则没有可用配对时永远够不到 |
 | `drv_ist8310` | —（I2C，走 `I2CBusRecover` 链）        | 不适用                                                   |
 
 **动作（`SPI_RecoverTx`）与顺序**：
@@ -491,18 +491,20 @@ HAL 的几条错误路径（`SPI_ITError` / `SPI_DMAError` / `EndRxTxTransaction
 7. **待现场验证（无硬件时的静态项）**：`BSP_BUSY` 的实际出现频率、`err_no_dma` 是否为 0。
    破坏性验证 `SPIRecoverTxIfStuck`：在调试器里把 `hspi1.State` 强行写成
    `HAL_SPI_STATE_BUSY_TX`（或把 `hdmatx->State` 写成 `HAL_DMA_STATE_BUSY`），
-   看 `tx_recover` 是否在 `BMI088ReadLatest` 的下一个周期 +20ms 内自增、`transfer_busy`
+   看 `tx_recover` 是否在 `BMI088Read` 的下一个周期 +20ms 内自增、`transfer_busy`
    是否随之清零、采样是否恢复。
 
 ## 7. 已知问题 / 后续
 
 - **`SPI_TX_STUCK_TIMEOUT_MS` 是全局单值**，一个值管所有 SPI。当前各口帧长同构所以没问题；
   若将来出现"慢速长帧 + 高速短帧"共存，须移进 `SPI_Config_s` 做 per-SPI 配置。
-- **`drv_bmi088` 的 INT 模式依赖 `BMI088ReadLatest` 被周期调用**：自恢复挂在它上面，
+- **`drv_bmi088` 的 INT 模式依赖 `BMI088Read` 被周期调用**：自恢复挂在它上面，
   若某条链路只在需要数据时才读，卡死后的恢复也会相应地晚。这是"把复位放任务上下文"的
   必然代价（中断里做不了）。
 - **`SPIReceive` 的 BLOCK 成功路径不更新 `instance->rx_len` 之外的状态**：长度上限一律以
   `buff_size` 为准，上层不要再按"收到了多长"去改缓冲大小。
 - DJI_C 的 `SPI_EX_2` 与 DM_MC02 的 `SPI_LCD_1` 都没有 DMA；将来要用 DMA 须先在 CubeMX 补
   DMA 请求与流中断，否则只会拿到 `err_no_dma`。
-- 后续：can / usb 最后迁到 `BSP_Status_e`（iic 已在 `bsp_i2c` 中独立演进，未走本模板）。
+- 后续：can / usb 最后迁到 `BSP_Status_e`（iic 已按本模板迁完，见 `bsp_i2c.md`；
+  I2C 侧没有 `SPIRecoverTxIfStuck` 的同款接口 —— 它已有 `I2CBusRecover` 作为任务上下文的
+  恢复入口，DRV 侧的失败计数会触发它）。

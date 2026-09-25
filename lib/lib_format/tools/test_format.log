@@ -1,6 +1,6 @@
 PASS  %lX 后跟 4 个 %d
 PASS  %lX 后跟 6 个 %d
-PASS  %lX 后跟 1 个 %d
+PASS  i2c 收尾日志（%s + %d×2 + %02X + %lX + %d×3）
 PASS  两个 %lX 并存
 PASS  SPI 启动失败日志（%s×2 + %d×5 + %lX）
 PASS  SPI BLOCK 失败日志（phase=failed / 无 DMA 口）
