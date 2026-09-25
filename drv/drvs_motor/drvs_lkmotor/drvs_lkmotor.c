@@ -124,7 +124,9 @@ void DrvsLKMotorSendCmd(DrvsLKMotor_s *inst, uint8_t cmd)
     memset(pack.data, 0x00, 8);
     pack.data[0] = cmd;
 
-    CANTransmit(inst->can, &pack, inst->timeout_ms, NULL, NULL);
+    /* 一次性命令帧没有"下一周期补发"：失败只体现在 tx_fail，调用方要可靠下发改自己重试 */
+    if (CANTransmit(inst->can, &pack, inst->timeout_ms, NULL, NULL) != BSP_OK)
+        inst->tx_fail++;
 }
 
 /*============================================
@@ -272,7 +274,9 @@ void DrvsLKMotorSend(DrvsLKMotor_s *inst)
     cf->parts._reserved3 = 0;
     cf->parts._reserved4 = 0;
 
-    CANTransmit(inst->can, &pack, inst->timeout_ms, NULL, NULL);
+    /* 控制帧是周期性的：丢一帧下一周期自然补上，故只计数不重试（重试会拖乱控制周期） */
+    if (CANTransmit(inst->can, &pack, inst->timeout_ms, NULL, NULL) != BSP_OK)
+        inst->tx_fail++;
 }
 
 /*============================================

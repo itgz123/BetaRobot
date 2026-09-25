@@ -44,7 +44,11 @@
 /* 异步分包发送卡死兜底阈值：连续 N 次 Send 都发现 tx_active 仍为 1（说明分包续发的
  * 发送完成回调丢失/总线异常），即判定卡死并强制放弃残帧恢复发送，避免永久卡死。
  * 按 Send 调用次数计（本工程 2ms 周期 → N=3 约 6ms）：须小于链路看门狗 daemon_reload
- * （10ms），保证在对端判离线之前已自恢复；正常单帧发送仅数百 µs，不会误触发。 */
+ * （10ms），保证在对端判离线之前已自恢复；正常单帧发送仅数百 µs，不会误触发。
+ *
+ * @note 这是**第二道防线**：bsp 侧改造后，逐帧失败（仲裁失败/发送错误/被取消/Tx Event 丢失）
+ *       会带 `result=BSP_HW_ERR` 直接回调 MediaCanIdseqTxHook，当场清 tx_active，
+ *       不必再攒 N 次。本兜底只剩"完成回调本身丢失"这一种情形要兜。 */
 #ifndef CAN_MEDIA_IDSEQ_TX_STALL_LIMIT
 #define CAN_MEDIA_IDSEQ_TX_STALL_LIMIT 3u
 #endif
@@ -82,8 +86,10 @@ typedef struct
     uint16_t tx_sent;            /* 已发送字节位置（0..tx_frame_len；异步分包推进依据，发完一帧回到 tx_frame_len） */
     uint8_t tx_active;           /* 异步分包发送进行中（1 = 上一帧尚未全部发出，拒绝新 Send 重入） */
     uint8_t tx_stall;            /* 连续 Send 时 tx_active 仍为 1 的次数（达 CAN_MEDIA_IDSEQ_TX_STALL_LIMIT 判卡死） */
-    uint32_t tx_fail;            /* 发送失败计数（重入拒绝/首包失败/中超时；只增不清，调试用） */
+    uint32_t tx_fail;            /* 发送失败计数（重入拒绝/首包失败/超时/分包被 bsp 判失败；只增不清，调试用） */
     uint32_t tx_stall_recover;   /* 发送卡死强制恢复次数（只增不清，调试用；正常恒 0） */
+    uint32_t err_count;          /* bsp 错误回调（总线/硬件级事件）累计次数（只增不清，调试用） */
+    uint8_t last_err;            /* 最近一次 bsp 错误回调的 CAN_ErrReason_e（调试用） */
     uint32_t rx_expect_pkt;      /* 期望接收的下一分包序号（序号段大小可 >255，用 uint32_t） */
     uint32_t lost_frames;        /* 丢帧计数（分包错位/帧中途丢包累加） */
     uint32_t timeout_ms;         /* CANTransmit 超时（Config 写入） */
@@ -91,7 +97,7 @@ typedef struct
     uint32_t rx_id;              /* 接收 ID 段基址（过滤段起点；Config 写入；CAN_ID_UNUSED = 不接收） */
 
     /* CAN 收发参数（Config 写入） */
-    CAN_Filter_s can_filter;     /* 接收过滤器（每实例一份，MASK 段匹配；bsp 为指针存储，须常驻实例） */
+    CAN_Filter_s can_filter;     /* 接收过滤器（每实例一份，RANGE 段匹配 [rx_id, rx_id+分包数)；bsp 为指针存储，须常驻实例） */
     CAN_Frame_Type_e frame_type; /* 帧类型（标准/扩展数据帧；收发共用） */
     CAN_Mode_Type_e mode;        /* CAN 帧格式：CLASSIC(8B/帧)/FD/FD_BRS(64B/帧)；分包片长与接收防御按此 */
 } CommMediaCanIdseq;
@@ -107,7 +113,8 @@ typedef struct
  *       name##_tx_buff（完整协议帧发送 staging 缓冲，异步分包期间保数据不失效）与
  *       name（CommMediaCanIdseq），并绑定 base.media/base.daemon。
  *       MediaCanIdseqSend 先整帧拷入 tx_buff，发第一包后返回，剩余包在
- *       CAN 发送完成回调（bsp tx_complete_callback）中逐包续发。
+ *       CAN 发送完成回调（bsp tx_complete_callback）中逐包续发；某包被判失败
+ *       （result != BSP_OK）则当场结束本轮，不再续发。
  *       缓冲放普通 RAM（CAN 无 DMA）。tx_id/rx_id/frame_type/mode 由 Config 写入。
  *
  * @example
@@ -148,7 +155,8 @@ int8_t MediaCanIdseqRegister(CommMediaCanIdseq *media);
  *       （RX 段 RANGE 过滤 id0=rx_id/id1=段上限 + mode 透传，每包 ID/len 由发送路径运行时构造；
  *       rx_id=CAN_ID_UNUSED 时不挂接收回调），
  *       BxCAN 非 CLASSIC / FDCAN FrameFormat 不匹配由 bsp 返回 -1。
- *       接收经 MediaCanIdseqRxHook 保证统一进 comm 层接收入口（CommMediaRxHook）。
+ *       接收经 MediaCanIdseqRxHook 保证统一进 comm 层接收入口（CommMediaRxHook）；
+ *       发送完成挂 MediaCanIdseqTxHook（逐包续发），另挂 MediaCanIdseqErrHook 统计总线级错误。
  */
 int8_t MediaCanIdseqConfig(CommMediaCanIdseq *media, CommMediaCanIdseqConfig_s *cfg);
 

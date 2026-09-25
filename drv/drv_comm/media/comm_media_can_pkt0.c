@@ -13,7 +13,8 @@
  *       （rx_frame_len）即完成一帧（无末包标志，收发编译期约定帧长）。
  * @note 发送为异步分包：MediaCanPkt0Send 先整帧拷入自持 staging 缓冲 m->tx_buff，
  *       发送第一包后即返回（tx_sent 记录已发位置），后续包由 CAN 发送完成回调
- *       （bsp tx_complete_callback → MediaCanPkt0TxHook）逐包续发，发完清 tx_active。
+ *       （bsp tx_complete_callback → MediaCanPkt0TxHook）逐包续发，发完清 tx_active；
+ *       某包被 bsp 判失败（result != BSP_OK）则当场结束本轮，不再续发。
  *       CANTransmit 同步等 mailbox/Tx FIFO 空间并拷入外设缓冲，故回调内续发不会覆盖已排队帧。
  */
 
@@ -25,7 +26,8 @@
 
 static int8_t MediaCanPkt0Send(CommMedia *media, const uint8_t *data);
 static int8_t MediaCanPkt0SendNext(CommMediaCanPkt0 *m);
-static void MediaCanPkt0TxHook(CANInstance *can, uint32_t tx_mailbox);
+static void MediaCanPkt0TxHook(CANInstance *can, uint32_t tx_mailbox, BSP_Status_e result);
+static void MediaCanPkt0ErrHook(CANInstance *can, CAN_ErrReason_e reason);
 static void MediaCanPkt0RxHook(CANInstance *can, const CAN_Pack_s *pack);
 
 static const CommMediaVTable_s s_can_pkt0_vtable = {
@@ -114,8 +116,8 @@ static int8_t MediaCanPkt0SendNext(CommMediaCanPkt0 *m)
     pack.data[0] = (uint8_t)pkt_idx;
     memcpy(&pack.data[1], &m->tx_buff[m->tx_sent], chunk);
 
-    if (CANTransmit(can, &pack, m->timeout_ms, NULL, NULL) != 0)
-        return -1; /* 发送失败或超时：中止分包（已发部分接收端丢帧重同步） */
+    if (CANTransmit(can, &pack, m->timeout_ms, NULL, NULL) != BSP_OK)
+        return -1; /* 发送失败/资源忙/超时：中止分包（已发部分接收端丢帧重同步） */
 
     m->tx_sent += chunk; /* 记录发送到哪个位置 */
     return 0;
@@ -124,23 +126,56 @@ static int8_t MediaCanPkt0SendNext(CommMediaCanPkt0 *m)
 /* bsp 发送完成适配钩子（tx_complete_callback）：续发下一分包，直至整帧发完清 tx_active。
  * @note 在 CAN 中断上下文执行；CANTransmit 同步等 mailbox/FIFO 空间（上一片已发完必有空间）。
  * @note pkt0 为单通道串行分包发送，无需按 tx_mailbox 区分帧来源。 */
-static void MediaCanPkt0TxHook(CANInstance *can, uint32_t tx_mailbox)
+static void MediaCanPkt0TxHook(CANInstance *can, uint32_t tx_mailbox, BSP_Status_e result)
 {
     CommMediaCanPkt0 *m = (CommMediaCanPkt0 *)can->parent; /* media 层设置的反向指针 */
+    int8_t r;
 
     (void)tx_mailbox;
     if (m == NULL)
         return;
-    {
-        int8_t r = MediaCanPkt0SendNext(m);
 
-        if (r != 0)
-        {
-            m->tx_active = 0; /* 发完(1) 或失败(-1)：结束本轮异步发送 */
-            if (r < 0)
-                m->tx_fail++; /* 分包续发失败：记录（接收端按分包序号错位丢帧重同步） */
-        }
+    /* 这一包没发出去（仲裁失败/发送错误/被取消/Tx Event 丢失）：当场结束本轮，不再续发。
+     * 旧实现只有"发送成功"才回调，失败时什么也不知道，只能等 CAN_MEDIA_PKT0_TX_STALL_LIMIT
+     * 次 Send 后由兜底判卡死——多丢 N 帧，且分不清"真卡死"与"总线一直在错"。 */
+    if (result != BSP_OK)
+    {
+        m->tx_active = 0;
+        m->tx_sent = 0;
+        m->tx_fail++;
+        return;
     }
+
+    /* 本轮已被放弃（stall 兜底提前清过 tx_active，或此时已开始发新帧）：
+     * 这是被丢弃残帧的迟到完成回调，不能再拿着当前的 tx_sent 续发。 */
+    if (!m->tx_active)
+        return;
+
+    r = MediaCanPkt0SendNext(m);
+    if (r != 0)
+    {
+        m->tx_active = 0; /* 发完(1) 或失败(-1)：结束本轮异步发送 */
+        if (r < 0)
+            m->tx_fail++; /* 分包续发失败：记录（接收端按分包序号错位丢帧重同步） */
+    }
+}
+
+/* bsp 错误回调（总线/硬件级事件，ISR 上下文）：只做观测计数。
+ * @note **刻意不在这里清 tx_active**：bsp 已经把"逐帧结果"通过 tx_complete_callback 送来了
+ *       （被取消/判失败/溯源丢失的帧都会带 BSP_HW_ERR 回调），在这里另清一遍既冗余，
+ *       又会引入"错误广播清掉 A 实例的 tx_active，而 A 的在途帧随后正常完成"这种
+ *       跨实例误伤。真丢了完成回调的情形由 CAN_MEDIA_PKT0_TX_STALL_LIMIT 兜底。
+ *       err_callback 是广播（同一条总线上的所有实例都会收到），所以 handler 里
+ *       不能有任何"只对自己成立"的假设。 */
+static void MediaCanPkt0ErrHook(CANInstance *can, CAN_ErrReason_e reason)
+{
+    CommMediaCanPkt0 *m = (CommMediaCanPkt0 *)can->parent;
+
+    if (m == NULL)
+        return;
+
+    m->err_count++;
+    m->last_err = (uint8_t)reason;
 }
 
 /* bsp 接收适配钩子：每包 = [pkt_idx][数据片]，按分包序号连续重组整帧。
@@ -219,7 +254,7 @@ int8_t MediaCanPkt0Register(CommMediaCanPkt0 *media)
         return -1;
 
     /* bsp 注册（防重复注册；CAN_INSTANCE_NUM 共享池，本函数不可重入） */
-    if (CANRegister(can) != 0)
+    if (CANRegister(can) != BSP_OK)
         return -1;
 
     media->base.vtable = &s_can_pkt0_vtable;
@@ -236,6 +271,8 @@ int8_t MediaCanPkt0Register(CommMediaCanPkt0 *media)
     media->tx_stall = 0;
     media->tx_fail = 0;
     media->tx_stall_recover = 0;
+    media->err_count = 0;
+    media->last_err = 0;
     return 0;
 }
 
@@ -291,10 +328,11 @@ int8_t MediaCanPkt0Config(CommMediaCanPkt0 *media, CommMediaCanPkt0Config_s *cfg
         .parent = media,
         .filters = &media->can_filter,
         .filter_num = 1,
-        .tx_complete_callback = MediaCanPkt0TxHook, /* 发送完成回调：续发下一分包 */
+        .tx_complete_callback = MediaCanPkt0TxHook, /* 发送完成回调：逐包续发 + 逐帧失败当场收尾 */
+        .err_callback = MediaCanPkt0ErrHook,        /* 总线/硬件级错误：仅观测计数（见 ErrHook 说明） */
     };
 
-    if (CANConfig(can, &can_cfg) != 0)
+    if (CANConfig(can, &can_cfg) != BSP_OK)
         return -1;
 
     media->tx_id = cfg->tx_id;

@@ -189,6 +189,7 @@ struct DrvsDJIMotorBroadcast
     CAN_Filter_s can_filter; // CAN 接收过滤器
     DaemonInstance *daemon;  // 守护进程实例（通信在线检测）
     uint32_t timeout_ms;     // CAN 发送超时 (ms)
+    /* 无 tx_fail：单电机实例没有发送口（发送挂在组上），失败计数只在 Group 的 tx_fail 里 */
 
     /* 标识 */
     DrvsDJIModel_e model; // 型号（决定电流量程与 ID 基址）
@@ -224,6 +225,8 @@ struct DrvsDJIMotorBroadcastGroup
     DrvsDJIMotorBroadcast_s *slots[DRVS_DJI_BC_SLOTS]; // 槽位占用表，NULL=空槽
     uint8_t member_count;                              // 已占用槽位数，0 表示尚未绑定总线
     BoardCAN_e can_e;                                  // 首个成员确定，后续成员必须一致
+    uint32_t tx_fail;                                  // 组播帧发送失败累计（CANTransmit 返回非 BSP_OK 时自增）
+                                                       // 组播帧一帧带 4 个电机，失败只记在组上，不摊到各电机
 };
 
 /*============================================

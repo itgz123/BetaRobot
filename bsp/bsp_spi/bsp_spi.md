@@ -505,6 +505,7 @@ HAL 的几条错误路径（`SPI_ITError` / `SPI_DMAError` / `EndRxTxTransaction
   `buff_size` 为准，上层不要再按"收到了多长"去改缓冲大小。
 - DJI_C 的 `SPI_EX_2` 与 DM_MC02 的 `SPI_LCD_1` 都没有 DMA；将来要用 DMA 须先在 CubeMX 补
   DMA 请求与流中断，否则只会拿到 `err_no_dma`。
-- 后续：can / usb 最后迁到 `BSP_Status_e`（iic 已按本模板迁完，见 `bsp_i2c.md`；
+- ~~后续：can / usb 最后迁到 `BSP_Status_e`~~ **已完成**（iic 早已按本模板迁完，见 `bsp_i2c.md`；
   I2C 侧没有 `SPIRecoverTxIfStuck` 的同款接口 —— 它已有 `I2CBusRecover` 作为任务上下文的
-  恢复入口，DRV 侧的失败计数会触发它）。
+  恢复入口，DRV 侧的失败计数会触发它）。CAN 见 `bsp_can.md` §6、USB 见 `bsp_usb.md` §3。
+  两个模块的共同点与 SPI 一致：失败返回码分开、错误回调只在动作之后、恢复入口按调用方的时基触发。

@@ -304,7 +304,11 @@ void DrvsLKMotorBroadcastGroupSend(DrvsLKMotorBroadcastGroup_s *group)
     }
 
     if (tx_can)
-        CANTransmit(tx_can, &pack, tx_timeout, NULL, NULL);
+    {
+        /* 组播帧一帧带 4 个槽位，失败摊到哪个电机都不对 → 记在组上 */
+        if (CANTransmit(tx_can, &pack, tx_timeout, NULL, NULL) != BSP_OK)
+            group->tx_fail++;
+    }
 }
 
 /*============================================

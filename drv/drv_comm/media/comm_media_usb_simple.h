@@ -37,7 +37,11 @@ typedef struct
     uint16_t rx_cnt;             /* 已累积字节数（0..rx_frame_len，上交后归零；长帧重组用） */
     uint8_t rx_expect_pkt;       /* 期望接收的下一分包序号（帧内 0 起递增；长帧重组用） */
     uint32_t lost_frames;        /* 丢帧计数（短帧长度不符 / 长帧分包错位累加） */
-    uint32_t tx_fail;            /* 发送失败计数（未枚举/ring 满导致 USBTransmit 丢包；只增不清，调试用） */
+    uint32_t tx_fail;            /* 发送失败计数（USBTransmit 返回非 BSP_OK 且非背压：未枚举/参数错；只增不清，调试用） */
+    uint32_t tx_busy;            /* 发送背压计数（USBTransmit 返回 BSP_BUSY：ring 放不下整帧，退避后重发即可） */
+    uint32_t err_count;          /* bsp 错误回调（USB_ERR_* 事件）累计次数（只增不清，调试用） */
+    uint8_t last_err;            /* 最近一次 bsp 错误回调的 USB_ErrReason_e（调试用） */
+    USB_ErrCallback user_err_callback; /* cfg 里用户提供的错误回调（可为 NULL）；本层自己的钩子转发给它 */
 } CommMediaUsbSimple;
 
 /**
@@ -84,8 +88,9 @@ int8_t MediaUsbSimpleRegister(CommMediaUsbSimple *media);
  * @retval 0 成功；-1 参数非法 / 未注册 / 配置失败
  *
  * @note 内部调 bsp USBConfig 并强制接管 rx_callback=MediaUsbSimpleRxHook、
- *       parent=media（反向指针），保证接收统一进 comm 层接收入口
- *       （CommMediaRxHook）；USBConfig 将二者写入实例。
+ *       err_callback=MediaUsbSimpleErrHook、parent=media（反向指针），保证接收统一进
+ *       comm 层接收入口（CommMediaRxHook）；USBConfig 将三者写入实例。
+ *       cfg 里用户自己的 err_callback 不被丢弃：本层记下来并转发（见 user_err_callback）。
  */
 int8_t MediaUsbSimpleConfig(CommMediaUsbSimple *media, USB_Config_s *cfg);
 

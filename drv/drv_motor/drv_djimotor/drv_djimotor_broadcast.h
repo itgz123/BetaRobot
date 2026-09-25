@@ -22,6 +22,8 @@ typedef struct
 {
     DJIMotorBroadcastInstance *motors[4]; // 组内4个电机指针
     uint8_t motor_init_flag[4];           // 电机是否初始化标志
+    uint32_t tx_fail;                     // 组播帧发送失败累计（由 MotorCanTransmit 累加，见 drv_motor_can.h）
+                                          // 组播帧一帧带 4 个电机，失败只记在组上，不摊到各电机
 } DJIMotorBroadcastSendGroup_s;
 
 /**

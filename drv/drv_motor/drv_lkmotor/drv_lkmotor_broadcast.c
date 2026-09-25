@@ -610,7 +610,8 @@ void LKMotorBroadcast_Send(void *inst)
         LKMotorBroadcastInstance *m = group->motors[i];
         if (group->motor_init_flag[i] && m && m->base.can)
         {
-            CANTransmit(m->base.can, &pack, m->base.timeout_ms, NULL, NULL);
+            /* 组播帧一帧带 4 个槽位，失败摊到哪个电机都不对 → 记在组上 */
+            MotorCanTransmit(m->base.can, &pack, m->base.timeout_ms, &group->tx_fail);
             break;
         }
     }
