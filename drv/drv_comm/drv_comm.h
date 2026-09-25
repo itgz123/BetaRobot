@@ -43,8 +43,10 @@ typedef struct
     void *media_cfg;                  /* 介质后端配置指针（USART → CommMediaUsartConfig_s*；NULL 跳过介质配置） */
     ProtoFrameCallback on_frame;      /* 出帧消费回调（NULL 表示不修改） */
     uint16_t daemon_reload;           /* 链路对端看门狗超时（ms）；0 = 不监控（DaemonIsOnline 恒报在线）。
-                                         后端挂了 vtable->offline 钩子时，0 会被 Config 提升为
-                                         DRV_COMM_DAEMON_RELOAD_DEFAULT（禁用会把自恢复一起禁掉），见 CommConfig */
+                                         挂了 vtable->offline 钩子的后端（USART / USB / USB_SIMPLE）
+                                         配 0 会被 Config 提升为 DRV_COMM_DAEMON_RELOAD_DEFAULT
+                                         （禁用会把自恢复一起禁掉）；两个 CAN 后端不挂钩子，配 0 就是
+                                         真的不监控。见 CommConfig */
     DaemonFaultAction_e daemon_fault; /* 链路对端离线故障动作（见 DaemonFaultAction_e） */
 } CommConfig_s;
 
@@ -70,11 +72,12 @@ int8_t CommRegister(CommInstance *inst);
  *
  * @note media_cfg 经 media 后端下发（USART → MediaUsartConfig → bsp USARTConfig），
  *       运行中可再次调用以切换波特率/发送模式等；链路对端看门狗按 daemon_reload 判离线
- *       （收到完整合法帧喂狗，查询用 DaemonIsOnline(media->daemon)）。后端挂了 offline 钩子
- *       （如 USART 接收停摆重启）时**配 0 会被提升为默认值**而非禁用 —— 自恢复就搭在这个
- *       回调上，禁用会把它一起关掉；没挂该钩子的后端（USB / CAN 系）配 0 就是字面意义的
- *       不监控，不做提升；on_frame 直接覆盖挂到接收协议 rx_proto->on_frame，
- *       可运行期修改消费逻辑。
+ *       （收到完整合法帧喂狗，查询用 DaemonIsOnline(media->daemon)）。挂了 offline 钩子的后端
+ *       （USART / USB / USB_SIMPLE，如 USART 接收停摆重启）**配 0 会被提升为默认值**而非禁用
+ *       —— 它们的自恢复只搭在这个回调上，禁用会把它一起关掉。没挂该钩子的后端（两个 CAN）配 0
+ *       就是字面意义的不监控、不做提升：CAN 的自恢复是**总线级**动作，判据必须来自总线而非
+ *       "这条链路没收到帧"，故它搭在自己的发送入口上（见 bsp_can.md §6.4.1）；
+ *       on_frame 直接覆盖挂到接收协议 rx_proto->on_frame，可运行期修改消费逻辑。
  */
 int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg);
 

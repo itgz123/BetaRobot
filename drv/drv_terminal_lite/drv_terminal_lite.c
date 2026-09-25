@@ -519,7 +519,11 @@ void TerminalLiteSend(const char *fmt, ...)
      * 连借都借不到，终端彻底静默。只有每条发送必经的这里能把状态复位、
      * 并借 err_callback 归还那个 SEND 槽。
      * 本函数是 TX 唯一写者，故这里仍满足"单写者"约定；从 ISR 调用也安全
-     * （bsp 入口直接返回 BSP_BUSY），空闲时只做一次 DWT 读。 */
+     * （bsp 入口直接返回 BSP_BUSY），空闲时只做一次 DWT 读。
+     * 返回值刻意不消费（bsp 层的分工）：BSP_OK = 本次刚复位过一次卡死发送，bsp 已按
+     * WARNING 记日志、已计 tx_recover、并已按 err_callback 契约通知上层归还缓冲
+     * （对端就是下面那个 SEND 槽）；BSP_BUSY = 什么都没做（ISR / 空闲 / 未登记句柄）。
+     * 本层要的结果只有一个——下面能不能借到槽，看槽池状态就够了。 */
     (void)USARTRecoverTxIfStuck(&s_tl_uart, 0);
 
     // 借空闲槽；WRITE 期间 DMA/完成回调不会碰该槽，格式化可在临界区外做
@@ -627,11 +631,15 @@ void TerminalLiteInit(const TerminalLiteCmd_s *table, uint8_t cnt)
         .tx_callback = TerminalLiteTxCplt,
         .err_callback = TerminalLiteErrHandler,
     };
+    /* Register / Config / Receive 三个返回值都只用来决定"要不要往下走"，不做本层的错误上报：
+     * 每一个失败分支 bsp 都已按 ERROR/WARNING 记进日志（部分路径还计了 s_usart_status[] 的
+     * 对应计数），本层再打一遍只会重复。唯一静默的是 BSP_BUSY——那是背压/已在跑，属正常。
+     * 这也是 drv 侧不主动处理错误的统一分工：错误的上报归 bsp，本层只管流程。 */
     if (USARTRegister(&s_tl_uart) == BSP_OK && USARTConfig(&s_tl_uart, &usart_cfg) == BSP_OK)
     {
         // 启动接收常开流（Config 不再自动启动接收，收满一行由 TerminalLiteRxHook 取走）。
         // 不因失败而 return / 跳过小任务：小任务的空闲超时自检会按同一套参数反复重启它
-        // （TerminalLiteRxRecover），此刻放弃反而把自恢复一起关掉了。失败由 bsp 打 ERROR 日志。
+        // （TerminalLiteRxRecover），此刻放弃反而把自恢复一起关掉了。
         (void)USARTReceive(&s_tl_uart, s_tl_uart.rx_buff_size, BSP_DMA_MODE, 0);
     }
 

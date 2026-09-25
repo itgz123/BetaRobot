@@ -58,7 +58,11 @@ static int8_t MediaUsartSend(CommMedia *media, const uint8_t *data)
      * 一旦上一次发送卡死（gState 停在 BUSY_TX、完成回调不会再来），这里就会永远返回 -1，
      * 永远走不到 USARTTransmit 里的卡死复位，链路发送侧永久静默。此处的探测能在
      * 任务上下文把状态复位（复位后 gState 即 READY，本帧就能照常发出去）。
-     * ISR 里调用安全（bsp 入口直接返回 BSP_BUSY）；空闲时只做一次 DWT 读。 */
+     * ISR 里调用安全（bsp 入口直接返回 BSP_BUSY）；空闲时只做一次 DWT 读。
+     * 返回值刻意不消费（bsp 层的分工）：BSP_OK = 本次刚复位过一次卡死发送，bsp 已按
+     * WARNING 记日志、已计 tx_recover、并已按 err_callback 契约通知上层归还缓冲；
+     * BSP_BUSY = 什么都没做（ISR / 空闲 / 未登记句柄）。本层要的结果只有一个——
+     * 下面的 gState 判定是否因此变回 READY，看 gState 就够了。 */
     (void)USARTRecoverTxIfStuck(usart, 0);
     /* 忙判定必须**早于** memcpy：上一帧的 DMA 正在从 m->tx_buff 取数，
      * 先拷贝会把在途帧的内容改掉（发出去的是新旧混合的残帧）。

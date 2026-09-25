@@ -217,7 +217,8 @@ struct DrvsRSMotor
     CAN_Filter_s can_filter; // CAN 接收过滤器
     DaemonInstance *daemon;  // 守护进程实例（通信在线检测）
     uint32_t timeout_ms;     // CAN 发送超时 (ms)
-    uint32_t tx_fail;        // CAN 发送失败累计（CANTransmit 返回非 BSP_OK 时自增；只增不清，调试用）
+    uint32_t tx_fail;        // 发送失败累计：CANTransmit 入队失败（返回非 BSP_OK）+ 逐帧失败
+                             // （tx_complete_callback 报 result != BSP_OK，见 .c 的 TxHook）；只增不清，调试用
 
     /* 标识 */
     uint16_t can_id;    // stm32->motor | tx

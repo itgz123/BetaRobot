@@ -29,7 +29,9 @@
 
 /* daemon_reload 配 0 时的兜底值（单位：毫秒，即 100ms）：
  * 0 的本义是"禁用监控"——DaemonTask 会整个跳过该实例，等于把介质后端的离线自恢复
- * （如 USART 的接收停摆重启，见 CommMediaVTable_s.offline）一起禁掉。故 Config 把 0 提升为该值。
+ * （如 USART 的接收停摆重启，见 CommMediaVTable_s.offline）一起禁掉。故 Config 对
+ * **挂了 offline 钩子的后端**把 0 提升为该值（判定条件就是"钩子是否为空"，故不挂钩子的
+ * 后端如两个 CAN 介质不受影响，见 CommConfig 里的说明）。
  * 该值同时是"多久没收到完整合法帧判离线"的阈值（离线日志 / fault_action / 对端在线查询都按它）。 */
 #ifndef DRV_COMM_DAEMON_RELOAD_DEFAULT
 #define DRV_COMM_DAEMON_RELOAD_DEFAULT 100
@@ -235,19 +237,19 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
         uint16_t daemon_reload = cfg->daemon_reload;
         offline_callback offline_hook = (media->vtable != NULL) ? media->vtable->offline : NULL;
 
-        /* reload==0 本义是禁用监控（DaemonTask 跳过该实例 = 恒在线）。只有**挂了 offline
-         * 自恢复钩子**的后端才提升：那种后端（USART / USB / USB_SIMPLE）"没收到帧"是它唯一
-         * 能拿到的任务上下文周期时基，禁用等于把自恢复一起禁掉。
-         * 没有 offline 钩子的后端（CAN_PKT0 / CAN_IDSEQ）的 daemon 只
-         * 用来判对端在线，配 0 就是调用方真想不监控 —— 那种情况下静默改成监控属于把契约反转，
-         * 故不提升（见 comm_media.h 的 vtable.offline 说明）。
-         * @note CAN 两个后端不挂 offline 是因为它们的自恢复不依赖任务上下文时基：
-         *       发送失败由 bsp 的逐帧完成回调（result != BSP_OK）当场收尾；
-         *       在途帧卡死在 CANTransmit 等待超时路径里就地处理（取消全部在途帧 + 逐帧通知发起者，
-         *       bxCAN 走 CANAbortAllTx / FDCAN 走 AbortTxRequest + FDCAN_ReclaimMarkers），
-         *       媒体侧另有 TX_STALL_LIMIT 兜底；bus-off 由 CAN 错误中断自恢复。
-         *       bsp 的 CANRecover 是任务侧的统一恢复入口，但**本仓库目前零调用者**
-         *       （见 bsp/bsp_can/bsp_can.md §6.4），故不算作这里的兜底。 */
+        /* reload==0 的本义是"禁用监控"（DaemonTask 跳过该实例 = 恒在线）。但 USART / USB /
+         * USB_SIMPLE 三个后端的 offline 钩子**只有** daemon 这一个任务上下文周期时基
+         * （"没收到帧"才触发它），禁用等于把发送卡死收尾 / 接收重挂一起禁掉——
+         * 故对挂了钩子的后端把 0 提升为 DRV_COMM_DAEMON_RELOAD_DEFAULT。
+         * @note 两个 CAN 后端**刻意不挂 offline 钩子**，所以 CAN 链路的 daemon_reload = 0
+         *       仍然是真正的"不监控"。理由（与 bsp_spi 的 SPIRecoverTxIfStuck 同一条原则）：
+         *       offline 的触发条件是"这条链路没收到帧"= **实例级**证据，而 CANRecover 取消的是
+         *       **整条总线**上所有实例的在途帧 = **总线级**动作；证据的作用域必须与动作的
+         *       作用域对齐，否则对端不发 / 滤波器不匹配 / 流量被同总线别的实例挤掉，都会把
+         *       整条总线的在途帧打掉。它们的探测改搭在自己的发送入口上
+         *       （见 comm_media_can_pkt0.c / comm_media_can_idseq.c 的 ProbeBus），
+         *       总线级判据由 bsp 在 CANRecover 入口自证。 */
+        /* @note 判定条件仍按"是否挂了钩子"写：将来若新增不带钩子的后端，配 0 就是真不监控。 */
         if (daemon_reload == 0 && offline_hook != NULL)
         {
             daemon_reload = DRV_COMM_DAEMON_RELOAD_DEFAULT;

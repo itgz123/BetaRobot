@@ -75,7 +75,12 @@ typedef struct
     /* 收尾与恢复计数 */
     uint32_t abort_reset; /* 强制复位句柄次数（启动失败 / 等就绪超时 / 重配收尾） */
     uint32_t bus_rebuild; /* 因总线仍 BUSY 而重建外设（DeInit + Init）的次数 */
-    uint32_t bus_recover; /* I2CBusRecover 被调用次数（上层主动恢复） */
+    uint32_t bus_recover; /* I2CBusRecover 真正动手重建的次数（入口自证通过） */
+    uint32_t bus_recover_skip; /* I2CBusRecover 被调用但**没动手**的次数：入口自证不成立
+                                * （非任务上下文 / BUSY 标志已落 / 本句柄有在途传输）。
+                                * 与 bus_recover 一起看即可判断"上层是不是在白调"：这个数远大于
+                                * bus_recover，说明触发者看的是实例级现象，而那些失败根本不在
+                                * 总线上（见 bsp_i2c.md §2.B.1.1）。 */
     /* 探测计数（I2CIsDeviceReady）：恢复流程里那道"器件还在不在"的门禁 */
     uint32_t probe_ok;   /* 探测到从机应答（HAL_OK） */
     uint32_t probe_fail; /* 探测未通过：器件不应答，或探测本身就超时（两版 HAL 都返回
@@ -1213,6 +1218,8 @@ BSP_Status_e I2CIsDeviceReady(I2CInstance *instance, uint16_t dev_addr, uint32_t
 BSP_Status_e I2CBusRecover(I2CInstance *instance)
 {
     uint8_t idx;
+    uint8_t busy_flag;
+    uint8_t idle;
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL || instance->handle == NULL, BSP_PARAM_ERR,
                            BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "BusRecover: invalid instance!"));
@@ -1220,13 +1227,59 @@ BSP_Status_e I2CBusRecover(I2CInstance *instance)
     I2C_HandleTypeDef *h = instance->handle;
 
     idx = I2C_Hi2cToIndex(h);
+
+    /* ===== 入口自证：没有"总线级"证据就什么都不做（**必须在任何动作之前**）=====
+     * 本函数是**总线级**动作（重建整个外设：时钟、GPIO、NVIC 全放掉再重配），
+     * 而它的触发者（drv_ist8310）看到的是**实例级**现象——"我这个从机没应答"。
+     * 证据的作用域必须与动作的作用域对齐：对端不发 / 从机挂了 / 只是赶上一次总线噪声，
+     * 这三样都不在总线上，重建外设一个都治不好，代价却是把本总线上**别的实例**的在途传输
+     * 一起打断。故判据必须在这里、由 bsp 自己读总线状态，而不是交给调用点。
+     * 调用点只负责"何时看一眼"（drv_ist8310 的失败计数 + 冷却），bsp 负责"值不值得动手"。
+     *
+     * 判据（两条同时成立才动手）：
+     *   ① `I2C_FLAG_BUSY` 置位 —— 外设说"总线还被占着"。这是唯一的总线级观测量；
+     *      总线已经放开（NACK / 从机挂了）时它是 0，那种故障该由 DRV 的
+     *      探测 + RSTN 脉冲 + 重初始化去救（见 bsp_i2c.md §2.B.1.1）。
+     *      它也正是本函数末尾用来判"总线是否真被拉死"的那一位，前后读的是同一个事实。
+     *   ② 本句柄空闲（`State == READY && Lock` 未锁）—— 说明"占着总线"的那一位**没有
+     *      任何一笔在途传输在负责**：要么标志被闩住，要么从机把 SCL/SDA 拉着。
+     *      反过来若句柄非空闲，那是**有一笔正常传输正在途**（正常传输同样让 BUSY 置位），
+     *      此刻重建就是误伤——这一条不能省，也不能倒过来先看。
+     *
+     * 为什么不用别的判据：
+     * - 只看"器件不应答"（调用点的现象）：实例级证据 → 总线健康时也会成立，
+     *   等于把上面那些误伤全放进来。
+     * - 加"卡住超过 N ms"的时长阈值：这里没有可靠的计时起点（`State` 由 HAL 改，
+     *   本层看不到它何时被置忙），而且 `I2C_ResetHandle` 每次失败都会把 `State` 复位，
+     *   真要计时就得再引入一份按外设的时间戳 —— 为一条没有观测支撑的判据增状态，不值。
+     *   现有两条判据已能把"总线真卡住"与"NACK 类失败"分开（前者 BUSY 置位且无人负责）。
+     * - 用 `ErrorCode` 判：它是**上一笔**传输的结果，而上一笔早被 `I2C_AbortOnError`
+     *   复位过了，读到的多半是 0，不代表当前总线状态。
+     */
+    busy_flag = (__HAL_I2C_GET_FLAG(h, I2C_FLAG_BUSY) == SET) ? 1 : 0;
+    idle = I2C_BusIsIdle(h);
+    if (!busy_flag || !idle || !I2C_CanBlockingAbort())
+    {
+        /* 不做任何事。上下文与两条判据共用这一个出口：对调用方而言返回值语义相同
+         * （BSP_BUSY = 未做任何事），分开只会让调用点多出几个永远不看的返回值。 */
+        if (idx < I2C_NUM_MAX)
+        {
+            s_i2c_status[idx].bus_recover_skip++;
+            s_i2c_status[idx].state = h->State;
+            s_i2c_status[idx].error_code = h->ErrorCode;
+            s_i2c_status[idx].lock = h->Lock;
+        }
+        return BSP_BUSY;
+    }
+
     if (idx < I2C_NUM_MAX)
     {
         s_i2c_status[idx].bus_recover++;
     }
 
-    BSPLOG(&g_i2c_log, LOG_LEVEL_WARNING, "Bus recover start (i2c_e=%d), state=0x%02X, err=0x%lX",
-           (int)instance->i2c_e, (unsigned)h->State, (unsigned long)h->ErrorCode);
+    BSPLOG(&g_i2c_log, LOG_LEVEL_WARNING,
+           "Bus recover start (i2c_e=%d), busy_flag=%d, state=0x%02X, err=0x%lX",
+           (int)instance->i2c_e, (int)busy_flag, (unsigned)h->State, (unsigned long)h->ErrorCode);
 
     /* 1) 先让外设静默 + 解锁 + 清状态（Lock 残留会让后续 HAL 调用直接 HAL_BUSY） */
     I2C_ResetHandle(instance);
@@ -1237,13 +1290,13 @@ BSP_Status_e I2CBusRecover(I2CInstance *instance)
     /* 3) 兜底复位（Init 正常时已复位，防 Init 失败留下脏状态） */
     I2C_ResetHandle(instance);
 
-    /* 4) 用 BUSY 标志判定总线是否真被引脚拉死（从机把 SCL/SDA 一直拉低） */
-    {
-        uint8_t busy = (__HAL_I2C_GET_FLAG(h, I2C_FLAG_BUSY) == SET) ? 1 : 0;
-        BSPLOG(&g_i2c_log, busy ? LOG_LEVEL_ERROR : LOG_LEVEL_INFO,
-               "Bus recover done, busy=%d (1 = 引脚被从机拉死，需从机侧复位)", busy);
-        return busy ? BSP_HW_ERR : BSP_OK;
-    }
+    /* 4) 再读一次**同一个** BUSY 标志：入口是"它置位才动手"，这里是"动完手它还置位吗"。
+     *    仍置位 = 重建没能让总线松手，多半是从机真把 SCL/SDA 拉着（本层不翻转引脚，
+     *    见 §2.B.1 的取舍），由 DRV 记 ERROR 并走 RSTN 脉冲 / 冷却重试。 */
+    busy_flag = (__HAL_I2C_GET_FLAG(h, I2C_FLAG_BUSY) == SET) ? 1 : 0;
+    BSPLOG(&g_i2c_log, busy_flag ? LOG_LEVEL_ERROR : LOG_LEVEL_INFO,
+           "Bus recover done, busy=%d (1 = 引脚被从机拉死，需从机侧复位)", (int)busy_flag);
+    return busy_flag ? BSP_HW_ERR : BSP_OK;
 }
 
 #endif /* I2C_INSTANCE_NUM > 0 */

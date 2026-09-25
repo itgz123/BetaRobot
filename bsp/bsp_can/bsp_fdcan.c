@@ -477,7 +477,7 @@ static uint8_t FDCAN_ReclaimMarkers(uint8_t can_idx, uint8_t reclaim)
  * @brief 向该 CAN 上所有注册了 err_callback 的实例广播一个错误原因
  * @note 错误是**外设级**的（同一 handle 上可以有多个实例共享同一条总线），无法归给某一个
  *       实例，故广播给该 handle 上的所有注册者。handler 契约要求幂等，重复收到同一原因无害；
- *       没配 err_callback 的实例（如只关心收发的电机驱动）直接跳过。
+ *       没配 err_callback 的实例直接跳过（本仓库的 drv 层都已接上，见各 drvs_* 的 ErrHook）。
  */
 static void FDCAN_NotifyError(const FDCAN_HandleTypeDef *hfdcan, CAN_ErrReason_e reason)
 {
@@ -852,10 +852,32 @@ static uint32_t FDCAN_WaitTxFree(FDCAN_HandleTypeDef *hfdcan)
 }
 
 /**
- * @brief CAN 发送资源自恢复（任务上下文；五步顺序与理由见 bsp_can.h）
+ * @brief 读发送错误计数器（TEC），只给 CANRecover 的入口判据用
+ * @return TxErrorCnt（0~255）。总线条件不满足时它随每次失败的发送增长、发送成功时回落，
+ *         ≥128 即进入 error passive —— 也就是"发送侧真的推不动"的直接观测量。
+ * @note 为什么不用 ProtocolStatus.ErrorPassive：后者是"TEC ≥128 **或** REC ≥128"，
+ *       一个只是收帧受干扰（REC 高）而发送完全正常的总线也会被算进去，据此取消在途帧就是误伤。
+ * @note 读失败时返回 0（当作"发送侧推得动"）：判据宁可不成立——本入口的动作是破坏性的，
+ *       宁可少恢复一次，也不要因为一次读失败去取消一总线的在途帧。
+ */
+static uint32_t FDCAN_TxErrorCount(FDCAN_HandleTypeDef *hfdcan)
+{
+    FDCAN_ErrorCountersTypeDef err_cnt = {0};
+
+    if (HAL_FDCAN_GetErrorCounters(hfdcan, &err_cnt) != HAL_OK)
+        return 0;
+
+    return err_cnt.TxErrorCnt;
+}
+
+/**
+ * @brief CAN 发送资源自恢复（任务上下文；入口自证 + 五步顺序与理由见 bsp_can.h）
  * @note FDCAN 的 bus-off 恢复：ISR 里已清 CCCR.INIT 让硬件走恢复序列；这里做任务侧兜底 ——
  *       若外设仍停在 bus-off（外部总线条件不满足，如线没接回），停止并按原配置重启外设。
  *       HAL_FDCAN_Stop/Start 会清掉中断线映射与已激活的中断，必须一并重新配置。
+ * @note **入口会先自证总线级判据（bus-off / 发送资源占满且 TEC≥128），不满足直接返回
+ *       BSP_BUSY 且不碰任何在途帧** —— 判据的理由、为什么不放在调用点、为什么不用
+ *       "marker 池占满"，全部写在函数体开头的注释块里，改判据前先读那一段。
  */
 BSP_Status_e CANRecover(CANInstance *instance)
 {
@@ -876,6 +898,35 @@ BSP_Status_e CANRecover(CANInstance *instance)
         BSPLOG(&g_can_log, LOG_LEVEL_WARNING, "CANRecover: can_e=%d not started, nothing to recover", can_idx);
         return BSP_BUSY;
     }
+
+    // ===== 入口自证：没有"总线级"证据就什么都不做（**必须在任何动作之前**）=====
+    // 为什么门槛放在这里而不是调用点：本函数作用于**整条总线**（取消该总线上所有实例的在途
+    // 帧、必要时重停外设），而调用方（drv/media）只看得到**自己这一条链路**——"我这条链路没
+    // 收到帧"不是总线级证据：对端不发、滤波器不匹配、流量被同总线别的实例挤掉都会造成它，
+    // 而这三样本函数一个都治不好，代价却是把别人正在发的帧全丢掉。所以调用点只负责"何时看
+    // 一眼"（限频），"值不值得动手"的判据必须在这层——只有 bsp 看得见总线状态。
+    // 判据一条都不满足时返回 BSP_BUSY（= "什么都没做"），调用方按现状忽略即可，不刷日志。
+    //
+    // 判据只有两条，都要求"恢复动作确实对症"：
+    //   ① 停在 bus-off：ISR 已清过 CCCR.INIT，此处仍为 1 = 硬件等不到"128×11 位隐性电平"，
+    //      恢复序列自己走不出去 → 本函数末尾的 Stop/Start 重启是唯一出路（总线没接回时
+    //      重启也没用，会走 recover_fail 返回 BSP_HW_ERR）；
+    //   ② 发送资源占满 **且** 发送错误计数 ≥ 128（error passive 区）：Tx Error Counter 越界
+    //      说明帧确实一直发不出去（无 ACK 时硬件会一直重传、既不完成也不报错），此时取消
+    //      在途帧才能把 Tx FIFO/marker 腾出来。
+    // @note 为什么"资源占满"这一条必须再搭 TEC：单纯 Tx FIFO 满在健康总线上是**正常瞬时**
+    //       状态（一帧正在发），拿它当判据会在正常忙时误取消一批好帧。
+    // @note 为什么不把"marker 池占满（OwnerBusyCount == 32）"当判据：合法突发同样能占满 32 个
+    //       （TxEventsNbr/TxFifoQueueElmntsNbr 都是 32），而真泄漏（Tx Event FIFO 满/丢）已经在
+    //       FDCAN_TxEventFifoCallback 里就地回收（FDCAN_ReclaimMarkers(…, 1)）——拿它判只会误伤。
+    // @note 为什么不在 CANTransmit 超时分支里复用本入口：那里判据是"本次发送等不到 FIFO 空间"
+    //       （实例级），动作是"放掉占着 FIFO 的帧"（总线级），是同一条原则的例外——它由"确认发送
+    //       资源已死"这一确定性事实触发，且已经有独立实现（见 CANTransmit 的超时分支）。
+    (void)HAL_FDCAN_GetProtocolStatus(hfdcan, &protocol_status);
+    tx_free = HAL_FDCAN_GetTxFifoFreeLevel(hfdcan);
+    s_fdcan_status[can_idx].tx_free = (uint8_t)tx_free;
+    if (protocol_status.BusOff == 0U && !(tx_free == 0U && FDCAN_TxErrorCount(hfdcan) >= 128U))
+        return BSP_BUSY;
 
     // ①② 取消全部在途发送（TXBCR 整掩码 = 逐元素取消）并逐帧通知发起者。
     //     被成功取消的帧**不产生 Tx Event**，marker 槽不会被回调回收，故必须显式回收。

@@ -78,7 +78,11 @@ static int8_t MediaUsbSend(CommMedia *media, const uint8_t *data)
     /* 发送卡死自检：必须早于实际发送。ring 一旦推不动（CDC IN 端点的在途传输卡死），
      * USBTransmit 会一路 BSP_BUSY，而"发送失败"没有任何中断能把它救回来——本入口是
      * 每帧必经之处，在任务上下文（comm 周期任务）给 bsp 一次收尾机会。
-     * 判据/限频/动作都在 bsp 的 USBRecoverTxIfStuck 里，这里原样调用即可。 */
+     * 判据/限频/动作都在 bsp 的 USBRecoverTxIfStuck 里，这里原样调用即可。
+     * 返回值刻意不消费（bsp 层的分工）：BSP_OK/BSP_HW_ERR 两种"刚做过收尾"的结果，
+     * bsp 已按 WARNING 记日志、已计 tx_recover_ok/fail、并已按 err_callback 契约
+     * 报 USB_ERR_TX_STUCK / USB_ERR_HW（本层 ErrHook 计数后转给用户）；
+     * BSP_BUSY 是"没到阈值/环空/未枚举"，无事可做。本层的处置只看下面 USBTransmit 的返回码。 */
     (void)USBRecoverTxIfStuck(usb, 0);
 
     /* 分包发送：整帧 = data，tx_frame_len > 63B 时拆成多包，seq = 该片在整个帧的第几包（0 起）。
@@ -96,7 +100,9 @@ static int8_t MediaUsbSend(CommMedia *media, const uint8_t *data)
         {
             /* BSP_BUSY = ring 放不下这一包（bsp 保证零字节写入）→ 背压，退避后重发整帧即可；
              * 其余（BSP_HW_ERR 未枚举 / BSP_PARAM_ERR）= 本帧确实发不出去。两者分开计数，
-             * 调试时"tx_busy 涨"是主机读得慢，"tx_fail 涨"才是链路真出问题。 */
+             * 调试时"tx_busy 涨"是主机读得慢，"tx_fail 涨"才是链路真出问题。
+             * 再往下细分（未枚举 / 参数错）bsp 已分开计 tx_not_configured / tx_param_err，
+             * 本层不重复建计数器（结构体不加字段），查链路问题看 bsp 的状态快照。 */
             if (st == BSP_BUSY)
                 m->tx_busy++;
             else

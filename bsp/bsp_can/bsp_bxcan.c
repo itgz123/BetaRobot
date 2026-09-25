@@ -307,7 +307,7 @@ static HAL_StatusTypeDef CANAbortAllTx(CANInstance *instance)
  * @brief 向该 CAN 上所有注册了 err_callback 的实例广播一个错误原因
  * @note 错误是**外设级**的（同一 handle 上可以有多个实例共享同一条总线），无法归给某一个
  *       实例，故广播给该 handle 上的所有注册者。handler 契约要求幂等，重复收到同一原因无害；
- *       没配 err_callback 的实例（如只关心收发的电机驱动）直接跳过。
+ *       没配 err_callback 的实例直接跳过（本仓库的 drv 层都已接上，见各 drvs_* 的 ErrHook）。
  */
 static void CAN_NotifyError(const CAN_HandleTypeDef *hcan, CAN_ErrReason_e reason)
 {
@@ -691,6 +691,23 @@ BSP_Status_e CANRecover(CANInstance *instance)
         BSPLOG(&g_can_log, LOG_LEVEL_WARNING, "CANRecover: can_e=%d not started, nothing to recover", can_idx);
         return BSP_BUSY;
     }
+
+    // ===== 入口自证：没有"总线级"证据就什么都不做（**必须在任何动作之前**）=====
+    // 完整理由（为什么门槛不放调用点、为什么要搭发送错误计数器、为什么不按"资源占满"单独判）
+    // 见 bsp_fdcan.c 的同名函数；bxCAN 这边是同一原则的同一份实现，只有判据的读法不同：
+    //   ① ESR.BOFF：停在 bus-off。CubeMX 给 bxCAN 开了 AutoBusOff（硬件自己重同步），
+    //      所以这里看到 BOFF 更多是"总线物理层还没回来"的信号，本函数末尾会再回读确认。
+    //   ② ESR.TEC ≥ 128 且三个邮箱全占：发送错误计数已越界（bxCAN 每失败一次 +8、成功一次 -1），
+    //      说明帧确实一直发不出去而不是单纯赶上了忙时 → 取消在途帧把邮箱腾出来。
+    //      @note 用 TEC 而不是 EPVF：后者是"TEC ≥128 **或** REC ≥128"，收帧受干扰而发送正常的
+    //            总线也会被算进去。ESR 里 TEC 只有低 8 位，TEC=256（bus-off 上限）时读回 0，
+    //            但那一刻 BOFF 已置位、判据① 会接住，不影响。
+    // @note bxCAN 没有 marker 池（只有 3 个邮箱），不存在 FDCAN 那条"池泄漏"判据。
+    esr = hcan->Instance->ESR;
+    tx_free = HAL_CAN_GetTxMailboxesFreeLevel(hcan);
+    s_bxcan_status[can_idx].tx_free = (uint8_t)tx_free;
+    if ((esr & CAN_ESR_BOFF) == 0U && !(tx_free == 0U && ((esr & CAN_ESR_TEC) >> CAN_ESR_TEC_Pos) >= 128U))
+        return BSP_BUSY;
 
     // ①② 取消全部在途发送并逐帧通知发起者（被成功取消的帧不会产生完成回调，必须显式收口）
     (void)CANAbortAllTx(instance);

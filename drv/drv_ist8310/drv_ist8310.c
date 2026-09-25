@@ -429,7 +429,11 @@ static int8_t IST8310_Recover(IST8310Instance *inst)
     BSPLOG(&g_ist8310_log, LOG_LEVEL_WARNING, "Recover start (count=%d, fail=%d)",
            inst->recover_count, inst->fail_count);
 
-    /* 1) 外设级总线恢复（DeInit + Init + 复位句柄状态） */
+    /* 1) 外设级总线恢复（DeInit + Init + 复位句柄状态）。
+     *    `(void)` 是有意的：本例给出的判据（连续 3 次传输失败 / 看门狗离线）都是**实例级**
+     *    现象，而 bsp 只在自己读到**总线级**证据（`I2C_FLAG_BUSY` 置位且无在途传输）时才动手，
+     *    否则返回 BSP_BUSY 什么都不做 —— 总线已放开时的失败由下面第 2 步的探测（不应答再脉冲
+     *    RSTN）去救才是对症的。见 bsp_i2c.h 的 I2CBusRecover 契约。 */
     (void)I2CBusRecover(inst->i2c_inst);
 
     /* 2) 探测从机是否应答；不应答就先硬复位再试一次 */
@@ -768,8 +772,11 @@ int8_t IST8310Config(IST8310Instance *inst, const IST8310_Config_s *config)
      * - **DMA**：本层的采集链**全在 ISR 里自维持**，任务侧没有"下一笔传输"的发起入口。
      *   一次失败若留下需收尾的残留，只有 tick 依赖的动作能清（HAL_DMA_Abort / DeInit+Init），
      *   而它们在 ISR 里做不了，只能等任务上下文的补刀点 —— 那条链的补刀点是低频的
-     *   IST8310Read 的链路看门狗，动作还是整段恢复（IST8310_Recover → I2CBusRecover：
-     *   DeInit/Init 整条总线重建 + 器件重初始化），代价远不止"丢一帧"。
+     *   IST8310Read 的链路看门狗，动作是整段恢复（IST8310_Recover → I2CBusRecover：
+     *   器件重初始化 + 必要时 DeInit/Init 整条总线重建），代价远不止"丢一帧"。
+     *   其中"重建整条总线"那一步还有条件：bsp 要先自证总线级判据（`I2C_FLAG_BUSY` 置位且
+     *   无在途传输，见 bsp_i2c.h），总线没被占住时它不会做 —— 也就是说这条链**不能指望
+     *   一定能把外设整个重来一遍**，所以这里直接拒绝 DMA。
      *   DMA 偏偏多引入一个与总线好坏无关的失败源（DMA 流的 State），一旦它非 READY，
      *   此后每一笔 DMA 都在启动阶段直接失败，形成确定性的级联失败。
      * - **IT**：没有 DMA 流可留，下一帧能否成功只取决于总线是否已放开（NACK / 仲裁丢失

@@ -20,16 +20,45 @@
 
 #include "comm_media_can_pkt0.h"
 #include "drv_comm.h" /* CommMediaRxHook：comm 层接收入口 */
+#include "bsp_dwt.h"  /* DWT_GetTimeUs：发送入口自恢复探测的限频时基 */
+#include "bsp_log.h"
 #include <string.h>
 
 #ifdef DRV_COMM_USED
+
+/* 总线级自恢复探测的最小间隔（ms）：本后端的**发送入口**每次都会先看一眼（见 MediaCanPkt0ProbeBus），
+ * 全靠这个周期限频。取值是两头权衡：CANRecover 的判据成立时会**放弃该总线上的在途帧**、还可能
+ * Stop/Start 外设（见 bsp_can.h 的代价说明），不能按发送频率去试；但外设真卡在 bus-off /
+ * 发送资源占死时，越早收口越早能再发帧，也不能太长。 */
+#ifndef DRV_COMM_MEDIA_CAN_RECOVER_PERIOD_MS
+#define DRV_COMM_MEDIA_CAN_RECOVER_PERIOD_MS 100
+#endif
+
+#ifndef DRV_COMM_MEDIA_CAN_PKT0_LOG_LIMIT
+#define DRV_COMM_MEDIA_CAN_PKT0_LOG_LIMIT 10
+#endif // !DRV_COMM_MEDIA_CAN_PKT0_LOG_LIMIT
+LOG_INSTANCE_DEF(g_media_can_pkt0_log, "comm_media_can_pkt0", DRV_COMM_MEDIA_CAN_PKT0_LOG_LIMIT);
+
+/* 每条总线（can_e）上一次探测的时刻。
+ * @note 限频按**外设**去重而不是按实例：CANRecover 作用于整个外设（它取消的是该总线上
+ *       所有实例的在途帧），同一条总线上挂多个东西时，一个共享节拍才是对的。 */
+static uint64_t s_can_recover_us[CAN_NUM_MAX] = {0};
 
 static int8_t MediaCanPkt0Send(CommMedia *media, const uint8_t *data);
 static int8_t MediaCanPkt0SendNext(CommMediaCanPkt0 *m);
 static void MediaCanPkt0TxHook(CANInstance *can, uint32_t tx_mailbox, BSP_Status_e result);
 static void MediaCanPkt0ErrHook(CANInstance *can, CAN_ErrReason_e reason);
 static void MediaCanPkt0RxHook(CANInstance *can, const CAN_Pack_s *pack);
+static void MediaCanPkt0ProbeBus(CANInstance *can);
 
+/* @note 本后端**刻意不挂 vtable->offline**（USART / USB / USB_SIMPLE 三个后端挂了）：
+ *       offline 的触发条件是"这条链路没收到帧"，是**实例级**证据；而 CAN 的自恢复动作
+ *       （CANRecover）作用于**整条总线**（取消该总线上所有实例的在途帧、必要时重停外设）。
+ *       证据的作用域必须与动作的作用域对齐，否则"对端不发 / 滤波器不匹配 / 流量被同总线
+ *       别的实例挤掉"都会把整条总线的在途帧打掉。故改为把探测放在**自己的发送入口**
+ *       （任务上下文、每帧必经、"发不出去"正是要治的病），由 bsp 在入口内部自证总线级判据。
+ *       连带效果：`CommConfig` 里"daemon_reload=0 提升为默认值"只对挂了 offline 钩子的
+ *       后端生效，故 CAN 链路的 `daemon_reload = 0` 仍是真的"不监控"（见 drv_comm.c）。 */
 static const CommMediaVTable_s s_can_pkt0_vtable = {
     .send = MediaCanPkt0Send,
 };
@@ -55,6 +84,12 @@ static int8_t MediaCanPkt0Send(CommMedia *media, const uint8_t *data)
 
     if (m->tx_id == CAN_ID_UNUSED)
         return -1; /* 未配置发送 ID：只收不发 */
+
+    /* 发送前给 bsp 一次收口机会（任务上下文、每帧必经之处）：总线卡在 bus-off / 发送资源被
+     * "发不出去"的帧占死时，先把发送能力救回来，本帧才可能发得出去。必须早于下面的
+     * tx_active 判断——总线上不来时逐包续发的完成回调也不会来，tx_active 会永久为 1，
+     * 若把探测放在它后面就永远够不到了。判据/动作/限频的理由见 MediaCanPkt0ProbeBus。 */
+    MediaCanPkt0ProbeBus(can);
 
     if (m->tx_active)
     {
@@ -176,6 +211,47 @@ static void MediaCanPkt0ErrHook(CANInstance *can, CAN_ErrReason_e reason)
 
     m->err_count++;
     m->last_err = (uint8_t)reason;
+}
+
+/**
+ * @brief 发送前的总线级自恢复探测（任务上下文）——本层只管"何时看一眼"
+ * @param can 本介质绑定的 CAN 实例（只用于指出**哪条总线**）
+ *
+ * @note **为什么搭在发送入口而不是 daemon 的 offline 钩子**：CANRecover 作用于**整条总线**
+ *       （取消该总线上所有实例的在途帧、必要时重停外设，见 bsp_can.h），而 offline 钩子的
+ *       触发条件是"这条链路没收到帧"——实例级证据。用实例级证据触发总线级动作会误伤：
+ *       对端不发、滤波器不匹配、流量被同总线别的实例挤掉，都会让本链路"没收到帧"，而这三样
+ *       恢复一个都治不好。发送入口是任务上下文、每帧必经，且"发不出去"正是本函数要治的病，
+ *       与动作对症。
+ * @note **判据不在这层**：本层只做限频（返回值不看内容、也不判"该不该恢复"），总线级判据
+ *       （bus-off / 发送资源占满且发送错误计数器越界）由 bsp 在 CANRecover 入口自证，
+ *       不成立时它返回 BSP_BUSY 且不碰任何在途帧 —— 也就是说**健康链路上本次探测是零代价的**
+ *       （两次寄存器读）。这与 bsp_spi 的 SPIRecoverTxIfStuck 是同一条分工。
+ * @note 返回值只用于日志分级：BSP_OK = 本次刚做过收口（bsp 内部已按 INFO 记账，本层不重复打）、
+ *       BSP_HW_ERR = 做过收口但总线仍不可用（bsp 已计 recover_fail，本层补一条带链路上下文的
+ *       ERROR，便于与"对端真掉线"区分）、BSP_BUSY = 没动作（绝大多数时候），不打日志、不刷屏。
+ */
+static void MediaCanPkt0ProbeBus(CANInstance *can)
+{
+    uint8_t idx;
+    uint64_t now;
+
+    if (can == NULL)
+        return;
+
+    idx = (uint8_t)can->can_e;
+    if (idx >= CAN_NUM_MAX)
+        return;
+
+    now = DWT_GetTimeUs();
+    if (s_can_recover_us[idx] != 0 &&
+        (now - s_can_recover_us[idx]) < ((uint64_t)DRV_COMM_MEDIA_CAN_RECOVER_PERIOD_MS * 1000u))
+        return; /* 限频：同一条总线这段时间内已经看过一眼 */
+    s_can_recover_us[idx] = now;
+
+    if (CANRecover(can) == BSP_HW_ERR)
+        BSPLOG(&g_media_can_pkt0_log, LOG_LEVEL_ERROR,
+               "CANRecover failed (can_e=%u), bus still unavailable", (unsigned)idx);
 }
 
 /* bsp 接收适配钩子：每包 = [pkt_idx][数据片]，按分包序号连续重组整帧。
