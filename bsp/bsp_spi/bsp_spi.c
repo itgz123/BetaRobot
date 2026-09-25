@@ -11,7 +11,9 @@
  *       ④ 计数与状态快照存 static 结构体供调试器 Watch（`s_spi_status`）。
  *       除此之外不提供任何接口：不做发送队列/缓冲（忙即 BSP_BUSY，多缓冲归上层），
  *       不对外暴露 work_mode / is_ready。卡死自恢复有一个对外入口
- *       （SPIRecoverTxIfStuck），只把"何时看一眼"交给上层，判据与动作都在这层。
+ *       （SPIRecoverTxIfStuck），只把"何时看一眼"交给上层，判据与动作都在这层
+ *       —— 这也是本模块不需要"入口自证"的原因：判据（这个句柄非 READY 超时）与动作
+ *       （中止这个句柄的传输）作用域天然相同，详见 SPIRecoverTxIfStuck 的说明。
  */
 
 #include "bsp_spi.h"
@@ -921,6 +923,18 @@ BSP_Status_e SPITransmitReceive(SPIInstance *instance, const uint8_t *tx_data, u
  * @note 总线空闲时顺便刷新基准，而不是只在配置/收发时刷新：上层是"每个控制周期调一次"，
  *       中间可能隔很久没有传输；不刷新的话基准会停在很久以前，下一次正常传输一开始就被
  *       判成卡死（假的 tx_recover + 一次无谓的 Abort 中止掉刚启动的传输）。
+ *
+ * @note **为什么本入口不需要"作用域自证"**（对比 `CANRecover` / `I2CBusRecover`）：
+ *       **故障对象与动作对象在这里是同一个** —— 判据读的是 `hspi->State` 与本句柄的两路
+ *       DMA 流（外设自己的话，不是上层"我这笔没成"的转述），动作（`HAL_SPI_Abort` +
+ *       强制放流）也只作用于这一个句柄，被中止的正是判据认定的那一笔卡死传输
+ *       （正常传输只有 6~64µs，阈值 20ms，量级差三个数量级，不会误伤在途的那一笔）。
+ *       故障与动作天生同域，判据放在这里就已经是自证。
+ *       需要额外自证的是另一类入口：**判据来自实例、动作却落到整条总线**
+ *       （重建整个外设 / 取消总线上所有实例的在途帧），见 `bsp_i2c.h` 的 `I2CBusRecover`
+ *       与 `bsp_can.h` 的 `CANRecover`。也正因为判据在这层，调用点传进来的 `stuck_ms`
+ *       只能**收紧时长**，既改不了判据、也改不了作用范围（`drv_bmi088` 传 1ms 是
+ *       "这条链路把判据卡严些"，不是"改按实例判"）。
  */
 BSP_Status_e SPIRecoverTxIfStuck(SPIInstance *instance, uint32_t stuck_ms)
 {

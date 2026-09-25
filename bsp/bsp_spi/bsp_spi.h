@@ -220,6 +220,15 @@ BSP_Status_e SPITransmitReceive(SPIInstance *instance, const uint8_t *tx_data, u
  *       ISR / 临界区里直接返回 BSP_BUSY 且不刷新计时基准，下一次任务上下文的调用照常补上。
  * @note 幂等且开销小：总线空闲时只做一次 DWT 读并刷新基准后返回；只有真的超过阈值才动硬件。
  *       计时基准在 bsp 内按 SPI 维护，上层不必自存时间戳。
+ *
+ * @note **判据不需要入口自证，而 `I2CBusRecover` / `CANRecover` 需要**：本入口的故障对象与
+ *       动作对象是同一个 —— 判据读 `hspi->State` 与本句柄的两路 DMA 流（外设自己的话，
+ *       不是上层"我这笔没成"的转述），动作也只作用于这一个句柄，中止的正是判据认定的那笔
+ *       卡死传输（正常传输 6~64µs vs 阈值 20ms）。另一类入口则是"判据来自实例、动作落到
+ *       整条总线"（重建整个外设 / 取消总线上所有实例的在途帧），作用域不重合，才必须在
+ *       bsp 入口自证后早退 `BSP_BUSY`（见 `bsp_i2c.h` 的 `I2CBusRecover` /
+ *       `bsp_can.h` 的 `CANRecover`）。
+ *       因此 `stuck_ms` 只能收紧时长，改不了判据，也改不了作用范围。
  */
 BSP_Status_e SPIRecoverTxIfStuck(SPIInstance *instance, uint32_t stuck_ms);
 

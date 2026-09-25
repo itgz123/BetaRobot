@@ -223,10 +223,25 @@ BSP_Status_e CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t
 
 /**
  * @brief CAN 发送资源自恢复入口（**任务上下文**，由调用方在自己的时基上周期调用或按需调用）
- * @param instance CAN实例（作用于其所在的整个 CAN 外设，不只是这一个实例）
- * @retval BSP_OK      恢复完成
- * @retval BSP_BUSY    外设未启动（尚未成功 CANConfig），无事可做
- * @retval BSP_HW_ERR  恢复后外设仍不可用（仍在 bus-off / 邮箱仍占满），已计数
+ * @param instance CAN实例。**注意它是"哪条总线"的选择符，不是"作用对象"**——本函数作用于
+ *                 该实例所在的整个 CAN 外设，同一条总线上挂的其它实例一样受影响
+ * @retval BSP_OK      本次刚做过恢复动作，且做完后总线可用
+ * @retval BSP_BUSY    未动作：外设未启动（尚未成功 CANConfig），**或入口自证判据不成立**
+ *                     （总线没有"恢复能治好的"证据，见下面 @note）
+ * @retval BSP_HW_ERR  做了动作但外设仍不可用（仍在 bus-off / 邮箱仍占满），已计数
+ *
+ * @note **入口自证（先判、后动）**：这是本入口与 `USARTRecoverTxIfStuck` 那一类最大的不同点。
+ *       本函数作用于**整条总线**（取消该总线上**所有实例**的在途帧、必要时重停外设），
+ *       而调用方只看得到**自己这一条链路**。"我这条链路没收到帧"不是总线级证据——对端不发、
+ *       滤波器不匹配、流量被同总线别的实例挤掉都能造成它，且这三样本函数一个都治不好。
+ *       所以：**调用点只负责"何时看一眼"（限频），"值不值得动手"的判据在 bsp 内部**，
+ *       判据不成立时返回 `BSP_BUSY` 且**不碰任何在途帧**（健康链路下调用它是零代价的）。
+ *       判据与逐条理由写在两个实现文件里（`bsp_fdcan.c` / `bsp_bxcan.c` 的 `CANRecover`
+ *       函数体开头），改判据前先读那一段；这里只给结论：
+ *       ① bus-off（硬件自己走不出恢复序列）→ 动手；
+ *       ② 发送资源占满 **且** 发送错误计数器 ≥ 128 → 动手（帧确实一直发不出去，不是正常忙时）；
+ *       ③ 其余一律 `BSP_BUSY`（含"marker 池占满"，那是合法突发也会有的状态，且真泄漏已在
+ *          Tx Event FIFO 满/丢的分支里就地回收）。
  *
  * @note 做五件事，顺序固定（不能换）：
  *       ① 取消全部在途发送（BxCAN: 三个邮箱 / FDCAN: 全部 Tx Buffer），把"发不出去还占着
@@ -243,10 +258,17 @@ BSP_Status_e CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t
  *       可能还是旧值（把一次成功的恢复判成失败）。实现里按 `CAN_RECOVER_DRAIN_US` 有界轮询，
  *       且采样点必须在可能的重启动作**之后**（FDCAN 的 Stop/Start 会清空 Tx FIFO）。
  *
- * @note **为什么不在 ISR 里做**：它会丢在途帧。恢复必须是上层显式决策（如 daemon 判定链路
- *       离线、或 CANTransmit 连续超时），BSP 不自动触发。
- * @note **代价**：在途帧被取消，上层会看到它们以 BSP_HW_ERR 失败并（按各自协议）重发，
- *       即"放弃若干帧换回发送能力"。
+ * @note **为什么不在 ISR 里做**：④ 的回读要等取消落地（有界轮询 ≤ `CAN_RECOVER_DRAIN_US`），
+ *       且 FDCAN 的兜底要 Stop/Start 外设——都会丢在途帧、也不该在中断里阻塞。恢复必须是
+ *       上层显式调用，BSP 不自动触发。
+ * @note **现状（谁在调）**：`drv_comm` 的两个 CAN 介质后端（`comm_media_can_pkt0` /
+ *       `comm_media_can_idseq`）在**自己的发送入口**里调它，按 `can_e` 限频
+ *       （`DRV_COMM_MEDIA_CAN_RECOVER_PERIOD_MS`，默认 100ms）。选发送入口的理由：它是
+ *       任务上下文、每帧必经、且"发不出去"正是本函数要治的病。**刻意不再搭在 daemon 的
+ *       离线钩子上**——那个钩子的触发条件是"这条链路没收到帧"，是实例级证据，与总线级动作
+ *       不匹配（见上面的入口自证）。
+ * @note **代价**：判据成立时在途帧会被取消，上层会看到它们以 BSP_HW_ERR 失败并（按各自
+ *       协议）重发，即"放弃若干帧换回发送能力"；判据不成立时零代价（只多两次寄存器读）。
  */
 BSP_Status_e CANRecover(CANInstance *instance);
 

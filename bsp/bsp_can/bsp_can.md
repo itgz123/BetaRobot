@@ -264,7 +264,7 @@ CAN 的典型故障不是"报错"，而是**不报错地发不出去**：
 | `CANRegister`       | `BSP_PARAM_ERR`（实例为空 / 重复注册 / 超实例数）                                                 |
 | `CANConfig`         | `BSP_PARAM_ERR`（参数/`can_e` 越界/模式非法、BxCAN 非 CLASSIC、FDCAN FrameFormat 不匹配）/ `BSP_HW_ERR`（板级映射缺失或 HAL 初始化失败） |
 | `CANTransmit`       | `BSP_PARAM_ERR`（空指针/长度越界/帧类型非法/帧类型与工作模式不兼容）<br>`BSP_BUSY`（邮箱/FIFO 满且不等待或中断里不等待）<br>`BSP_TIMEOUT`（等资源耗尽 `timeout_ms`，已顺手取消占用的邮箱/FIFO 并逐帧通知发起者）<br>`BSP_HW_ERR`（`HAL_*_AddTxMessage` 失败，或实例尚未成功 `CANConfig`——handle 为 NULL） |
-| `CANRecover`        | `BSP_PARAM_ERR`（实例/句柄为空）/ `BSP_BUSY`（外设没启动，无可恢复）/ `BSP_HW_ERR`（恢复后仍不可用） |
+| `CANRecover`        | `BSP_PARAM_ERR`（实例/句柄为空）/ `BSP_BUSY`（**没动作**：外设没启动，或入口自证判据不成立——见 §6.4.1）/ `BSP_OK`（刚做过恢复动作且总线可用）/ `BSP_HW_ERR`（做了动作但恢复后仍不可用，已计 `recover_fail`） |
 
 **发送资源类失败（`BSP_BUSY`/`BSP_TIMEOUT`）不走 `err_callback`** —— 它们由返回值和逐帧结果表达，
 与 usart 一致（`err_callback` 只报硬件/总线级事件）。
@@ -304,7 +304,45 @@ void (*tx_complete_callback)(CANInstance *instance, uint32_t tx_mailbox, BSP_Sta
 > 对外（`CANTransmit` 的 `tx_mailbox` 出参与 `tx_complete_callback` 回传值）它是**不透明标记**，
 > 只应原样比对，不要解释数值——上层按 `tx_mailbox` 区分帧来源的写法不受影响。
 
-### 6.4 `CANRecover` 的动作与顺序（任务上下文）
+### 6.4 `CANRecover` 的入口自证与动作顺序（任务上下文）
+
+#### 6.4.1 先判、后动：判据必须来自整条总线
+
+`CANRecover` 作用于**整条总线**（取消该总线上**所有实例**的在途帧、必要时重停外设），
+而调用方只看得到**自己这一条链路**。**"我这条链路没收到帧"不是总线级证据**：对端不发、
+滤波器不匹配、流量被同总线别的实例挤掉都会造成它，而这三样本函数一个都治不好，代价却是
+把别人正在发的帧全丢掉。所以判据必须在 bsp 入口内部自证 —— **调用点只负责"何时看一眼"
+（限频），"值不值得动手"的判据在这层**（只有 bsp 看得见总线状态）。这与 `bsp_spi` 的
+`SPIRecoverTxIfStuck` 是同一条分工原则，只是 SPI 恰好一口一实例、两者作用域天然重合。
+
+判据**在任何动作之前**评，一条都不成立就 `return BSP_BUSY`（= "什么都没做"）且**不碰任何
+在途帧** —— 健康链路上调用它是零代价的（多两次寄存器读）；调用方忽略 `BSP_BUSY`、不打日志。
+
+| # | 判据 | 为什么它"对症" |
+|---|------|----------------|
+| ① | 停在 **bus-off**：F4 `ESR.BOFF` / H7 `ProtocolStatus.BusOff` | ISR 已清过 `CCCR.INIT`，此处仍为 1 = 硬件等不到"128×11 位隐性电平"，恢复序列自己走不出去。H7 的 Stop/Start 重启是唯一出路（总线没接回时重启也无效，走 `recover_fail` 返回 `BSP_HW_ERR`） |
+| ② | **发送资源占满 且发送错误计数器越界**（F4 `ESR.TEC ≥ 128` 且三邮箱全占 / H7 `TxErrorCnt ≥ 128` 且 `TxFifoFreeLevel == 0`） | TEC 每失败一次发送 +8、成功一次 −1，≥128 即 error passive 区 → 说明帧确实**一直发不出去**（无 ACK 时硬件一直重传，既不完成也不报错），此时取消在途帧才能把资源腾出来 |
+| ③ | 其余一切 | `BSP_BUSY`，不动手 |
+
+两条判据的若干取舍（改判据前必须知道）：
+
+- **为什么②必须再搭 TEC，不能只看"资源占满"**：单纯 Tx FIFO / 邮箱满在健康总线上是**正常
+  瞬时状态**（一帧正在发），拿它当判据会在正常忙时误取消一批好帧。TEC 是"发送侧真的推不动"
+  的直接观测量。
+- **为什么用 TEC 而不是 `ProtocolStatus.ErrorPassive`**：后者是"TEC ≥128 **或** REC ≥128"，
+  一个只是收帧受干扰（REC 高）而发送完全正常的总线也会被算进去 → 误伤。故 H7 走
+  `HAL_FDCAN_GetErrorCounters().TxErrorCnt`（封装成 `FDCAN_TxErrorCount`）。
+- **为什么不把"marker 池占满（`OwnerBusyCount == 32`）"当判据**：合法突发同样能占满 32 个
+  （`TxEventsNbr` / `TxFifoQueueElmtsNbr` 都是 32），而真泄漏（Tx Event FIFO 满/丢）**已经在
+  `FDCAN_TxEventFifoCallback` 里就地回收**（`FDCAN_ReclaimMarkers(…, 1)`，见 §6.2）——
+  拿到恢复入口再判一次只会误伤一批正常在途帧。bxCAN 只有 3 个邮箱，没有这个问题。
+- **为什么 `CANTransmit` 的超时分支可以例外地"自行取消"**：那里判据是"本次发送确认等不到
+  FIFO 空间"这一**确定性事实**（`BSP_TIMEOUT` 已发生），动作虽是总线级但由"发送资源已死"
+  直接触发，不是靠上层猜的；且它已有独立实现（`bsp_fdcan.c` 的 Tx FIFO 超时分支）。
+- **`instance` 参数是"哪条总线"的选择符，不是"作用对象"**：任何挂在该总线上的实例调它，
+  效果完全一样。调用者容易误以为"我传的是我的实例，所以只影响我"——这正是判据必须内置的原因。
+
+#### 6.4.2 判据成立后做的五件事（顺序固定，不能换）
 
 ```
 ① 取消全部在途发送
@@ -334,15 +372,31 @@ void (*tx_complete_callback)(CANInstance *instance, uint32_t tx_mailbox, BSP_Sta
 `BSP_HW_ERR` 失败并按各自协议重发 —— 即"用丢若干帧换回发送能力"。
 `CANRecover` **不得在 ISR 里调用**。
 
-> ⚠️ **本轮只提供、没有接线调用点**：`CANRecover` 在本仓库里目前**零调用者**
-> （`grep -rn "CANRecover" --include=*.c` 只有定义）。
-> media 后端不调它有两个原因：① 它们的 `err_callback` 跑在 ISR 上下文，而 `CANRecover`
-> 是任务上下文；② CAN 两个后端没有挂 `vtable->offline`（`drv_comm.c:244-246` 注释），
-> 所以没有"离线时的任务上下文时基"可用。
-> 因此它是留给 **app 的兜底入口**（在自己的时基上按需调，如 `s_*_status[].recover_fail`
-> 连续增长时）。要真用起来，接法应当是给 CAN media 挂 offline 钩子或在 app 周期任务里调；
-> 在此之前，bus-off 的主要自愈路径仍是硬件 AutoBusOff + ISR 里清 `CCCR.INIT` 那一件动作，
-> FDCAN 的 Stop/Start 兜底**实际不会被执行到**。
+> **接在了哪里**：`drv/drv_comm/media/comm_media_can_pkt0.c` 与 `comm_media_can_idseq.c`
+> 各自的**发送入口**里（`MediaCanPkt0ProbeBus` / `MediaCanIdseqProbeBus`）调 `CANRecover`，
+> 按 `DRV_COMM_MEDIA_CAN_RECOVER_PERIOD_MS`（默认 100ms）**按外设 `can_e` 限频**。
+> 于是 FDCAN 的 Stop/Start 兜底真正可达，不再是"只提供不接线"。
+>
+> 为什么搭在发送入口：它是**任务上下文**（`CANRecover` 的上下文要求见下）、**每帧必经**
+> （不依赖任何"上层恰好会调"的约定），且"发不出去"正是本函数要治的病——判据与动作对症。
+> 调用点必须放在 `tx_active` 判断**之前**：总线上不来时逐包续发的完成回调也不会来，
+> `tx_active` 会永久为 1，放它后面就永远够不到。
+>
+> **为什么不搭在 daemon 的离线钩子上（此前的一版实现）**：offline 钩子的触发条件是"这条
+> 链路没收到帧"= **实例级**证据，而本函数是**总线级**动作，两者作用域不匹配（见 §6.4.1）。
+> 改为发送入口后还有一个连带好处：`CommConfig` 对 `daemon_reload = 0` 的提升只对挂了
+> `vtable->offline` 的后端生效，于是 **CAN 链路的 `daemon_reload = 0` 恢复成真正的"不监控"**
+> ——此前它会被静默改写成 100ms，等于把 app 的"我知道这条链路会安静"变成"每秒 10 次去抢整条总线"。
+>
+> 限频按**外设**去重而不是按实例：`CANRecover` 作用于整个外设（取消的是该总线上所有实例的在途帧），
+> 同一条总线上挂多个 media 时一个共享节拍才对（gimbal 的 `CAN_1` 就是底盘链路 + 电机共用）。
+> 返回值只用于日志分级：`BSP_OK` 本层不打（bsp 已按 INFO 记账）、`BSP_HW_ERR` 补一条带链路
+> 上下文的 ERROR（便于与"对端真掉线"区分）、`BSP_BUSY` 是**绝大多数时候**的返回值
+> （判据不成立 = 没动作），不打日志、不刷屏。
+>
+> 在此之前，bus-off 的第一道自愈路径仍是硬件 AutoBusOff + ISR 里清 `CCCR.INIT`；
+> 本入口只在总线级判据成立时再兜一层。若 app 想自己按别的判据（如 `recover_fail` 连续增长）
+> 调它也可以，但**限频要自负**：判据成立时每次调用都会取消该总线上的在途帧，调太勤等于持续丢帧。
 
 ### 6.5 上下文限制：中断里不等待
 
@@ -396,10 +450,13 @@ typedef enum : uint8_t
      等 `drv_motor/` 连同 `drv_motor_can.h` 一起删掉后，`drv/` 里就只剩这 9 个直呼点；
    - `CAN_TX_MAILBOX_FREE_BASE`（定义后从未使用的死物）→ 零匹配。
 3. **符号级要查 `.o`，不要查 `.elf`**：本工程开了 `-ffunction-sections` + `-Wl,--gc-sections`
-   （`CMakeLists.txt:226,243`），**零调用者的函数会被链接器丢掉**。所以 `CANRecover`
-   （以及 USB 的 `USBReenumerate`）在 `.elf` 的 `nm -g` 里查不到，这是预期现象，
-   不代表没编译。正确查法是查目标文件：
+   （`CMakeLists.txt:226,243`），**零调用者的函数会被链接器丢掉**。所以零调用者的函数
+   （如 USB 的 `USBReenumerate`）在 `.elf` 的 `nm -g` 里查不到，这是预期现象，不代表没编译。
+   正确查法是查目标文件：
    `arm-none-eabi-nm -S build/CMakeFiles/<app>.dir/Debug/bsp/bsp_can/bsp_bxcan.c.obj`
    → 应有 `T CANRecover` 与 `B s_bxcan_status`（FDCAN 版同理，见 chassis 的 `bsp_fdcan.c.obj`）。
+   `CANRecover` 现在有真实调用点（CAN media 的发送入口探测），故 `DRV_COMM_USED` 打开的 app
+   在 `.elf` 里也应能查到它——查不到就说明 comm 没编进来或钩子被 `gc-sections` 割掉了，
+   属于需要排查的现象。
 4. **待现场验证（无硬件）**：拔线进 bus-off → 接回看 `recover_ok` / `err_bus_off` 增长与发送自愈；
    邮箱占满时 ISR clamp 的实际效果；FDCAN marker 回收后能继续发帧。

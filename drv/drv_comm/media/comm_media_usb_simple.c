@@ -77,7 +77,11 @@ static int8_t MediaUsbSimpleSend(CommMedia *media, const uint8_t *data)
     /* 发送卡死自检：必须早于实际发送。ring 一旦推不动（CDC IN 端点的在途传输卡死），
      * USBTransmit 会一路 BSP_BUSY，而"发送失败"没有任何中断能把它救回来——本入口是
      * 每帧必经之处，在任务上下文（comm 周期任务）给 bsp 一次收尾机会。
-     * 判据/限频/动作都在 bsp 的 USBRecoverTxIfStuck 里，这里原样调用即可。 */
+     * 判据/限频/动作都在 bsp 的 USBRecoverTxIfStuck 里，这里原样调用即可。
+     * 返回值刻意不消费（bsp 层的分工）：BSP_OK/BSP_HW_ERR 两种"刚做过收尾"的结果，
+     * bsp 已按 WARNING 记日志、已计 tx_recover_ok/fail、并已按 err_callback 契约
+     * 报 USB_ERR_TX_STUCK / USB_ERR_HW（本层 ErrHook 计数后转给用户）；
+     * BSP_BUSY 是"没到阈值/环空/未枚举"，无事可做。本层的处置只看下面 USBTransmit 的返回码。 */
     (void)USBRecoverTxIfStuck(usb, 0);
 
     /* 短帧（整帧 ≤ 64B，单包装下）：免分包序号，整帧一包透传 */
@@ -87,7 +91,9 @@ static int8_t MediaUsbSimpleSend(CommMedia *media, const uint8_t *data)
         if (st == BSP_BUSY)
             m->tx_busy++; /* 背压：退避后重发整帧即可 */
         else if (st != BSP_OK)
-            m->tx_fail++; /* 未枚举/参数错：本帧确实发不出去 */
+            m->tx_fail++; /* 未枚举/参数错：本帧确实发不出去。更细的原因（未枚举 → BSP_HW_ERR、
+                           * 参数错 → BSP_PARAM_ERR）bsp 已分开计 tx_not_configured / tx_param_err，
+                           * 本层不重复建计数器（结构体不加字段），查链路问题去看 bsp 的状态快照。 */
         return (st == BSP_OK) ? 0 : -1;
     }
 

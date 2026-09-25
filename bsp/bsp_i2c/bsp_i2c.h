@@ -279,13 +279,26 @@ BSP_Status_e I2CIsDeviceReady(I2CInstance *instance, uint16_t dev_addr, uint32_t
 /**
  * @brief 外设级总线恢复：重建 I2C 外设 + 复位 State/ErrorCode/Lock
  * @param instance I2C实例
- * @retval BSP_OK        重建后总线 BUSY 标志为 0（可用）
- * @retval BSP_HW_ERR    仍 BUSY（多半 SCL/SDA 被从机拉死，需从机侧复位；本层不翻转引脚）
+ * @retval BSP_OK        本次刚做完全套重建，且总线 BUSY 标志已落（可用）
+ * @retval BSP_BUSY      未做任何事：入口自证不成立（非任务上下文 / 总线 BUSY 标志已落 /
+ *                       本句柄有在途传输）。计入 `s_i2c_status[].bus_recover_skip`
+ * @retval BSP_HW_ERR    重建后仍 BUSY（多半 SCL/SDA 被从机拉死，需从机侧复位；本层不翻转引脚）
  * @retval BSP_PARAM_ERR 实例或句柄为空
  *
  * @note 实现 = HAL_I2C_DeInit + HAL_I2C_Init（Init 复用 hi2c->Init 原值重配，
  *       F4 的 ClockSpeed/DutyCycle 与 H7 的 Timing 差异自动抹平）+ 强制复位句柄字段。
  *       含 MspDeInit/MspInit，涉及时钟与 GPIO/NVIC 重配，只能在任务上下文调用。
+ *
+ * @note **入口自证（先判、后动）**：本函数是**总线级**动作（重建整个外设），而触发者看到的是
+ *       **实例级**现象（"我这个从机没应答"）。证据的作用域必须与动作的作用域对齐，故判据在
+ *       本函数内部、且在任何动作之前读：
+ *         ① `I2C_FLAG_BUSY` 置位（外设说总线被占）
+ *         ② 本句柄空闲（`State == READY && Lock` 未锁）—— 即"占着总线的那一位"不是任何一笔
+ *            在途传输（正常传输同样让 BUSY 置位，单独看①会在传输途中误重建）
+ *       两条同时成立才动手，否则 `BSP_BUSY` 返回、什么都不做：总线已放开时的失败（NACK / 从机挂了）
+ *       重建外设治不了，该由 DRV 的探测 + RSTN 脉冲 + 整段重初始化处理。
+ *       **调用点只管"何时看一眼"（自己的失败计数与冷却），bsp 只管"值不值得动手"** ——
+ *       与 `SPIRecoverTxIfStuck`（bsp_spi.h）同一条原则，逐条取舍见 bsp_i2c.md §2.B.1.1。
  */
 BSP_Status_e I2CBusRecover(I2CInstance *instance);
 

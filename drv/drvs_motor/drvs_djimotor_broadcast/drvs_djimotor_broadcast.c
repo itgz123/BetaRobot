@@ -19,8 +19,14 @@
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
 #include "bsp_dwt.h"
+#include "bsp_log.h"
 #include <math.h>
 #include <string.h>
+
+#ifndef DRVS_DJIMOTOR_BC_LOG_LIMIT
+#define DRVS_DJIMOTOR_BC_LOG_LIMIT 10
+#endif // !DRVS_DJIMOTOR_BC_LOG_LIMIT
+LOG_INSTANCE_DEF(g_drvs_djimotor_bc_log, "drvs_djimotor_bc", DRVS_DJIMOTOR_BC_LOG_LIMIT);
 
 /*============================================
  *              协议常量
@@ -115,6 +121,44 @@ static void DrvsDJIMotorBroadcastRxCallback(CANInstance *can, const CAN_Pack_s *
 }
 
 /*============================================
+ *        CAN 错误 / 逐帧发送结果（drv 层错误处理）
+ *
+ * app 不主动检查错误，bsp 两条上报通道就都得由本层接住：
+ *   - err_callback        ：总线/硬件级事件。它是**外设级广播**（同一条总线上的所有实例
+ *                           都收到同一个原因，见 bsp_can.h 契约），故本层只做限频日志，
+ *                           不做"只对自己成立"的状态复位（那会误伤同总线的其他实例）；
+ *   - tx_complete_callback：**逐帧**结果。result != BSP_OK 即这一帧确实没发出去
+ *                           （仲裁失败 / 发送错误 / 被取消 / 溯源丢失）——
+ *                           旧实现只计"入队失败"（CANTransmit 的返回值），
+ *                           帧入队之后的失败是全静默的。
+ * 本层不做策略性动作：控制帧是周期性的，丢一帧下一周期自然补上；重试只会拖乱控制周期。
+ *============================================*/
+
+static void DrvsDJIMotorBroadcastErrHook(CANInstance *can, CAN_ErrReason_e reason)
+{
+    (void)can; /* 广播：错误归整条总线，不属于某个实例；分类计数在 bsp 的 s_*_status[] 里 */
+
+    /* 限频靠 LOG_INSTANCE_DEF 的 times_per_second（CAN_ERR_PROTOCOL 在总线异常时可每帧一次，
+     * 没有这个上限会刷屏），细分原因/错误计数器见 bsp/bsp_can.md 的状态变量表 */
+    BSPLOG(&g_drvs_djimotor_bc_log, (reason == CAN_ERR_BUS_OFF) ? LOG_LEVEL_ERROR : LOG_LEVEL_WARNING,
+           "CAN bus error, reason=%u", (unsigned)reason);
+}
+
+static void DrvsDJIMotorBroadcastTxHook(CANInstance *can, uint32_t tx_mailbox, BSP_Status_e result)
+{
+    /* 组播帧经"该 tx_id 的首个成员"的 CAN 实例发出（GroupSend 的 tx_cans[]），
+     * 故 can->parent 必然落回组内某个成员，再由它取回组 */
+    DrvsDJIMotorBroadcast_s *inst = (can != NULL) ? (DrvsDJIMotorBroadcast_s *)can->parent : NULL;
+
+    (void)tx_mailbox; /* 一帧带 4 个电机，失败不摊到具体电机，也不需要区分帧来源 */
+    if (inst == NULL || inst->group == NULL || result == BSP_OK)
+        return;
+
+    inst->group->tx_fail++; /* 与 GroupSend 记的"入队失败"共用组计数器（只增不清，调试用） */
+    BSPLOG(&g_drvs_djimotor_bc_log, LOG_LEVEL_WARNING, "group frame not sent (result=%d)", (int)result);
+}
+
+/*============================================
  *              注册
  *============================================*/
 /**
@@ -132,7 +176,7 @@ int8_t DrvsDJIMotorBroadcastRegister(DrvsDJIMotorBroadcast_s *inst)
 
     if (inst->can)
     {
-        if (CANRegister(inst->can) != 0)
+        if (CANRegister(inst->can) != BSP_OK)
             return -1;
         inst->can->parent = inst;
     }
@@ -203,8 +247,10 @@ int8_t DrvsDJIMotorBroadcastConfig(DrvsDJIMotorBroadcast_s *inst,
             .parent = inst, /* 必须：CANConfig 会覆盖 parent，不设则回调取 can->parent 失效 */
             .filters = &inst->can_filter,
             .filter_num = 1,
+            .tx_complete_callback = DrvsDJIMotorBroadcastTxHook, /* 逐帧结果：这一帧到底发出去没有 */
+            .err_callback = DrvsDJIMotorBroadcastErrHook,        /* 总线/硬件级事件（ISR 广播） */
         };
-        if (CANConfig(inst->can, &can_cfg) != 0)
+        if (CANConfig(inst->can, &can_cfg) != BSP_OK)
             return -1;
     }
 
@@ -246,9 +292,12 @@ int8_t DrvsDJIMotorBroadcastConfig(DrvsDJIMotorBroadcast_s *inst,
     memset(inst->data, 0, sizeof(inst->data));
     inst->data_idx = 0;
 
-    /* daemon：只当通信看门狗用，不挂回调
-     * （广播模式无协议级恢复帧；旧驱动的回调是 reset PID，那属于算法层，
-     *   且掉线期间 daemon 每个 tick 都会调用一次回调，不适合做重发） */
+    /* daemon：只当通信看门狗用，**刻意不挂离线回调**。
+     * ① 离线事件的检测、状态转换与日志都由 drv_daemon 自己完成（OFFLINE / back ONLINE，
+     *    见 drv_daemon.c），本层再挂一个每次 tick 都被调用的回调只会重复动作、刷日志；
+     * ② 广播协议没有"恢复帧"（无协议级使能/清错可重发），本层也没有算法层状态可复位
+     *    （旧驱动的回调是 reset PID，那属于算法层）；
+     * ③ 真正的"发送侧出问题"已由 ErrHook / TxHook 接住（错误与逐帧结果都进组计数与日志）。 */
     if (inst->daemon)
     {
         Daemon_Config_s daemon_cfg = {

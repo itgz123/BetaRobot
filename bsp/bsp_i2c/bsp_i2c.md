@@ -130,7 +130,9 @@ handler 必须无阻塞、可重入且**幂等**（判自身状态再复位，�
 - 收发计数：`tx_ok` / `rx_ok` / `xfer_fail` / `xfer_busy` / `xfer_timeout`；
 - 错误分类：`err_total` / `err_berr` / `err_arlo` / `err_af` / `err_ovr` / `err_dma` /
   `err_timeout` / `err_other` / `err_no_dma` / `err_start`；
-- 收尾与恢复：`abort_reset` / `bus_rebuild` / `bus_recover`；
+- 收尾与恢复：`abort_reset` / `bus_rebuild` / `bus_recover` / `bus_recover_skip`。
+  `bus_recover` 只计**真正动手**的次数；`bus_recover_skip` 计"调了但入口自证不成立、
+  什么都没做"的次数（§2.B.1）。两个一起看就能判断上层是不是在白调 `I2CBusRecover`：
 - 探测计数（`I2CIsDeviceReady`）：`probe_ok` / `probe_fail` / `probe_busy`。
   它唯一的使用者是恢复流程里那道"器件还在不在"的门禁，而现场最需要区分的正是
   "器件不应答"与"总线根本没让出来"这两条分支 —— 只看 `recover_count` 是看不出来的。
@@ -232,6 +234,41 @@ HAL 的 `DevAddress` 形参要的是 **7 位地址左移一位**后的 8 位形�
 `I2CBusRecover` 会在结束时读 `I2C_FLAG_BUSY`，仍置位就返回 `BSP_HW_ERR`，
 由 DRV 记 ERROR 并冷却重试。真解脱需要后续在 `bsp_map` 里给该总线加两根 GPIO，
 或依赖从机自己的 RSTN 引脚（drv_ist8310 的恢复流程会顺带脉冲一次 RSTN）。
+
+**B.1.1 `I2CBusRecover` 的入口自证：判据必须在 bsp 内、且在任何动作之前**
+
+本函数是**总线级**动作（`DeInit`+`Init` 会把时钟、GPIO、NVIC 全放掉再重配，见上），
+而它的触发者（drv_ist8310）看到的是**实例级**现象 —— "我这个从机没应答"。两者作用域
+不同，所以判据不能交给调用点，只能由 bsp 在入口自己读总线状态：
+
+| 判据                   | 读取                                                       | 为什么                                                                                                                                                             |
+| ---------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ① 总线被占             | `I2C_FLAG_BUSY` 置位                                        | 唯一的总线级观测量。总线已放开时（NACK / 从机挂了 / 一次总线噪声）它为 0                                                                                            |
+| ② "占着总线那位"无人负责 | `I2C_BusIsIdle(h)`（`State == READY && Lock` 未锁）          | BUSY 置位却没有任何在途传输在负责 → 标志被闩住，或从机把 SCL/SDA 拉着。**正常传输同样让 BUSY 置位**，所以单看①会在传输途中误重建，② 不能省、也不能倒过来先看 |
+
+两条**同时**成立 → 动手（`bus_recover++`）；否则 `return BSP_BUSY` = 什么都没做
+（`bus_recover_skip++`），由调用点的失败计数 + 冷却决定下一次何时再看。
+
+非任务上下文（`I2C_CanBlockingAbort()` 为 0）也走同一个出口返回 `BSP_BUSY`：
+`DeInit`/`Init` 含 `MspDeInit`/`MspInit`，中断里做不了（§2.B.4）。三种原因对调用方
+而言返回值语义相同（"未做任何事"），故共用一个出口，不拆成多个返回码。
+
+**被否掉的判据**：
+
+- **只看"器件不应答"**（= 调用点的现象）：**实例级**证据。对端不发、从机挂了、只是赶上
+  一次总线噪声，都会成立，而这三样重建外设一个都治不好，代价却是把本总线上**别的实例**
+  的在途传输一起打断。
+- **加"卡住超过 N ms"的时长阈值**：没有可靠的计时起点 —— `State` 由 HAL 改，本层看不到
+  它何时被置忙；而且 `I2C_ResetHandle` 每次失败都会把 `State` 复位，采不到"连续非 READY"
+  这个量。真要计时就得再引入一份按外设的时间戳，为一条没有观测支撑的判据增状态不值
+  （对比 SPI：那边的 `State` 是 HAL 在启动失败分支里**忘了**复位，所以"连续非 READY"本身
+  就是故障信号，见 `bsp_spi.md`）。
+- **用 `ErrorCode` 判**：它是**上一笔**传输的结果，而上一笔早被 `I2C_AbortOnError` 复位过
+  （`I2C_ResetHandle` 会清 `ErrorCode`），读到的多半是 0，不代表当前总线状态。
+
+**与调用点的分工**：drv_ist8310 只管"何时看一眼"（自己的 `fail_count` + 500ms 冷却），
+bsp 只管"值不值得动手"。这与 `SPIRecoverTxIfStuck`（`bsp_spi.h`：只把"何时看一眼"交给
+上层，判据与动作都在这层）是同一条原则在两条总线上的同一份实现。
 
 **B.2 不用 `HAL_I2C_Master_Abort_IT` 收尾**
 它是异步的、依赖 I2C 中断，总线卡死时永远不会完成（等于二次卡死）。
@@ -347,8 +384,9 @@ IST8310 没有连续测量模式，每帧都要先写一次 `CNTL1=0x01`。旧�
 - **但"能发起"不等于"随便挑模式"**：中断模式的链子**只能配 `BSP_IT_MODE`**
   （`IST8310Config` 强制，BLOCK/DMA 都拒绝）。因为这两笔传输的发起与收尾全在 ISR 里，
   任务侧没有第二处发起入口 —— 也就没有"下一帧顺手补一刀"的机会。这条链唯一的补刀点是
-  低频看门狗 + 整段总线恢复（`IST8310_Recover` → `I2CBusRecover`：DeInit/Init 整条总线
-  重建 + 器件重初始化），代价远超"丢一帧"。而 DMA 恰好多引入一个**与总线好坏无关**的
+  低频看门狗 + 整段恢复（`IST8310_Recover` → `I2CBusRecover`：器件重初始化 + 必要时
+  DeInit/Init 重建整条总线，后者还要先过 §2.B.1.1 的入口自证），代价远超"丢一帧"。
+  而 DMA 恰好多引入一个**与总线好坏无关**的
   失败源：DMA 流的 `State` 一旦非 READY，`HAL_DMA_Start_IT` 会让此后每一笔 DMA 都在
   启动阶段直接失败（确定性级联），而这类残留只有 tick 依赖的动作能清
   （`HAL_DMA_Abort` / `DeInit+Init`），在 ISR 里做不了。IT 没有流可留，下一帧能否成功
@@ -449,7 +487,10 @@ drv_ist8310 在那里只能编译、无法实例化运行，暂不需要。
 
 - **不支持从机模式**：见 §1.4。HAL 的从机 API/回调一个都没包，`OwnAddress1` 也没配。
 - **`I2CIsDeviceReady` 是阻塞轮询**（HAL 内部用 `HAL_GetTick`），不能进中断。
-- `I2CBusRecover` 含 `MspDeInit`/`MspInit`（时钟与 GPIO/NVIC 重配），只能在任务上下文调用。
+- `I2CBusRecover` 含 `MspDeInit`/`MspInit`（时钟与 GPIO/NVIC 重配），只能在任务上下文调用；
+  中断/临界区里调用会直接返回 `BSP_BUSY`（入口自证，§2.B.1.1），不会硬撑。
+- `I2CBusRecover` **不保证每次调用都重建**：总线没被占住时它返回 `BSP_BUSY` 什么都不做
+  （同样见 §2.B.1.1）。也就是说"调了恢复"≠"外设已经重来一遍"。
 - **DMA 模式禁止从 ISR 发起**：出错时 `I2C_ResetHandle` 在中断里会跳过 DMA 中止
   （原因见 B.4），DMA 就只能等任务上下文的 `I2CBusRecover` 来收。
   注意这条只对"没有任务侧发起入口"的链路才是致命的（`IST8310` 的中断模式即如此，
@@ -488,8 +529,12 @@ drv_ist8310 在那里只能编译、无法实例化运行，暂不需要。
 5. 中断模式（DRDY 是否真来、`frame_valid` 是否置起）；`CNTL2.DRP=1` 与 PG3 的
    上升沿触发这一对必须一致（换板/改 CubeMX 时重点核对）。
 6. 破坏性验证恢复链：拔线 / 短接 SDA 到地，看 `fail_count` 与 `recover_count` 的走向，
-   以及 `s_i2c_status[]` 的 `err_*` / `abort_reset` / `bus_rebuild` 增长情况，
-   `I2CBusRecover` 是否被 `I2C_FLAG_BUSY` 判定为"被拉死"。
+   以及 `s_i2c_status[]` 的 `err_*` / `abort_reset` / `bus_rebuild` 增长情况。
+   重点核对 §2.B.1.1 的入口自证：
+   - **短接 SDA 到地**（总线被占）→ `bus_recover` 与 `bus_rebuild` 都涨，
+     `I2CBusRecover` 末尾仍读回 BUSY → 返回 `BSP_HW_ERR`；
+   - **拔掉从机**（只是 NACK，总线空闲）→ `bus_recover_skip` 涨、`bus_recover` 不涨，
+     恢复靠 DRV 的探测 + RSTN 脉冲走通 —— 这正是"证据作用域对齐"要挡掉的无谓重建。
 7. 重开 `BSP_I2C_USED` / `DRV_IST8310_USED` 并把实例接回 app 时，别忘同步开启。
 
 DMA 侧另注意：`I2C_INSTANCE_DEF` 的缓冲已带 `DMA_RAM`，DJI_C 是 F4，

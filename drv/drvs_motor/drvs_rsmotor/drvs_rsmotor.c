@@ -17,8 +17,14 @@
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
 #include "bsp_dwt.h"
+#include "bsp_log.h"
 #include <math.h>
 #include <string.h>
+
+#ifndef DRVS_RSMOTOR_LOG_LIMIT
+#define DRVS_RSMOTOR_LOG_LIMIT 10
+#endif // !DRVS_RSMOTOR_LOG_LIMIT
+LOG_INSTANCE_DEF(g_drvs_rsmotor_log, "drvs_rsmotor", DRVS_RSMOTOR_LOG_LIMIT);
 
 /* RS05 出厂默认量程（cfg 传 0 时采用，需与灵足上位机一致） */
 #define DRVS_RS_DEFAULT_POS_MAX 12.57f  // 位置范围 ±12.57 rad
@@ -109,6 +115,44 @@ static void DrvsRSMotorRxCallback(CANInstance *can, const CAN_Pack_s *pack)
 }
 
 /*============================================
+ *        CAN 错误 / 逐帧发送结果（drv 层错误处理）
+ *
+ * app 不主动检查错误，bsp 两条上报通道就都得由本层接住：
+ *   - err_callback        ：总线/硬件级事件。它是**外设级广播**（同一条总线上的所有实例
+ *                           都收到同一个原因，见 bsp_can.h 契约），故本层只做限频日志，
+ *                           不做"只对自己成立"的状态复位（那会误伤同总线的其他实例）；
+ *   - tx_complete_callback：**逐帧**结果。result != BSP_OK 即这一帧确实没发出去
+ *                           （仲裁失败 / 发送错误 / 被取消 / 溯源丢失）——
+ *                           旧实现只计"入队失败"（CANTransmit 的返回值），
+ *                           帧入队之后的失败是全静默的。
+ * 本层不做策略性动作：控制帧是周期性的，丢一帧下一周期自然补上；重试只会拖乱控制周期。
+ *============================================*/
+
+static void DrvsRSMotorErrHook(CANInstance *can, CAN_ErrReason_e reason)
+{
+    (void)can; /* 广播：错误归整条总线，不属于某个实例；分类计数在 bsp 的 s_*_status[] 里 */
+
+    /* 限频靠 LOG_INSTANCE_DEF 的 times_per_second（CAN_ERR_PROTOCOL 在总线异常时可每帧一次，
+     * 没有这个上限会刷屏），细分原因/错误计数器见 bsp/bsp_can.md 的状态变量表 */
+    BSPLOG(&g_drvs_rsmotor_log, (reason == CAN_ERR_BUS_OFF) ? LOG_LEVEL_ERROR : LOG_LEVEL_WARNING,
+           "CAN bus error, reason=%u", (unsigned)reason);
+}
+
+static void DrvsRSMotorTxHook(CANInstance *can, uint32_t tx_mailbox, BSP_Status_e result)
+{
+    /* 本模块一个实例一条 CAN（Config 里 .parent = inst），失败归属由 can->parent 唯一确定，
+     * 无需按 tx_mailbox 区分帧来源 */
+    DrvsRSMotor_s *inst = (can != NULL) ? (DrvsRSMotor_s *)can->parent : NULL;
+
+    (void)tx_mailbox;
+    if (inst == NULL || result == BSP_OK)
+        return;
+
+    inst->tx_fail++; /* 逐帧失败，与发送点记的"入队失败"同一个计数器（只增不清，调试用） */
+    BSPLOG(&g_drvs_rsmotor_log, LOG_LEVEL_WARNING, "frame not sent (result=%d)", (int)result);
+}
+
+/*============================================
  *              模式命令发送
  *============================================*/
 
@@ -176,7 +220,7 @@ int8_t DrvsRSMotorRegister(DrvsRSMotor_s *inst)
 
     if (inst->can)
     {
-        if (CANRegister(inst->can) != 0)
+        if (CANRegister(inst->can) != BSP_OK)
             return -1;
         inst->can->parent = inst;
     }
@@ -211,8 +255,10 @@ int8_t DrvsRSMotorConfig(DrvsRSMotor_s *inst, const DrvsRSMotorConfig_s *cfg)
             .parent = inst, /* 必须：CANConfig 会覆盖 parent，不设则回调取 can->parent 失效 */
             .filters = &inst->can_filter,
             .filter_num = 1,
+            .tx_complete_callback = DrvsRSMotorTxHook, /* 逐帧结果：这一帧到底发出去没有 */
+            .err_callback = DrvsRSMotorErrHook,        /* 总线/硬件级事件（ISR 广播） */
         };
-        if (CANConfig(inst->can, &can_cfg) != 0)
+        if (CANConfig(inst->can, &can_cfg) != BSP_OK)
             return -1;
     }
 
@@ -245,9 +291,13 @@ int8_t DrvsRSMotorConfig(DrvsRSMotor_s *inst, const DrvsRSMotorConfig_s *cfg)
     memset(inst->data, 0, sizeof(inst->data));
     inst->data_idx = 0;
 
-    /* daemon：只当通信看门狗用，不挂回调
-     * （RS05 掉线会自动退出 MIT 模式，但"要不要重发 0xFC"是策略：模块已不持有使能状态，
-     *   无从判断该不该重发；由 app 在 DaemonIsOnline 变化时自己调 SendCmd 决定） */
+    /* daemon：只当通信看门狗用，**刻意不挂离线回调**。
+     * ① 离线事件的检测、状态转换与日志都由 drv_daemon 自己完成（OFFLINE / back ONLINE，
+     *    见 drv_daemon.c），本层再挂一个每次 tick 都被调用的回调只会重复动作、刷日志；
+     * ② 本层能对这个事件做的只有策略性动作（RS05 掉线会自动退出 MIT 模式，要恢复控制
+     *    就得重发 0xFC 使能），而本模块**不持有使能状态**（见头文件），无从判断该不该
+     *    重发——挂了也是在回调里瞎猜；
+     * ③ 真正的"发送侧出问题"已由 ErrHook / TxHook 接住（错误与逐帧结果都进 tx_fail 与日志）。 */
     if (inst->daemon)
     {
         Daemon_Config_s daemon_cfg = {
