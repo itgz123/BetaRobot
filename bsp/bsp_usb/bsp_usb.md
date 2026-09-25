@@ -237,6 +237,10 @@ USB 的故障表现和串口一样是**静默**：
 - 武装被**接受**只说明中间件收下了请求，**是否真恢复要等下一帧到来**（看 `s_usb_status[].rx_ok`
   是否继续增长），所以这条路径成功时**不**回调 `err_callback`（否则"对端本来就没发帧"会每次刷屏）；
 - 武装被**拒** → `rx_rearm_fail++` + `err_callback(USB_ERR_RX_STALLED)` + 返回 `BSP_HW_ERR`。
+  但"被拒"的实际含义要看中间件实现：`USBD_CDC_ReceivePacket` **只在 `pClassData == NULL` 时
+  返回 `USBD_FAIL`**（其余一律 `USBD_OK`），且 `(void)USBD_LL_PrepareReceive(...)` 把底层的
+  HAL 返回丢掉了 —— 也就是说它既不报告、也报不出"端点是否真的武装成功"。本分支真正捕捉到的是
+  **提交时设备已回到未初始化**（主机刚断开/复位、CDC 被 DeInit），不是端点层收尾失败。
 
 ### 3.5 枚举状态感知
 
@@ -303,7 +307,7 @@ USB 两个后端现在都挂了钩子，所以这条自恢复通道不会被"禁
 | --------------------------------------------------------------------------- | -------------------------------------------------------- |
 | `tx_ok` / `tx_pkt_ok`                                                       | `USBTransmit` 整帧入队次数 / 单包成功提交给 CDC 次数      |
 | `tx_fail` / `tx_ring_full` / `tx_param_err` / `tx_not_configured`            | `USBTransmit` 非 OK 总次数及其细分（环满 / 参数错 / 未枚举）|
-| `tx_busy` / `tx_hw_fail`                                                    | `CDC_Transmit` 返回 `USBD_BUSY` / 其它非 OK 次数          |
+| `tx_busy` / `tx_submit_fail`                                                | `CDC_Transmit` 返回 `USBD_BUSY` / 其它非 OK 次数（后者按中间件实现只可能是"类句柄被清空"，**不是硬件故障**：PCD 层失败被 `USBD_LL_Transmit` 丢弃）|
 | `rx_ok`                                                                     | 收帧次数                                                 |
 | `tx_stuck` / `tx_recover_ok` / `tx_recover_fail`                            | TX 卡死判定次数 / 收尾后恢复 / 仍出不去                   |
 | `rx_stalled` / `rx_recover_ok` / `rx_rearm_fail`                            | RX 停摆判定 / 重新武装被接受 / 被拒                       |

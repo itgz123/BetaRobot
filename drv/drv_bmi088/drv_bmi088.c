@@ -115,6 +115,7 @@ static uint8_t BMI088_WriteRegWithCheck(BMI088Instance *inst, GPIOInstance *cs, 
 /* 中断模式私有函数 */
 static void BMI088_IntCallback(GPIOInstance *gpio_inst);
 static void BMI088_SpiAbort(BMI088Instance *inst);
+static void BMI088_AbortTransfer(BMI088Instance *inst);
 static void BMI088_StartSensorDMA(BMI088Instance *inst, uint8_t sensor_type);
 static void BMI088_SPICpltCallback(SPIInstance *spi_inst);
 static void BMI088_SPITxCpltCallback(SPIInstance *spi_inst);
@@ -373,18 +374,15 @@ static void BMI088_IntCallback(GPIOInstance *gpio_inst)
 }
 
 /**
- * @brief 丢弃本次传输并释放总线（发起失败 / 传输出错共用的收尾）
+ * @brief 丢弃本次传输并释放总线（发起失败 / 传输出错的共用收尾）
  * @param inst BMI088实例
  *
- * @note 两处失败路径收尾动作完全相同，故收在一处：由 BMI088_StartSensorDMA 的同步
- *       失败分支与 BMI088_SPIErrCallback（异步错误）共同调用。
+ * @note 只做"放片选 + 清在途标志"，**不记失败**：谁来记、记不记由调用方定 ——
+ *       中断模式经 BMI088_SpiAbort 补记一笔，轮询模式的失败由调用方自己记。
  * @note 只丢弃本次传输，不清环形缓冲和 acc_cnt/gyro_cnt：已采到的数据与
  *       ReadLatest 的可用性都不受影响。
- * @note 顺带记一次连续失败，攒够阈值后置恢复请求。两处调用点都可能在 ISR 里
- *       （DRDY EXTI 发起失败 / SPI_ERR_HW），真正的 Abort 只能改期到任务上下文，
- *       见 BMI088_ServiceRecover。
  */
-static void BMI088_SpiAbort(BMI088Instance *inst)
+static void BMI088_AbortTransfer(BMI088Instance *inst)
 {
     // 释放片选，避免总线被一直拉低
     GPIOSet(inst->cs_acc);
@@ -393,7 +391,19 @@ static void BMI088_SpiAbort(BMI088Instance *inst)
     // 丢弃本次传输，等下一次 EXTI 重新发起
     inst->transfer_busy = 0;
     inst->pending_mask = 0;
+}
 
+/**
+ * @brief 同上，并记一次连续失败（攒够阈值置恢复请求）
+ * @note 只给"失败计数归本路径管"的场合用（中断模式的错误回调、INT 发起失败）。
+ *       轮询模式请直接用 BMI088_AbortTransfer：那条路的失败由调用方记，
+ *       这里再记一笔就是一次失败记两笔（见 BMI088_SPIErrCallback）。
+ * @note 两个调用点都可能在 ISR 里（DRDY EXTI 发起失败 / SPI_ERR_HW），所以这里只置恢复
+ *       请求：真正的 Abort 要等 HAL tick，只能延后到任务上下文做，见 BMI088_ServiceRecover。
+ */
+static void BMI088_SpiAbort(BMI088Instance *inst)
+{
+    BMI088_AbortTransfer(inst);
     BMI088_NoteFailure(inst);
 }
 
@@ -431,7 +441,10 @@ static void BMI088_StartSensorDMA(BMI088Instance *inst, uint8_t sensor_type)
     /* 传输方式取运行时默认值 spi_mode（Config 已拒绝 INT + BLOCK）。
      * timeout_ms = 0：本函数跑在 DRDY EXTI 里，只判一次总线就绪，忙即放弃本次采样。
      * 绝不能在这里等就绪（旧版传 spi_timeout_ms，且 timeout_ms==0 时还是个死循环）：
-     * 中断里等 HAL tick 等不到，卡死时就是永久死等。真卡死由任务上下文的
+     * 等就绪的判据是 DWT（会到期，不是死循环），但让总线空闲的那笔传输的完成回调就在
+     * 同级中断里、进不来，等就是白等；而超时后的复位要走 HAL_SPI_Abort → HAL_DMA_Abort
+     * 按 HAL_GetTick 自旋，中断里 tick 不前进 = 死等（bsp 的 SPI_CanBlockingAbort 会拦下，
+     * 见 bsp_spi.md §2.A.4）。真卡死由任务上下文的
      * BMI088_ServiceRecover（事件驱动）+ BMI088Read 里的周期检查复位。
      * transfer_busy 已经保证不会与上一笔并发，所以这里的"忙"只可能是异常残留。 */
     if (SPITransmitReceive(inst->spi_inst, inst->tx_buff, inst->tx_len,
@@ -494,11 +507,14 @@ static void BMI088_SPICpltCallback(SPIInstance *spi_inst)
         if (inst->acc_cnt < UINT8_MAX)
             inst->acc_cnt++;
 
-        /* 温度每 1.28s 更新一次（§5.3.7），通过 pending 机制调度 */
+        /* 温度每 1.28s 更新一次（§5.3.7），通过 pending 机制调度。
+         * 只用 last_temp_sched_us 计节拍、**不碰** last_temp_us：温度值要到
+         * BMI088_SENSOR_TEMP 那笔完成（下面的 else 分支）才更新，而新鲜度判据
+         * 必须与值同源，否则这段窗口里 getter 会把 0℃ 初值当有效值发出去。 */
         uint64_t now = DWT_GetTimeUs();
-        if (now - inst->last_temp_us >= BMI088_TEMP_UPDATE_INTERVAL_US)
+        if (now - inst->last_temp_sched_us >= BMI088_TEMP_UPDATE_INTERVAL_US)
         {
-            inst->last_temp_us = now;
+            inst->last_temp_sched_us = now;
             inst->pending_mask |= BMI088_PENDING_TEMP;
         }
 
@@ -525,8 +541,12 @@ static void BMI088_SPICpltCallback(SPIInstance *spi_inst)
         /* === 温度 SPI IT 完成 === */
         GPIOSet(inst->cs_acc);
 
-        /* 提取 11-bit 温度值（§5.3.7: Temp_uint11 = (TEMP_MSB*8) + (TEMP_LSB/32)） */
+        /* 提取 11-bit 温度值（§5.3.7: Temp_uint11 = (TEMP_MSB*8) + (TEMP_LSB/32)）。
+         * 走到这里 = 这笔传输已成功完成（失败走 BMI088_SPIErrCallback，不会有本回调），
+         * 故温度值与新鲜度**同一处**刷新 —— 这正是"0℃ 初值不能当有效温度"的保证。
+         * 轮询路径（BMI088_ReadPolling）同样遵循这个顺序，两处别再写反。 */
         inst->temperature = BMI088_ParseTempCelsius(spi_inst->rx_buff);
+        inst->last_temp_us = DWT_GetTimeUs();
 
         inst->transfer_busy = 0;
     }
@@ -557,8 +577,9 @@ static void BMI088_SPITxCpltCallback(SPIInstance *spi_inst)
  * @note 这类失败不会再有 BMI088_SPICpltCallback，必须在这里复位传输状态，
  *       否则 transfer_busy 恒为 1，驱动永久失联（现象：acc_cnt/gyro_cnt 不再增长、
  *       pending_t_* 每次中断都被重写、euler 恒为 0）。
- *       两种原因的处理相同（都是丢弃本次传输），故收在 BMI088_SpiAbort 里；
- *       失败计数与恢复请求也在那条路径上统一记（BMI088_NoteFailure）。
+ *       两种原因的处理相同（都是丢弃本次传输），故收在 BMI088_AbortTransfer 里。
+ *       失败计数分两种模式：中断模式在这条路径上记（BMI088_SpiAbort → BMI088_NoteFailure），
+ *       轮询模式留给调用方（BMI088_ReadPolling 自己会记，见函数内的注释）。
  * @note 可能跑在 ISR（SPI_ERR_HW）也可能跑在任务上下文（SPI_ERR_ABORT，由
  *       BMI088Read → SPIRecoverTxIfStuck 触发），因此只能做置标志这类无阻塞动作。
  */
@@ -576,6 +597,16 @@ static void BMI088_SPIErrCallback(SPIInstance *spi_inst, SPI_ErrReason_e reason)
     /* 先记账：轮询模式下调用方靠它知道这笔传输没成功
      * （bsp 那头也会返回非 BSP_OK，两条路都指向同一个结论） */
     inst->xfer_error = 1;
+
+    /* 传输状态必须收尾（尤其释放片选，否则器件一直被选中、整条 SPI 起不来），
+     * 但**失败计数**在轮询模式下要留给调用方：BMI088_ReadPolling 见到这笔失败同样会调
+     * BMI088_NoteFailure，这里再计一次就成了"一次失败记两笔"，RECOVER_FAIL_TH=3 实际
+     * 两次真失败就触发恢复请求。孪生实现 drv_ist8310 的 I2C 错误回调有同样的守卫。 */
+    if (inst->work_mode != BMI088_MODE_INT)
+    {
+        BMI088_AbortTransfer(inst);
+        return;
+    }
 
     BMI088_SpiAbort(inst);
 }
@@ -977,7 +1008,8 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
     BSP_RETURN_IF_TRUE_LOG(config->spi_mode > BSP_DMA_MODE, -1,
                            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "Invalid spi_mode=%d!", (int)config->spi_mode));
     /* 中断模式配阻塞传输 = 在 DRDY EXTI 里做阻塞 SPI：HAL 用 HAL_GetTick 计时，
-     * tick 中断优先级低于该 EXTI，中断里 tick 不前进，从机一不响应就是死循环。
+     * 而 HAL tick 源（TIM14/TIM23）的 NVIC 优先级数值不小于外设中断的 5，抢占不了该
+     * EXTI，中断里 tick 不前进、超时判据永不成立，从机一不响应就是死循环。
      * 这个组合没有合法用途，直接拒绝而不是留个上电就卡的实例 */
     BSP_RETURN_IF_TRUE_LOG(config->work_mode == BMI088_MODE_INT && config->spi_mode == BSP_BLOCK_MODE, -1,
                            BSPLOG(&g_bmi088_log, LOG_LEVEL_ERROR, "INT mode cannot use BSP_BLOCK_MODE (blocking SPI in EXTI)!"));
@@ -1119,6 +1151,7 @@ int8_t BMI088Config(BMI088Instance *inst, const BMI088_Config_s *config)
         inst->acc_cnt = 0;
         inst->gyro_cnt = 0;
         inst->temperature = 0.0f;
+        inst->last_temp_sched_us = 0;
         inst->last_temp_us = 0;
         memset(inst->acc_raw, 0, sizeof(inst->acc_raw));
         memset(inst->gyro_raw, 0, sizeof(inst->gyro_raw));
@@ -1337,7 +1370,9 @@ float BMI088GetTemperature(const BMI088Instance *inst)
         return NAN;
     /* last_temp_us == 0 表示本次上电还没成功采到温度：
      * 此时 inst->temperature 仍是初值 0，会把 0℃ 当成真实温度上报，
-     * 对温补/加热这类消费者是危险的输入，故返回 NAN 明确表示"不可用" */
+     * 对温补/加热这类消费者是危险的输入，故返回 NAN 明确表示"不可用"。
+     * 判据靠得住的前提是它**只在读成功时**刷新（轮询路径在 ReadPolling 末尾、中断路径在
+     * SENSOR_TEMP 完成回调里）；旧版在"发起读取"时就刷新它，这条 NAN 保护等于没有。 */
     if (inst->last_temp_us == 0)
         return NAN;
 

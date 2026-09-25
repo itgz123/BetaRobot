@@ -134,8 +134,9 @@ static void I2C_SnapshotReq(uint8_t idx, I2CInstance *instance, uint16_t hal_dev
                             I2C_MemAddrSize_e mem_addr_size, uint16_t len, BSP_Transfer_Mode_e mode);
 static void I2C_ResetHandle(I2CInstance *instance);
 static void I2C_RebuildPeriph(I2CInstance *instance);
-static void I2C_AbortOnError(I2CInstance *instance, const char *reason);
-static BSP_Status_e I2C_StartFail(I2CInstance *instance, HAL_StatusTypeDef st, const char *what, uint8_t idx);
+static void I2C_AbortOnError(I2CInstance *instance, const char *reason, uint8_t notify);
+static BSP_Status_e I2C_StartFail(I2CInstance *instance, HAL_StatusTypeDef st, const char *what,
+                                  uint8_t idx, BSP_Transfer_Mode_e mode);
 static BSP_Status_e I2C_WaitReady(I2CInstance *instance, uint32_t timeout_ms, const char *reason);
 static BSP_Status_e I2C_ClaimBus(I2CInstance *instance, BSP_Transfer_Mode_e mode,
                                  uint32_t timeout_ms, const char *reason);
@@ -212,15 +213,17 @@ static void I2C_SnapshotReq(uint8_t idx, I2CInstance *instance, uint16_t hal_dev
 /*------------- 私有函数实现：上下文判定与句柄收尾 --------------*/
 
 /**
- * @brief 当前上下文能否安全执行"按 HAL_GetTick 自旋"的收尾动作（HAL_DMA_Abort / HAL_I2C_Init）
+ * @brief 当前上下文能否安全执行收尾动作（HAL_DMA_Abort 按 `HAL_GetTick` 自旋；
+ *        HAL_I2C_DeInit/Init 是外设重建，不按 tick 等，但只允许在任务上下文做）
  * @retval 1 可以（普通任务上下文）
  * @retval 0 不可以（死等风险，只能改期）
  *
- * @note 两类不安全上下文都要查：
- *       ① 中断上下文（`IPSR != 0`）——IST8310 的 INT 模式就是在 DRDY EXTI 里发起传输；
+ * @note 两类不安全上下文都要查（共同后果是 `HAL_GetTick` 冻住）：
+ *       ① 中断上下文（`IPSR != 0`）——IST8310 的 INT 模式就是在 DRDY EXTI 里发起传输。
+ *          HAL tick 源在本工程是 TIM 不是 SysTick（DJI_C 的 TIM14、其余板 TIM23，
+ *          优先级 5/15），优先级数值不小于外设中断的 5，抢占不了本 ISR，故中断里 tick 不前进；
  *       ② 临界区——`taskENTER_CRITICAL` 抬的是 BASEPRI（FreeRTOS ARM_CM4F/CM7 端口的
- *          `portDISABLE_INTERRUPTS` = `vPortRaiseBASEPRI`），SysTick 同样进不来，
- *          `HAL_GetTick` 冻住。
+ *          `portDISABLE_INTERRUPTS` = `vPortRaiseBASEPRI`），tick 源同样进不来。
  * @note `HAL_DMA_Abort` 内部按 `HAL_GetTick` 轮询等 DMA 流的 EN 位清零
  *       （`while(...) + HAL_TIMEOUT_DMA_ABORT`），tick 不前进就是死循环；重建外设
  *       （`HAL_I2C_DeInit/Init` → MspDeInit/MspInit，涉及时钟与 GPIO/NVIC）更是只能
@@ -268,8 +271,9 @@ static void I2C_ResetHandle(I2CInstance *instance)
 
     /* 停掉异步传输与中断源：不关的话残留在途传输会在复位后又把状态改回 BUSY。
      * 但中断上下文里必须跳过 DMA 中止 —— HAL_DMA_Abort 在 State==BUSY 且 DMA 的
-     * EN 位不落时用 HAL_GetTick() 死等，而 tick 中断优先级低于 EXTI，中断里
-     * HAL_GetTick() 根本不前进 → 那个 while 就是死循环。中断里本也不该有用 DMA 在飞的
+     * EN 位不落时用 HAL_GetTick() 死等，而 HAL tick 源（TIM14/TIM23）的 NVIC 优先级数值
+     * 不小于外设中断的 5（见 I2C_CanBlockingAbort），抢占不了 → 中断里 HAL_GetTick()
+     * 根本不前进 → 那个 while 就是死循环。中断里本也不该有用 DMA 在飞的
      * 传输（DMA 模式禁止从 ISR 发起），真卡住了交给任务上下文的 I2CBusRecover 收尾。 */
     if (I2C_CanBlockingAbort())
     {
@@ -344,8 +348,18 @@ static void I2C_RebuildPeriph(I2CInstance *instance)
  *       不做无谓的时钟与 GPIO 重建。
  * @note 被收尾的那次传输不会再有完成回调，所以按 err_callback 契约通知上层复位自身状态。
  *       顺序必须是"复位句柄之后"再通知：上层判据普遍是"State == READY 才说明 HAL 已收尾"。
+ * @note notify 决定这次要不要通知，由调用方按**本次传输模式**给：
+ *       异步（IT/DMA）为 1，BLOCK 为 0。理由（bsp_i2c.h 的 I2CInstance 契约：
+ *       "BLOCK 模式不产生任何回调"，drv_ist8310 的初始化序列正是照这条写的）：
+ *       - BLOCK 的成败在调用点就由返回值给出了（BSP_TIMEOUT / BSP_HW_ERR），
+ *         再回一次 err_callback 是同一个失败说两遍；
+ *       - 更要紧的是语义污染：上层的 err_callback 是**异步采集链**的故障入口
+ *         （drv_ist8310 在其中累积 fail_count / 置恢复请求），而 BLOCK 传输大量出现在
+ *         初始化与恢复序列里 —— 那里的失败是**被容忍**的探针（如 WAI 重试本就要试几次
+ *         才知道器件在不在），混进去会让"器件不在"直接变成"采集链故障"，在恢复流程内部
+ *         再提出恢复请求。
  */
-static void I2C_AbortOnError(I2CInstance *instance, const char *reason)
+static void I2C_AbortOnError(I2CInstance *instance, const char *reason, uint8_t notify)
 {
     I2C_HandleTypeDef *h = instance->handle;
     uint8_t idx = I2C_Hi2cToIndex(h);
@@ -388,7 +402,7 @@ static void I2C_AbortOnError(I2CInstance *instance, const char *reason)
         I2C_ResetHandle(instance);
     }
 
-    if (instance->err_callback != NULL)
+    if (notify && instance->err_callback != NULL)
     {
         instance->err_callback(instance, I2C_ERR_ABORT); /* 被收尾的传输不会再有完成回调 */
     }
@@ -400,14 +414,17 @@ static void I2C_AbortOnError(I2CInstance *instance, const char *reason)
  * @param st       本次调用的 HAL 返回
  * @param what     动作名（仅日志）
  * @param idx      总线下标
+ * @param mode     本次传输模式：只用来决定收尾时要不要按 err_callback 契约通知上层
+ *                 （BLOCK 不通知，见 I2C_AbortOnError 的 notify）
  * @retval BSP_BUSY    `HAL_BUSY`：此刻总线被占用（HAL 的每个接口入口都判 `Lock`/`State`，
  *                     且此时**不动 State、不置 ErrorCode**）。计入 `xfer_busy`，
  *                     不打日志、不计 `err_start` —— 上层下一拍/下一帧重试即可
  * @retval BSP_TIMEOUT 超时类失败：`ErrorCode` 带 TIMEOUT（等标志位/等 BUSY 超时）或
  *                     F4 的 WRONG_START（START 位没发出去）。计入 `err_start`/`xfer_timeout`，
- *                     已复位句柄并通知上层
+ *                     已复位句柄；**IT/DMA 才**按契约回调 `err_callback`，BLOCK 不回调
+ *                     （它的失败已由本次调用的返回值给出，见 @param mode）
  * @retval BSP_HW_ERR  其余真失败：`ErrorCode` 是 NACK/BERR/ARLO/DMA…（从机不在/时序错乱）。
- *                     同样计入 `err_start` 并走 I2C_AbortOnError 收尾
+ *                     同样计入 `err_start` 并走 I2C_AbortOnError 收尾（通知与否同上）
  *
  * @note 为什么"忙"必须和真失败分开：三种模式都会在这里拿到 `HAL_BUSY` ——
  *       `I2C_ClaimBus` 判完就绪到真正调用 HAL 之间始终有一个窗口（此刻被更高优先级的
@@ -424,7 +441,8 @@ static void I2C_AbortOnError(I2CInstance *instance, const char *reason)
  *       把 ErrorCode 清零，之后再读就只剩 0（旧版把它记成 `err_start` 时，
  *       现场信息就是这样丢掉的）。
  */
-static BSP_Status_e I2C_StartFail(I2CInstance *instance, HAL_StatusTypeDef st, const char *what, uint8_t idx)
+static BSP_Status_e I2C_StartFail(I2CInstance *instance, HAL_StatusTypeDef st, const char *what,
+                                  uint8_t idx, BSP_Transfer_Mode_e mode)
 {
     uint32_t err = instance->handle->ErrorCode; /* 复位前采样，见上 */
 
@@ -444,7 +462,8 @@ static BSP_Status_e I2C_StartFail(I2CInstance *instance, HAL_StatusTypeDef st, c
     {
         s_i2c_status[idx].err_start++;
     }
-    I2C_AbortOnError(instance, what);
+    /* BLOCK 的失败已由本次调用的返回值给出，不再回 err_callback（见 I2C_AbortOnError） */
+    I2C_AbortOnError(instance, what, (uint8_t)(mode != BSP_BLOCK_MODE));
 
     if ((err & I2C_START_TIMEOUT_MASK) != 0U)
     {
@@ -454,7 +473,7 @@ static BSP_Status_e I2C_StartFail(I2CInstance *instance, HAL_StatusTypeDef st, c
 }
 
 /**
- * @brief 等待总线就绪（内部按 HAL tick 自旋；只由 I2C_ClaimBus 在 IT/DMA 下调用）
+ * @brief 等待总线就绪（自旋判据用 DWT 计时，不是 HAL tick；只由 I2C_ClaimBus 在 IT/DMA 下调用）
  * @param instance   I2C实例
  * @param timeout_ms 等待超时（ms）；0 = 只判一次，忙即返回
  * @param reason     超时收尾时的日志用词
@@ -485,8 +504,10 @@ static BSP_Status_e I2C_WaitReady(I2CInstance *instance, uint32_t timeout_ms, co
     {
         if (BSP_TimeoutExpired(&t))
         {
-            /* 等不到就绪同样是"传输没发出去"，必须通知上层，否则其传输标志永久卡死 */
-            I2C_AbortOnError(instance, reason);
+            /* 等不到就绪同样是"传输没发出去"，必须通知上层，否则其传输标志永久卡死。
+             * 本路径只被 IT/DMA 走到（BLOCK 由 I2C_ClaimBus 短路，从不进 I2C_WaitReady），
+             * 故恒 notify=1。 */
+            I2C_AbortOnError(instance, reason, 1);
             return BSP_TIMEOUT;
         }
     }
@@ -715,8 +736,10 @@ void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
  * @param hi2c 发生错误的句柄
  * @note 本回调内完成分类计数 + 状态快照 + 通知上层。**不在这里做中止收尾**：
  *       HAL 的错误路径在调用本回调前已复位 State 并解锁，而在 ISR 里再调
- *       I2C_AbortOnError 会经 HAL_DMA_Abort/HAL_I2C_DeInit 等 HAL tick —— 中断里
- *       tick 不前进，直接死等（真没复位干净，下一次收发会在"等就绪"超时路径里补做）。
+ *       I2C_AbortOnError 会走到 DMA 中止（HAL_DMA_Abort 按 HAL_GetTick 自旋等 EN 位清零）
+ *       与外设重建两条收尾路径 —— 中断里 tick 不前进、外设重建也做不了，
+ *       所以那里被 I2C_CanBlockingAbort 拦下（真没复位干净，下一次收发会在"等就绪"
+ *       超时路径里补做）。
  */
 void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 {
@@ -845,7 +868,9 @@ BSP_Status_e I2CConfig(I2CInstance *instance, const I2C_Config_s *config)
         }
         if (!I2C_BusIsIdle(instance->handle))
         {
-            I2C_AbortOnError(instance, "reconfig with in-flight transfer");
+            /* 在途传输只能是 IT/DMA（BLOCK 在调用内同步跑完，跨不过一次 Config），
+             * 故恒 notify=1：那笔的发起方正在等完成回调，不通知就永远等不到。 */
+            I2C_AbortOnError(instance, "reconfig with in-flight transfer", 1);
         }
     }
 
@@ -935,7 +960,7 @@ BSP_Status_e I2CMemRead(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_a
     if (hal_st != HAL_OK)
     {
         /* 启动失败不会有完成回调，必须由 I2C_StartFail 复位句柄并把失败抛给上层 */
-        return I2C_StartFail(instance, hal_st, "mem read start failed", idx);
+        return I2C_StartFail(instance, hal_st, "mem read start failed", idx, mode);
     }
 
     if (mode == BSP_BLOCK_MODE)
@@ -1015,7 +1040,7 @@ BSP_Status_e I2CMemWrite(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_
 
     if (hal_st != HAL_OK)
     {
-        return I2C_StartFail(instance, hal_st, "mem write start failed", idx);
+        return I2C_StartFail(instance, hal_st, "mem write start failed", idx, mode);
     }
 
     if (mode == BSP_BLOCK_MODE && idx < I2C_NUM_MAX)
@@ -1083,7 +1108,7 @@ BSP_Status_e I2CMasterTransmit(I2CInstance *instance, uint16_t dev_addr, const u
 
     if (hal_st != HAL_OK)
     {
-        return I2C_StartFail(instance, hal_st, "transmit start failed", idx);
+        return I2C_StartFail(instance, hal_st, "transmit start failed", idx, mode);
     }
 
     if (mode == BSP_BLOCK_MODE && idx < I2C_NUM_MAX)
@@ -1152,7 +1177,7 @@ BSP_Status_e I2CMasterReceive(I2CInstance *instance, uint16_t dev_addr, uint16_t
 
     if (hal_st != HAL_OK)
     {
-        return I2C_StartFail(instance, hal_st, "receive start failed", idx);
+        return I2C_StartFail(instance, hal_st, "receive start failed", idx, mode);
     }
 
     if (mode == BSP_BLOCK_MODE)

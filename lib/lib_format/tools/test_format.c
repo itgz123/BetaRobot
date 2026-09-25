@@ -161,6 +161,27 @@ void _start(void)
     FMT_CALL(b, "x=%X", (u32)0xDEADBEEF);
     chk("%X 32 位", b, "x=DEADBEEF");
 
+    /* ---- 回归点：未支持的说明符必须消费参数槽，后续转换不得错位 ----
+     * 现场症状：bsp_adc 的 "handle=0x%p, channel=%lu" 里 %p 不消费参数槽，
+     * 于是 channel 读到的是前一个实参（handle 指针），且不报任何错。 */
+    FMT_CALL(b, "p=%p next=0x%lX", (u32)0xDEADBEEFu, (u32)0x10u);
+    chk("未支持的 %p 消费 1 个槽（不吞掉下一个实参）", b, "p=%p next=0x10");
+
+    FMT_CALL(b, "c=%c next=0x%lX", (u32)'A', (u32)0x10u);
+    chk("未支持的 %c 消费 1 个槽", b, "c=%c next=0x10");
+
+    /* % 后不是字母：原文照抄、一个参数都不动 */
+    FMT_CALL(b, "duty=100% ok, err=0x%lX", (u32)0x10u);
+    chk("% 后非字母按原文输出且不消费参数", b, "duty=100% ok, err=0x10");
+
+    /* %% 输出一个字面 %，也不消费参数（曾误落在 default 分支上） */
+    FMT_CALL(b, "duty=100%% err=0x%lX", (u32)0x10u);
+    chk("%% 输出单个 % 且不消费参数", b, "duty=100% err=0x10");
+
+    /* 格式串以单个 % 结尾：不吞字符 */
+    FMT_CALL(b, "duty=100%");
+    chk("结尾单个 % 按字面输出", b, "duty=100%");
+
     puts_(s_fails ? "\n结果: 有失败\n" : "\n结果: 全部通过\n");
     sys_exit(s_fails);
 }

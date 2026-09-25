@@ -13,7 +13,8 @@
  *   - 传输（bsp_log.c 内实现）：UART DMA 直接发送 + 缓冲池状态机调度。
  *     借用/提交/出队均内联在 bsp_log.c，池槽 data/state/len 集中在
  *     log_buf_s 结构体；DMA 完成回调 LogUartTxCplt 归还缓冲并调度下一个。
- *     公共归还接口：BSPLogBufRelease()（DMA 完成后调用，避免池耗尽）。
+ *     归还不对外暴露：缓冲只在 TX 完成/错误回调里由本模块自己归还，调用方拿不到、
+ *     也不需要归还缓冲（BSPLOG 是"发完不管"的宏，没有返回值）。
  *
  * BSPLOG 在 BSP_LOG_USED 与 LOG_UART 均定义时把参数透传给核心实现 BSPLogV()
  * （bsp_log.c，限频/组装/发送都在 .c 里做）；任一未定义时 BSPLOG 为空宏、
@@ -24,9 +25,6 @@
  *     BSPLOG(&g_log, LOG_LEVEL_INFO, "hello"); // 直接使用默认实例
  *     LOG_INSTANCE_DEF(g_motor_log, "motor", 20); // 或按模块自定义实例（模块名 + 限频，0 = 禁用该实例）
  *     BSPLOG(&g_motor_log, LOG_LEVEL_INFO, "enc=%d speed=%d", enc, speed);
- *
- * 兼容旧宏（LOGDEBUG/LOGINFO/...）：暂以空宏占位，既有调用点不输出日志；
- * 调用点后续统一迁移到 BSPLOG 后删除。
  */
 
 #ifndef __BSP_LOG_H
@@ -147,6 +145,9 @@ typedef struct
  * 多实例按需仍可自行 LOG_INSTANCE_DEF + 编译期初始化。 */
 extern LOGInstance g_log;
 extern uint64_t level_cnt[LOG_LEVEL_NUM];
+/* 残留槽累计回收数（见 bsp_log.c 的 LogReclaimOrphanSend）：
+ * 恒 0 = 那条窄路径从未发生；非 0 = 日志链曾靠它自救过，值就是救回的槽数。 */
+extern uint32_t g_log_orphan_cnt;
 
 /* 级别过滤判断宏：level 低于 LOG_FILTER_LEVEL 返回真（本条剔除）。
  * LOG_FILTER_LEVEL 为编译期常量、level 为调用点字面量枚举值，

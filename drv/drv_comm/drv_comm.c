@@ -81,14 +81,9 @@ void CommMediaRxHook(CommMedia *media, const uint8_t *data)
     if (media == NULL)
         return;
 
-    /* 链路对端看门狗喂狗：各 media 后端仅在收齐一帧完整合法数据后才调用本入口，
-     * 故凡到达此处即代表对端持续在线（未配置 / 未登记看门狗时本入口空转） */
-    if (media->daemon != NULL)
-        DaemonReload(media->daemon);
-
     inst = (CommInstance *)media->parent;
     if (inst == NULL || inst->rx_proto == NULL)
-        return;
+        return; /* 协议层未接线：无从判断帧是否合法，也就没有"对端在线"的证据 */
     rx_proto = COMM_INSTANCE_RX_PROTO(inst);
 
     switch (inst->unpack_mode)
@@ -102,7 +97,24 @@ void CommMediaRxHook(CommMedia *media, const uint8_t *data)
          * @warning payload 指向接收缓冲，回调返回后即被 bsp 清零——
          *          on_frame 必须同步消费，不可保存指针异步使用 */
         payload = ProtoUnpack(rx_proto, data);
-        if (payload && rx_proto->on_frame)
+        if (payload == NULL)
+            break; /* 坏帧（长度/CRC/序号不合法）：不能证明对端在线，不喂狗。
+                    * **重帧**（seq 与上一帧相同，ExtSeqCheck 判掉）也走这条：它确实来自
+                    * 对端，但"同一帧的第 N 次投递"证明不了对端在推进新数据。而发送侧 seq
+                    * 是每帧自增的（comm_proto_ext.c: out_buff[1] = tx_seq++），对端只要
+                    * 还在按约定发，新 seq 就会持续到来 —— 所以这条判据不会因一次重传就判
+                    * 出离线；本链路 2ms 一帧、10ms 判离线，要连续 5 帧全被丢弃才够。 */
+
+        /* 链路对端看门狗喂狗：判据刻意取"协议层认下的帧"，而不是"media 收到一帧"。
+         * media 侧只做长度/序号重组（见 MediaUsartRxHook：只比 rx_len），收到一截
+         * 凑够长度、内容却是噪声的字节也算"一帧"；只有过了解包校验，才真正说明
+         * 对端在按约定发数据。反过来，若把喂狗挪到 media 入口，一条持续吐垃圾的
+         * 对端（假帧/回环噪声）会让看门狗一直"在线"，offline 钩子的自恢复永远不会触发。
+         * 未配置 / 未登记看门狗时本入口空转。 */
+        if (media->daemon != NULL)
+            DaemonReload(media->daemon);
+
+        if (rx_proto->on_frame)
             rx_proto->on_frame(payload);
         break;
     }

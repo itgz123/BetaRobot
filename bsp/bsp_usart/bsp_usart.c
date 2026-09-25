@@ -160,12 +160,14 @@ static BSP_Status_e USART_TxFailThenRet(const USARTInstance *instance, BSP_Statu
  * @retval 1 可以（普通任务上下文）
  * @retval 0 不可以（死等风险，只能改期）
  *
- * @note 两类不安全上下文都要查：
- *       ① 中断上下文（`IPSR != 0`）；
+ * @note 两类不安全上下文都要查（共同后果是 `HAL_GetTick` 冻住）：
+ *       ① 中断上下文（`IPSR != 0`）——HAL tick 源在本工程是 TIM 不是 SysTick
+ *          （DJI_C 的 TIM14、其余板 TIM23，优先级 5/15），优先级数值不小于外设中断的 5，
+ *          抢占不了本 ISR，故中断里 tick 不前进；
  *       ② 临界区——`taskENTER_CRITICAL` 抬的是 BASEPRI（FreeRTOS ARM_CM4F/CM7 端口的
- *          `portDISABLE_INTERRUPTS` = `vPortRaiseBASEPRI`），SysTick 同样进不来，
- *          `HAL_GetTick` 冻住。调用方 drv_terminal_lite 的发送提交正是整个包在
- *          `taskENTER_CRITICAL` 里，故只查 IPSR 不够（bsp_i2c 的 `I2C_InIsr` 是简化版）。
+ *          `portDISABLE_INTERRUPTS` = `vPortRaiseBASEPRI`），tick 源同样进不来。
+ *          调用方 drv_terminal_lite 的发送提交正是整个包在 `taskENTER_CRITICAL` 里，
+ *          故只查 IPSR 不够（bsp_i2c 的 `I2C_CanBlockingAbort` 判据与本函数相同）。
  * @note 判定为 0 时一律不动作、也不假复位（假复位会让下一次 HAL 启动直接失败）：
  *       判据侧不刷新时间戳，下一次任务上下文的调用会照样命中并补做。
  */
@@ -923,9 +925,10 @@ BSP_Status_e USARTRecoverTxIfStuck(USARTInstance *instance, uint32_t stuck_ms)
 
     /* 超过阈值仍非 READY = 卡死：该次发送的完成回调（DMA TC 中断）丢了、或在错误路径上
      * 被 HAL 停在了 BUSY_TX。中止本次、把 gState 放回 READY，让发送链重新跑起来。
-     * 被中止的那次不会再有 tx_callback，USART_RecoverTx 会按契约调 err_callback 通知上层。 */
-    if (!USART_RecoverTx(instance))
-        return BSP_HW_ERR; /* 上下文已判定允许，走到这里只能是参数异常（已在入口拦过） */
+     * 被中止的那次不会再有 tx_callback，USART_RecoverTx 会按契约调 err_callback 通知上层。
+     * 返回值恒为 1：instance/handle 非空与上下文允许都在入口判过，这里没有第二种可能，
+     * 所以不再写一条永远走不到的分支（旧版 `if (!USART_RecoverTx(...)) return BSP_HW_ERR;`）。 */
+    (void)USART_RecoverTx(instance);
 
     s_tx_ready_us[idx] = DWT_GetTimeUs(); /* 刚复位，重新计时 */
     BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "UART TX stuck >%dms, state reset (uart_e=%d)!",

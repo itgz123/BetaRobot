@@ -186,8 +186,10 @@ DRV 也等不到完成回调、自己的 `transfer_busy` 永远清不掉 —— 
 **A.4 不能在 ISR / 临界区里做会自旋的 Abort**
 `HAL_SPI_Abort` 内部对 DMA 流的收尾调的是阻塞版 `HAL_DMA_Abort`，按 `HAL_GetTick()` 自旋等
 "流真的停下来"；F4 版 `HAL_SPI_Abort` 自带的计数器轮询同样要等 DMA 停。**两类上下文里 tick 都不前进**：
-① 中断上下文（`IPSR != 0`）—— BMI088 的 INT 模式正是在 DRDY EXTI 里发起传输；
-② 临界区 —— `taskENTER_CRITICAL` 抬的是 BASEPRI，SysTick 进不来。
+① 中断上下文（`IPSR != 0`）—— BMI088 的 INT 模式正是在 DRDY EXTI 里发起传输；HAL tick 源在本工程
+是 TIM，不是 SysTick（DJI_C 的 `TIM14`、其余板 `TIM23`，优先级 5/15），优先级数值不小于外设中断的 5，
+抢占不了，中断里 tick 冻住；
+② 临界区 —— `taskENTER_CRITICAL` 抬的是 BASEPRI，tick 源同样进不来。
 处理：`SPI_CanBlockingAbort()` 同时查 IPSR / PRIMASK / BASEPRI，不允许时**什么都不做**，
 且调用方不刷新卡死判据的时间戳 —— 于是下一次任务上下文的调用自动补做真正的复位。
 
@@ -280,7 +282,9 @@ HAL 在启动传输时写入 `RxXferSize`，传输过程中只递减 `RxXferCoun
 UART 的发送链每帧都要调一次 `USARTTransmit`（因此复位可以挂在调用路径上）；
 **SPI 的传输由 DRDY EXTI 发起**（BMI088 的 `BMI088_IntCallback`），而 EXTI 里：
 
-- 不能等 tick ⇒ `SPI_WaitReady` 只能传 `timeout_ms = 0`，拿不到总线就放弃本次采样；
+- 不能自旋等就绪（就绪判据本身是 DWT 计时、会到期，但等到的只是白等：让总线空闲的那笔
+  传输的完成回调就在同级中断里，进不来；而超时后的复位动作又要等 HAL tick）⇒ `SPI_WaitReady`
+  只能传 `timeout_ms = 0`，拿不到总线就放弃本次采样；
 - 不能 Abort ⇒ 即便发现总线卡死也救不回来（见 A.4）。
 
 两句合起来：**中断里发起的传输一旦启动失败，就再也起不来**，且因为 `transfer_busy`

@@ -61,13 +61,16 @@
  *       （如 IST8310 的 transfer_busy），否则该从机永久失联：
  *       - I2C_ERR_HW：HAL 报硬件错（BERR/ARLO/AF/OVR/DMA…），ISR 上下文；
  *       - I2C_ERR_ABORT：传输没发起成功或已被 bsp 强制收尾（启动失败 / 等就绪超时），
- *         任务上下文（发起调用的那一边）。
+ *         发起方上下文 —— 启动失败是就地回调，调用方在 ISR 里发起（如 IST8310 的
+ *         DRDY EXTI 调 I2CMemRead）时这次回调就在 ISR 里；强制收尾只在任务上下文。
+ *       **前提是 IT/DMA**：BLOCK 的失败在调用栈内就由返回值给出，bsp 不再回调
+ *       （一次失败不占两条上报通道，见 bsp_i2c.c 的 I2C_AbortOnError/notify）。
  *       上层 handler 必须无阻塞、可重入且**幂等**（判自身状态再复位，重复调用无副作用）。
  */
 typedef enum : uint8_t
 {
     I2C_ERR_HW = 0,    //!< 硬件错误（BERR/ARLO/AF/OVR/DMA…），HAL_I2C_ErrorCallback 内，ISR 上下文
-    I2C_ERR_ABORT = 1, //!< 传输未发起或已被强制收尾，任务上下文，HAL State 已复位为 READY
+    I2C_ERR_ABORT = 1, //!< 传输未发起或已被强制收尾，发起方上下文（ISR 里发起即为 ISR），HAL State 已复位为 READY
 } I2C_ErrReason_e;
 
 /* 前向声明：下面的回调签名要用到 struct I2CInstance，而结构体本身在后面才定义。
@@ -203,10 +206,11 @@ BSP_Status_e I2CConfig(I2CInstance *instance, const I2C_Config_s *config);
  *                       不等待、只判一次），或 HAL 启动时判 State 非 READY 而返回
  *                       HAL_BUSY。都是可重试的争用，上层下一拍重试即可
  * @retval BSP_TIMEOUT   超时：等就绪超时，或 HAL 启动后即报超时类错误（`ErrorCode` 带
- *                       TIMEOUT / F4 的 WRONG_START）。此时 bsp 已复位句柄并回调了
- *                       err_callback，上层可直接重试
+ *                       TIMEOUT / F4 的 WRONG_START）。此时 bsp 已复位句柄；IT/DMA 还会
+ *                       回调 err_callback（BLOCK 不回调，失败已由返回值给出），上层可直接重试
  * @retval BSP_PARAM_ERR 参数非法 / dev_addr 越界 / len 越界 / mode 非法 / 该口没有 RX DMA
- * @retval BSP_HW_ERR    HAL 启动读取失败（真失败：`ErrorCode` 是 NACK/BERR/DMA…）
+ * @retval BSP_HW_ERR    HAL 启动读取失败（真失败：`ErrorCode` 是 NACK/BERR/DMA…）；是否
+ *                       回调 err_callback 同 BSP_TIMEOUT（IT/DMA 回调，BLOCK 不回调）
  */
 BSP_Status_e I2CMemRead(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_addr,
                         I2C_MemAddrSize_e mem_addr_size, uint16_t len,

@@ -1,3 +1,8 @@
+# 用法见 test_format.c 文件头；本次运行：
+#   gcc -m32 -ffreestanding -nostdlib -nostartfiles -fno-stack-protector -Wall -Wextra \
+#       -DLIB_FORMAT_STANDALONE -I .. -I ../../lib_math -o test_format test_format.c ../lib_format.c && ./test_format
+# 后 5 条用例是针对未支持/字面 % 的说明符处理新增的回归点：前 3 条在本次修改前的
+# lib_format.c（git HEAD 版本）上会 FAIL（如 got: next=0xDEADBEEF，即读到前一个实参）。
 PASS  %lX 后跟 4 个 %d
 PASS  %lX 后跟 6 个 %d
 PASS  i2c 收尾日志（%s + %d×2 + %02X + %lX + %d×3）
@@ -8,5 +13,10 @@ PASS  %ld 32 位 / %lld 64 位
 PASS  %llu 仍为 64 位
 PASS  %llX 仍为 64 位
 PASS  %X 32 位
+PASS  未支持的 %p 消费 1 个槽（不吞掉下一个实参）
+PASS  未支持的 %c 消费 1 个槽
+PASS  % 后非字母按原文输出且不消费参数
+PASS  %% 输出单个 % 且不消费参数
+PASS  结尾单个 % 按字面输出
 
 结果: 全部通过

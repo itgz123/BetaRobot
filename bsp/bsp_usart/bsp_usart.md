@@ -167,11 +167,13 @@ USARTReceive(&my_uart, my_uart.rx_buff_size, BSP_DMA_MODE, 0);  // 需接收才�
 
 **A.3 不能在 ISR / 临界区里做会自旋的 Abort**
 `HAL_UART_AbortTransmit` 内部经 `HAL_DMA_Abort`，按 `HAL_GetTick()` 自旋等 DMA 关闭。**两类上下文里
-tick 都不前进**：① 高优先级中断（`IPSR != 0`）；② **临界区** —— `taskENTER_CRITICAL` 抬的是 BASEPRI
-（FreeRTOS ARM_CM4F/CM7 端口的 `portDISABLE_INTERRUPTS` = `vPortRaiseBASEPRI`），SysTick 同样进不来。
+tick 都不前进**：① 中断上下文（`IPSR != 0`）—— HAL tick 源在本工程是 TIM，不是 SysTick（DJI_C 的
+`TIM14`、其余板 `TIM23`，优先级 5/15），优先级数值不小于外设中断的 5，抢占不了，中断里 tick 冻住；
+② **临界区** —— `taskENTER_CRITICAL` 抬的是 BASEPRI（FreeRTOS ARM_CM4F/CM7 端口的
+`portDISABLE_INTERRUPTS` = `vPortRaiseBASEPRI`），tick 源同样进不来。
 处理：① 错误回调里完全不动发送状态，复位只发生在 `USARTTransmit` 的就绪失败路径；
 ② `USART_RecoverTx` / `USART_RecoverRx` 入口用 `USART_CanBlockingAbort()`（同时查 IPSR / PRIMASK /
-BASEPRI，比 `bsp_i2c` 的 `I2C_InIsr` 多查后两者）判定，不允许时**什么都不做并返回 0**，且调用方
+BASEPRI，与 `bsp_i2c` 的 `I2C_CanBlockingAbort` 判据相同）判定，不允许时**什么都不做并返回 0**，且调用方
 不刷新卡死判据的时间戳 —— 于是下一次任务上下文的收发自动补做真正的复位。
 （实机动机：`drv_terminal_lite` 的发送提交整个包在 `taskENTER_CRITICAL` 里，只查 IPSR 挡不住。）
 

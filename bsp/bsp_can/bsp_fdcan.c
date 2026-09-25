@@ -360,6 +360,46 @@ static uint8_t FDCAN_MarkerGen(uint32_t marker)
 }
 
 /**
+ * @brief 原子摘取一个 marker 槽（"读 owner → 置 NULL → 推进代际"三步不可分）
+ * @param can_idx    can_e 索引（已校验）
+ * @param slot       槽位号（已校验 < FDCAN_TX_MARKER_NUM）
+ * @param bump_gen   1 = 同时推进该槽代际（回收路径，见 FDCAN_ReclaimMarkers）；
+ *                   0 = 只摘槽（Tx Event 正常收口，代际不动）
+ * @param marker_out 出参：摘到槽时写回"按摘取**前**的代际编码"的 MessageMarker，
+ *                   即与 CANTransmit 出参一致、上层用来比对的那个值；可为 NULL
+ * @return 槽里原来的 owner；槽本就没人认领时返回 NULL（= 已被别的路径收口）
+ *
+ * @note 为什么必须原子：同一个 marker 的收尾会被多条路径同时观察到 —— Tx Event FIFO 中断
+ *       （正常收口、以及 FIFO 满时的就地回收）与 bsp 任务上下文的 CANRecover / 发送超时回收。
+ *       它们不在同一优先级，"读→清"之间被抢占就会让两条路径拿到同一个非空 owner 并各回调
+ *       一次（头文件虽把 tx_complete_callback 定为幂等，但"同一帧只通知一次"是这条溯源
+ *       机制的基本承诺，不该靠上层兜底）；更糟的是回收路径会推进代际，若在"推进代际"与
+ *       "回调"之间被抢占，迟到的 Tx Event 会被判成代际不符而丢弃 —— 那一帧的发起者就永远
+ *       等不到结果了。代价只有一次 4 条指令的临界区，且临界区里不做任何回调。
+ */
+static CANInstance *FDCAN_TakeMarker(uint8_t can_idx, uint8_t slot, uint8_t bump_gen, uint32_t *marker_out)
+{
+    CANInstance *inst;
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    inst = s_fdcan_tx_owner[can_idx][slot];
+    if (inst != NULL)
+    {
+        if (marker_out != NULL)
+            *marker_out = FDCAN_MarkerEncode(can_idx, slot); /* 摘取前的代际 */
+        s_fdcan_tx_owner[can_idx][slot] = NULL;
+        if (bump_gen)
+            s_fdcan_tx_gen[can_idx][slot] =
+                (uint8_t)((s_fdcan_tx_gen[can_idx][slot] + 1u) & FDCAN_TX_MARKER_GEN_MASK);
+    }
+    if (primask == 0U)
+        __enable_irq();
+
+    return inst;
+}
+
+/**
  * @brief 分配一个空闲 marker 槽并登记所属实例
  * @param marker 出参：**编码后**的 MessageMarker（代际<<5 | 槽位），既写进硬件也回给调用方
  * @note 先登记再入队：消息入队后可能立即发送、事件随之中断触发，需保证此时槽已登记
@@ -367,17 +407,27 @@ static uint8_t FDCAN_MarkerGen(uint32_t marker)
 static int8_t FDCAN_AllocMarker(uint8_t can_idx, CANInstance *instance, uint32_t *marker)
 {
     uint8_t i;
+    uint32_t primask = __get_PRIMASK();
+    int8_t ret = -1;
 
+    /* "找到空槽 → 登记"必须原子：回收路径（Tx Event FIFO 满 / CANRecover，可能在 ISR 里）
+     * 随时会把某个槽置 NULL，若在这两步之间插进来，本函数会把刚被别人认领的槽再分一次
+     * ——两个实例共用一个 marker 槽，后到的事件结果就记到错误的发起者头上了。 */
+    __disable_irq();
     for (i = 0; i < FDCAN_TX_MARKER_NUM; i++)
     {
         if (s_fdcan_tx_owner[can_idx][i] == NULL)
         {
             s_fdcan_tx_owner[can_idx][i] = instance;
             *marker = FDCAN_MarkerEncode(can_idx, i);
-            return 0;
+            ret = 0;
+            break;
         }
     }
-    return -1;
+    if (primask == 0U)
+        __enable_irq();
+
+    return ret;
 }
 
 /** 释放一个 marker 槽（入队失败时用；不带代际变更——该帧从未进硬件，不会有事件回来） */
@@ -396,11 +446,16 @@ static void FDCAN_FreeMarker(uint8_t can_idx, uint32_t marker)
  * @note **代际不符的事件丢弃**：槽位被回收（CANRecover / 事件丢失）后会被新帧复用，
  *       而旧帧的事件可能仍在 FIFO 里。若它的代际与该槽当前代际不符，说明这是上一轮
  *       的迟到事件，其结果不能记到当前占用者头上（也不能清掉它正在等结果的槽）。
+ * @note 代际校验与摘槽在**同一个临界区**里做（不像 bxCAN 那样能单靠"先清后回调"）：
+ *       这里多了一层"代际必须仍匹配"的前置判断，若判断与摘槽之间被 CANRecover 抢占
+ *       （它推进代际、把槽换给下一帧），本函数就会把**新占用者**当成这条迟到事件的主人。
  */
 static void FDCAN_TxResultHandler(uint8_t can_idx, uint32_t marker, BSP_Status_e result)
 {
     CANInstance *inst;
     uint8_t slot;
+    uint8_t stale;
+    uint32_t primask;
 
     if (can_idx >= CAN_NUM_MAX)
         return;
@@ -409,7 +464,16 @@ static void FDCAN_TxResultHandler(uint8_t can_idx, uint32_t marker, BSP_Status_e
     if (slot >= FDCAN_TX_MARKER_NUM)
         return;
 
-    if (FDCAN_MarkerGen(marker) != (s_fdcan_tx_gen[can_idx][slot] & FDCAN_TX_MARKER_GEN_MASK))
+    primask = __get_PRIMASK();
+    __disable_irq();
+    stale = (FDCAN_MarkerGen(marker) != (s_fdcan_tx_gen[can_idx][slot] & FDCAN_TX_MARKER_GEN_MASK)) ? 1U : 0U;
+    inst = stale ? NULL : s_fdcan_tx_owner[can_idx][slot];
+    if (!stale)
+        s_fdcan_tx_owner[can_idx][slot] = NULL; /* 先清槽再回调：回调内可立即复用本槽 */
+    if (primask == 0U)
+        __enable_irq();
+
+    if (stale)
     {
         s_fdcan_status[can_idx].tx_result_stale++;
         return;
@@ -418,8 +482,6 @@ static void FDCAN_TxResultHandler(uint8_t can_idx, uint32_t marker, BSP_Status_e
     if (result == BSP_OK)
         s_fdcan_status[can_idx].tx_ok++;
 
-    inst = s_fdcan_tx_owner[can_idx][slot];
-    s_fdcan_tx_owner[can_idx][slot] = NULL;
     s_fdcan_status[can_idx].tx_owner_busy = FDCAN_OwnerBusyCount(can_idx);
     if (inst != NULL && inst->tx_complete_callback != NULL)
         inst->tx_complete_callback(inst, marker, result);
@@ -452,15 +514,14 @@ static uint8_t FDCAN_ReclaimMarkers(uint8_t can_idx, uint8_t reclaim)
 
     for (i = 0; i < FDCAN_TX_MARKER_NUM; i++)
     {
-        CANInstance *owner = s_fdcan_tx_owner[can_idx][i];
-        uint32_t marker;
+        uint32_t marker = 0;
+        /* 原子摘取（同时推进代际）：本函数既会被 Tx Event FIFO 中断调用，也会被任务上下文的
+         * CANRecover / 发送超时回收调用，非原子就会与中断抢同一个槽（见 FDCAN_TakeMarker） */
+        CANInstance *owner = FDCAN_TakeMarker(can_idx, i, 1, &marker);
 
         if (owner == NULL)
-            continue;
+            continue; /* 已被另一条路径收口 */
 
-        marker = FDCAN_MarkerEncode(can_idx, i); // 先按当前代际编码，回调要拿到与 CANTransmit 出参一致的值
-        s_fdcan_tx_owner[can_idx][i] = NULL;
-        s_fdcan_tx_gen[can_idx][i] = (uint8_t)((s_fdcan_tx_gen[can_idx][i] + 1u) & FDCAN_TX_MARKER_GEN_MASK);
         n++;
         if (reclaim)
             s_fdcan_status[can_idx].marker_reclaim++;
@@ -526,6 +587,13 @@ BSP_Status_e CANRegister(CANInstance *instance)
  * @note 要求先调用 CANRegister 注册实例。
  *       FDCAN 发送/接收机制跟随 CubeMX 配置：首次配置读 hfdcan->Init 自动使能对应中断，
  *       无需在软件里硬编码 FIFO/Buffer 数量。
+ * @note **配置项一律覆盖写入，包括两个回调**：`config->tx_complete_callback`/`err_callback`
+ *       传 NULL 的含义是"清空"，不是"保持原样"。所以**同一个实例别配两遍**：第二次若不带
+ *       回调，第一次注册的就被静默清掉，异步分包会卡在"永远等不到发送完成"。
+ *       多个实例共享同一 handle（见 CANRegister 的说明）则互不影响 —— 两个回调都按实例
+ *       存放：发送完成回调只发给**发起那帧的实例**（FDCAN_TxResultHandler 按 marker 查到
+ *       谁发的那帧），错误回调才按 handle **广播**给该总线上的每个实例（FDCAN_NotifyError
+ *       逐个调各自那份，某个实例没挂就跳过它）。与 bsp_bxcan.c 的 CANConfig 同一条约定。
  */
 BSP_Status_e CANConfig(CANInstance *instance, const CAN_Config_s *config)
 {
@@ -720,6 +788,24 @@ BSP_Status_e CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t
         return CAN_FdcanTxFail(instance, BSP_PARAM_ERR);
     }
 
+    /* ID 范围校验（按声明的帧类型）：HAL 只在 USE_FULL_ASSERT 下才查 ID（本工程各板都没开
+     * USE_FULL_ASSERT，见 stm32h7xx_hal_conf.h），而硬件写 T0 时对 SID 只取 11 位
+     * （FDCAN_TIR_SID_MASK）—— 超范围的标准帧 ID 被**静默截断**，发出去的是另一个 ID 的帧。
+     * 现场表现最坑：发送路径一路成功（`tx_ok` 照涨、没有错误位），接收端却因过滤器不匹配
+     * 一帧都收不到。宁可在这里硬拒成参数错。 */
+    if (tx_header.IdType == FDCAN_STANDARD_ID)
+    {
+        BSP_RETURN_IF_TRUE_LOG(pack->id > 0x7FFu, CAN_FdcanTxFail(instance, BSP_PARAM_ERR),
+                               BSPLOG(&g_can_log, LOG_LEVEL_ERROR,
+                                      "Standard frame id=0x%lX exceeds 0x7FF!", (unsigned long)pack->id));
+    }
+    else
+    {
+        BSP_RETURN_IF_TRUE_LOG(pack->id > 0x1FFFFFFFu, CAN_FdcanTxFail(instance, BSP_PARAM_ERR),
+                               BSPLOG(&g_can_log, LOG_LEVEL_ERROR,
+                                      "Extended frame id=0x%lX exceeds 0x1FFFFFFF!", (unsigned long)pack->id));
+    }
+
     // 帧格式/BRS 由实例工作模式决定
     if (instance->mode == CAN_FRAME_FORMAT_FD_BRS)
     {
@@ -874,7 +960,8 @@ static uint32_t FDCAN_TxErrorCount(FDCAN_HandleTypeDef *hfdcan)
  * @brief CAN 发送资源自恢复（任务上下文；入口自证 + 五步顺序与理由见 bsp_can.h）
  * @note FDCAN 的 bus-off 恢复：ISR 里已清 CCCR.INIT 让硬件走恢复序列；这里做任务侧兜底 ——
  *       若外设仍停在 bus-off（外部总线条件不满足，如线没接回），停止并按原配置重启外设。
- *       HAL_FDCAN_Stop/Start 会清掉中断线映射与已激活的中断，必须一并重新配置。
+ *       重启时把中断线映射与已激活中断一并重做（幂等加固，理由见函数体里那一段：
+ *       HAL_FDCAN_Stop **不会**清 IE/ILS/ILE，所以这不是"必须"，是防将来/防误改）。
  * @note **入口会先自证总线级判据（bus-off / 发送资源占满且 TEC≥128），不满足直接返回
  *       BSP_BUSY 且不碰任何在途帧** —— 判据的理由、为什么不放在调用点、为什么不用
  *       "marker 池占满"，全部写在函数体开头的注释块里，改判据前先读那一段。
@@ -945,8 +1032,15 @@ BSP_Status_e CANRecover(CANInstance *instance)
     s_fdcan_status[can_idx].lec = (uint8_t)protocol_status.LastErrorCode;
 
     // 仍在 bus-off：总线物理层没恢复（线没接回 / 终端电阻 / 对端没上电）。
-    // 兜底动作：停止并按原配置重启外设，让状态机从头走一遍（Stop 会清掉中断线映射与已激活的
-    // 中断，所以必须重新 ConfigInterruptLines + ActivateNotification，否则恢复后一个中断都收不到）
+    // 兜底动作：停止并按原配置重启外设，让状态机从头走一遍。
+    // 中断配置照旧一并重做，但**理由不是"Stop 会清掉它"**（旧注释这么写，与 HAL 实况不符）：
+    // 本仓库两版 H7 HAL 的 HAL_FDCAN_Stop 只置 CCCR.INIT/CCE、清 CSR 位、复位
+    // LatestTxFifoQRequest 与 State，**不碰 IE/ILS/ILE**；HAL_FDCAN_Start 也只清 INIT 与
+    // ErrorCode（逐行核对过）。即 ILS/IE 本就能原样跨过 Stop/Start。
+    // 保留重做是因为它幂等且廉价 —— ConfigInterruptLines 写的就是 ILS、ActivateNotification
+    // 写的就是 IE/ILE，重做一遍的结果与"已经正确"完全相同，却能把"将来换个会清 IE 的 HAL
+    // 版本"或"有人在 Stop 与 Start 之间动过中断配置"这两种情况一并盖住；反过来若漏做，
+    // 那样的环境下恢复后会一个中断都收不到，且现场毫无线索。
     if (s_fdcan_status[can_idx].bus_off != 0U)
     {
         uint32_t active_it;

@@ -209,7 +209,15 @@ typedef struct BMI088Instance
     volatile uint8_t acc_cnt;                  // 已收到的 acc 样本数
     volatile uint8_t gyro_cnt;                 // 已收到的 gyro 样本数
     volatile float temperature;                // 实际温度（℃）
-    uint64_t last_temp_us;                     // 上次温度读取时间戳 (us)，用于限速
+    /* 两个时间戳各司其职，**不可合并**（详见 BMI088GetTemperature 的注释）：
+     *   - last_temp_sched_us：最近一次**发起**温度读取的时刻，只做 1.28s 节拍门控；
+     *   - last_temp_us：最近一次**成功**读回温度的时刻，是"这个 temperature 值可不可信"的
+     *     唯一判据。读失败不刷新它（沿用它 = 继续返回上一次的真实温度）。
+     * 若把节拍门控也写在 last_temp_us 上（旧版就是），调度时它就被刷新了，而温度值要到
+     * 下一次 EXTI 发起的那笔传输完成才更新 —— 中间这段 getter 会把 0℃ 初值（或传输失败
+     * 后的陈温）当成有效温度发出去，温补型消费者会因此吃到一次假的 ΔT。 */
+    uint64_t last_temp_sched_us;               // 最近一次发起温度读取的时刻 (us)：节拍门控
+    uint64_t last_temp_us;                     // 最近一次成功读回温度的时刻 (us)：新鲜度判据
 } BMI088Instance;
 
 /*============================ 实例定义宏 ============================*/

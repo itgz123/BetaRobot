@@ -228,11 +228,12 @@ static BSP_Status_e SPI_StartFail(SPIInstance *instance, HAL_StatusTypeDef st, c
  * @retval 1 可以（普通任务上下文）
  * @retval 0 不可以（死等风险，只能改期）
  *
- * @note 两类不安全上下文都要查：
- *       ① 中断上下文（`IPSR != 0`）——BMI088 的 INT 模式就是在 DRDY EXTI 里发起传输；
+ * @note 两类不安全上下文都要查（共同后果是 `HAL_GetTick` 冻住）：
+ *       ① 中断上下文（`IPSR != 0`）——BMI088 的 INT 模式就是在 DRDY EXTI 里发起传输。
+ *          HAL tick 源在本工程是 TIM 不是 SysTick（DJI_C 的 TIM14、其余板 TIM23，
+ *          优先级 5/15），优先级数值不小于外设中断的 5，抢占不了本 ISR，故中断里 tick 不前进；
  *       ② 临界区——`taskENTER_CRITICAL` 抬的是 BASEPRI（FreeRTOS ARM_CM4F/CM7 端口的
- *          `portDISABLE_INTERRUPTS` = `vPortRaiseBASEPRI`），SysTick 同样进不来，
- *          `HAL_GetTick` 冻住。
+ *          `portDISABLE_INTERRUPTS` = `vPortRaiseBASEPRI`），tick 源同样进不来。
  * @note HAL_SPI_Abort 内部对 DMA 流的收尾调的是阻塞版 HAL_DMA_Abort：它按 HAL_GetTick
  *       等"流真的停下来"，tick 不前进就是死等（F4 版 HAL_SPI_Abort 自带的计数器轮询也一样
  *       要等 DMA 停）。故判定为 0 时一律不动作、也不假复位（假复位会让下一次 HAL 启动
@@ -676,7 +677,15 @@ BSP_Status_e SPIConfig(SPIInstance *instance, const SPI_Config_s *config)
      * 占着总线让新配置一次都发不出去）+ 清旧路由槽 */
     if (instance->handle != NULL)
     {
-        (void)SPI_RecoverTx(instance); /* 上下文不允许 Abort 时返回 0，交由下一次收发兜底 */
+        /* 只在真有东西要收尾时动手：SPI_RecoverTx 一律计一次 `tx_recover` 并按契约回调
+         * `SPI_ERR_ABORT`（"本次传输已被强制收尾、不会再有完成回调"）。总线本来空闲时
+         * 它什么都没中止，却把这句话说给了上层 —— 上层（如 BMI088）据此清 transfer_busy、
+         * 记一次失败，而 Config 是可重入的（切模式、重挂回调都会重调），每次重配都白报一笔，
+         * `tx_recover` 这个诊断量也跟着失真（分不清"真卡死恢复了几次"与"配了几次"）。
+         * 判据用 SPI_BusIsIdle（外设 + 两路 DMA 流），与 SPIRecoverTxIfStuck 同源；
+         * 上下文不允许 Abort 时 SPI_RecoverTx 自己返回 0，交由下一次收发兜底。 */
+        if (!SPI_BusIsIdle(instance->handle))
+            (void)SPI_RecoverTx(instance);
         old_idx = SPI_HspiToIndex(instance->handle);
         if (old_idx < SPI_NUM_MAX && s_spi_inst_by_spi[old_idx] == instance)
             s_spi_inst_by_spi[old_idx] = NULL;
@@ -973,9 +982,11 @@ BSP_Status_e SPIRecoverTxIfStuck(SPIInstance *instance, uint32_t stuck_ms)
         return BSP_BUSY;
 
     /* 超过阈值仍非 READY = 卡死：中止本次、把 State 放回 READY，让传输链重新跑起来。
-     * 被中止的那次不会再有完成回调，SPI_RecoverTx 会按契约调 err_callback 通知上层。 */
-    if (!SPI_RecoverTx(instance))
-        return BSP_HW_ERR; /* 上下文已判定允许，走到这里只能是参数异常（已在入口拦过） */
+     * 被中止的那次不会再有完成回调，SPI_RecoverTx 会按契约调 err_callback 通知上层。
+     * 返回值恒为 1：SPI_RecoverTx 的 0 分支只有 instance/handle 为空与上下文不允许，
+     * 这三个条件在本函数入口都判过了，所以不再写一条永远走不到的分支
+     * （旧版 `if (!SPI_RecoverTx(...)) return BSP_HW_ERR;`）。 */
+    (void)SPI_RecoverTx(instance);
 
     s_spi_ready_us[idx] = DWT_GetTimeUs(); /* 刚复位，重新计时 */
     BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "SPI stuck >%dms, state reset (spi_e=%d)!",

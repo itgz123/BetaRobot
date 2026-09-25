@@ -89,7 +89,13 @@ typedef struct
                                  * @note 与另两处同名计数**不是一个东西**：bsp_can 的 tx_busy 是
                                  *       "邮箱/FIFO 满"；comm media 的 tx_busy 是"上层 ring 满
                                  *       （BSP_BUSY）"。这里是端点级在途，是最内层、最不该涨的那个。 */
-    uint32_t tx_hw_fail;        /* CDC_Transmit 返回其它非 OK 值次数 */
+    uint32_t tx_submit_fail;    /* CDC 提交既非 OK 也非 BUSY 的次数。**不是硬件故障**：
+                                 * 按本工程中间件的实现（USBD_CDC_TransmitPacket），这类返回
+                                 * 只有一条路径 —— 取句柄与提交之间 hcdc(pClassData) 被清空
+                                 * （主机断开/复位触发 CDC DeInit），即"设备已回到未初始化"。
+                                 * PCD 层的发送失败被 USBD_LL_Transmit 丢弃，到不了这里。
+                                 * 上一包仍留在 ring 里（tx_tail 未推进），由 USBRecoverTxIfStuck
+                                 * 在重新枚举后兜底。 */
     uint32_t rx_ok;             /* 收帧次数 */
     /* 自恢复计数 */
     uint32_t tx_stuck;          /* 判定 TX 卡死（已执行收尾动作）次数 */
@@ -97,7 +103,13 @@ typedef struct
     uint32_t tx_recover_fail;   /* 卡死收尾后仍出不了队次数 */
     uint32_t rx_stalled;        /* 判定 RX 停摆（已尝试重新武装）次数 */
     uint32_t rx_recover_ok;     /* RX 重新武装被中间件接受次数（是否真恢复看后续 rx_ok） */
-    uint32_t rx_rearm_fail;     /* RX 重新武装被拒次数（>0 表示 RX 已停摆且起不来） */
+    uint32_t rx_rearm_fail;     /* RX 重新武装被**拒**次数。判据取 USBD_CDC_ReceivePacket 的返回，
+                                 * 而它只在 pClassData 为空时返回 FAIL（其余一律 OK），
+                                 * 也就是说这一支真正记录的是"重新武装时设备已回到未初始化"
+                                 * （主机断开/复位），**不是**端点层武装失败 —— 端点是否真武装
+                                 * 成功它根本不报告：`(void)USBD_LL_PrepareReceive(...)` 把 HAL
+                                 * 的返回丢掉了。故本计数与 rx_recover_ok 都只是"中间件收没收下请求"，
+                                 * "是否真的恢复了"要看 rx_ok 是否继续增长（见 bsp_usb.md）。 */
     uint32_t dev_state_drop;    /* 枚举状态下降沿次数（主机串口关闭 / 拔出） */
     /* 实时快照 */
     uint8_t dev_state;     /* USBD_HandleTypeDef.dev_state（最近一次采样） */
@@ -290,8 +302,11 @@ static void USB_ProcessTxLocked(USBInstance *inst)
     }
     else
     {
+        /* 既非 OK 也非 BUSY：按中间件实现只能是"类句柄被清空"，见 tx_submit_fail 的说明。
+         * 上一包已在 ring 里、本次没有提交出去，tx_tail 不推进是对的 —— 等重新枚举后由
+         * USBRecoverTxIfStuck 把出队接上（它的判据是 tx_last_ok_us 陈旧，正好覆盖这一支）。 */
         if (idx < USB_INSTANCE_NUM)
-            s_usb_status[idx].tx_hw_fail++;
+            s_usb_status[idx].tx_submit_fail++;
     }
 
     USB_Snapshot(inst, idx);
@@ -656,8 +671,9 @@ BSP_Status_e USBRecoverRxIfStalled(USBInstance *instance, uint32_t period_ms)
 
     if (!armed)
     {
-        BSPLOG(&g_usb_log, LOG_LEVEL_WARNING, "RX re-arm failed: out endpoint unusable");
-        /* 重新武装被拒 = 端点层收尾失败：按契约在动作之后通报 */
+        BSPLOG(&g_usb_log, LOG_LEVEL_WARNING, "RX re-arm rejected: device de-initialized (host disconnected?)");
+        /* 被拒 = 提交时类句柄已被清空（如主机刚断开/复位），软件无从恢复；
+         * 按契约在动作之后通报（reason 见 bsp_usb.h 的 USB_ERR_RX_STALLED） */
         if (inst->err_callback != NULL)
             inst->err_callback(inst, USB_ERR_RX_STALLED);
         return BSP_HW_ERR;

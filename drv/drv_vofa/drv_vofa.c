@@ -57,6 +57,12 @@ static volatile uint8_t s_write_buff = 0;
 // 当前 DMA 使用的缓冲区索引
 static volatile uint8_t s_active_buff = 0;
 
+/* 孤儿 PENDING 槽回收计数（见 VofaSend 入口）：
+ * 恒 0 = 发送链从未出现"有 PENDING 却无 ACTIVE"的空档；
+ * 非 0 = 该空档发生过（错误回调释放了唯一在途槽、却没带走排队的 PENDING），
+ * 值就是被回收救回的槽数，是可观测的自愈凭据，勿删。 */
+volatile uint32_t g_vofa_pending_reclaim = 0;
+
 /*------------- 协议帧尾定义 --------------*/
 #define VOFA_JUST_FLOAT_FRAME_END_0 0x00
 #define VOFA_JUST_FLOAT_FRAME_END_1 0x00
@@ -196,6 +202,31 @@ void VofaSend(void)
      * ISR 里调用安全（bsp 入口直接返回 BSP_BUSY）；空闲时只做一次 DWT 读。 */
     (void)USARTRecoverTxIfStuck(&s_vofa_uart, 0);
 
+    /* 写缓冲必须真是空闲的：第 4 步在三缓冲全非 IDLE 时会**保留原索引**，而那个槽可能
+     * 正被 DMA 读（ACTIVE）或已排队等发送（PENDING）。往在途 DMA 缓冲里写，或者改写一个
+     * 已排队帧的时间戳（通道数据还是旧周期的、时间戳却是新的），都会让遥测流自相矛盾、
+     * 而且从外面完全看不出来。这里直接丢弃本帧：控制周期（1ms）远快于遥测一帧（~4ms@115200），
+     * 少发一帧不影响判读，冒险写坏一帧才要命。VofaSetChannel 一直就有同样的检查。 */
+    if (s_buff_state[s_write_buff] != BUFF_IDLE)
+    {
+        /* 唯一的例外：写槽停在 PENDING、而模块里没有任何 ACTIVE —— 没有在途发送，也就
+         * 没有 TxCplt 再来把它升成 ACTIVE（VofaErrHandler 只释放 ACTIVE 槽，搁死的 PENDING
+         * 没人管；PENDING 的来源见下面第 3 步的 BUSY 分支）。这种槽就是孤儿，当 IDLE 用；
+         * 有 ACTIVE 时绝不能动 —— 它可能正排在那笔完成后的补发队列里，且这个槽不会被 DMA 读
+         * （PENDING 从未交给传输层），回收到 IDLE 是安全的。 */
+        if (s_buff_state[s_write_buff] == BUFF_PENDING && !VofaHasActive())
+        {
+            s_buff_state[s_write_buff] = BUFF_IDLE;
+            g_vofa_pending_reclaim++;
+        }
+
+        /* 回收与否都**丢弃本帧**，别接着往下写：回收出来的槽里还是上一周期（甚至更早）的
+         * 通道值 —— 本周期的 VofaSetChannel 见它非 IDLE 已经全部丢弃 —— 继续写就会发出
+         * 上面刚否掉的那种帧：旧通道数据配新时间戳。留着当 IDLE，下个周期 SetChannel 会
+         * 填进全新一组值，那时才是自洽的一帧。 */
+        return;
+    }
+
     // 1. 填充时间戳到写入缓冲区（单次字写入）
     FloatBytes_u ts = {.f = (float)DWT_GetTimeUs()};
     *(uint32_t *)s_tx_buff[s_write_buff] = ts.u32;
@@ -215,8 +246,11 @@ void VofaSend(void)
     }
     else
     {
-        /* 无在途发送：直接启动（无 ACTIVE 时不会有完成回调抢跑——PENDING 只能在有 ACTIVE
-         * 时产生，而完成回调必把它升为 ACTIVE，故 HasActive()==0 蕴含无 PENDING）。
+        /* 无在途发送：直接启动 —— 无 ACTIVE 就不会有完成回调抢跑（TxCplt 只由在途传输产生）。
+         * 但无 ACTIVE **不**蕴含无 PENDING：下面的 BSP_BUSY 分支正会在无 ACTIVE 时留下
+         * PENDING（bsp 的发送契约就是"忙即 BSP_BUSY、上层排队重试"，故这条是正常路径而非兜底）。
+         * 那种槽不会再有 TxCplt 去把它升成 ACTIVE，属孤儿：由 VofaSend 入口回收到 IDLE
+         * （那一帧顺带丢弃，理由见入口注释），链路由下一个周期的直发重新接上，本分支不负责它。
          * 顺序刻意是"先启动、成功才标 ACTIVE"：USARTTransmit 内部可能触发 err_callback
          * （发送卡死自恢复），若提前标 ACTIVE，那个回调会把**尚未交给 DMA** 的本帧当成
          * 被中止的那次一并释放，与下面的成功分支打架；不标则它只认 ACTIVE、碰不到本帧。
@@ -248,8 +282,10 @@ void VofaSend(void)
             return;
         }
     }
-    // 没有空闲缓冲区，保持当前索引，下次 SetChannel 会因状态检查而失效
-    BSPLOG(&g_vofa_log, LOG_LEVEL_WARNING, "No idle buffer, SetChannel will be ignored until buffer available!");
+    /* 没有空闲缓冲区，保持当前索引 —— 该槽当前非 IDLE（PENDING/ACTIVE），
+     * 下次 VofaSend 的入口检查会丢弃当帧、VofaSetChannel 也会因状态检查失效，
+     * 直到某个槽被完成回调释放。这两个丢弃都是有意的（见 VofaSend 入口注释）。 */
+    BSPLOG(&g_vofa_log, LOG_LEVEL_WARNING, "No idle buffer, VofaSend/SetChannel will be ignored until buffer available!");
 }
 
 #else // !(defined(VOFA_USED)) && (defined(VOFA_UART))
