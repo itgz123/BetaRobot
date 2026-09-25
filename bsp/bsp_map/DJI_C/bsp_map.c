@@ -5,35 +5,25 @@ void BSPInit()
 }
 
 const GPIO_Map_t gpio_map[GPIO_NUM_MAX] = {
-    [GPIO_USER_KEY] = {GPIOA, GPIO_PIN_0},
-    [GPIO_BMI088_CS_ACCEL] = {GPIOA, GPIO_PIN_4},
-    [GPIO_BMI088_CS_GYRO] = {GPIOB, GPIO_PIN_0},
-    [GPIO_BMI088_INT_ACCEL] = {GPIOC, GPIO_PIN_4},
-    [GPIO_BMI088_INT_GYRO] = {GPIOC, GPIO_PIN_5},
-    [GPIO_IST8310_DRDY] = {GPIOG, GPIO_PIN_3},
-    [GPIO_IST8310_RSTN] = {GPIOG, GPIO_PIN_6},
-    [GPIO_PWM_1] = {GPIOE, GPIO_PIN_9},  /* PE9  TIM1_CH1 */
-    [GPIO_PWM_2] = {GPIOE, GPIO_PIN_11}, /* PE11 TIM1_CH2 */
-    [GPIO_PWM_3] = {GPIOE, GPIO_PIN_13}, /* PE13 TIM1_CH3 */
-    [GPIO_PWM_4] = {GPIOE, GPIO_PIN_14}, /* PE14 TIM1_CH4 */
-    [GPIO_PWM_5] = {GPIOC, GPIO_PIN_6},  /* PC6  TIM8_CH1 */
-    [GPIO_PWM_6] = {GPIOI, GPIO_PIN_6},  /* PI6  TIM8_CH2 */
-    [GPIO_PWM_7] = {GPIOI, GPIO_PIN_7},  /* PI7  TIM8_CH3 */
+    [GPIO_USER_KEY] = {GPIOA, GPIO_PIN_0},        [GPIO_BMI088_CS_ACCEL] = {GPIOA, GPIO_PIN_4},
+    [GPIO_BMI088_CS_GYRO] = {GPIOB, GPIO_PIN_0},  [GPIO_BMI088_INT_ACCEL] = {GPIOC, GPIO_PIN_4},
+    [GPIO_BMI088_INT_GYRO] = {GPIOC, GPIO_PIN_5}, [GPIO_IST8310_DRDY] = {GPIOG, GPIO_PIN_3},
+    [GPIO_IST8310_RSTN] = {GPIOG, GPIO_PIN_6},    [GPIO_PWM_1] = {GPIOE, GPIO_PIN_9}, /* PE9  TIM1_CH1 */
+    [GPIO_PWM_2] = {GPIOE, GPIO_PIN_11},                                              /* PE11 TIM1_CH2 */
+    [GPIO_PWM_3] = {GPIOE, GPIO_PIN_13},                                              /* PE13 TIM1_CH3 */
+    [GPIO_PWM_4] = {GPIOE, GPIO_PIN_14},                                              /* PE14 TIM1_CH4 */
+    [GPIO_PWM_5] = {GPIOC, GPIO_PIN_6},                                               /* PC6  TIM8_CH1 */
+    [GPIO_PWM_6] = {GPIOI, GPIO_PIN_6},                                               /* PI6  TIM8_CH2 */
+    [GPIO_PWM_7] = {GPIOI, GPIO_PIN_7},                                               /* PI7  TIM8_CH3 */
 };
 
 const TIM_Map_t tim_map[TIM_NUM_MAX] = {
-    [TIM_PWM_1] = {&htim1, TIM_CHANNEL_1},
-    [TIM_PWM_2] = {&htim1, TIM_CHANNEL_2},
-    [TIM_PWM_3] = {&htim1, TIM_CHANNEL_3},
-    [TIM_PWM_4] = {&htim1, TIM_CHANNEL_4},
-    [TIM_PWM_5] = {&htim8, TIM_CHANNEL_1},
-    [TIM_PWM_6] = {&htim8, TIM_CHANNEL_2},
-    [TIM_PWM_7] = {&htim8, TIM_CHANNEL_3},
-    [TIM_LED_B] = {&htim5, TIM_CHANNEL_1},
-    [TIM_LED_G] = {&htim5, TIM_CHANNEL_2},
-    [TIM_LED_R] = {&htim5, TIM_CHANNEL_3},
-    [TIM_LASER] = {&htim3, TIM_CHANNEL_3},
-    [TIM_BUZZER] = {&htim4, TIM_CHANNEL_3},
+    [TIM_PWM_1] = {&htim1, TIM_CHANNEL_1},   [TIM_PWM_2] = {&htim1, TIM_CHANNEL_2},
+    [TIM_PWM_3] = {&htim1, TIM_CHANNEL_3},   [TIM_PWM_4] = {&htim1, TIM_CHANNEL_4},
+    [TIM_PWM_5] = {&htim8, TIM_CHANNEL_1},   [TIM_PWM_6] = {&htim8, TIM_CHANNEL_2},
+    [TIM_PWM_7] = {&htim8, TIM_CHANNEL_3},   [TIM_LED_B] = {&htim5, TIM_CHANNEL_1},
+    [TIM_LED_G] = {&htim5, TIM_CHANNEL_2},   [TIM_LED_R] = {&htim5, TIM_CHANNEL_3},
+    [TIM_LASER] = {&htim3, TIM_CHANNEL_3},   [TIM_BUZZER] = {&htim4, TIM_CHANNEL_3},
     [TIM_HEATER] = {&htim10, TIM_CHANNEL_1},
 };
 

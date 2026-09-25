@@ -87,18 +87,18 @@ typedef struct
 #define LIB_HAMMING_FULL_K(m) ((uint32_t)((1u << (m)) - 1u - (m)))
 
 /* 单块数据位数 k_s = min(data_bits, k)（与 LIB_Hamming_Fit 同一定义） */
-#define LIB_HAMMING_FIT_KS(data_bits, m) \
+#define LIB_HAMMING_FIT_KS(data_bits, m)                                                                               \
     (((data_bits) < LIB_HAMMING_FULL_K(m)) ? (uint32_t)(data_bits) : LIB_HAMMING_FULL_K(m))
 
 /* 块数 B = ceil(data_bits / k_s) */
 #define LIB_HAMMING_BLOCK_CNT(data_bits, k_s) (((uint32_t)(data_bits) + (k_s) - 1u) / (k_s))
 
 /* 码字总位数 = B * (k_s + m + ext)，ext 非 0 时每块多 1 位总校验位 */
-#define LIB_HAMMING_CODE_BITS(data_bits, k_s, m, ext) \
+#define LIB_HAMMING_CODE_BITS(data_bits, k_s, m, ext)                                                                  \
     (LIB_HAMMING_BLOCK_CNT((data_bits), (k_s)) * ((uint32_t)(k_s) + (m) + ((ext) ? 1u : 0u)))
 
 /* 码字总字节数 = ceil(码字总位数 / 8)，取整后尾部空位由编码函数清零 */
-#define LIB_HAMMING_CODE_BYTES(data_bits, k_s, m, ext) \
+#define LIB_HAMMING_CODE_BYTES(data_bits, k_s, m, ext)                                                                 \
     ((LIB_HAMMING_CODE_BITS((data_bits), (k_s), (m), (ext)) + 7u) / 8u)
 
 /**
@@ -107,9 +107,9 @@ typedef struct
  * @param k_s 每块数据位数（1..k）
  * @note 用法：LIB_HAMMING_CHECK_CFG(m, k_s);
  */
-#define LIB_HAMMING_CHECK_CFG(m, k_s)                                                      \
-    _Static_assert((m) >= 2u && (m) <= LIB_HAMMING_M_MAX && (k_s) >= 1u &&                 \
-                       (uint32_t)(k_s) <= (uint32_t)((1u << (m)) - 1u - (m)),              \
+#define LIB_HAMMING_CHECK_CFG(m, k_s)                                                                                  \
+    _Static_assert((m) >= 2u && (m) <= LIB_HAMMING_M_MAX && (k_s) >= 1u &&                                             \
+                       (uint32_t)(k_s) <= (uint32_t)((1u << (m)) - 1u - (m)),                                          \
                    "lib_hamming: m must be 2..7 and k_s must be 1..2^m-1-m")
 
 /*---- 字节块编译期规划（数据按整字节收发的场景，如 comm 帧）----
@@ -122,13 +122,12 @@ typedef struct
 #define LIB_HAMMING_BYTE_FULL_BLK(m) (LIB_HAMMING_FULL_K(m) / 8u)
 
 /* 块数 B = ceil(P / S)（最少块数；P 须 ≥ 1） */
-#define LIB_HAMMING_BYTE_BLKS(payload_bytes, m)                             \
-    (((uint32_t)(payload_bytes) + LIB_HAMMING_BYTE_FULL_BLK(m) - 1u) /      \
-     LIB_HAMMING_BYTE_FULL_BLK(m))
+#define LIB_HAMMING_BYTE_BLKS(payload_bytes, m)                                                                        \
+    (((uint32_t)(payload_bytes) + LIB_HAMMING_BYTE_FULL_BLK(m) - 1u) / LIB_HAMMING_BYTE_FULL_BLK(m))
 
 /* 每块数据字节数 s = ceil(P / B)（≤ S ⇒ k_s = 8s ≤ k，仍是合法缩短码） */
-#define LIB_HAMMING_BYTE_BLK_DATA(payload_bytes, m)                          \
-    (((uint32_t)(payload_bytes) + LIB_HAMMING_BYTE_BLKS(payload_bytes, m) - 1u) / \
+#define LIB_HAMMING_BYTE_BLK_DATA(payload_bytes, m)                                                                    \
+    (((uint32_t)(payload_bytes) + LIB_HAMMING_BYTE_BLKS(payload_bytes, m) - 1u) /                                      \
      LIB_HAMMING_BYTE_BLKS(payload_bytes, m))
 
 /*============================================
@@ -196,8 +195,7 @@ uint32_t LIB_Hamming_RequiredBits(uint32_t data_bits, const LIB_Hamming_Cfg_t *c
  * @param[out] code 输出码字（k_s+m 位；前 k_s 位 = 数据，后 m 位 = 校验）
  * @return OK 成功；BAD_ARG 参数非法
  */
-LIB_Hamming_Status_t LIB_Hamming_EncodeBlock(const uint8_t *data, const LIB_Hamming_Cfg_t *cfg,
-                                             uint8_t *code);
+LIB_Hamming_Status_t LIB_Hamming_EncodeBlock(const uint8_t *data, const LIB_Hamming_Cfg_t *cfg, uint8_t *code);
 
 /**
  * @brief 对一块码字解码（标准码，单纠错）
@@ -208,8 +206,8 @@ LIB_Hamming_Status_t LIB_Hamming_EncodeBlock(const uint8_t *data, const LIB_Hamm
  * @param[out] err_pos 输出纠错位置（块内下标 0..k_s+m-1；无错或不可纠为 -1；可为 NULL）
  * @return OK 无错；CORRECTED 已纠单错；DETECTED 不可纠（数据未纠）；BAD_ARG 参数非法
  */
-LIB_Hamming_Status_t LIB_Hamming_DecodeBlock(const uint8_t *code, const LIB_Hamming_Cfg_t *cfg,
-                                             uint8_t *data, uint8_t *syndrome, int16_t *err_pos);
+LIB_Hamming_Status_t LIB_Hamming_DecodeBlock(const uint8_t *code, const LIB_Hamming_Cfg_t *cfg, uint8_t *data,
+                                             uint8_t *syndrome, int16_t *err_pos);
 
 /**
  * @brief 由 syndrome 反查块内错误位置
@@ -220,8 +218,7 @@ LIB_Hamming_Status_t LIB_Hamming_DecodeBlock(const uint8_t *code, const LIB_Hamm
  *         BAD_ARG 参数非法或 syndrome 为 0
  * @note 扩展层用它区分单错与多错，无需复制任何矩阵逻辑。
  */
-LIB_Hamming_Status_t LIB_Hamming_PosFromSyndrome(uint8_t syndrome, const LIB_Hamming_Cfg_t *cfg,
-                                                 int16_t *pos);
+LIB_Hamming_Status_t LIB_Hamming_PosFromSyndrome(uint8_t syndrome, const LIB_Hamming_Cfg_t *cfg, int16_t *pos);
 
 /*============================================
  *          任意 bit 长度（标准码）
@@ -238,8 +235,8 @@ LIB_Hamming_Status_t LIB_Hamming_PosFromSyndrome(uint8_t syndrome, const LIB_Ham
  * @return 0 成功；-1 参数非法；-2 缓冲不足（不写缓冲）
  * @note 末块不足 k_s 位补零；code 尾部非整字节位会被清零。
  */
-int8_t LIB_Hamming_Encode(const uint8_t *data, uint32_t data_bits, const LIB_Hamming_Cfg_t *cfg,
-                          uint8_t *code, uint32_t code_cap_bits, uint32_t *code_bits);
+int8_t LIB_Hamming_Encode(const uint8_t *data, uint32_t data_bits, const LIB_Hamming_Cfg_t *cfg, uint8_t *code,
+                          uint32_t code_cap_bits, uint32_t *code_bits);
 
 /**
  * @brief 解码任意 bit 长度数据（标准汉明码）
@@ -252,7 +249,7 @@ int8_t LIB_Hamming_Encode(const uint8_t *data, uint32_t data_bits, const LIB_Ham
  * @return 0 成功；-1 参数非法（含 code_bits 不匹配）
  * @note 纠错能力有限，具体结果看 stat->corrected / stat->detected。
  */
-int8_t LIB_Hamming_Decode(const uint8_t *code, uint32_t code_bits, uint32_t data_bits,
-                          const LIB_Hamming_Cfg_t *cfg, uint8_t *data, LIB_Hamming_Stat_t *stat);
+int8_t LIB_Hamming_Decode(const uint8_t *code, uint32_t code_bits, uint32_t data_bits, const LIB_Hamming_Cfg_t *cfg,
+                          uint8_t *data, LIB_Hamming_Stat_t *stat);
 
 #endif /* __LIB_HAMMING_H */

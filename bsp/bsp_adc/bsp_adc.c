@@ -58,8 +58,11 @@ static HAL_StatusTypeDef ADCConfigChannel(ADCInstance *instance)
 int8_t ADCRegister(ADCInstance *instance)
 {
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Register failed: instance is NULL"));
-    BSP_RETURN_IF_TRUE_LOG(s_adc_idx >= ADC_INSTANCE_NUM, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Register failed: instance num exceeded %d", ADC_INSTANCE_NUM));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1,
+                           BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Register failed: instance is NULL"));
+    BSP_RETURN_IF_TRUE_LOG(
+        s_adc_idx >= ADC_INSTANCE_NUM, -1,
+        BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Register failed: instance num exceeded %d", ADC_INSTANCE_NUM));
 
     // 防重复注册检查
     for (uint8_t i = 0; i < s_adc_idx; i++)
@@ -84,18 +87,23 @@ int8_t ADCRegister(ADCInstance *instance)
  */
 int8_t ADCConfig(ADCInstance *instance, const ADC_Config_s *config)
 {
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Config failed: instance is NULL"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1,
+                           BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Config failed: instance is NULL"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Config failed: config is NULL"));
-    BSP_RETURN_IF_TRUE_LOG(config->adc_e >= ADC_NUM_MAX, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Config failed: adc_e out of range"));
+    BSP_RETURN_IF_TRUE_LOG(config->adc_e >= ADC_NUM_MAX, -1,
+                           BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Config failed: adc_e out of range"));
 
     // 填充枚举和硬件映射
     instance->adc_e = config->adc_e;
     instance->adc_map = adc_map[instance->adc_e];
 
-    BSP_RETURN_IF_TRUE_LOG(instance->adc_map.handle == NULL, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Config failed: ADC handle is NULL"));
+    BSP_RETURN_IF_TRUE_LOG(instance->adc_map.handle == NULL, -1,
+                           BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Config failed: ADC handle is NULL"));
 
     // 配置ADC通道
-    BSP_RETURN_IF_TRUE_LOG(ADCConfigChannel(instance) != HAL_OK, -1, BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Config failed: config channel failed, adc_e=%d", instance->adc_e));
+    BSP_RETURN_IF_TRUE_LOG(
+        ADCConfigChannel(instance) != HAL_OK, -1,
+        BSPLOG(&g_adc_log, LOG_LEVEL_ERROR, "Config failed: config channel failed, adc_e=%d", instance->adc_e));
 
     // ADC校准（仅H7系列支持，F4系列无校准API）
     ADC_HandleTypeDef *hadc = instance->adc_map.handle;
@@ -115,8 +123,8 @@ int8_t ADCConfig(ADCInstance *instance, const ADC_Config_s *config)
     /* 用 %lX + (unsigned long) 而不是 0x%p：lib_format 不支持 %p（见 lib_format.h），
      * 它会按字面打出 "0xp" 并让后面的 channel 读到 handle 指针。句柄是 32 位地址，
      * (unsigned long) 在本工程 ABI 下宽度一致，打印值与 printf 的 %p 相同。 */
-    BSPLOG(&g_adc_log, LOG_LEVEL_INFO, "Config success: adc_e=%d, handle=0x%lX, channel=%lu",
-           instance->adc_e, (unsigned long)instance->adc_map.handle, (unsigned long)instance->adc_map.channel);
+    BSPLOG(&g_adc_log, LOG_LEVEL_INFO, "Config success: adc_e=%d, handle=0x%lX, channel=%lu", instance->adc_e,
+           (unsigned long)instance->adc_map.handle, (unsigned long)instance->adc_map.channel);
     return 0;
 }
 

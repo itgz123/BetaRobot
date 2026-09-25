@@ -30,17 +30,18 @@
 /* USB 介质派生结构体（首成员必须为 CommMedia 基类，vtable 约定；字段同 CommMediaUsb） */
 typedef struct
 {
-    CommMedia base;              /* 基类（首成员；发送不持 staging 缓冲，MediaUsbSimpleSend 直接引用 comm 打包缓冲 data） */
-    uint8_t *rx_buff;            /* 接收累积缓冲（完整协议帧，不含分包序号；DEF 宏静态绑定，大小 = rx_buff_sz） */
-    const uint16_t rx_frame_len; /* 完整协议帧长（不含分包序号）= rx_buff_sz（DEF 宏写入；接收判定依据 + 短帧透传目标长度） */
+    CommMedia base;   /* 基类（首成员；发送不持 staging 缓冲，MediaUsbSimpleSend 直接引用 comm 打包缓冲 data） */
+    uint8_t *rx_buff; /* 接收累积缓冲（完整协议帧，不含分包序号；DEF 宏静态绑定，大小 = rx_buff_sz） */
+    const uint16_t
+        rx_frame_len; /* 完整协议帧长（不含分包序号）= rx_buff_sz（DEF 宏写入；接收判定依据 + 短帧透传目标长度） */
     const uint16_t tx_frame_len; /* 完整协议帧长（不含分包序号）= tx_buff_sz（DEF 宏写入；发送分包/透传依据） */
     uint16_t rx_cnt;             /* 已累积字节数（0..rx_frame_len，上交后归零；长帧重组用） */
     uint8_t rx_expect_pkt;       /* 期望接收的下一分包序号（帧内 0 起递增；长帧重组用） */
     uint32_t lost_frames;        /* 丢帧计数（短帧长度不符 / 长帧分包错位累加） */
-    uint32_t tx_fail;            /* 发送失败计数（USBTransmit 返回非 BSP_OK 且非背压：未枚举/参数错；只增不清，调试用） */
-    uint32_t tx_busy;            /* 发送背压计数（USBTransmit 返回 BSP_BUSY：ring 放不下整帧，退避后重发即可） */
-    uint32_t err_count;          /* bsp 错误回调（USB_ERR_* 事件）累计次数（只增不清，调试用） */
-    uint8_t last_err;            /* 最近一次 bsp 错误回调的 USB_ErrReason_e（调试用） */
+    uint32_t tx_fail;   /* 发送失败计数（USBTransmit 返回非 BSP_OK 且非背压：未枚举/参数错；只增不清，调试用） */
+    uint32_t tx_busy;   /* 发送背压计数（USBTransmit 返回 BSP_BUSY：ring 放不下整帧，退避后重发即可） */
+    uint32_t err_count; /* bsp 错误回调（USB_ERR_* 事件）累计次数（只增不清，调试用） */
+    uint8_t last_err;   /* 最近一次 bsp 错误回调的 USB_ErrReason_e（调试用） */
     USB_ErrCallback user_err_callback; /* cfg 里用户提供的错误回调（可为 NULL）；本层自己的钩子转发给它 */
 } CommMediaUsbSimple;
 
@@ -59,16 +60,15 @@ typedef struct
  *   COMM_MEDIA_USB_SIMPLE_DEF(vis_comm_media, 57, 57); 57B ≤ 64B → 免序号整包透传
  *   COMM_MEDIA_USB_SIMPLE_DEF(vis_comm_media, 100, 100); 100B > 64B → 分包带序号（同 usb）
  */
-#define COMM_MEDIA_USB_SIMPLE_DEF(name, rx_buff_sz, tx_buff_sz) \
-    USB_INSTANCE_DEF(name##_usb);                               \
-    DAEMON_INSTANCE_DEF(name##_daemon);                         \
-    static uint8_t name##_rx_buff[(rx_buff_sz)] = {0};          \
-    static CommMediaUsbSimple name = {                          \
-        .base.media = &name##_usb,                              \
-        .base.daemon = &name##_daemon,                          \
-        .rx_buff = name##_rx_buff,                              \
-        .rx_frame_len = (rx_buff_sz),                           \
-        .tx_frame_len = (tx_buff_sz)}
+#define COMM_MEDIA_USB_SIMPLE_DEF(name, rx_buff_sz, tx_buff_sz)                                                        \
+    USB_INSTANCE_DEF(name##_usb);                                                                                      \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
+    static uint8_t name##_rx_buff[(rx_buff_sz)] = {0};                                                                 \
+    static CommMediaUsbSimple name = {.base.media = &name##_usb,                                                       \
+                                      .base.daemon = &name##_daemon,                                                   \
+                                      .rx_buff = name##_rx_buff,                                                       \
+                                      .rx_frame_len = (rx_buff_sz),                                                    \
+                                      .tx_frame_len = (tx_buff_sz)}
 
 /**
  * @brief 注册 USB-simple 介质后端（不可重入：仅可调用一次）

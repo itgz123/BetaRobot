@@ -90,16 +90,12 @@ static uint8_t Hamming_Ctz(uint8_t v)
  *       全部单位置错）与旧的"现场穷举"逐项一致。
  */
 static const uint8_t s_hamming_col[120] = {
-    3,   5,   6,   7,   9,   10,  11,  12,  13,  14,  15,  17,
-    18,  19,  20,  21,  22,  23,  24,  25,  26,  27,  28,  29,
-    30,  31,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,
-    43,  44,  45,  46,  47,  48,  49,  50,  51,  52,  53,  54,
-    55,  56,  57,  58,  59,  60,  61,  62,  63,  65,  66,  67,
-    68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,
-    80,  81,  82,  83,  84,  85,  86,  87,  88,  89,  90,  91,
-    92,  93,  94,  95,  96,  97,  98,  99,  100, 101, 102, 103,
-    104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115,
-    116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127};
+    3,   5,   6,   7,   9,   10,  11,  12,  13,  14,  15,  17,  18,  19,  20,  21,  22,  23,  24,  25,
+    26,  27,  28,  29,  30,  31,  33,  34,  35,  36,  37,  38,  39,  40,  41,  42,  43,  44,  45,  46,
+    47,  48,  49,  50,  51,  52,  53,  54,  55,  56,  57,  58,  59,  60,  61,  62,  63,  65,  66,  67,
+    68,  69,  70,  71,  72,  73,  74,  75,  76,  77,  78,  79,  80,  81,  82,  83,  84,  85,  86,  87,
+    88,  89,  90,  91,  92,  93,  94,  95,  96,  97,  98,  99,  100, 101, 102, 103, 104, 105, 106, 107,
+    108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127};
 
 /* 表长须正好是最大 m 的满码数据位数 k = 2^m-1-m：改 LIB_HAMMING_M_MAX 时
  * （比如扩到 8，k=247）这里会编译报错，提醒同步扩表，不会静默越界读。 */
@@ -162,8 +158,7 @@ uint32_t LIB_Hamming_RequiredBits(uint32_t data_bits, const LIB_Hamming_Cfg_t *c
  * @brief 对一块数据编码（标准码）
  * @see LIB_Hamming_EncodeBlock
  */
-LIB_Hamming_Status_t LIB_Hamming_EncodeBlock(const uint8_t *data, const LIB_Hamming_Cfg_t *cfg,
-                                             uint8_t *code)
+LIB_Hamming_Status_t LIB_Hamming_EncodeBlock(const uint8_t *data, const LIB_Hamming_Cfg_t *cfg, uint8_t *code)
 {
     uint8_t acc = 0;
     uint16_t i;
@@ -198,8 +193,7 @@ LIB_Hamming_Status_t LIB_Hamming_EncodeBlock(const uint8_t *data, const LIB_Hamm
  * @brief 由 syndrome 反查块内错误位置
  * @see LIB_Hamming_PosFromSyndrome
  */
-LIB_Hamming_Status_t LIB_Hamming_PosFromSyndrome(uint8_t syndrome, const LIB_Hamming_Cfg_t *cfg,
-                                                 int16_t *pos)
+LIB_Hamming_Status_t LIB_Hamming_PosFromSyndrome(uint8_t syndrome, const LIB_Hamming_Cfg_t *cfg, int16_t *pos)
 {
     uint16_t p;
 
@@ -227,8 +221,8 @@ LIB_Hamming_Status_t LIB_Hamming_PosFromSyndrome(uint8_t syndrome, const LIB_Ham
  * @brief 对一块码字解码（标准码，单纠错）
  * @see LIB_Hamming_DecodeBlock
  */
-LIB_Hamming_Status_t LIB_Hamming_DecodeBlock(const uint8_t *code, const LIB_Hamming_Cfg_t *cfg,
-                                             uint8_t *data, uint8_t *syndrome, int16_t *err_pos)
+LIB_Hamming_Status_t LIB_Hamming_DecodeBlock(const uint8_t *code, const LIB_Hamming_Cfg_t *cfg, uint8_t *data,
+                                             uint8_t *syndrome, int16_t *err_pos)
 {
     uint8_t recon = 0;
     uint16_t n_s;
@@ -279,8 +273,8 @@ LIB_Hamming_Status_t LIB_Hamming_DecodeBlock(const uint8_t *code, const LIB_Hamm
  * @brief 编码任意 bit 长度数据（标准汉明码）
  * @see LIB_Hamming_Encode
  */
-int8_t LIB_Hamming_Encode(const uint8_t *data, uint32_t data_bits, const LIB_Hamming_Cfg_t *cfg,
-                          uint8_t *code, uint32_t code_cap_bits, uint32_t *code_bits)
+int8_t LIB_Hamming_Encode(const uint8_t *data, uint32_t data_bits, const LIB_Hamming_Cfg_t *cfg, uint8_t *code,
+                          uint32_t code_cap_bits, uint32_t *code_bits)
 {
     uint32_t blocks;
     uint32_t required;
@@ -337,8 +331,8 @@ int8_t LIB_Hamming_Encode(const uint8_t *data, uint32_t data_bits, const LIB_Ham
  * @brief 解码任意 bit 长度数据（标准汉明码）
  * @see LIB_Hamming_Decode
  */
-int8_t LIB_Hamming_Decode(const uint8_t *code, uint32_t code_bits, uint32_t data_bits,
-                          const LIB_Hamming_Cfg_t *cfg, uint8_t *data, LIB_Hamming_Stat_t *stat)
+int8_t LIB_Hamming_Decode(const uint8_t *code, uint32_t code_bits, uint32_t data_bits, const LIB_Hamming_Cfg_t *cfg,
+                          uint8_t *data, LIB_Hamming_Stat_t *stat)
 {
     uint32_t blocks;
     uint32_t required;

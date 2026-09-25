@@ -14,14 +14,8 @@ TaskHandle_t TaskRegister(TaskInstance *inst, const Task_Init_Config_s *config)
     configASSERT(config != NULL);
     configASSERT(config->func != NULL);
 
-    inst->handle = xTaskCreateStatic(
-        config->func,
-        inst->name,
-        inst->stack_size,
-        NULL,
-        config->priority,
-        inst->stack,
-        inst->tcb);
+    inst->handle =
+        xTaskCreateStatic(config->func, inst->name, inst->stack_size, NULL, config->priority, inst->stack, inst->tcb);
 
     return inst->handle;
 }
@@ -30,11 +24,7 @@ QueueHandle_t QueueRegister(QueueInstance *inst)
 {
     configASSERT(inst != NULL);
 
-    inst->handle = xQueueCreateStatic(
-        inst->length,
-        inst->item_size,
-        inst->storage,
-        inst->buffer);
+    inst->handle = xQueueCreateStatic(inst->length, inst->item_size, inst->storage, inst->buffer);
 
     return inst->handle;
 }

@@ -85,13 +85,13 @@ void BSP_SysStatusAppTaskTimeoutCount(void);
  *       （如 CANRegister / CANConfig 返回 0 成功、-1 失败）。
  * @example BSP_ASSERT_APP_CALL(CANRegister(&can_inst));
  */
-#define BSP_ASSERT_APP_CALL(func)           \
-    do                                      \
-    {                                       \
-        if ((func) != 0)                    \
-        {                                   \
-            BSP_SysStatusAppInitErrCount(); \
-        }                                   \
+#define BSP_ASSERT_APP_CALL(func)                                                                                      \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        if ((func) != 0)                                                                                               \
+        {                                                                                                              \
+            BSP_SysStatusAppInitErrCount();                                                                            \
+        }                                                                                                              \
     } while (0)
 
 #else /* 系统状态关闭：BSP_SYS_STATUS_USED 未定义（与 bsp_sys_status.c 的 #if 一致） */

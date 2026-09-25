@@ -132,8 +132,8 @@ int8_t DBUSConfig(DBUSInstance *instance, const DBUS_Config_s *config)
         if (daemon_reload == 0)
         {
             daemon_reload = DRV_DBUS_DAEMON_RELOAD_DEFAULT;
-            BSPLOG(&g_dbus_log, LOG_LEVEL_WARNING,
-                   "daemon_reload=0 disables RX self-heal, forced to %u", daemon_reload);
+            BSPLOG(&g_dbus_log, LOG_LEVEL_WARNING, "daemon_reload=0 disables RX self-heal, forced to %u",
+                   daemon_reload);
         }
 
         Daemon_Config_s daemon_cfg = {
@@ -379,7 +379,7 @@ static void DBUSUARTRxCallback(USARTInstance *usart_inst)
         return;
     }
 
-    dbus_inst->dbus_data = frame; /* 有效帧：整份覆盖（帧内无失控位，flags 恒 0） */
+    dbus_inst->dbus_data = frame;    /* 有效帧：整份覆盖（帧内无失控位，flags 恒 0） */
     DaemonReload(dbus_inst->daemon); /* 只有可解析的有效帧才证明对端在线 */
 
     // 信号恢复正常：清除计时和丢失标志

@@ -69,7 +69,8 @@ LOG_INSTANCE_DEF(g_bmi088_kalman_log, "bmi088_kalman", DRVLIB_BMI088_KALMAN_LOG_
 /*============================ 内部函数声明 ============================*/
 
 static void KalmanAxisInit(KalmanInstance *kf, float r_tilt);
-static float KalmanAxisStep(KalmanInstance *kf, float rate, float dt, const BMI088KalmanInstance *inst, uint8_t meas_ok, float z, float r_now);
+static float KalmanAxisStep(KalmanInstance *kf, float rate, float dt, const BMI088KalmanInstance *inst, uint8_t meas_ok,
+                            float z, float r_now);
 
 /*============================ 内部函数实现 ============================*/
 
@@ -116,7 +117,8 @@ static void KalmanAxisInit(KalmanInstance *kf, float r_tilt)
  * @param r_now 本帧量测噪声方差 (rad²)
  * @return 倾角估计 (rad)
  */
-static float KalmanAxisStep(KalmanInstance *kf, float rate, float dt, const BMI088KalmanInstance *inst, uint8_t meas_ok, float z, float r_now)
+static float KalmanAxisStep(KalmanInstance *kf, float rate, float dt, const BMI088KalmanInstance *inst, uint8_t meas_ok,
+                            float z, float r_now)
 {
     float u[1] = {rate};
 
@@ -244,9 +246,8 @@ int8_t BMI088KalmanConfig(BMI088KalmanInstance *inst, const BMI088Kalman_Config_
     BSPLOG(&g_bmi088_kalman_log, LOG_LEVEL_INFO,
            "config: gyro_bias(urad/s) %d %d %d tempco(1e-6/degC) %d %d %d temp_ref=%d",
            (int)(inst->gyro_calib.bias[0] * 1e6f), (int)(inst->gyro_calib.bias[1] * 1e6f),
-           (int)(inst->gyro_calib.bias[2] * 1e6f),
-           (int)(inst->gyro_calib.bias_tempco[0] * 1e6f), (int)(inst->gyro_calib.bias_tempco[1] * 1e6f),
-           (int)(inst->gyro_calib.bias_tempco[2] * 1e6f),
+           (int)(inst->gyro_calib.bias[2] * 1e6f), (int)(inst->gyro_calib.bias_tempco[0] * 1e6f),
+           (int)(inst->gyro_calib.bias_tempco[1] * 1e6f), (int)(inst->gyro_calib.bias_tempco[2] * 1e6f),
            (int)inst->temp_ref);
     return 0;
 }
@@ -349,7 +350,8 @@ void BMI088KalmanUpdate(BMI088KalmanInstance *inst)
             meas_ok = 1;
             /* R 随 |acc| 偏离 1g 的程度连续放大（最多 1+R_INFLATE_MAX 倍），
              * 越不像"只剩重力"就越不信它 */
-            r_now = inst->r_tilt * (1.0f + BMI088_KALMAN_R_INFLATE_MAX * (err * err) / (BMI088_KALMAN_ACC_REJECT * BMI088_KALMAN_ACC_REJECT));
+            r_now = inst->r_tilt * (1.0f + BMI088_KALMAN_R_INFLATE_MAX * (err * err) /
+                                               (BMI088_KALMAN_ACC_REJECT * BMI088_KALMAN_ACC_REJECT));
             /* 静止时加速度计指向 +Z、模长 1g，反算取 aerospace(ZYX) 约定 */
             acc_roll = Lib_Math_Atan2(acc[1], acc[2]);
             acc_pitch = Lib_Math_Atan2(-acc[0], Lib_Math_Sqrt(acc[1] * acc[1] + acc[2] * acc[2]));
@@ -370,8 +372,7 @@ void BMI088KalmanUpdate(BMI088KalmanInstance *inst)
         KF_X(inst->kf_pitch, 0) = inst->euler.pitch;
         KF_X(inst->kf_pitch, 1) = 0.0f;
 
-        BSPLOG(&g_bmi088_kalman_log, LOG_LEVEL_INFO,
-               "attitude seeded: roll=%d pitch=%d (mrad)",
+        BSPLOG(&g_bmi088_kalman_log, LOG_LEVEL_INFO, "attitude seeded: roll=%d pitch=%d (mrad)",
                (int)(inst->euler.roll * 1000.0f), (int)(inst->euler.pitch * 1000.0f));
     }
 

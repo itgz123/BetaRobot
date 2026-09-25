@@ -42,9 +42,7 @@ Kalman_Status_e KalmanInit(KalmanInstance *kf, const Kalman_Init_Config_s *cfg)
     }
 
     /* 维度合法性：1 ≤ n ≤ n_max，1 ≤ m ≤ m_max，0 ≤ l ≤ l_max */
-    if (cfg->n < 1 || cfg->n > kf->n_max ||
-        cfg->m < 1 || cfg->m > kf->m_max ||
-        cfg->l > kf->l_max)
+    if (cfg->n < 1 || cfg->n > kf->n_max || cfg->m < 1 || cfg->m > kf->m_max || cfg->l > kf->l_max)
     {
         return KALMAN_ERR_DIM;
     }
@@ -225,8 +223,7 @@ Kalman_Status_e KalmanUpdate(KalmanInstance *kf, const float *z)
     {
         return KALMAN_ERR_NULL;
     }
-    if (kf->n < 1 || kf->n > kf->n_max ||
-        kf->m < 1 || kf->m > kf->m_max)
+    if (kf->n < 1 || kf->n > kf->n_max || kf->m < 1 || kf->m > kf->m_max)
     {
         return KALMAN_ERR_DIM;
     }

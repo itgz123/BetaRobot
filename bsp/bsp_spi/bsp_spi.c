@@ -101,10 +101,9 @@ volatile SPI_Status_s s_spi_status[SPI_NUM_MAX];
 
 /* 两个 HAL 版本共有、且判据一致的错误位（F4 的 0x80 是 INVALID_CALLBACK，
  * H7 的 0x80 是 UDR —— 位域不同，故只能用交集做分类掩码，其余一律进 err_other） */
-#define SPI_ERROR_COMMON_MASK                                               \
-    (uint32_t)(HAL_SPI_ERROR_MODF | HAL_SPI_ERROR_CRC | HAL_SPI_ERROR_OVR | \
-               HAL_SPI_ERROR_FRE | HAL_SPI_ERROR_DMA | HAL_SPI_ERROR_FLAG | \
-               HAL_SPI_ERROR_ABORT)
+#define SPI_ERROR_COMMON_MASK                                                                                          \
+    (uint32_t)(HAL_SPI_ERROR_MODF | HAL_SPI_ERROR_CRC | HAL_SPI_ERROR_OVR | HAL_SPI_ERROR_FRE | HAL_SPI_ERROR_DMA |    \
+               HAL_SPI_ERROR_FLAG | HAL_SPI_ERROR_ABORT)
 
 /*------------- 私有函数：查表与计数 --------------*/
 
@@ -165,8 +164,7 @@ static BSP_Status_e SPI_FailThenRet(const SPIInstance *instance, BSP_Status_e st
  * @note 只有**真失败**才走到这里（`HAL_BUSY` 是流控，见 SPI_StartFail），
  *       因此日志里必然带着 `err=0x...`：见到 `err=0x0` 就不是本函数打的。
  */
-static void SPI_LogStartFail(const SPIInstance *instance, const char *what,
-                             BSP_Transfer_Mode_e mode, uint8_t idx)
+static void SPI_LogStartFail(const SPIInstance *instance, const char *what, BSP_Transfer_Mode_e mode, uint8_t idx)
 {
     SPI_HandleTypeDef *hspi = instance->handle;
     int tx_state = (hspi->hdmatx != NULL) ? (int)hspi->hdmatx->State : -1;
@@ -184,8 +182,7 @@ static void SPI_LogStartFail(const SPIInstance *instance, const char *what,
         s_spi_status[idx].dma_rx_state = (rx_state < 0) ? 0xFF : (uint8_t)rx_state;
     }
 
-    BSPLOG(&g_spi_log, LOG_LEVEL_WARNING,
-           "SPI %s %s (spi_e=%d, mode=%d, spi=%d, tx_dma=%d, rx_dma=%d, err=0x%lX)!",
+    BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "SPI %s %s (spi_e=%d, mode=%d, spi=%d, tx_dma=%d, rx_dma=%d, err=0x%lX)!",
            what, phase, (int)instance->spi_e, (int)mode, (int)hspi->State, tx_state, rx_state,
            (unsigned long)hspi->ErrorCode);
 }
@@ -456,21 +453,19 @@ static BSP_Status_e SPI_WaitReady(SPIInstance *instance, uint32_t timeout_ms)
  * @retval 1 可用（或不是 DMA 模式，无需校验）
  * @retval 0 不可用（已计数并打日志）
  */
-static uint8_t SPI_CheckDmaCapability(SPIInstance *instance, BSP_Transfer_Mode_e mode,
-                                      uint8_t need_tx, uint8_t need_rx)
+static uint8_t SPI_CheckDmaCapability(SPIInstance *instance, BSP_Transfer_Mode_e mode, uint8_t need_tx, uint8_t need_rx)
 {
     if (mode != BSP_DMA_MODE)
         return 1;
 
-    if ((need_tx && instance->handle->hdmatx == NULL) ||
-        (need_rx && instance->handle->hdmarx == NULL))
+    if ((need_tx && instance->handle->hdmatx == NULL) || (need_rx && instance->handle->hdmarx == NULL))
     {
         uint8_t idx = SPI_HspiToIndex(instance->handle);
 
         if (idx < SPI_NUM_MAX)
             s_spi_status[idx].err_no_dma++;
-        BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "SPI DMA not available (spi_e=%d, tx=%d, rx=%d)!",
-               (int)instance->spi_e, need_tx, need_rx);
+        BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "SPI DMA not available (spi_e=%d, tx=%d, rx=%d)!", (int)instance->spi_e,
+               need_tx, need_rx);
         return 0;
     }
     return 1;
@@ -601,10 +596,8 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 
     /* ③ 上报（保留解码日志，便于直接看出是哪种错） */
     BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "Error detected, code=0x%lX (MODF:%d OVR:%d FRE:%d DMA:%d)",
-           (unsigned long)error_code,
-           (error_code & HAL_SPI_ERROR_MODF) ? 1 : 0,
-           (error_code & HAL_SPI_ERROR_OVR) ? 1 : 0,
-           (error_code & HAL_SPI_ERROR_FRE) ? 1 : 0,
+           (unsigned long)error_code, (error_code & HAL_SPI_ERROR_MODF) ? 1 : 0,
+           (error_code & HAL_SPI_ERROR_OVR) ? 1 : 0, (error_code & HAL_SPI_ERROR_FRE) ? 1 : 0,
            (error_code & HAL_SPI_ERROR_DMA) ? 1 : 0);
 
     if (instance != NULL && instance->err_callback != NULL)
@@ -619,8 +612,7 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
  */
 BSP_Status_e SPIRegister(SPIInstance *instance)
 {
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR,
-                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(s_spi_idx >= SPI_INSTANCE_NUM, BSP_PARAM_ERR,
                            BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Exceeded max instance count!"));
 
@@ -649,10 +641,8 @@ BSP_Status_e SPIConfig(SPIInstance *instance, const SPI_Config_s *config)
     uint8_t old_idx = SPI_NUM_MAX;
     uint8_t new_idx;
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR,
-                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, BSP_PARAM_ERR,
-                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, BSP_PARAM_ERR, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Config is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config->spi_e >= SPI_NUM_MAX, BSP_PARAM_ERR,
                            BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "spi_e out of range!"));
 
@@ -713,8 +703,8 @@ BSP_Status_e SPIConfig(SPIInstance *instance, const SPI_Config_s *config)
     return BSP_OK;
 }
 
-BSP_Status_e SPITransmit(SPIInstance *instance, const uint8_t *data, uint16_t len,
-                         BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
+BSP_Status_e SPITransmit(SPIInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode,
+                         uint32_t timeout_ms)
 {
     BSP_Status_e ret;
     uint8_t idx;
@@ -771,8 +761,7 @@ BSP_Status_e SPITransmit(SPIInstance *instance, const uint8_t *data, uint16_t le
     return BSP_OK;
 }
 
-BSP_Status_e SPIReceive(SPIInstance *instance, uint16_t len,
-                        BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
+BSP_Status_e SPIReceive(SPIInstance *instance, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
 {
     BSP_Status_e ret;
     uint8_t idx;
@@ -786,10 +775,9 @@ BSP_Status_e SPIReceive(SPIInstance *instance, uint16_t len,
     BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, SPI_FailThenRet(instance, BSP_PARAM_ERR),
                            BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
     /* 静默截断会让上层拿到"比请求短"的数据却毫无察觉，直接拒绝 */
-    BSP_RETURN_IF_TRUE_LOG(len == 0 || len > instance->buff_size,
-                           SPI_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Invalid receive len=%d (buff=%d)!",
-                                  len, instance->buff_size));
+    BSP_RETURN_IF_TRUE_LOG(
+        len == 0 || len > instance->buff_size, SPI_FailThenRet(instance, BSP_PARAM_ERR),
+        BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Invalid receive len=%d (buff=%d)!", len, instance->buff_size));
 
     idx = SPI_HspiToIndex(instance->handle);
 
@@ -837,8 +825,8 @@ BSP_Status_e SPIReceive(SPIInstance *instance, uint16_t len,
     return BSP_OK;
 }
 
-BSP_Status_e SPITransmitReceive(SPIInstance *instance, const uint8_t *tx_data, uint16_t len,
-                                BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
+BSP_Status_e SPITransmitReceive(SPIInstance *instance, const uint8_t *tx_data, uint16_t len, BSP_Transfer_Mode_e mode,
+                                uint32_t timeout_ms)
 {
     BSP_Status_e ret;
     uint8_t idx;
@@ -977,8 +965,7 @@ BSP_Status_e SPIRecoverTxIfStuck(SPIInstance *instance, uint32_t stuck_ms)
 
     /* 非 READY 但没超过阈值：可能只是一次正常的在途传输 */
     now_us = DWT_GetTimeUs();
-    if (s_spi_ready_us[idx] == 0 ||
-        (now_us - s_spi_ready_us[idx]) <= ((uint64_t)stuck_ms * 1000u))
+    if (s_spi_ready_us[idx] == 0 || (now_us - s_spi_ready_us[idx]) <= ((uint64_t)stuck_ms * 1000u))
         return BSP_BUSY;
 
     /* 超过阈值仍非 READY = 卡死：中止本次、把 State 放回 READY，让传输链重新跑起来。
@@ -989,8 +976,8 @@ BSP_Status_e SPIRecoverTxIfStuck(SPIInstance *instance, uint32_t stuck_ms)
     (void)SPI_RecoverTx(instance);
 
     s_spi_ready_us[idx] = DWT_GetTimeUs(); /* 刚复位，重新计时 */
-    BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "SPI stuck >%dms, state reset (spi_e=%d)!",
-           (int)stuck_ms, (int)instance->spi_e);
+    BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "SPI stuck >%dms, state reset (spi_e=%d)!", (int)stuck_ms,
+           (int)instance->spi_e);
     return BSP_OK;
 }
 

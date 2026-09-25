@@ -73,6 +73,7 @@ struct CommMedia
 };
 
 /* 公共接口 */
-int8_t MediaSend(CommMedia *media, const uint8_t *data); /* 统一发送分发（vtable 转发；发送缓冲/长度由各后端自持：USART 拷入自持 staging，USB 直接引用 data 分包） */
+int8_t MediaSend(CommMedia *media, const uint8_t *data); /* 统一发送分发（vtable 转发；发送缓冲/长度由各后端自持：USART
+                                                            拷入自持 staging，USB 直接引用 data 分包） */
 
 #endif /* COMM_MEDIA_H */

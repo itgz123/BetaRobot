@@ -30,8 +30,10 @@
  * fdcan:
  *     CANConfig配置CAN_Mode_Type_e时：
  *         只有一下3种情况允许
- *         1. (CANInstance.mode==CAN_FRAME_FORMAT_FD_BRS)&&(FDCAN_HandleTypeDef.Init.FrameFormat==CAN_FRAME_FORMAT_FD_BRS)
- *         2. (CANInstance.mode==CAN_FRAME_FORMAT_FD)&&((FDCAN_HandleTypeDef.Init.FrameFormat==CAN_FRAME_FORMAT_FD)||(FDCAN_HandleTypeDef.Init.FrameFormat==CAN_FRAME_FORMAT_FD_BRS))
+ *         1.
+ * (CANInstance.mode==CAN_FRAME_FORMAT_FD_BRS)&&(FDCAN_HandleTypeDef.Init.FrameFormat==CAN_FRAME_FORMAT_FD_BRS)
+ *         2.
+ * (CANInstance.mode==CAN_FRAME_FORMAT_FD)&&((FDCAN_HandleTypeDef.Init.FrameFormat==CAN_FRAME_FORMAT_FD)||(FDCAN_HandleTypeDef.Init.FrameFormat==CAN_FRAME_FORMAT_FD_BRS))
  *         3. CANInstance.mode==CAN_FRAME_FORMAT_CLASSIC
  *     发送的pack：
  *         CAN_FRAME_FORMAT_CLASSIC模式下CAN_Frame_Type_e的4种都支持
@@ -52,7 +54,8 @@ typedef enum : uint8_t
 typedef enum : uint8_t
 {
     CAN_FILTER_MODE_MASK = 0, // 掩码匹配：(id & id0) == (id1 & id0) 命中。Mask: (id & id0) == (id1 & id0).
-    CAN_FILTER_MODE_LIST = 1, // 精确ID列表：id0、id1 两个精确ID（id1=CAN_ID_UNUSED 未用，仅匹配 id0）。List: two exact IDs.
+    CAN_FILTER_MODE_LIST =
+        1, // 精确ID列表：id0、id1 两个精确ID（id1=CAN_ID_UNUSED 未用，仅匹配 id0）。List: two exact IDs.
     CAN_FILTER_MODE_RANGE = 2 // 区间匹配：id0 <= id <= id1 命中。Range: id0 <= id <= id1.
 } CAN_Filter_Mode_e;
 
@@ -114,11 +117,12 @@ typedef struct
  */
 typedef struct CAN_Filter_s
 {
-    CAN_Filter_Mode_e mode;                                                 // 过滤模式。Filter mode.
-    uint32_t id0;                                                           // MASK:掩码 / LIST:精确ID1 / RANGE:区间下限。Mask / exact ID1 / range lower bound.
-    uint32_t id1;                                                           // MASK:匹配值 / LIST:精确ID2 / RANGE:区间上限。Match value / exact ID2 / range upper bound.
-    CAN_Frame_Type_e frame_type;                                            // 帧类型过滤（仅接收该类型帧）。Frame type filter.
-    void (*callback)(struct CANInstance *instance, const CAN_Pack_s *pack); // 接收回调（匹配后调用；NULL 不接收）。Callback.
+    CAN_Filter_Mode_e mode; // 过滤模式。Filter mode.
+    uint32_t id0;           // MASK:掩码 / LIST:精确ID1 / RANGE:区间下限。Mask / exact ID1 / range lower bound.
+    uint32_t id1;           // MASK:匹配值 / LIST:精确ID2 / RANGE:区间上限。Match value / exact ID2 / range upper bound.
+    CAN_Frame_Type_e frame_type; // 帧类型过滤（仅接收该类型帧）。Frame type filter.
+    void (*callback)(struct CANInstance *instance,
+                     const CAN_Pack_s *pack); // 接收回调（匹配后调用；NULL 不接收）。Callback.
 } CAN_Filter_s;
 
 /*------------- 发送完成回调契约（tx_complete_callback） --------------
@@ -148,25 +152,27 @@ typedef struct CAN_Filter_s
  */
 typedef struct
 {
-    BoardCAN_e can_e;                                                                         // 板载CAN枚举（用于查找硬件映射）
-    CAN_Mode_Type_e mode;                                                                     // 工作模式
-    void *parent;                                                                             // 父实例指针（由 DRV 层设置）
-    CAN_Filter_s *filters;                                                                    // 软件过滤器数组（硬过滤全通后由软件匹配分发；可为 NULL）
-    uint8_t filter_num;                                                                       // 过滤器数量
-    void (*tx_complete_callback)(struct CANInstance *instance, uint32_t tx_mailbox, BSP_Status_e result); // 发送完成回调（见上方契约；可为 NULL）
-    CAN_ErrCallback err_callback;                                                             // 错误回调（总线/硬件级事件，见 CAN_ErrReason_e；可为 NULL）
+    BoardCAN_e can_e;      // 板载CAN枚举（用于查找硬件映射）
+    CAN_Mode_Type_e mode;  // 工作模式
+    void *parent;          // 父实例指针（由 DRV 层设置）
+    CAN_Filter_s *filters; // 软件过滤器数组（硬过滤全通后由软件匹配分发；可为 NULL）
+    uint8_t filter_num;    // 过滤器数量
+    void (*tx_complete_callback)(struct CANInstance *instance, uint32_t tx_mailbox,
+                                 BSP_Status_e result); // 发送完成回调（见上方契约；可为 NULL）
+    CAN_ErrCallback err_callback;                      // 错误回调（总线/硬件级事件，见 CAN_ErrReason_e；可为 NULL）
 } CAN_Config_s;
 
 struct CANInstance
 {
-    BoardCAN_e can_e;                                                                         // 板载CAN枚举（Config时查找映射）
-    CAN_Map_t map;                                                                            // CAN映射（Config时自动填充）
-    CAN_Mode_Type_e mode;                                                                     // 工作模式
-    void *parent;                                                                             // 父实例指针（由 DRV 层设置）
-    CAN_Filter_s *filters;                                                                    // 软件过滤器数组（Config时写入，指向 config 中的数组）
-    uint8_t filter_num;                                                                       // 过滤器数量（Config时写入）
-    void (*tx_complete_callback)(struct CANInstance *instance, uint32_t tx_mailbox, BSP_Status_e result); // 发送完成回调（ISR 或任务上下文；可为 NULL）
-    CAN_ErrCallback err_callback;                                                             // 错误回调（ISR 上下文；可为 NULL）
+    BoardCAN_e can_e;      // 板载CAN枚举（Config时查找映射）
+    CAN_Map_t map;         // CAN映射（Config时自动填充）
+    CAN_Mode_Type_e mode;  // 工作模式
+    void *parent;          // 父实例指针（由 DRV 层设置）
+    CAN_Filter_s *filters; // 软件过滤器数组（Config时写入，指向 config 中的数组）
+    uint8_t filter_num;    // 过滤器数量（Config时写入）
+    void (*tx_complete_callback)(struct CANInstance *instance, uint32_t tx_mailbox,
+                                 BSP_Status_e result); // 发送完成回调（ISR 或任务上下文；可为 NULL）
+    CAN_ErrCallback err_callback;                      // 错误回调（ISR 上下文；可为 NULL）
     // 契约（同 USARTInstance.err_callback）：在错误分类计数、状态快照、纠正动作**之后**调用；
     // handler 必须无阻塞、可重入、幂等（可能连续高频触发），且不得在其中调用
     // CANTransmit / CANConfig（会重入发送分发与状态机）。
@@ -219,7 +225,8 @@ BSP_Status_e CANConfig(CANInstance *instance, const CAN_Config_s *config);
  * @retval BSP_TIMEOUT   等发送资源耗尽 timeout_ms
  * @retval BSP_HW_ERR    加入发送资源失败（HAL 返回错误）或实例尚未成功 CANConfig
  */
-BSP_Status_e CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeout_ms, uint32_t *tx_mailbox, uint8_t *tx_free_level);
+BSP_Status_e CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeout_ms, uint32_t *tx_mailbox,
+                         uint8_t *tx_free_level);
 
 /**
  * @brief CAN 发送资源自恢复入口（**任务上下文**，由调用方在自己的时基上周期调用或按需调用）

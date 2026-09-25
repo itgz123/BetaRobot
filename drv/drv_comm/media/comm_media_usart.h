@@ -59,15 +59,14 @@ typedef struct
  * @example
  *   COMM_MEDIA_USART_DEF(uart_comm, 64, 32);
  */
-#define COMM_MEDIA_USART_DEF(name, rx_buff_sz, tx_buff_sz)   \
-    USART_INSTANCE_DEF(name##_usart, rx_buff_sz);            \
-    DAEMON_INSTANCE_DEF(name##_daemon);                      \
-    static uint8_t name##_tx_buff[tx_buff_sz] DMA_RAM = {0}; \
-    static CommMediaUsart name = {                           \
-        .base.media = &name##_usart,                         \
-        .base.daemon = &name##_daemon,                       \
-        .tx_buff = name##_tx_buff,                           \
-        .tx_buff_size = tx_buff_sz}
+#define COMM_MEDIA_USART_DEF(name, rx_buff_sz, tx_buff_sz)                                                             \
+    USART_INSTANCE_DEF(name##_usart, rx_buff_sz);                                                                      \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
+    static uint8_t name##_tx_buff[tx_buff_sz] DMA_RAM = {0};                                                           \
+    static CommMediaUsart name = {.base.media = &name##_usart,                                                         \
+                                  .base.daemon = &name##_daemon,                                                       \
+                                  .tx_buff = name##_tx_buff,                                                           \
+                                  .tx_buff_size = tx_buff_sz}
 
 /**
  * @brief 注册 UART 介质后端（不可重入：仅可调用一次）

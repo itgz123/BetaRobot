@@ -258,8 +258,8 @@ static void MediaCanIdseqProbeBus(CANInstance *can)
     s_can_recover_us[idx] = now;
 
     if (CANRecover(can) == BSP_HW_ERR)
-        BSPLOG(&g_media_can_idseq_log, LOG_LEVEL_ERROR,
-               "CANRecover failed (can_e=%u), bus still unavailable", (unsigned)idx);
+        BSPLOG(&g_media_can_idseq_log, LOG_LEVEL_ERROR, "CANRecover failed (can_e=%u), bus still unavailable",
+               (unsigned)idx);
 }
 
 /* bsp 接收适配钩子：每包 ID = rx_id + seq，按序号连续重组整帧。
@@ -375,13 +375,11 @@ int8_t MediaCanIdseqConfig(CommMediaCanIdseq *media, CommMediaCanIdseqConfig_s *
         return -1;
 
     /* 帧类型：本后端为数据分包（序号在 ID，无 RTR），仅允许标准/扩展数据帧（FD 帧无 RTR，天然兼容） */
-    if (cfg->frame_type != CAN_STANDARD_DATA_FRAME &&
-        cfg->frame_type != CAN_EXTENDED_DATA_FRAME)
+    if (cfg->frame_type != CAN_STANDARD_DATA_FRAME && cfg->frame_type != CAN_EXTENDED_DATA_FRAME)
         return -1;
 
     /* 帧格式 mode：仅三种合法值；BxCAN 非 CLASSIC 由 bsp 拒绝（此处不做硬件判断） */
-    if (cfg->mode != CAN_FRAME_FORMAT_CLASSIC &&
-        cfg->mode != CAN_FRAME_FORMAT_FD &&
+    if (cfg->mode != CAN_FRAME_FORMAT_CLASSIC && cfg->mode != CAN_FRAME_FORMAT_FD &&
         cfg->mode != CAN_FRAME_FORMAT_FD_BRS)
         return -1;
 

@@ -149,27 +149,26 @@ int8_t CommSend(CommInstance *inst, const uint8_t *payload);
  *             可正常子字段展开。
  *       注 4：static 名跨编译单元可能重名，GDB 解析不到时用 '文件.c'::name 限定。
  */
-#define COMM_DEF(name, media_type_, rx_proto_, tx_proto_, rx_type_, rx_size, tx_type_, tx_size, unpack_mode_) \
-    _Static_assert(sizeof(rx_type_) == (rx_size),                                                             \
-                   "COMM rx: sizeof(" #rx_type_ ") == " #rx_size " FAILED, layout != wire-protocol len");     \
-    _Static_assert(sizeof(tx_type_) == (tx_size),                                                             \
-                   "COMM tx: sizeof(" #tx_type_ ") == " #tx_size " FAILED, layout != wire-protocol len");     \
-    COMM_##media_type_##_DEF(name##_media,                                                                    \
-                             (rx_size) + PROTO_##rx_proto_##_OVERHEAD(rx_size),                               \
-                             (tx_size) + PROTO_##tx_proto_##_OVERHEAD(tx_size));                              \
-    COMM_PROTO_##rx_proto_##_DEF(name##_rx_proto, name##_media, rx_size);                                     \
-    COMM_PROTO_##tx_proto_##_DEF(name##_tx_proto, name##_media, tx_size);                                     \
-    static uint8_t name##_tx_buff[(tx_size) + PROTO_##tx_proto_##_OVERHEAD(tx_size)] = {0};                   \
-    CommInstance name = {                                                                                     \
-        .media_type = media_type_,                                                                            \
-        .rx_proto_type = PROTO_##rx_proto_,                                                                   \
-        .tx_proto_type = PROTO_##tx_proto_,                                                                   \
-        .unpack_mode = unpack_mode_,                                                                          \
-        .media = &name##_media,                                                                               \
-        .rx_proto = &name##_rx_proto,                                                                         \
-        .tx_proto = &name##_tx_proto,                                                                         \
-        .tx_buff = name##_tx_buff,                                                                            \
-        .inited = 0,                                                                                          \
+#define COMM_DEF(name, media_type_, rx_proto_, tx_proto_, rx_type_, rx_size, tx_type_, tx_size, unpack_mode_)          \
+    _Static_assert(sizeof(rx_type_) == (rx_size),                                                                      \
+                   "COMM rx: sizeof(" #rx_type_ ") == " #rx_size " FAILED, layout != wire-protocol len");              \
+    _Static_assert(sizeof(tx_type_) == (tx_size),                                                                      \
+                   "COMM tx: sizeof(" #tx_type_ ") == " #tx_size " FAILED, layout != wire-protocol len");              \
+    COMM_##media_type_##_DEF(name##_media, (rx_size) + PROTO_##rx_proto_##_OVERHEAD(rx_size),                          \
+                             (tx_size) + PROTO_##tx_proto_##_OVERHEAD(tx_size));                                       \
+    COMM_PROTO_##rx_proto_##_DEF(name##_rx_proto, name##_media, rx_size);                                              \
+    COMM_PROTO_##tx_proto_##_DEF(name##_tx_proto, name##_media, tx_size);                                              \
+    static uint8_t name##_tx_buff[(tx_size) + PROTO_##tx_proto_##_OVERHEAD(tx_size)] = {0};                            \
+    CommInstance name = {                                                                                              \
+        .media_type = media_type_,                                                                                     \
+        .rx_proto_type = PROTO_##rx_proto_,                                                                            \
+        .tx_proto_type = PROTO_##tx_proto_,                                                                            \
+        .unpack_mode = unpack_mode_,                                                                                   \
+        .media = &name##_media,                                                                                        \
+        .rx_proto = &name##_rx_proto,                                                                                  \
+        .tx_proto = &name##_tx_proto,                                                                                  \
+        .tx_buff = name##_tx_buff,                                                                                     \
+        .inited = 0,                                                                                                   \
     }
 
 #endif /* DRV_COMM_H */

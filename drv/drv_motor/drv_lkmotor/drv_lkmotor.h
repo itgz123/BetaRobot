@@ -151,12 +151,12 @@ typedef struct
 /*============================================
  *              单电机实例定义宏
  *============================================*/
-#define LKMOTOR_INSTANCE_DEF(name)      \
-    CAN_INSTANCE_DEF(name##_can);       \
-    DAEMON_INSTANCE_DEF(name##_daemon); \
-    static LKMotorInstance name = {     \
-        .base.can = &name##_can,        \
-        .base.daemon = &name##_daemon,  \
+#define LKMOTOR_INSTANCE_DEF(name)                                                                                     \
+    CAN_INSTANCE_DEF(name##_can);                                                                                      \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
+    static LKMotorInstance name = {                                                                                    \
+        .base.can = &name##_can,                                                                                       \
+        .base.daemon = &name##_daemon,                                                                                 \
     }
 
 /*============================================

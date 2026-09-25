@@ -125,11 +125,10 @@ typedef struct
 /* 日志实例定义：日志关闭（BSP_LOG_USED 或 LOG_UART 未定义）时为空宏，
  * 不分配 LOGInstance，零 RAM 占用 */
 #if (defined(BSP_LOG_USED)) && (defined(LOG_UART))
-#define LOG_INSTANCE_DEF(name, module, limit)                   \
-    LOGInstance name = {                                        \
-        .module_name = (module),                                \
-        .module_name_len = sizeof(module) - 1, /* 字面量长度 */ \
-        .times_per_second = (limit)}
+#define LOG_INSTANCE_DEF(name, module, limit)                                                                          \
+    LOGInstance name = {.module_name = (module),                                                                       \
+                        .module_name_len = sizeof(module) - 1, /* 字面量长度 */                                        \
+                        .times_per_second = (limit)}
 #else
 #define LOG_INSTANCE_DEF(name, module, limit)
 #endif
@@ -163,14 +162,14 @@ extern uint32_t g_log_orphan_cnt;
 void BSPLogV(LOGInstance *inst, LOG_LEVEL level, const char *fmt, ...);
 
 /* 发送日志：过滤（level 低于 LOG_FILTER_LEVEL 整条剔除）+ 透传参数给 BSPLogV */
-#define BSPLOG(inst, level, fmt, ...)                   \
-    do                                                  \
-    {                                                   \
-        if (BSPLOG_FILTER(level))                       \
-        {                                               \
-            break; /* 级别低于过滤值：整条剔除 */       \
-        }                                               \
-        BSPLogV((inst), (level), (fmt), ##__VA_ARGS__); \
+#define BSPLOG(inst, level, fmt, ...)                                                                                  \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        if (BSPLOG_FILTER(level))                                                                                      \
+        {                                                                                                              \
+            break; /* 级别低于过滤值：整条剔除 */                                                                      \
+        }                                                                                                              \
+        BSPLogV((inst), (level), (fmt), ##__VA_ARGS__);                                                                \
     } while (0)
 
 /**

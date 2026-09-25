@@ -95,8 +95,8 @@ typedef struct
     uint32_t timeout_ms;         /* CANTransmit 超时（Config 写入） */
 
     /* CAN 收发参数（Config 写入） */
-    CAN_Filter_s can_filter;     /* 接收过滤器（每实例一份，Config 填写后指针传给 CANConfig；bsp 为指针存储，须常驻实例） */
-    uint32_t tx_id;              /* 发送 ID；CAN_ID_UNUSED(-1) 表示不发送 */
+    CAN_Filter_s can_filter; /* 接收过滤器（每实例一份，Config 填写后指针传给 CANConfig；bsp 为指针存储，须常驻实例） */
+    uint32_t tx_id;          /* 发送 ID；CAN_ID_UNUSED(-1) 表示不发送 */
     CAN_Frame_Type_e frame_type; /* 帧类型（标准/扩展数据帧；收发共用） */
     CAN_Mode_Type_e mode;        /* CAN 帧格式：CLASSIC(8B/帧)/FD/FD_BRS(64B/帧)；分包片长与接收防御按此 */
 } CommMediaCanPkt0;
@@ -118,18 +118,17 @@ typedef struct
  * @example
  *   COMM_MEDIA_CAN_PKT0_DEF(can_comm_media, 16, 16); 协议帧 16B，帧长 > 7B 时自动分包
  */
-#define COMM_MEDIA_CAN_PKT0_DEF(name, rx_buff_sz, tx_buff_sz) \
-    CAN_INSTANCE_DEF(name##_can);                             \
-    DAEMON_INSTANCE_DEF(name##_daemon);                       \
-    static uint8_t name##_rx_buff[(rx_buff_sz)] = {0};        \
-    static uint8_t name##_tx_buff[(tx_buff_sz)] = {0};        \
-    static CommMediaCanPkt0 name = {                          \
-        .base.media = &name##_can,                            \
-        .base.daemon = &name##_daemon,                        \
-        .rx_buff = name##_rx_buff,                            \
-        .tx_buff = name##_tx_buff,                            \
-        .rx_frame_len = (rx_buff_sz),                         \
-        .tx_frame_len = (tx_buff_sz)}
+#define COMM_MEDIA_CAN_PKT0_DEF(name, rx_buff_sz, tx_buff_sz)                                                          \
+    CAN_INSTANCE_DEF(name##_can);                                                                                      \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
+    static uint8_t name##_rx_buff[(rx_buff_sz)] = {0};                                                                 \
+    static uint8_t name##_tx_buff[(tx_buff_sz)] = {0};                                                                 \
+    static CommMediaCanPkt0 name = {.base.media = &name##_can,                                                         \
+                                    .base.daemon = &name##_daemon,                                                     \
+                                    .rx_buff = name##_rx_buff,                                                         \
+                                    .tx_buff = name##_tx_buff,                                                         \
+                                    .rx_frame_len = (rx_buff_sz),                                                      \
+                                    .tx_frame_len = (tx_buff_sz)}
 
 /**
  * @brief 注册 CAN PKT0 介质后端（不可重入：仅可调用一次）

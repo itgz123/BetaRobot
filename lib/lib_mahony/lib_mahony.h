@@ -97,8 +97,7 @@ typedef struct MahonyInstance
 } MahonyInstance;
 
 /*============================ 公开接口声明 ============================*/
-#define MAHONY_INSTANCE_DEF(name) \
-    static MahonyInstance name = {0}
+#define MAHONY_INSTANCE_DEF(name) static MahonyInstance name = {0}
 
 /**
  * @brief 初始化 Mahony 滤波器

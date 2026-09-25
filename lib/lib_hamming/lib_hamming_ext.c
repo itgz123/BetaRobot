@@ -35,8 +35,8 @@ static int Hamming_ExtCfgValid(const LIB_Hamming_Cfg_t *cfg)
  * @brief 编码任意 bit 长度数据（扩展缩短汉明码）
  * @see LIB_Hamming_ExtEncode
  */
-int8_t LIB_Hamming_ExtEncode(const uint8_t *data, uint32_t data_bits, const LIB_Hamming_Cfg_t *cfg,
-                             uint8_t *code, uint32_t code_cap_bits, uint32_t *code_bits)
+int8_t LIB_Hamming_ExtEncode(const uint8_t *data, uint32_t data_bits, const LIB_Hamming_Cfg_t *cfg, uint8_t *code,
+                             uint32_t code_cap_bits, uint32_t *code_bits)
 {
     uint32_t blocks;
     uint32_t required;
@@ -100,8 +100,8 @@ int8_t LIB_Hamming_ExtEncode(const uint8_t *data, uint32_t data_bits, const LIB_
  * @brief 解码任意 bit 长度数据（扩展缩短汉明码，纠 1 检 2）
  * @see LIB_Hamming_ExtDecode
  */
-int8_t LIB_Hamming_ExtDecode(const uint8_t *code, uint32_t code_bits, uint32_t data_bits,
-                             const LIB_Hamming_Cfg_t *cfg, uint8_t *data, LIB_Hamming_Stat_t *stat)
+int8_t LIB_Hamming_ExtDecode(const uint8_t *code, uint32_t code_bits, uint32_t data_bits, const LIB_Hamming_Cfg_t *cfg,
+                             uint8_t *data, LIB_Hamming_Stat_t *stat)
 {
     uint32_t blocks;
     uint32_t required;
@@ -184,8 +184,8 @@ int8_t LIB_Hamming_ExtDecode(const uint8_t *code, uint32_t code_bits, uint32_t d
         /* 仅确认为单错并纠正时采用纠错后的数据，否则输出原始位（不改数据） */
         for (i = 0; i < have; i++)
         {
-            uint8_t bit = (block_st == LIB_HAMMING_CORRECTED) ? LIB_Hamming_BitGet(blk_data, i)
-                                                              : LIB_Hamming_BitGet(blk_code, i);
+            uint8_t bit =
+                (block_st == LIB_HAMMING_CORRECTED) ? LIB_Hamming_BitGet(blk_data, i) : LIB_Hamming_BitGet(blk_code, i);
             LIB_Hamming_BitSet(data, base + i, bit);
         }
 

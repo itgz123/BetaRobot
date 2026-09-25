@@ -239,8 +239,9 @@ MotorData_s DMMotor_GetData(void *inst)
 
     // 累加，偏置
     base->data_all.position_cnt += wraps;
-    double angle = ((double)base->data_all.position_cnt * (2.0 * (double)map->p_max)) + (double)position_single // ① 累加
-                   + (double)base->position_offset;                                                             // ② 偏置
+    double angle = ((double)base->data_all.position_cnt * (2.0 * (double)map->p_max)) +
+                   (double)position_single          // ① 累加
+                   + (double)base->position_offset; // ② 偏置
 
     // 方向
     angle *= setting->feedback_direction; // ③ 方向
@@ -518,7 +519,9 @@ static void DMMotor_Calculate(DMMotorInstance *inst)
         {
             position_feedforward = *setting->position_feedforward_ptr;
         }
-        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr) ? *setting->angle_external_ptr : md.position;
+        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr)
+                      ? *setting->angle_external_ptr
+                      : md.position;
         setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, position_feedforward);
     }
 
@@ -530,7 +533,9 @@ static void DMMotor_Calculate(DMMotorInstance *inst)
         {
             speed_feedforward = *setting->speed_feedforward_ptr;
         }
-        measure = (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr) ? *setting->speed_external_ptr : md.speed;
+        measure = (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr)
+                      ? *setting->speed_external_ptr
+                      : md.speed;
         output = PIDCalculate(&ctrl->pid_speed, setpoint, measure, speed_feedforward);
     }
     else
@@ -650,9 +655,7 @@ void DMMotor_Send(void *inst)
     uint16_t v_des = 0; /* 不使用板载速度控制 */
     uint16_t kp = 0;    /* 不使用板载 PD */
     uint16_t kd = 0;    /* 不使用板载 PD */
-    uint16_t t_ff = dm_float_to_uint(output_clamped,
-                                     motor->proto_map.t_to_uint_scale,
-                                     motor->proto_map.t_range);
+    uint16_t t_ff = dm_float_to_uint(output_clamped, motor->proto_map.t_to_uint_scale, motor->proto_map.t_range);
 
     /* 使用控制帧联合体打包（ID 逐帧指定 = can_id） */
     CAN_Pack_s pack = {.id = motor->can_id, .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};

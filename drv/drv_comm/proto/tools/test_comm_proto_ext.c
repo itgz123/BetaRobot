@@ -19,7 +19,7 @@
 #include <string.h>
 
 #include "comm_proto_ext.h"
-#include "lib_crc.h"        /* 测试里手工重算 seq 参与的那段 CRC8 */
+#include "lib_crc.h" /* 测试里手工重算 seq 参与的那段 CRC8 */
 #include "lib_crc_tables.h"
 
 #define FRAMEB 1024u /* 帧缓冲字节数 */
@@ -27,20 +27,20 @@
 static int g_checks = 0;
 static int g_fails = 0;
 
-#define CHECK(cond, ...)                       \
-    do                                         \
-    {                                          \
-        g_checks++;                            \
-        if (!(cond))                           \
-        {                                      \
-            g_fails++;                         \
-            if (g_fails <= 30)                 \
-            {                                  \
-                printf("FAIL %d: ", __LINE__); \
-                printf(__VA_ARGS__);           \
-                printf("\n");                  \
-            }                                  \
-        }                                      \
+#define CHECK(cond, ...)                                                                                               \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        g_checks++;                                                                                                    \
+        if (!(cond))                                                                                                   \
+        {                                                                                                              \
+            g_fails++;                                                                                                 \
+            if (g_fails <= 30)                                                                                         \
+            {                                                                                                          \
+                printf("FAIL %d: ", __LINE__);                                                                         \
+                printf(__VA_ARGS__);                                                                                   \
+                printf("\n");                                                                                          \
+            }                                                                                                          \
+        }                                                                                                              \
     } while (0)
 
 static uint32_t g_rng = 0x9E3779B9u;
@@ -151,10 +151,8 @@ static void test_roundtrip(void)
         rearm(t);
         pack_case(t, sizes[i]);
         CHECK(unpack_case(t, sizes[i]) == 1, "往返不一致 payload=%u", sizes[i]);
-        CHECK(t->rx_err == 0u && t->rx_fixed == 0u, "无错帧却计数 err=%u fixed=%u", t->rx_err,
-              t->rx_fixed);
-        CHECK(t->enc_bytes == PROTO_EXT_BYTES(sizes[i]), "enc_bytes 与编译期不符 payload=%u",
-              sizes[i]);
+        CHECK(t->rx_err == 0u && t->rx_fixed == 0u, "无错帧却计数 err=%u fixed=%u", t->rx_err, t->rx_fixed);
+        CHECK(t->enc_bytes == PROTO_EXT_BYTES(sizes[i]), "enc_bytes 与编译期不符 payload=%u", sizes[i]);
         CHECK(t->cfg.k_s == (uint16_t)(PROTO_EXT_BLK_BYTES(sizes[i]) * 8u), "k_s 与编译期不符");
     }
 }
@@ -190,8 +188,8 @@ static void test_single_bit(void)
         {
             /* 编码区单 bit 错：汉明必纠回，payload 不变，且走复核路径 */
             CHECK(r == 1, "编码区单错未纠回 bit=%u r=%d", b, r);
-            CHECK(t->rx_fixed == 1u && t->rx_err == 0u, "单错计数不对 bit=%u fixed=%u err=%u", b,
-                  t->rx_fixed, t->rx_err);
+            CHECK(t->rx_fixed == 1u && t->rx_err == 0u, "单错计数不对 bit=%u fixed=%u err=%u", b, t->rx_fixed,
+                  t->rx_err);
         }
         else
         {
@@ -308,8 +306,8 @@ static void test_three_bits(void)
     }
 
     /* 三错时汉明可能误纠，但重编码 + 原 CRC 复核应把绝大多数挡掉 */
-    printf("  三错抽样 %u：接受 %u，其中错误 payload %u（漏检率 %.2f%%）\n", 20000u, accepted,
-           wrong, (double)wrong * 100.0 / 20000.0);
+    printf("  三错抽样 %u：接受 %u，其中错误 payload %u（漏检率 %.2f%%）\n", 20000u, accepted, wrong,
+           (double)wrong * 100.0 / 20000.0);
     CHECK(wrong * 100u <= 20000u * 2u, "三错漏检率过高：wrong=%u/20000", wrong);
 }
 

@@ -78,10 +78,10 @@ static uint8_t rnd8(void)
  * （可省掉约 1/3），但那是 lib_hamming.c 的事，不在本次查表改动范围内。
  *
  * MISRA-ish 提醒：上面是"数出来的"而非"量出来的"，量测请上板用 DWT->CYCCNT。 */
-#define CY_ENC_BIT_AVG 38u   /* 编码：每数据位（随机数据均值） */
-#define CY_ENC_PAR 25u       /* 编码：每校验位回填 */
-#define CY_DEC_CODEBIT 31u   /* 解码：syndrome 段每码字位（随机数据均值） */
-#define CY_DEC_OUTBIT 39u    /* 解码：输出段每数据位 */
+#define CY_ENC_BIT_AVG 38u /* 编码：每数据位（随机数据均值） */
+#define CY_ENC_PAR 25u     /* 编码：每校验位回填 */
+#define CY_DEC_CODEBIT 31u /* 解码：syndrome 段每码字位（随机数据均值） */
+#define CY_DEC_OUTBIT 39u  /* 解码：输出段每数据位 */
 
 #define F407_MHZ 168u
 #define OG_SCALE 1.5 /* Debug(-Og) 相对 Release(-Os) 的倍数（同为调用式，差距比查表前小） */
@@ -94,8 +94,7 @@ typedef struct
 } Case_s;
 
 static const Case_s s_cases[] = {
-    {"8B", &b8, 8u}, {"12B", &b12, 12u}, {"13B", &b13, 13u},
-    {"16B", &b16, 16u}, {"32B", &b32, 32u}, {"64B", &b64, 64u},
+    {"8B", &b8, 8u}, {"12B", &b12, 12u}, {"13B", &b13, 13u}, {"16B", &b16, 16u}, {"32B", &b32, 32u}, {"64B", &b64, 64u},
 };
 
 /* 跑 ROUNDS 次 f，返回每次的平均 ns */
@@ -127,8 +126,7 @@ static void do_unpack_ok(CommProtoExt *t, uint32_t payload)
     (void)payload;
     /* 每轮换 seq，避免被"重帧"直接挡在序列检测上（那测不到解码本身） */
     g_rx[1] = (uint8_t)(g_rx[1] + 1u);
-    g_rx[t->enc_bytes + 2u] =
-        (uint8_t)LIB_CRC_TableCalc(&LIB_CRC_TBL_CRC8, &g_rx[1], (uint32_t)t->enc_bytes + 1u);
+    g_rx[t->enc_bytes + 2u] = (uint8_t)LIB_CRC_TableCalc(&LIB_CRC_TBL_CRC8, &g_rx[1], (uint32_t)t->enc_bytes + 1u);
     (void)ProtoUnpack(&t->base, g_rx);
 }
 
@@ -137,8 +135,7 @@ static void do_unpack_fix(CommProtoExt *t, uint32_t payload)
     (void)payload;
     /* 造一个编码区单 bit 错 → 走"汉明解码 + 重编码复核"慢路径；每轮翻/复位 */
     g_rx[1] = (uint8_t)(g_rx[1] + 1u);
-    g_rx[t->enc_bytes + 2u] =
-        (uint8_t)LIB_CRC_TableCalc(&LIB_CRC_TBL_CRC8, &g_rx[1], (uint32_t)t->enc_bytes + 1u);
+    g_rx[t->enc_bytes + 2u] = (uint8_t)LIB_CRC_TableCalc(&LIB_CRC_TBL_CRC8, &g_rx[1], (uint32_t)t->enc_bytes + 1u);
     g_rx[2] ^= 0x80u;
     (void)ProtoUnpack(&t->base, g_rx);
     g_rx[2] ^= 0x80u;
@@ -151,13 +148,12 @@ int main(void)
 
     printf("comm_proto_ext 单帧耗时（%u 轮均值）\n", ROUNDS);
     printf("⚠ PC 的 ns 别按主频折算到目标板：x86 4 发射 + 全 1 周期 load，比 Cortex-M4\n");
-    printf("   快 4~5 倍。目标板估计走「每块 %u/%u 周期 × 位 + 每块 %u/%u 周期 × 位」\n",
-           CY_ENC_BIT_AVG, CY_ENC_PAR, CY_DEC_CODEBIT, CY_DEC_OUTBIT);
+    printf("   快 4~5 倍。目标板估计走「每块 %u/%u 周期 × 位 + 每块 %u/%u 周期 × 位」\n", CY_ENC_BIT_AVG, CY_ENC_PAR,
+           CY_DEC_CODEBIT, CY_DEC_OUTBIT);
     printf("   这条逐条数反汇编的解析路径（数值出处见文件头注释）。\n");
-    printf("   Debug 列为 Release 值 × %.1f（两者同为调用式，仅作量级参考）。\n\n",
-           (double)OG_SCALE);
-    printf("%-5s %-4s %-4s %-4s %-6s %-9s %-9s %-9s %-24s %s\n", "pyld", "帧长", "包", "块", "k_s",
-           "pack(ns)", "rx(ns)", "rx+纠(ns)", "F407@168MHz Release(us)", "Debug(us)");
+    printf("   Debug 列为 Release 值 × %.1f（两者同为调用式，仅作量级参考）。\n\n", (double)OG_SCALE);
+    printf("%-5s %-4s %-4s %-4s %-6s %-9s %-9s %-9s %-24s %s\n", "pyld", "帧长", "包", "块", "k_s", "pack(ns)",
+           "rx(ns)", "rx+纠(ns)", "F407@168MHz Release(us)", "Debug(us)");
     printf("%-5s %-4s %-4s %-4s %-6s %-9s %-9s %-9s %-24s %s\n\n", "", "B", "CAN", "", "", "", "", "",
            "pack / rx / rx+纠", "(µs)");
 
@@ -209,9 +205,8 @@ int main(void)
         cyc_fix = cyc_pack + cyc_rx;
 
         printf("%-5s %-4u %-4u %-4u %-6u %-9.1f %-9.1f %-9.1f %7.0f /%6.0f /%6.0f   %7.0f /%6.0f /%6.0f\n",
-               s_cases[k].name, frame, (frame + 7u) / 8u, blks, ks, tp, to, tf,
-               cyc_pack / F407_MHZ, cyc_rx / F407_MHZ, cyc_fix / F407_MHZ,
-               cyc_pack * OG_SCALE / F407_MHZ, cyc_rx * OG_SCALE / F407_MHZ,
+               s_cases[k].name, frame, (frame + 7u) / 8u, blks, ks, tp, to, tf, cyc_pack / F407_MHZ, cyc_rx / F407_MHZ,
+               cyc_fix / F407_MHZ, cyc_pack * OG_SCALE / F407_MHZ, cyc_rx * OG_SCALE / F407_MHZ,
                cyc_fix * OG_SCALE / F407_MHZ);
     }
 

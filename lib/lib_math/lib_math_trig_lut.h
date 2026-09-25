@@ -81,12 +81,10 @@
 #define LIB_MATH_TRIG_QUARTER 1.57079632679489661923f     /* π/2    */
 
 /* QUARTER 相位位置换算：u = phi * (M * 2/π)，编译期折叠为单个 float 常数 */
-#define LIB_MATH_TRIG_U_SCALE \
-    ((float)LIB_MATH_TRIG_TABLE_SIZE * LIB_MATH_TRIG_INV_QUARTER)
+#define LIB_MATH_TRIG_U_SCALE ((float)LIB_MATH_TRIG_TABLE_SIZE * LIB_MATH_TRIG_INV_QUARTER)
 
 /* FULL 相位位置换算：u = theta * (N * 1/2π)，编译期折叠为单个 float 常数 */
-#define LIB_MATH_TRIG_FULL_U_SCALE \
-    ((float)LIB_MATH_TRIG_TABLE_SIZE * LIB_MATH_TRIG_INV_2PI)
+#define LIB_MATH_TRIG_FULL_U_SCALE ((float)LIB_MATH_TRIG_TABLE_SIZE * LIB_MATH_TRIG_INV_2PI)
 
 /* 表声明：定义在 lib_math_trig_lut.c，仅编译被选中 kind+size 的档位 */
 extern const float Lib_Math_SinTable[];     /* QUARTER：四分之一周期正弦表 */

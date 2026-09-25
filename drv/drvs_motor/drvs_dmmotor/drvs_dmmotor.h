@@ -253,12 +253,12 @@ typedef struct
 /*============================================
  *              单电机实例定义宏
  *============================================*/
-#define DRVS_DMMOTOR_INSTANCE_DEF(name) \
-    CAN_INSTANCE_DEF(name##_can);       \
-    DAEMON_INSTANCE_DEF(name##_daemon); \
-    static DrvsDMMotor_s name = {       \
-        .can = &name##_can,             \
-        .daemon = &name##_daemon,       \
+#define DRVS_DMMOTOR_INSTANCE_DEF(name)                                                                                \
+    CAN_INSTANCE_DEF(name##_can);                                                                                      \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
+    static DrvsDMMotor_s name = {                                                                                      \
+        .can = &name##_can,                                                                                            \
+        .daemon = &name##_daemon,                                                                                      \
     }
 
 /*============================================

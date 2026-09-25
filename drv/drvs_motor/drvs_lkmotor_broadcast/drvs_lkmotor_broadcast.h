@@ -233,12 +233,12 @@ typedef struct
 /*============================================
  *              单电机实例 / 广播组定义宏
  *============================================*/
-#define DRVS_LKMOTOR_BROADCAST_INSTANCE_DEF(name) \
-    CAN_INSTANCE_DEF(name##_can);                 \
-    DAEMON_INSTANCE_DEF(name##_daemon);           \
-    static DrvsLKMotorBroadcast_s name = {        \
-        .can = &name##_can,                       \
-        .daemon = &name##_daemon,                 \
+#define DRVS_LKMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                      \
+    CAN_INSTANCE_DEF(name##_can);                                                                                      \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
+    static DrvsLKMotorBroadcast_s name = {                                                                             \
+        .can = &name##_can,                                                                                            \
+        .daemon = &name##_daemon,                                                                                      \
     }
 
 /**
@@ -246,8 +246,7 @@ typedef struct
  * @note  先定义再传给 `cfg.group`。
  *        定义出来即全零：四个槽位皆空、成员数为 0，can_e 由第一个成员的 Config 落定。
  */
-#define DRVS_LKMOTOR_BROADCAST_GROUP_DEF(name) \
-    static DrvsLKMotorBroadcastGroup_s name = {0}
+#define DRVS_LKMOTOR_BROADCAST_GROUP_DEF(name) static DrvsLKMotorBroadcastGroup_s name = {0}
 
 /*============================================
  *              公共接口
@@ -263,8 +262,7 @@ int8_t DrvsLKMotorBroadcastRegister(DrvsLKMotorBroadcast_s *inst);
  * @note  换组/换槽会先释放旧槽位（旧组该槽位改为空 → 该槽位后续下发 0 扭矩）
  * @note  任何失败路径都不会改动组成员关系
  */
-int8_t DrvsLKMotorBroadcastConfig(DrvsLKMotorBroadcast_s *inst,
-                                  const DrvsLKMotorBroadcastConfig_s *cfg);
+int8_t DrvsLKMotorBroadcastConfig(DrvsLKMotorBroadcast_s *inst, const DrvsLKMotorBroadcastConfig_s *cfg);
 
 /**
  * @brief 设置扭矩设定值 (Nm)

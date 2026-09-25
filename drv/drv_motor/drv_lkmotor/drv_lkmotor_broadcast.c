@@ -190,9 +190,10 @@ MotorData_s LKMotorBroadcast_GetData(void *inst)
         }
     }
 
-    base->data_all.position_cnt += wraps;                                                                               // ① 累加（单位 = 线值回绕次数）
-    double angle = ((double)base->data_all.position_cnt * (double)LK_BROADCAST_WRAP_SPAN_RAD) + (double)position_single // ① 累加
-                   + (double)base->position_offset;                                                                     // ② 偏置
+    base->data_all.position_cnt += wraps; // ① 累加（单位 = 线值回绕次数）
+    double angle = ((double)base->data_all.position_cnt * (double)LK_BROADCAST_WRAP_SPAN_RAD) +
+                   (double)position_single          // ① 累加
+                   + (double)base->position_offset; // ② 偏置
 
     angle *= setting->feedback_direction; // ③ 方向
 
@@ -464,7 +465,9 @@ static void LKMotorBroadcast_Calculate(LKMotorBroadcastInstance *inst)
         {
             position_feedforward = *setting->position_feedforward_ptr;
         }
-        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr) ? *setting->angle_external_ptr : md.position;
+        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr)
+                      ? *setting->angle_external_ptr
+                      : md.position;
         setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, position_feedforward);
     }
 
@@ -476,7 +479,9 @@ static void LKMotorBroadcast_Calculate(LKMotorBroadcastInstance *inst)
         {
             speed_feedforward = *setting->speed_feedforward_ptr;
         }
-        measure = (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr) ? *setting->speed_external_ptr : md.speed;
+        measure = (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr)
+                      ? *setting->speed_external_ptr
+                      : md.speed;
         output = PIDCalculate(&ctrl->pid_speed, setpoint, measure, speed_feedforward);
     }
     else

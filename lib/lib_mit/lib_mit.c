@@ -35,7 +35,8 @@ void MITInit(MITInstance *instance, const MIT_Init_Config_s *config)
     instance->error_normalize_enable = config->error_normalize_enable;
 }
 
-float MITCalculate(MITInstance *instance, float speed_set, float speed_measure, float pos_set, float pos_measure, float feedforward)
+float MITCalculate(MITInstance *instance, float speed_set, float speed_measure, float pos_set, float pos_measure,
+                   float feedforward)
 {
     if (instance == NULL)
     {

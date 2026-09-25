@@ -162,23 +162,38 @@ typedef struct KalmanInstance
  * @note 按上限分配所需矩阵与工作区，RAM 占用 ≈ (5N² + 3NM + 3M² + N·L + 2N + M) floats
  * @note 例：KALMAN_INSTANCE_DEF(kf_imu, 9, 6, 0);
  */
-#define KALMAN_INSTANCE_DEF(name, N, M, L)           \
-    static float name##_x[N];                        \
-    static float name##_P[(N) * (N)];                \
-    static float name##_F[(N) * (N)];                \
-    static float name##_Q[(N) * (N)];                \
-    static float name##_H[(M) ? (M) * (N) : 1];      \
-    static float name##_R[(M) ? (M) * (M) : 1];      \
-    static float name##_B[(L) ? (N) * (L) : 1];      \
-    static float name##_wA[(N) * (N)];               \
-    static float name##_wB[(N) * (N)];               \
-    static float name##_wC[(M) ? (N) * (M) : 1];     \
-    static float name##_wG[(M) ? (N) * (M) : 1];     \
-    static float name##_wD[(M) ? 2 * (M) * (M) : 1]; \
-    static float name##_wE[N];                       \
-    static float name##_wF[(M) ? (M) : 1];           \
-    static KalmanInstance name = {                   \
-        .n_max = (N), .m_max = (M), .l_max = (L), .x = name##_x, .P = name##_P, .F = name##_F, .Q = name##_Q, .H = name##_H, .R = name##_R, .B = name##_B, .wA = name##_wA, .wB = name##_wB, .wC = name##_wC, .wG = name##_wG, .wD = name##_wD, .wE = name##_wE, .wF = name##_wF}
+#define KALMAN_INSTANCE_DEF(name, N, M, L)                                                                             \
+    static float name##_x[N];                                                                                          \
+    static float name##_P[(N) * (N)];                                                                                  \
+    static float name##_F[(N) * (N)];                                                                                  \
+    static float name##_Q[(N) * (N)];                                                                                  \
+    static float name##_H[(M) ? (M) * (N) : 1];                                                                        \
+    static float name##_R[(M) ? (M) * (M) : 1];                                                                        \
+    static float name##_B[(L) ? (N) * (L) : 1];                                                                        \
+    static float name##_wA[(N) * (N)];                                                                                 \
+    static float name##_wB[(N) * (N)];                                                                                 \
+    static float name##_wC[(M) ? (N) * (M) : 1];                                                                       \
+    static float name##_wG[(M) ? (N) * (M) : 1];                                                                       \
+    static float name##_wD[(M) ? 2 * (M) * (M) : 1];                                                                   \
+    static float name##_wE[N];                                                                                         \
+    static float name##_wF[(M) ? (M) : 1];                                                                             \
+    static KalmanInstance name = {.n_max = (N),                                                                        \
+                                  .m_max = (M),                                                                        \
+                                  .l_max = (L),                                                                        \
+                                  .x = name##_x,                                                                       \
+                                  .P = name##_P,                                                                       \
+                                  .F = name##_F,                                                                       \
+                                  .Q = name##_Q,                                                                       \
+                                  .H = name##_H,                                                                       \
+                                  .R = name##_R,                                                                       \
+                                  .B = name##_B,                                                                       \
+                                  .wA = name##_wA,                                                                     \
+                                  .wB = name##_wB,                                                                     \
+                                  .wC = name##_wC,                                                                     \
+                                  .wG = name##_wG,                                                                     \
+                                  .wD = name##_wD,                                                                     \
+                                  .wE = name##_wE,                                                                     \
+                                  .wF = name##_wF}
 
 /*============================ 矩阵元素索引宏 ============================*/
 

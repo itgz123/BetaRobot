@@ -35,7 +35,8 @@ void DaemonConfig(DaemonInstance *inst, const Daemon_Config_s *config)
 
     if (config->fault_action > DAEMON_FAULT_RESERVED_7)
     {
-        BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "Invalid fault_action: %d, max: %d", config->fault_action, DAEMON_FAULT_RESERVED_7);
+        BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "Invalid fault_action: %d, max: %d", config->fault_action,
+               DAEMON_FAULT_RESERVED_7);
         return;
     }
 

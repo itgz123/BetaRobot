@@ -140,6 +140,10 @@ def build():
     lines_c.append('#include "lib_crc_tables.h"')
     lines_c.append('#include "app_cfg.h"')
     lines_c.append("")
+    # 表体与描述符块是生成器排的定宽行（表每行 8 个数、描述符按 = 对齐），
+    # clang-format 会按 120 列重排，导致每次重新生成都与之冲突；整段关掉格式化。
+    lines_c.append("/* 以下为生成器排版的定宽内容，重排会与下次生成冲突，故关闭格式化 */")
+    lines_c.append("// clang-format off")
     lines_c.append("#ifdef LIB_CRC_TABLES_USED")
     lines_c.append("")
 
@@ -170,6 +174,7 @@ def build():
         lines_c.append("")
 
     lines_c.append("#endif /* LIB_CRC_TABLES_USED */")
+    lines_c.append("// clang-format on")
     lines_c.append("")
 
     h_path = os.path.join(out_dir, "lib_crc_tables.h")

@@ -263,14 +263,11 @@ typedef struct BMI088KalmanInstance
  *
  * @example BMI088_KALMAN_INSTANCE_DEF(imu);
  */
-#define BMI088_KALMAN_INSTANCE_DEF(name)           \
-    BMI088_INSTANCE_DEF(name##_imu);               \
-    KALMAN_INSTANCE_DEF(name##_kf_roll, 2, 1, 1);  \
-    KALMAN_INSTANCE_DEF(name##_kf_pitch, 2, 1, 1); \
-    static BMI088KalmanInstance name = {           \
-        .imu = &name##_imu,                        \
-        .kf_roll = &name##_kf_roll,                \
-        .kf_pitch = &name##_kf_pitch}
+#define BMI088_KALMAN_INSTANCE_DEF(name)                                                                               \
+    BMI088_INSTANCE_DEF(name##_imu);                                                                                   \
+    KALMAN_INSTANCE_DEF(name##_kf_roll, 2, 1, 1);                                                                      \
+    KALMAN_INSTANCE_DEF(name##_kf_pitch, 2, 1, 1);                                                                     \
+    static BMI088KalmanInstance name = {.imu = &name##_imu, .kf_roll = &name##_kf_roll, .kf_pitch = &name##_kf_pitch}
 
 /*============================ 公开接口 ============================*/
 

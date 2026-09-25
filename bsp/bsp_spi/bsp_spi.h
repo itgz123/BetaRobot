@@ -87,11 +87,9 @@ typedef struct SPIInstance
  * @example
  *   SPI_INSTANCE_DEF(bmi088_spi, 64);
  */
-#define SPI_INSTANCE_DEF(name, buff_sz)                   \
-    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0}; \
-    static SPIInstance name = {                           \
-        .rx_buff = name##_rx_buff,                        \
-        .buff_size = buff_sz}
+#define SPI_INSTANCE_DEF(name, buff_sz)                                                                                \
+    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};                                                              \
+    static SPIInstance name = {.rx_buff = name##_rx_buff, .buff_size = buff_sz}
 
 /*------------- 配置结构体 --------------*/
 
@@ -161,8 +159,8 @@ BSP_Status_e SPIConfig(SPIInstance *instance, const SPI_Config_s *config);
  * @note tx_callback 内续发是允许的（HAL 已把 State 置回 READY），但不得在回调内调
  *       SPIConfig。
  */
-BSP_Status_e SPITransmit(SPIInstance *instance, const uint8_t *data, uint16_t len,
-                         BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
+BSP_Status_e SPITransmit(SPIInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode,
+                         uint32_t timeout_ms);
 
 /**
  * @brief SPI接收（只收不发，发出去的字节为 0xFF/0x00 由 HAL 决定）
@@ -180,8 +178,7 @@ BSP_Status_e SPITransmit(SPIInstance *instance, const uint8_t *data, uint16_t le
  *       数据长度与请求不符却毫无察觉。缓冲不够请把 SPI_INSTANCE_DEF 开大。
  * @note 上下文限制同 SPITransmit（BLOCK 禁止在中断里调用；IT/DMA 在中断里传 timeout_ms=0）。
  */
-BSP_Status_e SPIReceive(SPIInstance *instance, uint16_t len,
-                        BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
+BSP_Status_e SPIReceive(SPIInstance *instance, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
 
 /**
  * @brief SPI全双工收发（同一时钟下同时收与发，结果写入 instance->rx_buff）
@@ -199,8 +196,8 @@ BSP_Status_e SPIReceive(SPIInstance *instance, uint16_t len,
  * @note 这是 BMI088 这类"先发寄存器地址再读数据"器件的唯一必需接口。
  * @note 上下文限制同 SPITransmit（BLOCK 禁止在中断里调用；IT/DMA 在中断里传 timeout_ms=0）。
  */
-BSP_Status_e SPITransmitReceive(SPIInstance *instance, const uint8_t *tx_data, uint16_t len,
-                                BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
+BSP_Status_e SPITransmitReceive(SPIInstance *instance, const uint8_t *tx_data, uint16_t len, BSP_Transfer_Mode_e mode,
+                                uint32_t timeout_ms);
 
 /**
  * @brief 传输卡死自恢复（幂等；DRV 在自己任务上下文的读入口调用）

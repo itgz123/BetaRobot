@@ -204,8 +204,7 @@ float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const AxisLiteState_s *sta
         output = inst->params.total_ff;
         break;
 
-    case AXIS_LITE_STAGE_IDENTIFY:
-    {
+    case AXIS_LITE_STAGE_IDENTIFY: {
         float t = CalcTimeSinceDelay(inst, now_us); // s
         if (t > inst->chirp_params.duration)
         {
@@ -234,8 +233,7 @@ float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const AxisLiteState_s *sta
         break;
     }
 
-    case AXIS_LITE_STAGE_IDENTIFY_OLS:
-    {
+    case AXIS_LITE_STAGE_IDENTIFY_OLS: {
         float t = CalcTimeSinceDelay(inst, now_us); // s
         float T = inst->multi_sine_params.duration; // s
 
@@ -254,8 +252,7 @@ float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const AxisLiteState_s *sta
         break;
     }
 
-    case AXIS_LITE_STAGE_TUNE:
-    {
+    case AXIS_LITE_STAGE_TUNE: {
         float t = CalcTimeSinceDelay(inst, now_us); // s
 
         // 首次进入 TUNE（延时结束后）记录当前角度作为正弦参考中心
@@ -284,8 +281,7 @@ float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const AxisLiteState_s *sta
         break;
     }
 
-    case AXIS_LITE_STAGE_NORMAL:
-    {
+    case AXIS_LITE_STAGE_NORMAL: {
         ref_pos = SafeGetRef(&ref->position, angle);    // rad
         ref_vel = SafeGetRef(&ref->speed, 0.0f);        // rad/s
         ref_acc = SafeGetRef(&ref->acceleration, 0.0f); // rad/s²

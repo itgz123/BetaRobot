@@ -35,14 +35,8 @@ const TIM_Map_t tim_map[TIM_NUM_MAX] = {
 };
 
 const UART_Map_t uart_map[UART_NUM_MAX] = {
-    [UART_1] = {&huart1},
-    [UART_SBUS] = {&huart5},
-    [UART_RS485_2] = {&huart2},
-    [UART_RS485_3] = {&huart3},
-    [UART_7] = {&huart7},
-    [UART_EX_8] = {&huart8},
-    [UART_EX_9] = {&huart9},
-    [UART_10] = {&huart10},
+    [UART_1] = {&huart1}, [UART_SBUS] = {&huart5}, [UART_RS485_2] = {&huart2}, [UART_RS485_3] = {&huart3},
+    [UART_7] = {&huart7}, [UART_EX_8] = {&huart8}, [UART_EX_9] = {&huart9},    [UART_10] = {&huart10},
 };
 
 const CAN_Map_t can_map[CAN_NUM_MAX] = {

@@ -60,8 +60,7 @@
 #define PROTO_EXT_BYTES(payload_bytes) LIB_HAMMING_EXT_BYTES((payload_bytes), PROTO_EXT_M)
 
 /* 协议开销（字节）= 帧头(1) + seq(1) + CRC8(1) + 帧尾(1) + 编码区膨胀(E - N) */
-#define PROTO_EXT_OVERHEAD(payload_size) \
-    (4u + PROTO_EXT_BYTES(payload_size) - (uint32_t)(payload_size))
+#define PROTO_EXT_OVERHEAD(payload_size) (4u + PROTO_EXT_BYTES(payload_size) - (uint32_t)(payload_size))
 
 /* 扩展汉明码帧协议派生结构体（首成员必须为 CommProto 基类） */
 typedef struct
@@ -97,18 +96,17 @@ typedef struct
  * @example
  *   COMM_PROTO_EXT_DEF(proto_cmd, uart_comm, 13);
  */
-#define COMM_PROTO_EXT_DEF(name, media_, payload_sz)                                            \
-    _Static_assert((payload_sz) >= 1u && (uint32_t)(payload_sz) <= 0xFFFFu,                     \
-                   "PROTO_EXT: payload 长度须在 1..65535 字节");                                 \
-    LIB_HAMMING_EXT_CHECK_M(PROTO_EXT_M);                                                       \
-    LIB_HAMMING_CHECK_CFG(PROTO_EXT_M, PROTO_EXT_BLK_BYTES(payload_sz) * 8u);                   \
-    static uint8_t name##_rx_buff[(payload_sz)];                                                \
-    static uint8_t name##_reenc_buff[(PROTO_EXT_BYTES(payload_sz)) + 1u];                       \
-    static CommProtoExt name = {                                                                \
-        .base.payload_size = (payload_sz),                                                      \
-        .base.media = (void *)&media_,                                                          \
-        .rx_buff = name##_rx_buff,                                                              \
-        .reenc_buff = name##_reenc_buff} /* 尾部无分号，调用处加 */
+#define COMM_PROTO_EXT_DEF(name, media_, payload_sz)                                                                   \
+    _Static_assert((payload_sz) >= 1u && (uint32_t)(payload_sz) <= 0xFFFFu,                                            \
+                   "PROTO_EXT: payload 长度须在 1..65535 字节");                                                       \
+    LIB_HAMMING_EXT_CHECK_M(PROTO_EXT_M);                                                                              \
+    LIB_HAMMING_CHECK_CFG(PROTO_EXT_M, PROTO_EXT_BLK_BYTES(payload_sz) * 8u);                                          \
+    static uint8_t name##_rx_buff[(payload_sz)];                                                                       \
+    static uint8_t name##_reenc_buff[(PROTO_EXT_BYTES(payload_sz)) + 1u];                                              \
+    static CommProtoExt name = {.base.payload_size = (payload_sz),                                                     \
+                                .base.media = (void *)&media_,                                                         \
+                                .rx_buff = name##_rx_buff,                                                             \
+                                .reenc_buff = name##_reenc_buff} /* 尾部无分号，调用处加 */
 
 /**
  * @brief 初始化扩展汉明码帧协议后端（挂 vtable + 算分块参数 + 清零收发序列状态）

@@ -111,13 +111,13 @@ typedef struct
     BoardGPIO_e rstn_e; // 复位 GPIO 枚举；**填 GPIO_NUM_MAX 表示未接**（无复位能力）
 
     /* 器件运行时参数 */
-    uint16_t daemon_reload;               // daemon 喂狗超时（ms），0 表示禁用（不监控：DaemonIsOnline 恒报在线）
-    DaemonFaultAction_e daemon_fault;     // daemon 离线故障动作
-    IST8310_WorkMode_e work_mode;         // 采样由谁驱动（轮询/中断）
-    BSP_Transfer_Mode_e i2c_mode;         // 传输怎么做（阻塞/IT/DMA）；INT 模式**只能填 BSP_IT_MODE**
-    IST8310_Avg_e avg;                    // 内部平均次数（影响噪声与最小测量间隔）
-    IST8310_PdPulse_e pd_pulse;           // set/reset 脉冲宽度（推荐 IST8310_PD_PULSE_NORMAL）
-    uint32_t i2c_timeout_ms;              // I2C 传输超时(ms)
+    uint16_t daemon_reload;           // daemon 喂狗超时（ms），0 表示禁用（不监控：DaemonIsOnline 恒报在线）
+    DaemonFaultAction_e daemon_fault; // daemon 离线故障动作
+    IST8310_WorkMode_e work_mode;     // 采样由谁驱动（轮询/中断）
+    BSP_Transfer_Mode_e i2c_mode;     // 传输怎么做（阻塞/IT/DMA）；INT 模式**只能填 BSP_IT_MODE**
+    IST8310_Avg_e avg;                // 内部平均次数（影响噪声与最小测量间隔）
+    IST8310_PdPulse_e pd_pulse;       // set/reset 脉冲宽度（推荐 IST8310_PD_PULSE_NORMAL）
+    uint32_t i2c_timeout_ms;          // I2C 传输超时(ms)
 } IST8310_Config_s;
 
 /*============================ 数据结构体 ============================*/
@@ -169,13 +169,13 @@ typedef struct IST8310Instance
     uint8_t *req_buff;
 
     /* 器件配置（Config 写入） */
-    IST8310_WorkMode_e work_mode;         // 采样由谁驱动（轮询/中断）
-    BSP_Transfer_Mode_e i2c_mode;         // 传输怎么做（阻塞/IT/DMA），每次调用透传给 bsp
-    IST8310_Avg_e avg;                    // 平均次数
-    IST8310_PdPulse_e pd_pulse;           // 脉冲宽度
-    uint32_t i2c_timeout_ms;              // I2C 超时(ms)
-    uint16_t meas_delay_ms;               // 单次测量最小等待(ms)，由 avg 推导
-    uint8_t has_rstn;                     // 1 = rstn_e 有效（非 GPIO_NUM_MAX）
+    IST8310_WorkMode_e work_mode; // 采样由谁驱动（轮询/中断）
+    BSP_Transfer_Mode_e i2c_mode; // 传输怎么做（阻塞/IT/DMA），每次调用透传给 bsp
+    IST8310_Avg_e avg;            // 平均次数
+    IST8310_PdPulse_e pd_pulse;   // 脉冲宽度
+    uint32_t i2c_timeout_ms;      // I2C 超时(ms)
+    uint16_t meas_delay_ms;       // 单次测量最小等待(ms)，由 avg 推导
+    uint8_t has_rstn;             // 1 = rstn_e 有效（非 GPIO_NUM_MAX）
 
     /*============================ 采集链字段 ============================*/
 
@@ -222,18 +222,17 @@ typedef struct IST8310Instance
  * @example
  *   IST8310_INSTANCE_DEF(ist8310);
  */
-#define IST8310_INSTANCE_DEF(name)                   \
-    I2C_INSTANCE_DEF(name##_i2c, IST8310_BUFF_SIZE); \
-    static uint8_t name##_req_buff[1] DMA_RAM = {0};  \
-    GPIO_INSTANCE_DEF(name##_drdy);                   \
-    GPIO_INSTANCE_DEF(name##_rstn);                   \
-    DAEMON_INSTANCE_DEF(name##_daemon);               \
-    static IST8310Instance name = {                   \
-        .i2c_inst = &name##_i2c,                      \
-        .req_buff = name##_req_buff,                  \
-        .drdy = &name##_drdy,                         \
-        .rstn = &name##_rstn,                         \
-        .daemon = &name##_daemon}
+#define IST8310_INSTANCE_DEF(name)                                                                                     \
+    I2C_INSTANCE_DEF(name##_i2c, IST8310_BUFF_SIZE);                                                                   \
+    static uint8_t name##_req_buff[1] DMA_RAM = {0};                                                                   \
+    GPIO_INSTANCE_DEF(name##_drdy);                                                                                    \
+    GPIO_INSTANCE_DEF(name##_rstn);                                                                                    \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
+    static IST8310Instance name = {.i2c_inst = &name##_i2c,                                                            \
+                                   .req_buff = name##_req_buff,                                                        \
+                                   .drdy = &name##_drdy,                                                               \
+                                   .rstn = &name##_rstn,                                                               \
+                                   .daemon = &name##_daemon}
 
 /*============================ 公开接口声明 ============================*/
 

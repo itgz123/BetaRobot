@@ -34,10 +34,10 @@ typedef struct
     uint16_t rx_cnt;             /* 已累积字节数（0..rx_frame_len，上交后归零） */
     uint8_t rx_expect_pkt;       /* 期望接收的下一分包序号（帧内 0 起递增；错位说明丢包，丢帧重同步） */
     uint32_t lost_frames;        /* 丢帧计数（分包错位/帧中途丢包累加） */
-    uint32_t tx_fail;            /* 发送失败计数（USBTransmit 返回非 BSP_OK 且非背压：未枚举/参数错；只增不清，调试用） */
-    uint32_t tx_busy;            /* 发送背压计数（USBTransmit 返回 BSP_BUSY：ring 放不下整帧，退避后重发即可） */
-    uint32_t err_count;          /* bsp 错误回调（USB_ERR_* 事件）累计次数（只增不清，调试用） */
-    uint8_t last_err;            /* 最近一次 bsp 错误回调的 USB_ErrReason_e（调试用） */
+    uint32_t tx_fail;   /* 发送失败计数（USBTransmit 返回非 BSP_OK 且非背压：未枚举/参数错；只增不清，调试用） */
+    uint32_t tx_busy;   /* 发送背压计数（USBTransmit 返回 BSP_BUSY：ring 放不下整帧，退避后重发即可） */
+    uint32_t err_count; /* bsp 错误回调（USB_ERR_* 事件）累计次数（只增不清，调试用） */
+    uint8_t last_err;   /* 最近一次 bsp 错误回调的 USB_ErrReason_e（调试用） */
     USB_ErrCallback user_err_callback; /* cfg 里用户提供的错误回调（可为 NULL）；本层自己的钩子转发给它 */
 } CommMediaUsb;
 
@@ -56,16 +56,15 @@ typedef struct
  * @example
  *   COMM_MEDIA_USB_DEF(usb_comm_media, 16, 16); 协议帧 16B，帧长 > 63B 时自动分包
  */
-#define COMM_MEDIA_USB_DEF(name, rx_buff_sz, tx_buff_sz) \
-    USB_INSTANCE_DEF(name##_usb);                        \
-    DAEMON_INSTANCE_DEF(name##_daemon);                  \
-    static uint8_t name##_rx_buff[(rx_buff_sz)] = {0};   \
-    static CommMediaUsb name = {                         \
-        .base.media = &name##_usb,                       \
-        .base.daemon = &name##_daemon,                   \
-        .rx_buff = name##_rx_buff,                       \
-        .rx_frame_len = (rx_buff_sz),                    \
-        .tx_frame_len = (tx_buff_sz)}
+#define COMM_MEDIA_USB_DEF(name, rx_buff_sz, tx_buff_sz)                                                               \
+    USB_INSTANCE_DEF(name##_usb);                                                                                      \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
+    static uint8_t name##_rx_buff[(rx_buff_sz)] = {0};                                                                 \
+    static CommMediaUsb name = {.base.media = &name##_usb,                                                             \
+                                .base.daemon = &name##_daemon,                                                         \
+                                .rx_buff = name##_rx_buff,                                                             \
+                                .rx_frame_len = (rx_buff_sz),                                                          \
+                                .tx_frame_len = (tx_buff_sz)}
 
 /**
  * @brief 注册 USB 介质后端（不可重入：仅可调用一次）
