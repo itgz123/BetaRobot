@@ -297,6 +297,30 @@ function(build_app app_name)
     # compile_commands.json 只导出当前 app，避免多个 board 的编译命令互相混淆
     if(app_name STREQUAL APP_NAME)
         set_target_properties(${app_name} PROPERTIES EXPORT_COMPILE_COMMANDS ON)
+
+        # ---- 强制每次构建都重新链接 ----
+        # -Wl,--print-memory-usage 的内存占用表只在链接步骤执行时打印，而工具链没有别的命令
+        # 能给出 region 百分比（size/objdump 只有段的地址和大小）。增量构建（无源文件改动、
+        # 或只改 app_cfg.h 触发 reconfigure）不重链就看不到它。
+        # 挂一个每次都会重建的空文件到 LINK_DEPENDS，强制重链：实测重链 + 反汇编 +
+        # 21 个 readelf dump 一起重跑约 0.4s，换取内存占用每次构建可见。
+        set(relink_stamp "${CMAKE_BINARY_DIR}/$<CONFIG>/${app_name}_relink.stamp")
+        add_custom_command(
+            OUTPUT "${relink_stamp}"
+            COMMAND ${CMAKE_COMMAND} -E touch "${relink_stamp}"
+            VERBATIM
+        )
+        # 上面这条 custom_command 只负责让 ninja 认得 stamp 这个文件：没有 target 依赖这个
+        # OUTPUT 时 CMake 不把它写进构建图，ninja 会报 "missing and no known rule to make it"。
+        add_custom_target(${app_name}_relink_stamp DEPENDS "${relink_stamp}")
+        set_target_properties(${app_name} PROPERTIES LINK_DEPENDS "${relink_stamp}")
+
+        # 链接完成后把 stamp 顶新，下次构建必然重链。
+        # 注意不能放在链接之前 touch：那样链接产出的 elf 比 stamp 新，重链会变成隔一次才发生一次。
+        add_custom_command(TARGET ${app_name} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E touch "${relink_stamp}"
+            VERBATIM
+        )
     else()
         set_target_properties(${app_name} PROPERTIES EXPORT_COMPILE_COMMANDS OFF)
     endif()
@@ -419,9 +443,19 @@ else()
 endif()
 
 ######################################
-# 打印配置信息
+# 打印配置信息（active app）
 ######################################
+# 重新读取 active app 的开关：build_app() 里的同名变量是函数作用域，这里取不到
+read_define(ACTIVE_HAL      "${CMAKE_SOURCE_DIR}/app/${APP_NAME}/app_cfg.h" HAL_CONFIG_NAME)
+check_define(ACTIVE_DISAS   "${CMAKE_SOURCE_DIR}/app/${APP_NAME}/app_cfg.h" GENERATE_DISASSEMBLY)
+check_define(ACTIVE_READELF "${CMAKE_SOURCE_DIR}/app/${APP_NAME}/app_cfg.h" GENERATE_READELF)
+
 message(STATUS "APP_NAME (active): ${APP_NAME}")
 message(STATUS "DEVELOPMENT_BOARD: ${ACTIVE_BOARD}")
+message(STATUS "HAL_CONFIG_NAME: ${ACTIVE_HAL}")
+message(STATUS "HAL_DIR: ${CMAKE_SOURCE_DIR}/cubemx/${ACTIVE_HAL}")
+message(STATUS "BUILD_TYPE: ${CMAKE_DEFAULT_BUILD_TYPE} (默认配置，可由 --config 覆盖)")
+message(STATUS "GENERATE_DISASSEMBLY: ${ACTIVE_DISAS}")
+message(STATUS "GENERATE_READELF: ${ACTIVE_READELF}")
 message(STATUS "CONFIGURATION_TYPES: ${CMAKE_CONFIGURATION_TYPES}")
 message(STATUS "GENERATOR: ${CMAKE_GENERATOR}")
