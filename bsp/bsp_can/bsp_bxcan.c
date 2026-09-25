@@ -230,15 +230,40 @@ static uint8_t CAN_OwnerBusyCount(uint8_t can_idx)
 }
 
 /**
+ * @brief 原子摘取某个邮箱的溯源槽（"读 owner → 置 NULL"不可分）
+ * @return 槽里原来的 owner；槽本就没人认领时返回 NULL
+ *
+ * @note 为什么必须原子：**同一个邮箱的完成事件会被多条路径同时观察到** —— HAL 的 TX 邮箱
+ *       中断（TXOK/取消）、SCE 错误中断（ALST/TERR），以及任务上下文的
+ *       CAN_TxDrainCompletions 与 CANAbortAllTx。它们不在同一优先级：drain 只屏蔽了
+ *       TX 邮箱中断（管不住 SCE），CANAbortAllTx 什么都不屏蔽，两者又都会一次处理多个邮箱。
+ *       "读→清"之间被抢占，两条路径就都会拿到同一个非空 owner 并各回调一次。
+ *       头文件把 tx_complete_callback 定为幂等，重复通知不至于出错，但"同一帧的结果只通知
+ *       一次"是这条溯源机制的基本承诺，不该靠上层兜底 —— 代价只有一次 4 条指令的临界区，
+ *       且临界区里不做任何回调。
+ */
+static CANInstance *CAN_TakeOwner(uint8_t can_idx, uint8_t mailbox_idx)
+{
+    CANInstance *inst;
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    inst = s_can_tx_owner[can_idx][mailbox_idx];
+    s_can_tx_owner[can_idx][mailbox_idx] = NULL;
+    if (primask == 0U)
+        __enable_irq();
+
+    return inst;
+}
+
+/**
  * @brief 逐帧结果收口：查溯源表 → 清槽 → 回调所属实例（成功与失败共用一条路径）
  * @param hcan        硬件句柄
  * @param mailbox_idx 邮箱索引（0/1/2）
  * @param result      BSP_OK=帧已真正发出；BSP_HW_ERR=仲裁失败/发送错误/被取消
  * @note **先清槽再回调**：回调内可能立即再次发送并复用同一邮箱。
  *       槽为空（该邮箱的发送不是经本层发起的，或已由另一条路径收口）时只计数、不回调。
- *       同一邮箱可能被多条路径同时观察到（HAL 的 TX/SCE 两个中断向量都进同一个 IRQHandler，
- *       而 CAN_TxDrainCompletions 会在任务上下文屏蔽 TX 中断后自己分发）——因为两条路径
- *       都是"先清槽再回调"，所以最多只有一条能拿到非空槽，不会重复通知。
+ *       多条路径并发时由 CAN_TakeOwner 的原子摘取保证"最多一条拿到非空槽"。
  */
 static void CAN_TxResultHandler(CAN_HandleTypeDef *hcan, uint8_t mailbox_idx, BSP_Status_e result)
 {
@@ -253,8 +278,7 @@ static void CAN_TxResultHandler(CAN_HandleTypeDef *hcan, uint8_t mailbox_idx, BS
     else
         s_bxcan_status[can_idx].err_tx++; /* 帧没能发出去 */
 
-    inst = s_can_tx_owner[can_idx][mailbox_idx];
-    s_can_tx_owner[can_idx][mailbox_idx] = NULL;
+    inst = CAN_TakeOwner(can_idx, mailbox_idx);
     s_bxcan_status[can_idx].tx_owner_busy = CAN_OwnerBusyCount(can_idx);
     if (inst != NULL && inst->tx_complete_callback != NULL)
         inst->tx_complete_callback(inst, mailbox_idx, result);
@@ -288,9 +312,10 @@ static HAL_StatusTypeDef CANAbortAllTx(CANInstance *instance)
 
     for (i = 0; i < CAN_TX_MAILBOX_NUM; i++)
     {
-        CANInstance *owner = s_can_tx_owner[can_idx][i];
+        /* 原子摘取：ACRQ 生效后 HAL 的 TxMailbox*AbortCallback / SCE 错误中断可能同时
+         * 观察到同一个邮箱，非原子摘取会让同一帧被回调两次（见 CAN_TakeOwner） */
+        CANInstance *owner = CAN_TakeOwner(can_idx, i);
 
-        s_can_tx_owner[can_idx][i] = NULL;
         if (owner != NULL)
         {
             s_bxcan_status[can_idx].tx_abort++;
@@ -410,6 +435,13 @@ BSP_Status_e CANRegister(CANInstance *instance)
 /**
  * @brief 配置CAN实例（填充硬件映射 + 工作模式 + 父指针 + 回调，可重复调用）
  * @note 要求先调用 CANRegister 注册实例
+ * @note **配置项一律覆盖写入，包括两个回调**：`config->tx_complete_callback`/`err_callback`
+ *       传 NULL 的含义是"清空"，不是"保持原样"。所以**同一个实例别配两遍**：第二次若不带
+ *       回调，第一次注册的就被静默清掉，异步分包会卡在"永远等不到发送完成"。
+ *       多个实例共享同一 handle（见上面 CANRegister 的说明）则互不影响 —— 两个回调都
+ *       按实例存放：发送完成回调只发给**发起那帧的实例**（CAN_TxResultHandler 按
+ *       CAN_TakeOwner 查到谁发的那帧），错误回调才按 handle **广播**给该总线上的每个实例
+ *       （CAN_NotifyError 逐个调各自那份，某个实例没挂就跳过它）。
  */
 BSP_Status_e CANConfig(CANInstance *instance, const CAN_Config_s *config)
 {
@@ -572,6 +604,25 @@ BSP_Status_e CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t
         BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Invalid frame_type=%d!", pack->frame_type);
         return CAN_BxcanTxFail(instance, BSP_PARAM_ERR);
     }
+    /* ID 范围校验（按声明的帧类型）：HAL 只在 USE_FULL_ASSERT 下才查 ID（本工程各板都没开
+     * USE_FULL_ASSERT，见 stm32f4xx_hal_conf.h），而 TIR 里标准 ID 只占 11 位
+     * （`StdId << CAN_TI0R_STID_Pos`）—— 超范围的标准帧 ID 会被静默截断（0x800 移出 32 位，
+     * 还可能与 EXID 字段互相污染），发出去的是**另一个 ID** 的帧。现场表现最坑：发送路径
+     * 一路成功（`tx_ok` 照涨、没有错误位），接收端却因过滤器不匹配一帧都收不到。
+     * 宁可在这里硬拒成参数错。 */
+    if (tx_header.IDE == CAN_ID_STD)
+    {
+        BSP_RETURN_IF_TRUE_LOG(pack->id > 0x7FFu, CAN_BxcanTxFail(instance, BSP_PARAM_ERR),
+                               BSPLOG(&g_can_log, LOG_LEVEL_ERROR,
+                                      "Standard frame id=0x%lX exceeds 0x7FF!", (unsigned long)pack->id));
+    }
+    else
+    {
+        BSP_RETURN_IF_TRUE_LOG(pack->id > 0x1FFFFFFFu, CAN_BxcanTxFail(instance, BSP_PARAM_ERR),
+                               BSPLOG(&g_can_log, LOG_LEVEL_ERROR,
+                                      "Extended frame id=0x%lX exceeds 0x1FFFFFFF!", (unsigned long)pack->id));
+    }
+
     tx_header.DLC = pack->len;
 
     // 入队前先同步分发未处理的发送完成事件：防止本函数复用刚发完的邮箱时写 TXRQ 清掉 RQCPx，

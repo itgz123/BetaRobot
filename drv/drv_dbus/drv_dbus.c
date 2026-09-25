@@ -167,10 +167,11 @@ static DBUS_Data_t DBUSDecodeFrame(const uint8_t *data, uint16_t len)
 {
     DBUS_Data_t result = {0};
 
-    // 参数检查
+    /* 拒绝本帧的唯一出口：此时 result 是零值帧，只有 frame_lost 有效。
+     * 调用方（DBUSUARTRxCallback）据它不刷新通道数据、不喂狗、并启动失控计时。 */
     if (data == NULL || len < DBUS_FRAME_SIZE)
     {
-        BSPLOG(&g_dbus_log, LOG_LEVEL_WARNING, "Invalid frame data, len=%d", len);
+        BSPLOG(&g_dbus_log, LOG_LEVEL_WARNING, "Invalid frame data, len=%d (expected %d)", len, DBUS_FRAME_SIZE);
         result.frame_lost = 1;
         return result;
     }
@@ -262,6 +263,46 @@ static void DBUSUARTErrCallback(USARTInstance *usart_inst, USART_ErrReason_e rea
 }
 
 /**
+ * @brief 失控保护的确认计时（帧被拒 / 链路静默两条入口共用）
+ * @param dbus_inst DBUS 实例
+ *
+ * @note 判据是"持续无有效帧达到 lost_timeout_us"：lost_start_time_us 是这段异常窗口的起点
+ *       （0 = 窗口未开），由**第一个**异常事件打点，之后的调用只做超时比较。
+ * @note 为什么必须有"静默"入口：遥控器关机/接收机断线时根本不会有帧进来，rx_callback
+ *       一次都不会被调用 —— 只在 rx_callback 里计时，`signal_lost` 会永远冻结在 0，
+ *       失控保护静默失效（这正是 DBUSUARTErrCallback 顶部那段长注释说的事，只是那一路
+ *       只覆盖"接收停摆"，覆盖不到"接收正常但对面不说话了"）。静默由 daemon 探知
+ *       （没喂狗 = 超时没收到有效帧），故本函数在 daemon 离线回调里也被调用。
+ *       daemon 的 reload_count（默认 100ms）是本函数的触发时基，lost_timeout_us（默认
+ *       1000ms）是确认窗口，两者量级不同、互不替代：前者要快（早发现早重启接收），
+ *       后者要稳（避免一次抖动就判定失控）。
+ * @note 本函数有**两个上下文**在跑同一实例（rx_callback 在中断里、daemon 离线回调在任务里，
+ *       见上面两段），而 lost_start_time_us 是 64 位：Cortex-M 上"读—比较—写"不是一条指令，
+ *       任务侧写一半被中断抢走时，中断侧可能读到半新半旧的巨大值，`now - lost_start_time` 随
+ *       即溢出成"已超时"，凭空置一次 signal_lost（失控保护误动作，代价是停车）。
+ *       故整段用临界区保护：只有 5 条指令、内部不调用任何函数。
+ *       （`signal_lost` 本身是单字节标志，且只在"确认失控"与"收到有效帧"两处写，不需要保护。） */
+static void DBUS_CheckLostTimeout(DBUSInstance *dbus_inst)
+{
+    uint64_t now_us = DWT_GetTimeUs();
+    uint32_t primask = __get_PRIMASK();
+
+    __disable_irq();
+    if (dbus_inst->lost_start_time_us == 0)
+    {
+        dbus_inst->lost_start_time_us = now_us;
+    }
+
+    /* lost_timeout_ms 配 0 = 立即标志（见 DBUS_Config_s）：首帧异常即满足 now - now >= 0 */
+    if ((now_us - dbus_inst->lost_start_time_us) >= dbus_inst->lost_timeout_us)
+    {
+        dbus_inst->signal_lost = 1;
+    }
+    if (primask == 0U)
+        __enable_irq();
+}
+
+/**
  * @brief daemon 离线回调（DaemonTask 任务上下文，1ms 一次）——接收停摆的自动重启
  * @param owner 所属模块实例（DBUSConfig 写入的 Daemon_Config_s.owner_id）
  *
@@ -274,6 +315,10 @@ static void DBUSUARTErrCallback(USARTInstance *usart_inst, USART_ErrReason_e rea
  *       USARTRecoverRxIfStalled 里，四条 UART 链路共用同一份实现；这里只给限频周期。
  *       依赖 daemon 已启用：daemon_reload 配 0 会被 DBUSConfig 提升为
  *       DRV_DBUS_DAEMON_RELOAD_DEFAULT，故本通道不会被"禁用监控"误关。
+ *
+ * @note 本回调在"离线持续期间每 1ms 都被调用"（见 DaemonTask），故它同时是失控保护在
+ *       **完全静默**（遥控器关机、接收机掉线）下的唯一计时时基：那种情况没有任何帧、
+ *       连坏帧都没有，只有这里能发现"已经这么久没有有效帧了"。
  */
 static void DBUSUARTDaemonCallback(void *owner)
 {
@@ -283,6 +328,9 @@ static void DBUSUARTDaemonCallback(void *owner)
     {
         return;
     }
+
+    /* 静默路径的失控确认：没喂狗 = 超过 daemon_reload 没收到有效帧 */
+    DBUS_CheckLostTimeout(dbus_inst);
 
     /* 接收在跑 / 未到限频周期 → BSP_BUSY，空转；只有真重启成功才打日志 */
     if (USARTRecoverRxIfStalled(dbus_inst->usart_inst, DRV_DBUS_RX_RESTART_PERIOD_MS) == BSP_OK)
@@ -295,54 +343,48 @@ static void DBUSUARTDaemonCallback(void *owner)
  * @brief BSP 层 UART 接收回调
  * @param usart_inst USART 实例指针
  * @note 通过 parent 字段获取 DBUSInstance，调用 APP 回调
+ *
+ * @note 与 SBUS 的关键差别：DBUS 帧内**没有** frame_lost / failsafe 位（那是 SBUS 的
+ *       flags 字节），接收机也不会替我们标"这一帧不可信"，所以本驱动的失控判据只能是
+ *       "有没有按期收到可解析的 18 字节帧"，靠计时而不是靠帧内容（见 DBUS_CheckLostTimeout）。
+ *       帧被拒（长度/参数不合法）算"没收到"：既不喂狗，也不覆盖上一份有效通道数据。
  */
 static void DBUSUARTRxCallback(USARTInstance *usart_inst)
 {
-    // 参数检查
+    DBUSInstance *dbus_inst;
+    DBUS_Data_t frame;
+
     if (usart_inst == NULL)
     {
         return;
     }
 
-    // 检查帧长度
-    if (usart_inst->rx_len != DBUS_FRAME_SIZE)
+    dbus_inst = (DBUSInstance *)usart_inst->parent;
+    if (dbus_inst == NULL)
     {
-        BSPLOG(&g_dbus_log, LOG_LEVEL_WARNING, "Frame length error: %d (expected %d)", usart_inst->rx_len, DBUS_FRAME_SIZE);
         return;
     }
 
-    // 通过 parent 字段获取 DBUSInstance 指针
-    DBUSInstance *dbus_inst = (DBUSInstance *)usart_inst->parent;
+    /* 在中断上下文中解析原始数据为通道数据（长度不合法时 decode 内部报错并返回
+     * frame_lost=1 的零值帧，故调用方必须按 frame_lost 分流） */
+    frame = DBUSDecodeFrame(usart_inst->rx_buff, usart_inst->rx_len);
 
-    // 调用 APP 层回调（传递解析后的数据）
-    if (dbus_inst != NULL)
+    if (frame.frame_lost)
     {
-        // 在中断上下文中解析原始数据为通道数据
-        dbus_inst->dbus_data = DBUSDecodeFrame(usart_inst->rx_buff, usart_inst->rx_len);
-        DaemonReload(dbus_inst->daemon);
-
-        // ---- 信号丢失超时检测 ----
-        if (dbus_inst->dbus_data.frame_lost || dbus_inst->dbus_data.failsafe)
-        {
-            // 丢帧/失控状态：如果尚未计时则记录时间戳
-            if (dbus_inst->lost_start_time_us == 0)
-            {
-                dbus_inst->lost_start_time_us = DWT_GetTimeUs();
-            }
-
-            // 检查是否超过超时时间
-            if ((DWT_GetTimeUs() - dbus_inst->lost_start_time_us) >= dbus_inst->lost_timeout_us)
-            {
-                dbus_inst->signal_lost = 1;
-            }
-        }
-        else
-        {
-            // 信号恢复正常：清除计时和丢失标志
-            dbus_inst->lost_start_time_us = 0;
-            dbus_inst->signal_lost = 0;
-        }
+        /* 本帧不可信：不喂狗（daemon 会因此判离线，静默路径的失控计时随即启动），
+         * 也不把零值写进 dbus_data —— 覆盖掉的话，失控保护触发之前的那段时间里
+         * 上层会看到杆位全部为 0（归一化后是 -1.0 而不是中位），比"保持上一帧"更危险。 */
+        dbus_inst->dbus_data.frame_lost = 1;
+        DBUS_CheckLostTimeout(dbus_inst);
+        return;
     }
+
+    dbus_inst->dbus_data = frame; /* 有效帧：整份覆盖（帧内无失控位，flags 恒 0） */
+    DaemonReload(dbus_inst->daemon); /* 只有可解析的有效帧才证明对端在线 */
+
+    // 信号恢复正常：清除计时和丢失标志
+    dbus_inst->lost_start_time_us = 0;
+    dbus_inst->signal_lost = 0;
 }
 
 #endif /* HAL_UART_MODULE_ENABLED */

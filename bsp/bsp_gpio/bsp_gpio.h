@@ -25,7 +25,7 @@ typedef struct GPIOInstance
     void *parent;                            // 父实例指针（由 DRV 层设置）
     BoardGPIO_e gpio_e;                      // 板载GPIO枚举（Config时查找映射）
     GPIO_Map_t map;                          // GPIO映射（Config时自动填充）
-    GPIO_PinState pin_state;                 // 引脚状态
+    GPIO_PinState pin_state;                 // 预留：当前无写入也无读取（bsp_gpio 不维护引脚状态快照）
     void (*callback)(struct GPIOInstance *); // EXTI中断回调函数
 } GPIOInstance;
 

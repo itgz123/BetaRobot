@@ -112,7 +112,11 @@ int8_t ADCConfig(ADCInstance *instance, const ADC_Config_s *config)
     BSPLOG(&g_adc_log, LOG_LEVEL_INFO, "ADC calibration skipped (not supported on F4 series)");
 #endif
 
-    BSPLOG(&g_adc_log, LOG_LEVEL_INFO, "Config success: adc_e=%d, handle=0x%p, channel=%lu", instance->adc_e, instance->adc_map.handle, instance->adc_map.channel);
+    /* 用 %lX + (unsigned long) 而不是 0x%p：lib_format 不支持 %p（见 lib_format.h），
+     * 它会按字面打出 "0xp" 并让后面的 channel 读到 handle 指针。句柄是 32 位地址，
+     * (unsigned long) 在本工程 ABI 下宽度一致，打印值与 printf 的 %p 相同。 */
+    BSPLOG(&g_adc_log, LOG_LEVEL_INFO, "Config success: adc_e=%d, handle=0x%lX, channel=%lu",
+           instance->adc_e, (unsigned long)instance->adc_map.handle, (unsigned long)instance->adc_map.channel);
     return 0;
 }
 

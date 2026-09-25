@@ -99,8 +99,18 @@ typedef struct
     uint8_t mouse_press_r;        // 鼠标右键 (0: 松开, 1: 按下)
     DBUS_Key_t key;               // 键盘按键位域 (W/S/A/D/Q/E/Shift/Ctrl)
     float dial;                   // 侧边拨轮 (-1.0 ~ 1.0)
-    uint8_t frame_lost;           // 帧丢失标志 (0: 正常, 1: 丢失)
-    uint8_t failsafe;             // 失控保护标志 (0: 正常, 1: 失控)
+
+    /* 下面两个标志的来源与 SBUS 不同，用之前先读这段：
+     *   - DBUS 帧内**没有**任何 loss/failsafe 位（那是 SBUS 的 flags 字节），接收机也不会
+     *     把"这帧不可信"标出来。故本驱动的失控判据只能是"按没按期收到可解析的帧"，
+     *     由实例的 signal_lost 表达（见 DBUSInstance）。
+     *   - frame_lost：**本驱动**拒绝本帧时置 1（长度/参数不合法）。此时 dbus_data 里
+     *     保留的是上一帧的有效通道数据，未刷新 —— 它表达的是"手上这份数据已经过期"，
+     *     不是"这一帧的帧内标志"。正常帧整份覆盖时随之清零。
+     *   - failsafe：本协议无从得知，恒 0。保留字段只为与 SBUS 的 DBUS_Data_t/SBUS_Data_t
+     *     对称、便于上层写通用遥控处理；**不要**拿它当失控判据。 */
+    uint8_t frame_lost;           // 本帧被驱动拒绝 (0: 本帧有效, 1: 拒绝，通道数据为上一帧)
+    uint8_t failsafe;             // 恒 0（DBUS 帧内无失控位，见上）
 } DBUS_Data_t;
 
 /**
@@ -112,9 +122,17 @@ typedef struct DBUSInstance
     USARTInstance *usart_inst;   // BSP 实例指针
     DBUS_Data_t dbus_data;       // 解析后的通道数据（在中断回调中填充）
     DaemonInstance *daemon;      // 看门狗监控实例指针
-    uint64_t lost_start_time_us; // 丢帧/失控开始时间戳 (us)，0 表示正常
-    uint8_t signal_lost;         // 信号丢失确认标志（0: 正常, 1: 失控）
-    uint64_t lost_timeout_us;    // 丢帧/失控确认超时 (us)
+    uint64_t lost_start_time_us; // 异常窗口起点 (us)，0 表示窗口未开（一切正常）
+    uint8_t signal_lost;         // 失控保护确认标志（0: 正常, 1: 确认失控）
+    uint64_t lost_timeout_us;    // 失控确认超时 (us)，0 = 收到第一个异常事件即刻确认
+
+    /* signal_lost 怎么来的（两条入口共用一套计时，见 drv_dbus.c 的 DBUS_CheckLostTimeout）：
+     *   ① 有帧但不可信 —— rx_callback 判定帧被拒；
+     *   ② 完全静默 —— 遥控器关机/接收机掉线，一帧都收不到，rx_callback 不再触发。
+     * ②必须有独立入口：只在 ① 里计时的话，静默（最常见的失联形态）永远不会置位，
+     * 上层拿着恒 0 的 signal_lost 形同没有失控保护。静默由 daemon 的"没喂狗"探知，
+     * 其离线回调（任务上下文，1ms 一次）里补这一拍。
+     * 恢复判据：收到任何一帧可解析的有效帧即清零。 */
 } DBUSInstance;
 
 typedef struct

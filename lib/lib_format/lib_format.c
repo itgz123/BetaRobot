@@ -250,6 +250,13 @@ static int BSPFmtV(char *out, size_t cap, const char *fmt, size_t fmt_len, va_li
         }
         if (f >= flim)
         {
+            /* 格式串以单个 '%' 结尾（如 "duty=100%"）：按字面输出这个 %，
+             * 别静默吞掉一个字符（正文里的 % 与 %% 一样常见）。 */
+            if (pos + 1 < cap)
+            {
+                out[pos] = '%';
+            }
+            pos++;
             break;
         }
         char spec = *f++;
@@ -327,8 +334,51 @@ static int BSPFmtV(char *out, size_t cap, const char *fmt, size_t fmt_len, va_li
             }
             continue; /* 不走数字输出段 */
         }
+        case '%':
+            /* 字面一个 %（与 C 标准一致）。必须独立成 case：下面 default 会消费一个
+             * 参数槽，%% 落到那里就会凭空吃掉调用方的一个实参。 */
+            if (pos + 1 < cap)
+            {
+                out[pos] = '%';
+            }
+            pos++;
+            continue;
         default:
-            /* 未支持的转换说明：按字面输出该字符（容错，不崩） */
+            /* 未支持的转换说明：**原样输出 '%' + 该说明符字符**（容错，不崩），
+             * 这样日志里能直接看出调用方写了什么不支持的说明符，而不是凭空少一段。
+             *
+             * 另一半要决定的是**参数槽要不要消费**：只输出不消费的话，本次之后同一
+             * 格式串里**所有**转换都会读到别人的实参，错位且不报错 —— bsp_adc 的
+             * "handle=0x%p, channel=%lu" 就是这么把 handle 指针当成 channel 打出来的。
+             * 判据取"spec 是不是字母"：
+             *   是字母（%p %c %i %f %zu...) —— 几乎必然是调用方想写的转换说明，
+             *     而且他为它传了实参 → 消费一个槽（按 is64 猜 32/64 位：这类说明符
+             *     绝大多数是整数/指针类，一个槽就对得上；已知例外是浮点，double 按
+             *     ABI 占两个槽，%f 之后仍会错位，本仓库的日志不使用 %f）；
+             *   不是字母（%-5d 这种 flags 写法、或消息正文里的 "100% 占空比"）——
+             *     这一档在字符层面分不开：'-'、' '、'+'、'#' 在 C 里是合法 flags，
+             *     在消息正文里就是标点。统一按"正文里的 %"处理：不消费参数、原文照抄。
+             *     对正文那半是对的（"100% 占空比" 的 % 本就不是转换说明）；代价是
+             *     flags 写法会**整体错位**（它同样不会被当成一次转换，后续每个实参前移
+             *     一格），不只是"宽度不生效"。本仓库不使用这种写法，真要用由
+             *     lib/lib_format/tools/scan_fmt_specs.py 扫出来；动态宽度 %*d（要两个槽）
+             *     与精度 .N 同理不处理。 */
+            if ((spec >= 'a' && spec <= 'z') || (spec >= 'A' && spec <= 'Z'))
+            {
+                if (is64)
+                {
+                    (void)va_arg(args, uint64_t);
+                }
+                else
+                {
+                    (void)va_arg(args, uint32_t);
+                }
+            }
+            if (pos + 1 < cap)
+            {
+                out[pos] = '%';
+            }
+            pos++;
             if (pos + 1 < cap)
             {
                 out[pos] = spec;

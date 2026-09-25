@@ -79,8 +79,9 @@ static void IST8310_I2CErrCallback(I2CInstance *i2c_inst, I2C_ErrReason_e reason
  * @brief 等一笔异步（IT/DMA）传输落地
  * @retval 0 成功；-1 失败或超时
  *
- * @note 本函数是忙等，**只能在任务上下文调用**：中断里 tick 与 DWT 都在走，
- *       但等的是另一个中断里的回调，跑在中断里就是死循环。
+ * @note 本函数是忙等，**只能在任务上下文调用**：判据用 DWT，中断里也会到期返回（不是
+ *       死循环），但等的是另一个中断（I2C 事件）里的回调，而同优先级中断不能互相抢占 ——
+ *       在中断里等只会白等到超时、还把该中断占住不让回调跑，越等越不可能完成。
  * @note 超时只记账返回，不在这里做收尾：此时 HAL 的传输可能还在飞，
  *       驱动无法安全地中止它。留下的 xfer_done/xfer_error 脏值不会污染下一笔传输
  *       （ReadReg/WriteReg 每次发起前都会清零），真卡死的句柄由 fail_count 攒够后的
@@ -120,8 +121,9 @@ static int8_t IST8310_WaitXfer(IST8310Instance *inst, uint32_t timeout_ms)
  *       异步模式下本函数自己等回调（IST8310_WaitXfer），所以上层代码不用区分模式，
  *       差别只在传输期间 CPU 是空闲的。
  * @note **模式与超时都每次传参**而不是从 inst 取：初始化序列这类必须同步完成的地方
- *       要显式传 BSP_BLOCK_MODE，而中断里发起时超时必须传 0（等就绪要按 tick 自旋，
- *       中断里 tick 不前进）—— 两种需求都不该被"实例默认值"绑住。
+ *       要显式传 BSP_BLOCK_MODE，而中断里发起时超时必须传 0（`bsp_i2c` 的等就绪是
+ *       DWT 计时，中断里会到期，但等到的只能是白等 —— 让总线变空闲的那笔传输的完成
+ *       回调就在同级中断里，进不来；0 = "忙就放弃本次"）—— 两种需求都不该被"实例默认值"绑住。
  * @note 传 IT/DMA 时只能在任务上下文调用（本函数要等完成回调）。
  */
 static int8_t IST8310_ReadReg(IST8310Instance *inst, uint8_t reg, uint8_t len,
@@ -373,11 +375,12 @@ static int8_t IST8310_InitDevice(IST8310Instance *inst)
  *       返回后 HAL 仍持有该指针（IT 模式的中断搬字节、DMA 模式的 DMA 搬运都在之后），
  *       用栈变量会读到被后续中断帧覆盖的内存。DMA 模式还要求它在 DMA 可访问的 RAM。
  * @note `wait=0` 只能在 I2C 完成回调里用，而且**必须**免等：该回调本身就运行在
- *       I2C 事件中断里，这笔新写的完成回调要靠同一个中断才能进来，同优先级不会重入，
- *       在这里等完成回调就是永久自旋 —— 且 tick 仍在走，喂狗也救不回来，
- *       现场表现是"传感器静默、日志里一个错误都没有"。
+ *       I2C 事件中断里，这笔新写的完成回调要靠同一个中断才能进来，同优先级不会重入 ——
+ *       在这里等就是白等整个超时（期间同级中断全被挡住，包括它等的那个完成中断），
+ *       然后返回 -1；可请求其实已经发出去了，现场表现是"传感器静默、日志里一个
+ *       错误都没有"。
  * @note 传输方式统一取 `i2c_mode`（与"请求按传输模式发"的约定一致）：`wait=1` 时
- *       超时取实例配置值，`wait=0` 时必须传 0（中断里等就绪要按 tick 自旋）。
+ *       超时取实例配置值，`wait=0` 时必须传 0（中断里等不到就绪，0 = 忙就放弃本次）。
  */
 static int8_t IST8310_TriggerMeas(IST8310Instance *inst, uint8_t wait)
 {
@@ -532,9 +535,10 @@ static void IST8310_PackFromRx(const uint8_t *raw, float *out)
 
 /**
  * @brief DRDY EXTI 回调（运行在中断上下文）
- * @note **只发起异步 I2C 读，绝不做阻塞 I2C**：HAL 的阻塞式 I2C 用
- *       HAL_GetTick 计时，而 tick 中断优先级低于本 EXTI，在中断里 tick 不前进，
- *       任何阻塞调用都会立刻超时（或永久卡住）。
+ * @note **只发起异步 I2C 读，绝不做阻塞 I2C**：HAL 的阻塞式 I2C 用 HAL_GetTick 计时，
+ *       而 HAL tick 源（DJI_C 的 TIM14 = 5、其余板 TIM23 = 15）的 NVIC 优先级数值
+ *       不小于外设中断的 5，抢占不了本 EXTI → 中断里 tick 不前进，超时判据永不成立，
+ *       阻塞调用不是"很快超时"而是**永久卡住**。
  * @note **数据读**只从 EXTI 发起，不从完成回调里发起；**测量请求**相反，
  *       正常运行时由完成回调续（见 IST8310_I2CRxCpltCallback）—— 两者不冲突：
  *       请求是写完就走的短写，读才是要等 DRDY 的那件事。
@@ -557,8 +561,9 @@ static void IST8310_IntCallback(GPIOInstance *gpio_inst)
     inst->int_timestamp = DWT_GetTimeUs();
     inst->transfer_busy = 1;
 
-    /* timeout_ms 必须是 0：中断里不能等就绪 —— 等不到就绪也没法在这里做收尾
-     * （收尾要经 HAL_DMA_Abort / HAL_I2C_Init 按 tick 自旋，中断里 tick 不前进）。
+    /* timeout_ms 必须是 0：中断里不能等就绪 —— 让总线空闲的那笔传输的完成回调就在
+     * 同级中断里，等也是白等；而且等出问题也没法在这里收尾（收尾要经 HAL_DMA_Abort，
+     * 它按 HAL_GetTick 自旋等 DMA 的 EN 位，中断里 tick 不前进 = 死等）。
      * 忙（BSP_BUSY）时本帧直接放弃，交给任务侧看门狗（link_us 停滞）补发请求 */
     if (I2CMemRead(inst->i2c_inst, IST8310_I2C_ADDR_7BIT, IST8310_DATAXL_REG,
                    I2C_MEM_ADDR_SIZE_8BIT, IST8310_DATA_LEN, inst->i2c_mode, 0) != BSP_OK)
@@ -577,8 +582,9 @@ static void IST8310_IntCallback(GPIOInstance *gpio_inst)
  * @note 重新发请求**必须发起即返回**（`wait=0`）：本回调运行在 I2C 事件中断里
  *       （中断模式只能是 IT，见 IST8310Config），
  *       而这笔新写的完成回调要靠同一个中断才能进来，同优先级不会重入 ——
- *       在这里等完成回调就是永久自旋，且 tick 仍在走、喂狗也救不回来，
- *       现场表现是"传感器静默、日志里一个错误都没有"。
+ *       在这里等就是白等整个超时（期间同级中断全被挡住，包括它等的那个完成中断），
+ *       然后返回 -1；可请求其实已经发出去了，现场表现是"传感器静默、日志里一个
+ *       错误都没有"。
  *       敢在这里发起新传输，依据是 bsp_i2c 的完成回调契约：派发回调前 State 已复位为
  *       READY、Lock 已释放（这与 bsp_spi 的 DMA 流未释放不同，已核对 bsp_i2c.c）。
  * @note 与写完成**分成两个回调**（bsp_i2c 按读/写分别派发）：读完成才是"一帧到手"，
@@ -767,10 +773,12 @@ int8_t IST8310Config(IST8310Instance *inst, const IST8310_Config_s *config)
                            BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "Invalid i2c_mode=%d!", (int)config->i2c_mode));
     /* 中断模式的传输方式只允许 IT（BLOCK/DMA 都拒绝）。理由分三层：
      * - **BLOCK**：这两笔传输都由中断发起（DRDY EXTI 发起读、读完成回调发起下一个请求），
-     *   而 HAL 的阻塞 I2C 用 HAL_GetTick 计时 —— tick 中断优先级低于 EXTI，中断里 tick
-     *   不前进，从机不应答就是死循环。这个组合没有合法用途。
+     *   而 HAL 的阻塞 I2C 用 HAL_GetTick 计时 —— HAL tick 源的 NVIC 优先级数值不小于
+     *   EXTI 的 5（DJI_C 的 TIM14 = 5、其余板 TIM23 = 15），抢占不了，中断里 tick 不前进，
+     *   超时判据永不成立，从机不应答就是死循环。这个组合没有合法用途。
      * - **DMA**：本层的采集链**全在 ISR 里自维持**，任务侧没有"下一笔传输"的发起入口。
-     *   一次失败若留下需收尾的残留，只有 tick 依赖的动作能清（HAL_DMA_Abort / DeInit+Init），
+     *   一次失败若留下需收尾的残留，只有任务上下文的收尾动作能清
+     *   （HAL_DMA_Abort 按 HAL_GetTick 自旋；DeInit/Init 重建外设与时钟），
      *   而它们在 ISR 里做不了，只能等任务上下文的补刀点 —— 那条链的补刀点是低频的
      *   IST8310Read 的链路看门狗，动作是整段恢复（IST8310_Recover → I2CBusRecover：
      *   器件重初始化 + 必要时 DeInit/Init 整条总线重建），代价远不止"丢一帧"。

@@ -15,9 +15,12 @@ static uint8_t s_idx = 0;
 #endif                                                              // !DRV_DAEMON_LOG_LIMIT
 LOG_INSTANCE_DEF(g_daemon_log, "drv_daemon", DRV_DAEMON_LOG_LIMIT); // Daemon 日志实例
 
-// 蜂鸣器鸣叫声音表格
+// 蜂鸣器鸣叫声音表格（预留：当前全 0、无代码读取。要按 fault 类型播不同节奏时填这里 ——
+// 现在只实现了 DAEMON_FAULT_BUZZER_SHORT，靠下面的 buzzer_flag + PWM 占空比）
 const uint8_t voice_map[DAEMON_FAULT_NUM][12] = {0};
 static uint8_t buzzer_flag = 0; // TODO:这个之后用位域实现
+// 调试用聚合标志：给人 Watch 的"全体在线"快照，本文件只写不读。
+// 代码里要判某个模块在不在线，请查它自己的 is_online
 static uint8_t all_daemon_is_online = 1;
 
 PWM_INSTANCE_DEF(buzzer_pwm);

@@ -101,7 +101,11 @@ I2C 的"片选"是 7 位从机地址，`bsp_i2c` 把它做成**每次调用传�
 
 - `I2C_ERR_HW`：HAL 报硬件错，运行在 `HAL_I2C_ErrorCallback` 里，**ISR 上下文**；
 - `I2C_ERR_ABORT`：传输没发起成功或已被 bsp 强制收尾（启动失败 / 等就绪超时 /
-  `I2CConfig` 重入收尾），**任务上下文**，此时 HAL `State` 已复位为 `READY`。
+  `I2CConfig` 重入收尾），**发起方上下文**——启动失败是就地回调的，调用方若在 ISR 里发起
+  （如 IST8310 的 DRDY EXTI 调 `I2CMemRead`），这次回调就在 ISR 里；强制收尾则只出现在
+  任务上下文。此时 HAL `State` 已复位为 `READY`。handler 因此要按"可能被 ISR 调用"写。
+  只发生在 **IT/DMA** 上：BLOCK 的失败在调用栈内就由返回值给出，bsp 不再回调
+  （一次失败不占两条上报通道）。
 
 **`err_callback` 是必须挂的**，不是可选装饰：一次传输若"没发起成功"，
 完成回调永远不会来，DRV 层若只依赖完成回调清自己的传输标志，就会永久卡在 busy
@@ -172,9 +176,12 @@ H7 的中断源在 **CR1**：`I2C_IT_ERRI` / `I2C_IT_TCI` / `I2C_IT_STOPI` / `I2
 两段式（H7 `hal_i2c.c:2885-2958 / 3118-3250`），BSP 不需要手工拆成两笔传输。
 
 **A.5 阻塞式 HAL I2C 用 `HAL_GetTick()` 计时 → 禁止在中断里调用**
-tick 中断优先级低于 EXTI，在中断上下文里 tick 不前进：任何阻塞 I2C 调用
-要么立刻超时、要么卡死（`HAL_DMA_Abort` 内部也按 `HAL_GetTick` 轮询等 EN 清零，
-同款问题）。**所有阻塞与"复位收尾"动作只能在任务上下文做**。
+HAL tick 源在本工程是 TIM，不是 SysTick（DJI_C 的 `TIM14`，其余板 `TIM23`，见各板
+`stm32xxxx_hal_timebase_tim.c`），其 NVIC 优先级数值**不小于**外设中断的 5（5 或 15）——
+抢占不了，所以任何中断上下文里 tick 都不前进。后果不是"很快超时"而是**卡死**：
+HAL 的超时判据本身就是那个冻住的 tick，`HAL_GetTick() - tickstart > Timeout` 永不成立
+（`HAL_DMA_Abort` 内部也按 `HAL_GetTick` 轮询等 EN 清零，同款问题）。
+**所有阻塞与"复位收尾"动作只能在任务上下文做**。
 本层的上下文判据是 `I2C_CanBlockingAbort()`：`IPSR == 0 && PRIMASK == 0 && BASEPRI == 0`
 （临界区里 tick 同样冻住，只查 IPSR 不够）。
 
@@ -300,7 +307,8 @@ bsp 只管"值不值得动手"。这与 `SPIRecoverTxIfStuck`（`bsp_spi.h`：�
   中断里不重建（含 MspDeInit/MspInit），交给任务上下文的 `I2CBusRecover`。
 
 准确地说：**中断里只跳过"按 tick 自旋"和"重建外设"这两件事**
-（`HAL_DMA_Abort` 与 `HAL_I2C_DeInit/Init`），**软件状态复位照做**
+（`HAL_DMA_Abort` 按 tick 自旋；`HAL_I2C_DeInit/Init` 不按 tick 等，但它重建外设、
+时钟与 GPIO/NVIC，同样只能任务上下文做），**软件状态复位照做**
 （关中断源 + `State`/`Mode`/`PreviousState`/`ErrorCode`/`Lock` 全部归位）。
 后者不只是"收尾"，还是**作废在途传输**的关键一步：HAL 的 ISR 按 `State`/`Mode`
 分派完成回调，这两个字段一归位，迟到的完成中断就不会再被分发到本层回调，
@@ -376,8 +384,9 @@ IST8310 没有连续测量模式，每帧都要先写一次 `CNTL1=0x01`。旧�
   `State` 复位为 `READY`、总线 `Lock` 已释放，所以从回调里起一笔新传输不会撞上
   `HAL_BUSY`。（SPI 侧不行，是 DMA 流尚未释放，见 bsp_spi.md。）
 - **绝不能在回调里等这笔传输完成**：完成回调本身就运行在 `I2Cx_EV_IRQHandler` 里，
-  而新写的完成回调要靠**同一个中断**才能进来；同优先级不会重入，在那里等就是**永久自旋**。
-  更要命的是 tick 仍在推进，看门狗照常喂，现场表现是"传感器静默、日志里一个错误都没有"。
+  而新写的完成回调要靠**同一个中断**才能进来；同优先级不会重入，在那里等就是**白等整个
+  超时**（判据是 DWT，会到期返回 `-1`，不是死循环）——期间同级中断全被挡住，包括它等的
+  那个完成中断，请求本身却已经发出去了，现场表现是"传感器静默、日志里一个错误都没有"。
   故 `IST8310_I2CRxCpltCallback` 续发测量请求时 **`timeout_ms` 必须传 0**。
 - **发起即返回 ⇒ 请求字节不能放栈上**：HAL 在传输期间一直持有该指针，
   必须用实例里的常驻缓冲（`IST8310_TriggerMeas` 用 `inst->req_buff`，`DMA_RAM`）。
@@ -388,8 +397,8 @@ IST8310 没有连续测量模式，每帧都要先写一次 `CNTL1=0x01`。旧�
   DeInit/Init 重建整条总线，后者还要先过 §2.B.1.1 的入口自证），代价远超"丢一帧"。
   而 DMA 恰好多引入一个**与总线好坏无关**的
   失败源：DMA 流的 `State` 一旦非 READY，`HAL_DMA_Start_IT` 会让此后每一笔 DMA 都在
-  启动阶段直接失败（确定性级联），而这类残留只有 tick 依赖的动作能清
-  （`HAL_DMA_Abort` / `DeInit+Init`），在 ISR 里做不了。IT 没有流可留，下一帧能否成功
+  启动阶段直接失败（确定性级联），而这类残留只有任务上下文的收尾动作能清
+  （`HAL_DMA_Abort` 要按 tick 自旋；`DeInit/Init` 要重建外设与时钟），在 ISR 里做不了。IT 没有流可留，下一帧能否成功
   只取决于总线是否已放开（NACK / 仲裁丢失之后总线通常是空闲的，链路往往自愈）。
   顺带记两点免得误伤：DMA **传输错误**（TE）时 DMA 中断自己就把流放开了（F4 用
   `SystemCoreClock/9600` 的周期计数做上界，与 tick 无关，ISR 安全），故级联只在
