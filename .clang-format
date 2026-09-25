@@ -1,0 +1,28 @@
+# BetaRobot 代码格式化配置（clang-format 命令行与 VS Code C/C++ 插件共用）
+#
+# 为什么要有这个文件：
+#   VS Code C/C++ 插件默认 C_Cpp.clang_format_style = "file"，找不到本文件时
+#   回退到 C_Cpp.clang_format_fallbackStyle = "Visual Studio"（= Microsoft 预设）；
+#   而命令行 clang-format 找不到配置时回退到 LLVM。两边不一致，且随 clang-format
+#   版本漂移（clang-format 22 已不再认 "Visual Studio" 这个写法）。这里显式写死。
+
+BasedOnStyle: Microsoft
+
+Language: Cpp
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 120
+
+# Microsoft 预设此处为 false，会把 `typedef union\n{` 压成 `typedef union {`，
+# 与本仓库 struct/enum 的 Allman 写法不一致。
+BraceWrapping:
+  AfterUnion: true
+
+# 保留手工用 `//` 分组的 include 顺序（预设默认会重排）。
+SortIncludes: false
+
+# 本仓库的尾注释靠本项对齐；关掉反而会把手写对齐拉平（实测改动 386 → 3978 行）。
+AlignTrailingComments:
+  Kind: Always
+  OverEmptyLines: 0
