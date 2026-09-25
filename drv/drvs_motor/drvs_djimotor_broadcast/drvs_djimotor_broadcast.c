@@ -352,7 +352,9 @@ void DrvsDJIMotorBroadcastGroupSend(DrvsDJIMotorBroadcastGroup_s *group)
             pack.data[i * 2 + 1] = (uint8_t)((uint16_t)raw & 0xFFu);
         }
 
-        CANTransmit(tx_cans[t], &pack, tx_timeouts[t], NULL, NULL);
+        /* 组播帧一帧带 4 个电机，失败摊到哪个电机都不对 → 记在组上（见 GroupSend 的说明） */
+        if (CANTransmit(tx_cans[t], &pack, tx_timeouts[t], NULL, NULL) != BSP_OK)
+            group->tx_fail++;
     }
 }
 

@@ -12,6 +12,7 @@
 #include "bsp_can.h"
 #include "drv_daemon.h"
 #include "drv_pid.h"
+#include "drv_motor_can.h"
 
 /*============================================
  *              电机品牌枚举
@@ -289,6 +290,10 @@ typedef struct
     DaemonInstance *daemon;  // 守护进程实例
 
     uint32_t timeout_ms; // CAN 发送超时(ms)（Config 写入）
+
+    /* 统计 */
+    uint32_t tx_fail; // CAN 发送失败累计（由 MotorCanTransmit 累加，见 drv_motor_can.h）
+                      // 组播帧（DJI/LK 广播）不属于单个电机，不进这个计数
 } MotorBase_s;
 
 /*============================================

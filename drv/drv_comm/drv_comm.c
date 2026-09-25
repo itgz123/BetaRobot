@@ -236,11 +236,18 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
         offline_callback offline_hook = (media->vtable != NULL) ? media->vtable->offline : NULL;
 
         /* reload==0 本义是禁用监控（DaemonTask 跳过该实例 = 恒在线）。只有**挂了 offline
-         * 自恢复钩子**的后端才提升：那种后端（USART）"没收到帧"是它唯一能拿到的任务上下文
-         * 周期时基，禁用等于把自恢复一起禁掉。
-         * 没有 offline 钩子的后端（USB / USB_SIMPLE / CAN_PKT0 / CAN_IDSEQ）的 daemon 只
+         * 自恢复钩子**的后端才提升：那种后端（USART / USB / USB_SIMPLE）"没收到帧"是它唯一
+         * 能拿到的任务上下文周期时基，禁用等于把自恢复一起禁掉。
+         * 没有 offline 钩子的后端（CAN_PKT0 / CAN_IDSEQ）的 daemon 只
          * 用来判对端在线，配 0 就是调用方真想不监控 —— 那种情况下静默改成监控属于把契约反转，
-         * 故不提升（见 comm_media.h 的 vtable.offline 说明）。 */
+         * 故不提升（见 comm_media.h 的 vtable.offline 说明）。
+         * @note CAN 两个后端不挂 offline 是因为它们的自恢复不依赖任务上下文时基：
+         *       发送失败由 bsp 的逐帧完成回调（result != BSP_OK）当场收尾；
+         *       在途帧卡死在 CANTransmit 等待超时路径里就地处理（取消全部在途帧 + 逐帧通知发起者，
+         *       bxCAN 走 CANAbortAllTx / FDCAN 走 AbortTxRequest + FDCAN_ReclaimMarkers），
+         *       媒体侧另有 TX_STALL_LIMIT 兜底；bus-off 由 CAN 错误中断自恢复。
+         *       bsp 的 CANRecover 是任务侧的统一恢复入口，但**本仓库目前零调用者**
+         *       （见 bsp/bsp_can/bsp_can.md §6.4），故不算作这里的兜底。 */
         if (daemon_reload == 0 && offline_hook != NULL)
         {
             daemon_reload = DRV_COMM_DAEMON_RELOAD_DEFAULT;

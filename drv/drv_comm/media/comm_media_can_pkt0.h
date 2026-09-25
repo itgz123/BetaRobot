@@ -48,7 +48,11 @@
 /* 异步分包发送卡死兜底阈值：连续 N 次 Send 都发现 tx_active 仍为 1（分包续发的发送完成
  * 回调丢失/总线异常），即判定卡死并强制放弃残帧恢复发送，避免永久卡死。按 Send 调用
  * 次数计（本工程 2ms 周期 → N=3 约 6ms）：须小于链路看门狗 daemon_reload（10ms），
- * 保证在对端判离线之前已自恢复；正常单帧发送仅数百 µs，不会误触发。 */
+ * 保证在对端判离线之前已自恢复；正常单帧发送仅数百 µs，不会误触发。
+ *
+ * @note 这是**第二道防线**：bsp 侧改造后，逐帧失败（仲裁失败/发送错误/被取消/Tx Event 丢失）
+ *       会带 `result=BSP_HW_ERR` 直接回调 MediaCanPkt0TxHook，当场清 tx_active，
+ *       不必再攒 N 次。本兜底只剩"完成回调本身丢失"这一种情形要兜。 */
 #ifndef CAN_MEDIA_PKT0_TX_STALL_LIMIT
 #define CAN_MEDIA_PKT0_TX_STALL_LIMIT 3u
 #endif
@@ -83,8 +87,10 @@ typedef struct
     uint8_t tx_active;           /* 异步分包发送进行中（1 = 上一帧尚未全部发出，拒绝新 Send 重入） */
     uint8_t tx_stall;            /* 连续 Send 时 tx_active 仍为 1 的次数（达 CAN_MEDIA_PKT0_TX_STALL_LIMIT 判卡死） */
     uint8_t rx_expect_pkt;       /* 期望接收的下一分包序号（帧内 0 起递增；错位说明丢包，丢帧重同步） */
-    uint32_t tx_fail;            /* 发送失败计数（重入拒绝/首包失败/续发失败；只增不清，调试用） */
+    uint32_t tx_fail;            /* 发送失败计数（重入拒绝/首包失败/超时/分包被 bsp 判失败；只增不清，调试用） */
     uint32_t tx_stall_recover;   /* 发送卡死强制恢复次数（只增不清，调试用；正常恒 0） */
+    uint32_t err_count;          /* bsp 错误回调（总线/硬件级事件）累计次数（只增不清，调试用） */
+    uint8_t last_err;            /* 最近一次 bsp 错误回调的 CAN_ErrReason_e（调试用） */
     uint32_t lost_frames;        /* 丢帧计数（分包错位/帧中途丢包累加） */
     uint32_t timeout_ms;         /* CANTransmit 超时（Config 写入） */
 

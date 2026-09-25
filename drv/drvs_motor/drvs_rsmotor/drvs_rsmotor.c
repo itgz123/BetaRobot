@@ -122,7 +122,9 @@ void DrvsRSMotorSendCmd(DrvsRSMotor_s *inst, uint8_t cmd)
     memset(pack.data, 0xFF, 7);
     pack.data[7] = cmd;
 
-    CANTransmit(inst->can, &pack, inst->timeout_ms, NULL, NULL);
+    /* 一次性命令帧没有"下一周期补发"：失败只体现在 tx_fail，调用方要可靠下发改自己重试 */
+    if (CANTransmit(inst->can, &pack, inst->timeout_ms, NULL, NULL) != BSP_OK)
+        inst->tx_fail++;
 }
 
 /**
@@ -140,7 +142,9 @@ static void DrvsRSMotorSendChangeIdCmd(DrvsRSMotor_s *inst, uint16_t new_id, uin
     pack.data[6] = (uint8_t)new_id;
     pack.data[7] = cmd;
 
-    CANTransmit(inst->can, &pack, inst->timeout_ms, NULL, NULL);
+    /* 一次性命令帧（改 ID）：失败只体现在 tx_fail，调用方要可靠下发改自己重试 */
+    if (CANTransmit(inst->can, &pack, inst->timeout_ms, NULL, NULL) != BSP_OK)
+        inst->tx_fail++;
 }
 
 void DrvsRSMotorChangeCanID(DrvsRSMotor_s *inst, uint16_t can_id)
@@ -290,7 +294,9 @@ void DrvsRSMotorSend(DrvsRSMotor_s *inst)
     cf->parts.kd_lo_and_tff_hi = (uint8_t)((t_ff >> 8) & 0x0F);
     cf->parts.tff_lo = (uint8_t)(t_ff & 0xFF);
 
-    CANTransmit(inst->can, &pack, inst->timeout_ms, NULL, NULL);
+    /* 控制帧是周期性的：丢一帧下一周期自然补上，故只计数不重试（重试会拖乱控制周期） */
+    if (CANTransmit(inst->can, &pack, inst->timeout_ms, NULL, NULL) != BSP_OK)
+        inst->tx_fail++;
 }
 
 /*============================================

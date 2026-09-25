@@ -190,6 +190,7 @@ struct DrvsLKMotor
     CAN_Filter_s can_filter; // CAN 接收过滤器
     DaemonInstance *daemon;  // 守护进程实例（通信在线检测）
     uint32_t timeout_ms;     // CAN 发送超时 (ms)
+    uint32_t tx_fail;        // CAN 发送失败累计（CANTransmit 返回非 BSP_OK 时自增；只增不清，调试用）
 
     /* 标识（一对一：tx 与 rx 同一 ID） */
     uint8_t motor_id; // 电机 ID 1~32（由 cfg 给出）

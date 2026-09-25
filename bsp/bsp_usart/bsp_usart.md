@@ -729,5 +729,12 @@ ORE/FE 之后 `rx_restart_fail` 是否保持 0（RX 未停摆）、人为断流�
   它的接收停摆靠 daemon 离线钩子 + `rx_armed` 判据感知（§3.7），链路是否可用的对外表达仍是
   `CommIsOnline`。上层若确需，可在 `CommMediaUsartConfig_s.usart.err_callback` 里自带一个，
   media 原样透传给 bsp（签名即 §1.6 的两参数版）。
-- 后续：iic / spi 照本模板迁移（公共头 + 三模式传参 + 状态结构体 + 回调命名统一）；
-  can / usb 最后迁到 `BSP_Status_e`。
+- ~~后续：iic / spi 照本模板迁移（公共头 + 三模式传参 + 状态结构体 + 回调命名统一）；
+  can / usb 最后迁到 `BSP_Status_e`。~~
+  **已完成**：iic / spi 照本模板迁完（见 `bsp_i2c.md` / `bsp_spi.md`）；
+  can / usb 也已迁到 `BSP_Status_e`（见 `bsp_can.md` §6、`bsp_usb.md` §3）。
+  两个模块各有一处与 usart 不同的地方，值得对照：
+  - **can** 多一条"逐帧结果"通道：`tx_complete_callback` 带 `BSP_Status_e result`，
+    因为 CAN 是异步分包发送、失败时**不会**有任何完成事件，光靠 err_callback 说明不了"这一帧怎么了"；
+  - **usb** 的 `err_callback` 全部发生在**任务上下文**（USB 中断里不产生错误回调），
+    因此 handler 里可以直接做恢复动作，不像 usart 那样要区分 ISR / 任务上下文。

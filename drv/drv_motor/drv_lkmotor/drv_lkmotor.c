@@ -99,7 +99,7 @@ void LKMotor_SendModeCmd(void *inst, uint8_t cmd)
                        .len = 8};
     memset(pack.data, 0x00, 8);
     pack.data[0] = cmd;
-    CANTransmit(motor->base.can, &pack, motor->base.timeout_ms, NULL, NULL);
+    MotorCanTransmit(motor->base.can, &pack, motor->base.timeout_ms, &motor->base.tx_fail);
 }
 
 /*============================================
@@ -607,7 +607,7 @@ void LKMotor_Send(void *inst)
     pack.data[6] = 0x00;
     pack.data[7] = 0x00;
 
-    CANTransmit(motor->base.can, &pack, motor->base.timeout_ms, NULL, NULL);
+    MotorCanTransmit(motor->base.can, &pack, motor->base.timeout_ms, &motor->base.tx_fail);
 }
 
 #endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */

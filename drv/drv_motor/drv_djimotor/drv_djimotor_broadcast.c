@@ -687,7 +687,8 @@ void DJIMotorBroadcast_Send(void *inst)
             frame->raw[i * 2 + 1] = (uint8_t)(cur & 0xFF);
         }
 
-        CANTransmit(tx_can, &pack, tx_timeouts[t], NULL, NULL); /* 该帧所属电机实例的 Config 超时 */
+        /* 组播帧一帧带 4 个电机，失败摊到哪个电机都不对 → 记在组上（组结构体的 tx_fail） */
+        MotorCanTransmit(tx_can, &pack, tx_timeouts[t], &group->tx_fail); /* 超时取该组第一个已配置电机的 Config 值 */
     }
 }
 

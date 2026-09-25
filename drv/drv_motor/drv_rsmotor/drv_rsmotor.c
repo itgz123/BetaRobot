@@ -110,7 +110,7 @@ void RSMotor_SendModeCmd(void *inst, uint8_t cmd)
     CAN_Pack_s pack = {.id = motor->can_id, .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
     memset(pack.data, 0xFF, 7);
     pack.data[7] = cmd;
-    CANTransmit(can, &pack, motor->base.timeout_ms, NULL, NULL);
+    MotorCanTransmit(can, &pack, motor->base.timeout_ms, &motor->base.tx_fail);
 }
 
 /*============================================
@@ -140,7 +140,7 @@ void RSMotor_ChangeCanID(void *inst, uint16_t can_id)
     memset(pack.data, 0xFF, 6);          // 前 6 字节固定 0xFF
     pack.data[6] = (uint8_t)can_id;      // Byte6 = 新电机 id
     pack.data[7] = RS_CMD_CHANGE_CAN_ID; // Byte7 = 指令7 (0xFA)
-    CANTransmit(can, &pack, motor->base.timeout_ms, NULL, NULL);
+    MotorCanTransmit(can, &pack, motor->base.timeout_ms, &motor->base.tx_fail);
 }
 
 void RSMotor_ChangeMasterCanID(void *inst, uint16_t can_id)
@@ -157,7 +157,7 @@ void RSMotor_ChangeMasterCanID(void *inst, uint16_t can_id)
     memset(pack.data, 0xFF, 6);             // 前 6 字节固定 0xFF
     pack.data[6] = (uint8_t)can_id;         // Byte6 = 新主机 id
     pack.data[7] = RS_CMD_CHANGE_MASTER_ID; // Byte7 = 指令9 (0x01)
-    CANTransmit(can, &pack, motor->base.timeout_ms, NULL, NULL);
+    MotorCanTransmit(can, &pack, motor->base.timeout_ms, &motor->base.tx_fail);
 }
 
 /*============================================
@@ -725,7 +725,7 @@ void RSMotor_Send(void *inst)
     cf->parts.kd_lo_and_tff_hi = (uint8_t)(((kd & 0xF) << 4) | ((t_ff >> 8) & 0xF));
     cf->parts.tff_lo = (uint8_t)(t_ff & 0xFF);
 
-    CANTransmit(motor->base.can, &pack, motor->base.timeout_ms, NULL, NULL);
+    MotorCanTransmit(motor->base.can, &pack, motor->base.timeout_ms, &motor->base.tx_fail);
 }
 
 #endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */

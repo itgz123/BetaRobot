@@ -2,7 +2,9 @@
  * @file bsp_bxcan.c
  * @brief BxCAN驱动封装实现（F4 平台，经典 CAN）
  *
- * @note 只负责实例管理和外设重配置，不负责滤波器/收发（后续实现）。
+ * @note 与 bsp_fdcan.c 共用统一接口（CANRegister / CANConfig / CANTransmit / CANRecover）：
+ *       这里额外负责软件过滤分发（含可选 LIST 查表加速）、发送溯源与逐帧结果收口、
+ *       错误分类统计与总线级错误广播。
  *       本文件仅在 BSP_CAN_IP == BSP_CAN_IP_BXCAN 时编译。
  */
 
@@ -112,25 +114,32 @@ static void CAN_ListLutRegister(CANInstance *inst)
 /**
  * @brief BxCAN 外设状态与错误统计（每 CAN 一份）
  * @note 纯调试辅助：只增不清，需要清零可在调试器里直接写 0。
- *       信息来源：错误回调（①）、RxFIFO0/1 FULL 与 overrun（②）、CANTransmit 返回 -1（③）、
- *       发送完成回调，外加便于"判断当前状态"的实时快照。
+ *       信息来源：错误回调（①）、RxFIFO0/1 FULL 与 overrun（②）、CANTransmit 的失败返回（③）、
+ *       发送完成/失败收口，外加便于"判断当前状态"的实时快照。
  */
 typedef struct
 {
     /* 收发计数 */
-    uint32_t tx_ok;    /* 发送完成次数（TxMailbox*CompleteCallback） */
-    uint32_t tx_fail;  /* CANTransmit 返回 -1 次数 */
-    uint32_t tx_drain; /* 任务上下文同步分发的完成事件数（消除邮箱复用竞态；见 CAN_TxDrainCompletions） */
-    uint32_t rx_ok;    /* 成功收帧次数 */
-    uint32_t rx_full;  /* RxFIFO0/1 FULL 事件次数 */
-    uint32_t rx_lost;  /* RxFIFO0/1 overrun 丢帧次数（FOV0/FOV1） */
+    uint32_t tx_ok;    /* 发送完成次数（帧真正发到总线上） */
+    uint32_t tx_fail;  /* CANTransmit 返回非 BSP_OK 次数 */
+    uint32_t tx_busy;  /* └ 其中"资源满且不等待"（BSP_BUSY）的次数——正常拥塞，不是故障 */
+    uint32_t tx_timeout;   /* └ 其中等邮箱耗尽 timeout_ms（BSP_TIMEOUT）的次数——总线可能已瘫 */
+    uint32_t tx_isr_clamp; /* 中断上下文里被钳成"不等待"的发送次数（见 CANTransmit 入口） */
+    uint32_t tx_abort;     /* 被 CANAbortAllTx / CANRecover 主动取消的在途帧数 */
+    uint32_t tx_drain;     /* 任务上下文同步分发的完成事件数（消除邮箱复用竞态；见 CAN_TxDrainCompletions） */
+    uint32_t rx_ok;        /* 成功收帧次数 */
+    uint32_t rx_full;      /* RxFIFO0/1 FULL 事件次数 */
+    uint32_t rx_lost;      /* RxFIFO0/1 overrun 丢帧次数（FOV0/FOV1） */
     /* 错误计数 */
     uint32_t err_bus_off;  /* bus-off 进入次数 */
     uint32_t err_passive;  /* error passive 进入次数 */
     uint32_t err_warning;  /* error warning 进入次数 */
     uint32_t err_protocol; /* 协议错误次数（LEC: STF/FOR/ACK/BR/BD/CRC） */
-    uint32_t err_tx;       /* 发送错误次数（ALST/TERR，仲裁失败或发送错误） */
-    /* 实时状态快照（最近一次错误回调采样） */
+    uint32_t err_tx;       /* 发送失败帧数（ALST/TERR，仲裁失败或发送错误） */
+    /* 恢复计数（CANRecover） */
+    uint32_t recover_ok;   /* 恢复后总线可用次数 */
+    uint32_t recover_fail; /* 恢复后仍 bus-off / 邮箱仍占满的次数 */
+    /* 实时状态快照（最近一次错误回调或 CANRecover 采样） */
     uint8_t bus_off;       /* ESR.BOFF */
     uint8_t error_passive; /* ESR.EPVF */
     uint8_t error_warning; /* ESR.EWGF */
@@ -138,14 +147,43 @@ typedef struct
     uint8_t tec;           /* ESR.TEC bit16-23 */
     uint8_t rec;           /* ESR.REC bit24-31 */
     uint8_t tx_free;       /* 空闲邮箱数（发送后采样） */
+    uint8_t tx_owner_busy; /* 已入队但结果尚未收口的帧数（正常 ≤ 3，总线安静时应归零；长期不归零=溯源槽泄漏） */
     uint8_t rx_fifo0_fill; /* RF0R.FMP */
     uint8_t rx_fifo1_fill; /* RF1R.FMP */
+    uint64_t last_err_us;  /* 最近一次错误回调的 DWT 时间戳（us），用于判断错误是否已经停止 */
 } CAN_BxcanStatus_s;
 
 /* 调试时 Watch 查看；volatile 保证调试器读到实时值、ISR 内写不被优化 */
 volatile CAN_BxcanStatus_s s_bxcan_status[CAN_NUM_MAX];
 
-/*------------- 私有函数：发送溯源 --------------*/
+/*------------- 私有常量：邮箱位掩码与中断上下文判定 --------------*/
+
+/* TSR 中三个邮箱的“请求完成”/“发送成功”位（bxCAN 不连续：bit0/8/16） */
+static const uint32_t s_can_rqcp_mask[CAN_TX_MAILBOX_NUM] = {CAN_TSR_RQCP0, CAN_TSR_RQCP1, CAN_TSR_RQCP2};
+static const uint32_t s_can_txok_mask[CAN_TX_MAILBOX_NUM] = {CAN_TSR_TXOK0, CAN_TSR_TXOK1, CAN_TSR_TXOK2};
+
+/* 发送失败（仲裁丢失 / 发送错误）错误码位，下标即邮箱号 0/1/2。
+ * HAL 在 IRQHandler 里已清掉 RQCPx，邮箱号只能从错误码位反推，
+ * 见 HAL_CAN_ErrorCallback 的"逐帧结果收口"。 */
+static const uint32_t s_can_tx_fail_mask[CAN_TX_MAILBOX_NUM] = {
+    HAL_CAN_ERROR_TX_ALST0 | HAL_CAN_ERROR_TX_TERR0,
+    HAL_CAN_ERROR_TX_ALST1 | HAL_CAN_ERROR_TX_TERR1,
+    HAL_CAN_ERROR_TX_ALST2 | HAL_CAN_ERROR_TX_TERR2};
+
+/**
+ * @brief 当前是否处于可阻塞等待的上下文（任务上下文且非临界区）
+ * @note 判据与 USART_CanBlockingAbort / SPI_CanBlockingAbort 一致。
+ *       这里挡的**不是死锁**——本模块的等待用 DWT 计时，不依赖 tick，ISR 里等不会卡死；
+ *       挡的是"在中断里空转"：资源满（总线无 ACK、帧发不出去）时等待循环必然跑满 timeout_ms，
+ *       而 comm media 的续发钩子正是在 CAN 中断里以 timeout_ms=1 调 CANTransmit ——
+ *       那就是每次 TxComplete 在 ISR 内空转 1ms，压住所有优先级更低的中断与任务。
+ */
+static uint8_t CAN_CanWait(void)
+{
+    return ((__get_IPSR() == 0U) && (__get_PRIMASK() == 0U) && (__get_BASEPRI() == 0U)) ? 1U : 0U;
+}
+
+/*------------- 私有函数：发送溯源与逐帧结果收口 --------------*/
 
 /**
  * @brief HAL 邮箱位掩码（CAN_TX_MAILBOX0/1/2 = 1/2/4）→ 索引（0/1/2）
@@ -176,31 +214,113 @@ static uint8_t CAN_HcanToIndex(const CAN_HandleTypeDef *hcan)
 }
 
 /**
- * @brief 发送完成处理：查溯源表，调用所属实例的发送完成回调
- * @param hcan       硬件句柄
- * @param mailbox_idx 邮箱索引（0/1/2）
+ * @brief 采样"已入队但结果尚未收口"的帧数（溯源槽泄漏指示）
+ * @note 正常应 ≤ CAN_TX_MAILBOX_NUM，总线安静时归零；长期不归零说明有帧的溯源槽没被回收。
  */
-static void CAN_TxCompleteHandler(CAN_HandleTypeDef *hcan, uint8_t mailbox_idx)
+static uint8_t CAN_OwnerBusyCount(uint8_t can_idx)
+{
+    uint8_t i, n = 0;
+
+    for (i = 0; i < CAN_TX_MAILBOX_NUM; i++)
+    {
+        if (s_can_tx_owner[can_idx][i] != NULL)
+            n++;
+    }
+    return n;
+}
+
+/**
+ * @brief 逐帧结果收口：查溯源表 → 清槽 → 回调所属实例（成功与失败共用一条路径）
+ * @param hcan        硬件句柄
+ * @param mailbox_idx 邮箱索引（0/1/2）
+ * @param result      BSP_OK=帧已真正发出；BSP_HW_ERR=仲裁失败/发送错误/被取消
+ * @note **先清槽再回调**：回调内可能立即再次发送并复用同一邮箱。
+ *       槽为空（该邮箱的发送不是经本层发起的，或已由另一条路径收口）时只计数、不回调。
+ *       同一邮箱可能被多条路径同时观察到（HAL 的 TX/SCE 两个中断向量都进同一个 IRQHandler，
+ *       而 CAN_TxDrainCompletions 会在任务上下文屏蔽 TX 中断后自己分发）——因为两条路径
+ *       都是"先清槽再回调"，所以最多只有一条能拿到非空槽，不会重复通知。
+ */
+static void CAN_TxResultHandler(CAN_HandleTypeDef *hcan, uint8_t mailbox_idx, BSP_Status_e result)
 {
     uint8_t can_idx = CAN_HcanToIndex(hcan);
     CANInstance *inst;
 
-    if (can_idx >= CAN_NUM_MAX)
+    if (can_idx >= CAN_NUM_MAX || mailbox_idx >= CAN_TX_MAILBOX_NUM)
         return;
 
-    // 状态统计：邮箱完成发送 = 一帧已真正发出
-    s_bxcan_status[can_idx].tx_ok++;
+    if (result == BSP_OK)
+        s_bxcan_status[can_idx].tx_ok++;
+    else
+        s_bxcan_status[can_idx].err_tx++; /* 帧没能发出去 */
 
-    // 先清槽再回调：回调内可能立即再次发送并复用同一邮箱
     inst = s_can_tx_owner[can_idx][mailbox_idx];
     s_can_tx_owner[can_idx][mailbox_idx] = NULL;
+    s_bxcan_status[can_idx].tx_owner_busy = CAN_OwnerBusyCount(can_idx);
     if (inst != NULL && inst->tx_complete_callback != NULL)
-        inst->tx_complete_callback(inst, mailbox_idx);
+        inst->tx_complete_callback(inst, mailbox_idx, result);
 }
 
-/* TSR 中三个邮箱的“请求完成”/“发送成功”位（bxCAN 不连续：bit0/8/16） */
-static const uint32_t s_can_rqcp_mask[CAN_TX_MAILBOX_NUM] = {CAN_TSR_RQCP0, CAN_TSR_RQCP1, CAN_TSR_RQCP2};
-static const uint32_t s_can_txok_mask[CAN_TX_MAILBOX_NUM] = {CAN_TSR_TXOK0, CAN_TSR_TXOK1, CAN_TSR_TXOK2};
+/**
+ * @brief 取消全部在途发送，并逐帧把结果通知给发起者（BSP_HW_ERR）
+ * @param instance CAN实例（作用于其所在的整个 CAN 外设）
+ * @retval HAL_CAN_AbortTxRequest 的返回（HAL_OK = 取消请求已受理）
+ *
+ * @note **必须显式通知**：被成功取消的帧（ABRQ 生效、帧未发出）在 HAL 里走
+ *       TxMailbox*AbortCallback，但那条路径依赖 TX 邮箱中断使能、且只覆盖
+ *       "RQCP 置位而 TXOK/ALST/TERR 均未置"这一种情形，不能把 owner 的收尾押在它上面。
+ *       这里先清槽再回调，故与 HAL 那条路径不会重复通知（谁先到谁通知，后到的查到空槽跳过）。
+ * @note 代价：在途帧被放弃，上层会看到它们以 BSP_HW_ERR 失败并按各自协议重发，
+ *       即"用丢若干帧换回发送能力"。**不得在 ISR 里调用**（会丢帧且回调可能很长）。
+ */
+static HAL_StatusTypeDef CANAbortAllTx(CANInstance *instance)
+{
+    CAN_HandleTypeDef *hcan = instance->map.handle;
+    uint8_t can_idx = instance->can_e;
+    HAL_StatusTypeDef ret;
+    uint8_t i;
+
+    if (hcan == NULL || can_idx >= CAN_NUM_MAX)
+        return HAL_ERROR;
+
+    /* HAL_CAN_AbortTxRequest 只置 TSR 的 ABRQ 位，无任何 tick 依赖的自旋，故不受
+     * CAN_CanWait 门禁约束；但它要求外设处于 READY/LISTENING，否则返回 HAL_ERROR */
+    ret = HAL_CAN_AbortTxRequest(hcan, CAN_TX_MAILBOX0 | CAN_TX_MAILBOX1 | CAN_TX_MAILBOX2);
+
+    for (i = 0; i < CAN_TX_MAILBOX_NUM; i++)
+    {
+        CANInstance *owner = s_can_tx_owner[can_idx][i];
+
+        s_can_tx_owner[can_idx][i] = NULL;
+        if (owner != NULL)
+        {
+            s_bxcan_status[can_idx].tx_abort++;
+            if (owner->tx_complete_callback != NULL)
+                owner->tx_complete_callback(owner, i, BSP_HW_ERR);
+        }
+    }
+    s_bxcan_status[can_idx].tx_owner_busy = 0;
+
+    return ret;
+}
+
+/**
+ * @brief 向该 CAN 上所有注册了 err_callback 的实例广播一个错误原因
+ * @note 错误是**外设级**的（同一 handle 上可以有多个实例共享同一条总线），无法归给某一个
+ *       实例，故广播给该 handle 上的所有注册者。handler 契约要求幂等，重复收到同一原因无害；
+ *       没配 err_callback 的实例（如只关心收发的电机驱动）直接跳过。
+ */
+static void CAN_NotifyError(const CAN_HandleTypeDef *hcan, CAN_ErrReason_e reason)
+{
+    uint8_t i;
+
+    for (i = 0; i < s_can_idx; i++)
+    {
+        CANInstance *inst = s_can_instance[i];
+
+        if (inst->map.handle == hcan && inst->err_callback != NULL)
+            inst->err_callback(inst, reason);
+    }
+}
 
 /* 分发进行中标志：分发会回调上层（可能再触发 CANTransmit）；嵌套调用直接跳过，
  * 避免同一 media 的回调被重入（外层未处理完时内层又推进 tx_sent 造成分包错乱）。
@@ -216,6 +336,9 @@ static volatile uint8_t s_can_tx_draining = 0;
  *       （comm media idseq/pkt0）会永久卡在 tx_active 造成单向静默。
  *       故入队前先屏蔽 TX 邮箱中断、把未处理的完成事件同步分发掉再恢复中断，从根上消除竞态。
  *       屏蔽期间新到的完成事件因 bxCAN 中断是 TSR 电平触发，恢复 IER 后会补触发，不会丢。
+ * @note 屏蔽的是 IER.TX_MAILBOX_EMPTY 这一位，而 HAL 的整个发送分支（完成 / 中止 /
+ *       ALST·TERR 错误码）都受该位门控（CANx_TX 与 CANx_SCE 两个向量进的是同一个
+ *       HAL_CAN_IRQHandler），所以屏蔽期间不会与中断并发处理同一邮箱。
  */
 static void CAN_TxDrainCompletions(CANInstance *instance)
 {
@@ -239,12 +362,15 @@ static void CAN_TxDrainCompletions(CANInstance *instance)
         hcan->Instance->TSR = s_can_rqcp_mask[i]; /* 写 1 清 RQCPx（同时清 TXOK/ALST/TERR） */
         if ((tsr & s_can_txok_mask[i]) != 0U)
         {
-            CAN_TxCompleteHandler(hcan, i); /* 发送成功：走正常完成回调（含状态统计） */
+            CAN_TxResultHandler(hcan, i, BSP_OK); /* 发送成功 */
             s_bxcan_status[instance->can_e].tx_drain++;
         }
         else
         {
-            s_bxcan_status[instance->can_e].err_tx++; /* 仲裁失败/发送错误：仅计数（同 HAL Abort 语义） */
+            /* 仲裁失败/发送错误：与 HAL 走 AbortCallback / ErrorCallback 是同一件事
+             * （RQCP 置位而 TXOK 未置）。也必须把逐帧结果通知到发起者，否则在这个
+             * 屏蔽窗口内失败的帧会永远等不到结果。 */
+            CAN_TxResultHandler(hcan, i, BSP_HW_ERR);
         }
     }
 
@@ -258,11 +384,12 @@ static void CAN_TxDrainCompletions(CANInstance *instance)
  * @brief 注册CAN实例（仅调用一次，修改 static 管理数组）
  * @note 仅注册，不配置硬件参数（由 CANConfig 负责）
  */
-int8_t CANRegister(CANInstance *instance)
+BSP_Status_e CANRegister(CANInstance *instance)
 {
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_can_idx >= CAN_INSTANCE_NUM, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    // 超实例数 / 重复注册都是**调用方用法错误**（不是硬件问题），与 USARTRegister/USBRegister 保持一致
+    BSP_RETURN_IF_TRUE_LOG(s_can_idx >= CAN_INSTANCE_NUM, BSP_PARAM_ERR, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Exceeded max instance count!"));
 
     // 防重复注册检查
     for (uint8_t i = 0; i < s_can_idx; i++)
@@ -270,42 +397,43 @@ int8_t CANRegister(CANInstance *instance)
         if (s_can_instance[i] == instance)
         {
             BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Instance already registered!");
-            return -1;
+            return BSP_PARAM_ERR;
         }
     }
 
     s_can_instance[s_can_idx++] = instance;
 
     BSPLOG(&g_can_log, LOG_LEVEL_INFO, "CAN Instance registered, idx=%d", s_can_idx - 1);
-    return 0;
+    return BSP_OK;
 }
 
 /**
- * @brief 配置CAN实例（填充硬件映射 + 工作模式 + 父指针，可重复调用）
+ * @brief 配置CAN实例（填充硬件映射 + 工作模式 + 父指针 + 回调，可重复调用）
  * @note 要求先调用 CANRegister 注册实例
  */
-int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
+BSP_Status_e CANConfig(CANInstance *instance, const CAN_Config_s *config)
 {
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->can_e >= CAN_NUM_MAX, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "can_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config == NULL, BSP_PARAM_ERR, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Config is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(config->can_e >= CAN_NUM_MAX, BSP_PARAM_ERR, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "can_e out of range!"));
 
     // 填充枚举和硬件句柄
     instance->can_e = config->can_e;
     instance->map = can_map[instance->can_e];
-    BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "CAN handle is NULL, check bsp_map mapping!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, BSP_HW_ERR, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "CAN handle is NULL, check bsp_map mapping!"));
 
     // 一个 handle 允许多个实例共享（如不同 ID 分组各占一个实例），无需防重
-    BSP_RETURN_IF_TRUE_LOG(config->filter_num > 0 && config->filters == NULL, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "filters is NULL but filter_num=%d!", config->filter_num));
+    BSP_RETURN_IF_TRUE_LOG(config->filter_num > 0 && config->filters == NULL, BSP_PARAM_ERR, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "filters is NULL but filter_num=%d!", config->filter_num));
 
     // F4 BxCAN 仅支持经典 CAN（FD 帧需 H7 FDCAN），非 CLASSIC 一律拒绝
-    BSP_RETURN_IF_TRUE_LOG(config->mode != CAN_FRAME_FORMAT_CLASSIC, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "BxCAN only supports CLASSIC frame format (mode=%d)!", config->mode));
+    BSP_RETURN_IF_TRUE_LOG(config->mode != CAN_FRAME_FORMAT_CLASSIC, BSP_PARAM_ERR, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "BxCAN only supports CLASSIC frame format (mode=%d)!", config->mode));
 
     instance->mode = config->mode;
     instance->parent = config->parent;
     instance->filters = config->filters; // 软件过滤器数组（Config 时写入，指向 config 中的数组）
     instance->filter_num = config->filter_num;
     instance->tx_complete_callback = config->tx_complete_callback;
+    instance->err_callback = config->err_callback;
 
 #if defined(BSP_CAN_LIST_LUT_USED)
     // 标准 ID + LIST 模式 filter 直接登记查表槽位（增量注册/改 ID 天然支持；同 ID 后写覆盖前写）
@@ -323,7 +451,7 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
         // 否则 ConfigFilter/Start 等 READY 门控的 HAL 调用会再次失败，重试永远不成功
         if (instance->map.handle->State == HAL_CAN_STATE_LISTENING)
         {
-            BSP_RETURN_IF_TRUE_LOG(HAL_CAN_Stop(instance->map.handle) != HAL_OK, -1,
+            BSP_RETURN_IF_TRUE_LOG(HAL_CAN_Stop(instance->map.handle) != HAL_OK, BSP_HW_ERR,
                                    BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "CAN Stop failed, can't retry init (can_e=%d)!", instance->can_e));
         }
 
@@ -361,50 +489,61 @@ int8_t CANConfig(CANInstance *instance, const CAN_Config_s *config)
         // 注意：必须同时使能 CAN_IT_ERROR（IER.ERRIE 主开关），否则 IRQHandler 的错误分支不执行
         it_mask |= CAN_IT_ERROR_WARNING | CAN_IT_ERROR_PASSIVE | CAN_IT_BUSOFF | CAN_IT_LAST_ERROR_CODE | CAN_IT_ERROR;
 
-        BSP_RETURN_IF_TRUE_LOG(HAL_CAN_ConfigFilter(instance->map.handle, &hw_filter) != HAL_OK, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "HAL_CAN_ConfigFilter failed!"));
-        BSP_RETURN_IF_TRUE_LOG(HAL_CAN_Start(instance->map.handle) != HAL_OK, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "HAL_CAN_Start failed!"));
-        BSP_RETURN_IF_TRUE_LOG(HAL_CAN_ActivateNotification(instance->map.handle, it_mask) != HAL_OK, -1, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "HAL_CAN_ActivateNotification failed!"));
+        BSP_RETURN_IF_TRUE_LOG(HAL_CAN_ConfigFilter(instance->map.handle, &hw_filter) != HAL_OK, BSP_HW_ERR, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "HAL_CAN_ConfigFilter failed!"));
+        BSP_RETURN_IF_TRUE_LOG(HAL_CAN_Start(instance->map.handle) != HAL_OK, BSP_HW_ERR, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "HAL_CAN_Start failed!"));
+        BSP_RETURN_IF_TRUE_LOG(HAL_CAN_ActivateNotification(instance->map.handle, it_mask) != HAL_OK, BSP_HW_ERR, BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "HAL_CAN_ActivateNotification failed!"));
 
         // 全部初始化步骤成功后才置位：任一步失败返回，标志保持 0，下次 CANConfig 可完整重试
         s_can_started[instance->can_e] = 1;
     }
 
-    return 0;
+    return BSP_OK;
 }
 
 /**
- * @brief CANTransmit 失败路径统一计数后返回 -1
- * @note 作为 BSP_RETURN_IF_TRUE_LOG 的 ret 参数注入（宏内 `return (ret)` 会求值），
- *       使所有 -1 返回点都统计进 s_bxcan_status[].tx_fail，日志行为不变。
+ * @brief CANTransmit 失败路径统一计数后返回状态码
+ * @param instance CAN实例（可为 NULL：仅返回状态码）
+ * @param status   要返回的状态码（BSP_BUSY / BSP_TIMEOUT / BSP_PARAM_ERR / BSP_HW_ERR）
+ * @note 作为 BSP_RETURN_IF_TRUE_LOG 的 ret 参数注入（宏只在条件成立时求值，
+ *       故 NULL 的 instance 不会走到解引用），使所有失败返回点都统计进
+ *       s_bxcan_status[].tx_fail 并分因计数，日志行为不变。
  */
-static int8_t CAN_BxcanTxFailThenRet(const CANInstance *instance)
+static BSP_Status_e CAN_BxcanTxFail(const CANInstance *instance, BSP_Status_e status)
 {
     if (instance != NULL && instance->can_e < CAN_NUM_MAX)
+    {
         s_bxcan_status[instance->can_e].tx_fail++;
-    return -1;
+        if (status == BSP_BUSY)
+            s_bxcan_status[instance->can_e].tx_busy++;
+        else if (status == BSP_TIMEOUT)
+            s_bxcan_status[instance->can_e].tx_timeout++;
+    }
+    return status;
 }
 
 /**
  * @brief 发送一帧CAN数据
  * @param instance      CAN实例
  * @param pack          数据包（id / frame_type / len / data）
- * @param timeout_ms    发送资源等待超时（ms）：三个邮箱全满时最多等待其空闲；传 0 表示不等待，满即失败
+ * @param timeout_ms    发送资源等待超时（ms）：三个邮箱全满时最多等待其空闲；传 0 表示不等待，满即失败。
+ *                      中断上下文内恒按 0 处理（见下方 CAN_CanWait 判据）
  * @param tx_mailbox    出参：本次发送使用的邮箱索引（0/1/2，对应 HAL CAN_TX_MAILBOX0/1/2）；可为 NULL
  * @param tx_free_level 出参：发送后剩余空闲邮箱数（0~CAN_TX_MAILBOX_NUM）；可为 NULL
- * @retval 0  发送成功
- * @retval -1 失败（参数非法 / 长度超限 / 帧类型非法 / 等待邮箱超时 / 加入邮箱失败）
+ * @retval BSP_OK        已加入邮箱（**不代表已发出**，逐帧结果看 tx_complete_callback）
+ * @retval BSP_PARAM_ERR / BSP_BUSY / BSP_TIMEOUT / BSP_HW_ERR 见 bsp_can.h
  */
-int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeout_ms, uint32_t *tx_mailbox, uint8_t *tx_free_level)
+BSP_Status_e CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeout_ms, uint32_t *tx_mailbox, uint8_t *tx_free_level)
 {
     CAN_TxHeaderTypeDef tx_header = {0};
     uint32_t mailbox;
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, CAN_BxcanTxFailThenRet(instance), BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, CAN_BxcanTxFailThenRet(instance), BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "CAN handle is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(pack == NULL, CAN_BxcanTxFailThenRet(instance), BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Pack is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, CAN_BxcanTxFail(instance, BSP_PARAM_ERR), BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    // handle 为 NULL = 该实例从未成功 CANConfig（映射由 CANConfig 填充），属调用方用错而非参数问题
+    BSP_RETURN_IF_TRUE_LOG(instance->map.handle == NULL, CAN_BxcanTxFail(instance, BSP_HW_ERR), BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "CAN handle is NULL (CANConfig not called or failed)!"));
+    BSP_RETURN_IF_TRUE_LOG(pack == NULL, CAN_BxcanTxFail(instance, BSP_PARAM_ERR), BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Pack is NULL!"));
 
     // 长度校验：经典 CAN 单帧最大 8 字节
-    BSP_RETURN_IF_TRUE_LOG(pack->len > 8, CAN_BxcanTxFailThenRet(instance), BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Length %d exceeds classic CAN max (8)!", pack->len));
+    BSP_RETURN_IF_TRUE_LOG(pack->len > 8, CAN_BxcanTxFail(instance, BSP_PARAM_ERR), BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Length %d exceeds classic CAN max (8)!", pack->len));
 
     // 由帧类型填充发送头（IDE/RTR/ID）
     switch (pack->frame_type)
@@ -431,7 +570,7 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeo
         break;
     default:
         BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "Invalid frame_type=%d!", pack->frame_type);
-        return CAN_BxcanTxFailThenRet(instance);
+        return CAN_BxcanTxFail(instance, BSP_PARAM_ERR);
     }
     tx_header.DLC = pack->len;
 
@@ -440,6 +579,15 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeo
     // 空闲邮箱判断之前做——分发可能触发续发、改变邮箱占用情况。
     CAN_TxDrainCompletions(instance);
 
+    // 中断上下文里不允许等待：钳成"只试一次"。这不是防死锁（等待用 DWT 计时），
+    // 而是防在 ISR 里空转——总线上其他实例的续发钩子就是在 CAN 中断里调本函数的。
+    if (!CAN_CanWait())
+    {
+        if (timeout_ms != 0)
+            s_bxcan_status[instance->can_e].tx_isr_clamp++;
+        timeout_ms = 0;
+    }
+
     // 邮箱空闲等待：三个发送邮箱全满则轮询等待其释放（timeout_ms 上限，0 表示不等待、满即失败）。
     // 无总线信号/对端离线时邮箱持续被占满（帧发不出去），不能死等，超时返回失败
     if (HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle) == 0)
@@ -447,7 +595,7 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeo
         if (timeout_ms == 0)
         {
             BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "TX mailboxes full!");
-            return CAN_BxcanTxFailThenRet(instance);
+            return CAN_BxcanTxFail(instance, BSP_BUSY);
         }
         else
         {
@@ -458,8 +606,16 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeo
             {
                 if ((DWT_GetTimeUs() - start_time) > timeout_us)
                 {
-                    BSPLOG(&g_can_log, LOG_LEVEL_WARNING, "CAN TX mailbox timeout (can_e=%d, id=0x%lX)!", instance->can_e, (unsigned long)pack->id);
-                    return CAN_BxcanTxFailThenRet(instance);
+                    // 超时说明邮箱被"发不出去"的帧长期占着：bxCAN 在无 ACK 时会无限重传，
+                    // 那些帧既不会完成也不会报错，没有任何回调会来。若只是返回 BSP_TIMEOUT：
+                    //   ① 本次调用者还能重试，但那几帧的发起者永远等不到结果（异步分包卡死在 tx_active）；
+                    //   ② 该 CAN 的发送资源被永久占死，任何实例都再也发不出帧。
+                    // 故在此主动取消它们并逐帧通知各自的发起者。代价是放弃若干帧（上层按各自协议重发），
+                    // 即"用丢帧换回发送能力"；超时设得过短时，健康但拥塞的总线也可能命中。
+                    BSPLOG(&g_can_log, LOG_LEVEL_WARNING, "CAN TX mailbox timeout (can_e=%d, id=0x%lX), abort queued frames!",
+                           instance->can_e, (unsigned long)pack->id);
+                    (void)CANAbortAllTx(instance);
+                    return CAN_BxcanTxFail(instance, BSP_TIMEOUT);
                 }
             }
         }
@@ -468,21 +624,105 @@ int8_t CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeo
     // 加入发送邮箱
     if (HAL_CAN_AddTxMessage(instance->map.handle, &tx_header, pack->data, &mailbox) != HAL_OK)
     {
+        // HAL 在这里只有两种失败：① 三个邮箱全满（HAL_CAN_ERROR_PARAM）；② 外设不在
+        // READY/LISTENING（HAL_CAN_ERROR_NOT_INITIALIZED）。①是"资源满、可重试"，②是状态异常。
+        // 上面第 592 行的判空与本次入队之间可能被同总线的其他上下文（ISR 里的续发钩子）抢走
+        // 最后一个邮箱，故不能直接按前面那次判断下结论 —— 再读一次空闲量来区分。
+        if (HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle) == 0)
+            return CAN_BxcanTxFail(instance, BSP_BUSY);
         BSPLOG(&g_can_log, LOG_LEVEL_ERROR, "HAL_CAN_AddTxMessage failed!");
-        return CAN_BxcanTxFailThenRet(instance);
+        return CAN_BxcanTxFail(instance, BSP_HW_ERR);
     }
 
-    // 溯源：记录该邮箱当前属于哪个实例（发送完成回调据此调用其回调）
+    // 溯源：记录该邮箱当前属于哪个实例（发送完成回调据此调用其回调）。
+    // 必须紧跟在 AddTxMessage 之后——帧可能在下一行之前就被发出并触发完成中断
     s_can_tx_owner[instance->can_e][CAN_MailboxIndex(mailbox)] = instance;
 
     // 出参：使用的邮箱索引 + 发送后剩余空闲邮箱数（顺带更新状态快照）
     if (tx_mailbox != NULL)
         *tx_mailbox = CAN_MailboxIndex(mailbox);
     s_bxcan_status[instance->can_e].tx_free = (uint8_t)HAL_CAN_GetTxMailboxesFreeLevel(instance->map.handle);
+    s_bxcan_status[instance->can_e].tx_owner_busy = CAN_OwnerBusyCount(instance->can_e);
     if (tx_free_level != NULL)
         *tx_free_level = s_bxcan_status[instance->can_e].tx_free;
 
-    return 0;
+    return BSP_OK;
+}
+
+/**
+ * @brief 有界等待发送邮箱腾出来（任务上下文，只给 CANRecover 用）
+ * @param hcan CAN 句柄
+ * @return 最后一次读到的空闲邮箱数（0 = 等到超时仍满，由调用方判失败）
+ * @note 取消在途帧（TSR.ABRQx）是硬件异步执行的，写完立刻回读 TSR.TMEx 可能还是旧值 →
+ *       这里按 CAN_RECOVER_DRAIN_US 轮询，把这个窗口等掉。等待用 DWT 计时（不依赖 tick）。
+ */
+static uint32_t CAN_BxcanWaitTxFree(CAN_HandleTypeDef *hcan)
+{
+    uint64_t start = DWT_GetTimeUs();
+    uint32_t free_level = HAL_CAN_GetTxMailboxesFreeLevel(hcan);
+
+    while (free_level == 0U && (DWT_GetTimeUs() - start) < (uint64_t)CAN_RECOVER_DRAIN_US)
+        free_level = HAL_CAN_GetTxMailboxesFreeLevel(hcan);
+
+    return free_level;
+}
+
+/**
+ * @brief CAN 发送资源自恢复（任务上下文；五步顺序与理由见 bsp_can.h）
+ * @note bxCAN 的 bus-off 总线恢复由 CubeMX 的 AutoBusOff=ENABLE 交给硬件（自动在检测到
+ *       128 次连续 11 隐性位后重同步），这里只清软件错误标志并回读确认。
+ */
+BSP_Status_e CANRecover(CANInstance *instance)
+{
+    CAN_HandleTypeDef *hcan;
+    uint32_t esr, tx_free;
+    uint8_t can_idx;
+
+    if (instance == NULL || instance->map.handle == NULL)
+        return BSP_PARAM_ERR;
+    can_idx = instance->can_e;
+    hcan = instance->map.handle;
+    if (can_idx >= CAN_NUM_MAX)
+        return BSP_PARAM_ERR;
+
+    // 外设没启动（CANConfig 未成功）时既没有邮箱占用也没有可读的寄存器状态，无从恢复
+    if (!s_can_started[can_idx])
+    {
+        BSPLOG(&g_can_log, LOG_LEVEL_WARNING, "CANRecover: can_e=%d not started, nothing to recover", can_idx);
+        return BSP_BUSY;
+    }
+
+    // ①② 取消全部在途发送并逐帧通知发起者（被成功取消的帧不会产生完成回调，必须显式收口）
+    (void)CANAbortAllTx(instance);
+
+    // ③ 清软件错误标志（清的是 HAL 的 ErrorCode 快照；硬件错误位由 ESR 只读反映）
+    HAL_CAN_ResetError(hcan);
+
+    // ④ 回读总线状态，判断恢复是否生效
+    esr = hcan->Instance->ESR;
+    // 邮箱空闲量要有界等到"取消落地"再读：ABRQ 是硬件异步执行的，写完立刻回读 TSR.TMEx
+    // 可能还是旧值，会把一次正常的恢复误判成"邮箱仍占满"（见 bsp_can.h 的 CAN_RECOVER_DRAIN_US）
+    tx_free = CAN_BxcanWaitTxFree(hcan);
+    s_bxcan_status[can_idx].bus_off = (esr >> 2) & 0x1;
+    s_bxcan_status[can_idx].error_passive = (esr >> 1) & 0x1;
+    s_bxcan_status[can_idx].error_warning = esr & 0x1;
+    s_bxcan_status[can_idx].lec = (esr >> 4) & 0x7;
+    s_bxcan_status[can_idx].tec = (esr >> 16) & 0xFF;
+    s_bxcan_status[can_idx].rec = (esr >> 24) & 0xFF;
+    s_bxcan_status[can_idx].tx_free = (uint8_t)tx_free;
+
+    // 仍在 bus-off：总线物理层没恢复（线没接回 / 终端电阻 / 对端没上电），只能等下次再试；
+    // 邮箱仍占满：取消请求还没生效（ABRQ 是硬件异步执行的），同样算没恢复
+    if (s_bxcan_status[can_idx].bus_off != 0U || tx_free == 0U)
+    {
+        s_bxcan_status[can_idx].recover_fail++;
+        BSPLOG(&g_can_log, LOG_LEVEL_WARNING, "CANRecover failed (can_e=%d): still bus-off or mailboxes full", can_idx);
+        return BSP_HW_ERR;
+    }
+
+    s_bxcan_status[can_idx].recover_ok++;
+    BSPLOG(&g_can_log, LOG_LEVEL_INFO, "CANRecover ok (can_e=%d)", can_idx);
+    return BSP_OK;
 }
 
 /*------------- 私有函数：接收过滤 --------------*/
@@ -680,14 +920,20 @@ void HAL_CAN_RxFifo1FullCallback(CAN_HandleTypeDef *hcan)
         s_bxcan_status[can_idx].rx_full++;
 }
 
-/*------------- 发送完成回调（邮箱发完释放时触发，由 CANConfig 激活 CAN_IT_TX_MAILBOX_EMPTY） --------------*/
+/*------------- 发送完成/中止回调（邮箱释放时触发，由 CANConfig 激活 CAN_IT_TX_MAILBOX_EMPTY） --------------
+ * HAL 按 TSR.RQCPx 置位时 TXOKx 的情况二选一：
+ *   TXOK=1            → TxMailbox*CompleteCallback（帧已发出）
+ *   TXOK=0 且 ALST/TERR 置位 → 只置 ErrorCode，走 ErrorCallback（仲裁失败 / 发送错误）
+ *   TXOK=0 且两者都不置     → TxMailbox*AbortCallback（取消请求生效，帧没发出去）
+ * 三种情况都通过 CAN_TxResultHandler 把逐帧结果通知到发起者。
+ */
 
 /**
  * @brief 发送邮箱0完成回调
  */
 void HAL_CAN_TxMailbox0CompleteCallback(CAN_HandleTypeDef *hcan)
 {
-    CAN_TxCompleteHandler(hcan, 0);
+    CAN_TxResultHandler(hcan, 0, BSP_OK);
 }
 
 /**
@@ -695,7 +941,7 @@ void HAL_CAN_TxMailbox0CompleteCallback(CAN_HandleTypeDef *hcan)
  */
 void HAL_CAN_TxMailbox1CompleteCallback(CAN_HandleTypeDef *hcan)
 {
-    CAN_TxCompleteHandler(hcan, 1);
+    CAN_TxResultHandler(hcan, 1, BSP_OK);
 }
 
 /**
@@ -703,7 +949,31 @@ void HAL_CAN_TxMailbox1CompleteCallback(CAN_HandleTypeDef *hcan)
  */
 void HAL_CAN_TxMailbox2CompleteCallback(CAN_HandleTypeDef *hcan)
 {
-    CAN_TxCompleteHandler(hcan, 2);
+    CAN_TxResultHandler(hcan, 2, BSP_OK);
+}
+
+/**
+ * @brief 发送邮箱0中止回调（取消请求生效、帧未发出）
+ */
+void HAL_CAN_TxMailbox0AbortCallback(CAN_HandleTypeDef *hcan)
+{
+    CAN_TxResultHandler(hcan, 0, BSP_HW_ERR);
+}
+
+/**
+ * @brief 发送邮箱1中止回调（取消请求生效、帧未发出）
+ */
+void HAL_CAN_TxMailbox1AbortCallback(CAN_HandleTypeDef *hcan)
+{
+    CAN_TxResultHandler(hcan, 1, BSP_HW_ERR);
+}
+
+/**
+ * @brief 发送邮箱2中止回调（取消请求生效、帧未发出）
+ */
+void HAL_CAN_TxMailbox2AbortCallback(CAN_HandleTypeDef *hcan)
+{
+    CAN_TxResultHandler(hcan, 2, BSP_HW_ERR);
 }
 
 /*------------- 错误状态中断回调（由 CANConfig 激活 ERROR_WARNING / ERROR_PASSIVE / BUSOFF / LAST_ERROR_CODE） --------------*/
@@ -723,6 +993,12 @@ void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
         uint8_t can_idx = CAN_HcanToIndex(hcan);
         uint8_t tec = (esr >> 16) & 0xFF;
         uint8_t rec = (esr >> 24) & 0xFF; // REC 硬件为 8 位（bit24-31），旧代码误用 0x7F 少记最高位
+        uint8_t tx_fail = 0;
+        uint8_t protocol = ((error & (HAL_CAN_ERROR_STF | HAL_CAN_ERROR_FOR | HAL_CAN_ERROR_ACK |
+                                      HAL_CAN_ERROR_BR | HAL_CAN_ERROR_BD | HAL_CAN_ERROR_CRC)) != 0U)
+                               ? 1U
+                               : 0U;
+        uint8_t i;
 
         // 状态快照 + 错误计数（三个错误状态独立 if，可同时置位）
         if (can_idx < CAN_NUM_MAX)
@@ -733,6 +1009,7 @@ void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
             s_bxcan_status[can_idx].bus_off = (esr >> 2) & 0x1;
             s_bxcan_status[can_idx].error_passive = (esr >> 1) & 0x1;
             s_bxcan_status[can_idx].error_warning = esr & 0x1;
+            s_bxcan_status[can_idx].last_err_us = DWT_GetTimeUs();
 
             if (error & HAL_CAN_ERROR_BOF)
                 s_bxcan_status[can_idx].err_bus_off++;
@@ -742,12 +1019,20 @@ void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
                 s_bxcan_status[can_idx].err_warning++;
             if ((error & (HAL_CAN_ERROR_RX_FOV0 | HAL_CAN_ERROR_RX_FOV1)) != 0U)
                 s_bxcan_status[can_idx].rx_lost++;
-            if (error & (HAL_CAN_ERROR_STF | HAL_CAN_ERROR_FOR | HAL_CAN_ERROR_ACK |
-                         HAL_CAN_ERROR_BR | HAL_CAN_ERROR_BD | HAL_CAN_ERROR_CRC))
+            if (protocol)
                 s_bxcan_status[can_idx].err_protocol++;
-            if (error & (HAL_CAN_ERROR_TX_ALST0 | HAL_CAN_ERROR_TX_ALST1 | HAL_CAN_ERROR_TX_ALST2 |
-                         HAL_CAN_ERROR_TX_TERR0 | HAL_CAN_ERROR_TX_TERR1 | HAL_CAN_ERROR_TX_TERR2))
-                s_bxcan_status[can_idx].err_tx++;
+        }
+
+        // 逐帧结果收口：ALST/TERR = 那一帧没发出去（仲裁失败 / 发送错误）。
+        // HAL 已在 IRQHandler 里清掉 RQCPx，邮箱号只能从错误码位反推（见 s_can_tx_fail_mask）。
+        // 不加这步，这种帧就只有计数、没有回调，异步分包的发起者会永远卡在"发送中"。
+        for (i = 0; i < CAN_TX_MAILBOX_NUM; i++)
+        {
+            if ((error & s_can_tx_fail_mask[i]) != 0U)
+            {
+                CAN_TxResultHandler(hcan, i, BSP_HW_ERR);
+                tx_fail = 1;
+            }
         }
 
         if (error & HAL_CAN_ERROR_BOF)
@@ -757,12 +1042,25 @@ void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
         if (error & HAL_CAN_ERROR_EWG)
             BSPLOG(&g_can_log, LOG_LEVEL_WARNING, "CAN Error Warning! TEC=%d, REC=%d", tec, rec);
         // 其余为 Last Error Code 位集（协议错误）或发送失败标志，汇总上报
-        if (error & (HAL_CAN_ERROR_STF | HAL_CAN_ERROR_FOR | HAL_CAN_ERROR_ACK |
-                     HAL_CAN_ERROR_BR | HAL_CAN_ERROR_BD | HAL_CAN_ERROR_CRC))
+        if (protocol)
             BSPLOG(&g_can_log, LOG_LEVEL_WARNING, "CAN protocol error: 0x%08lX, TEC=%d, REC=%d", (unsigned long)error, tec, rec);
 
         // 清软件错误标志（硬件 AutoBusOff=ENABLE 自动完成总线恢复）
         HAL_CAN_ResetError(hcan);
+
+        // 纠正动作做完后再广播给上层（err_callback 契约：分类计数 → 快照 → 纠正 → 通知）。
+        // BOF/EPV/EWG 是"总线健康度"的分级，ALST/TERR 与 LEC 位集都归到协议错误。
+        // 注意 CAN_ERR_PROTOCOL 可能每帧触发一次（总线断开时），handler 必须廉价且幂等。
+        if (error & HAL_CAN_ERROR_BOF)
+            CAN_NotifyError(hcan, CAN_ERR_BUS_OFF);
+        if (error & HAL_CAN_ERROR_EPV)
+            CAN_NotifyError(hcan, CAN_ERR_ERROR_PASSIVE);
+        if (error & HAL_CAN_ERROR_EWG)
+            CAN_NotifyError(hcan, CAN_ERR_ERROR_WARNING);
+        if ((error & (HAL_CAN_ERROR_RX_FOV0 | HAL_CAN_ERROR_RX_FOV1)) != 0U)
+            CAN_NotifyError(hcan, CAN_ERR_RX_OVERFLOW);
+        if (protocol || tx_fail)
+            CAN_NotifyError(hcan, CAN_ERR_PROTOCOL);
     }
 }
 
