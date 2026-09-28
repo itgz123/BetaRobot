@@ -50,7 +50,7 @@
 #ifndef __DRVLIB_IST8310_CALIB_H
 #define __DRVLIB_IST8310_CALIB_H
 
-#include <stdint.h> /* ist8310_reg_def.h 自身用到 uint8_t 但不带 <stdint.h>（固件里靠 main.h 先引入）*/
+#include <stdint.h>          /* ist8310_reg_def.h 自身用到 uint8_t 但不带 <stdint.h>（固件里靠 main.h 先引入）*/
 #include "ist8310_reg_def.h" /* IST8310_AXIS_NUM（纯器件事实，不含 HAL 依赖） */
 
 /*============================ 标定结构体 ============================*/
@@ -65,10 +65,10 @@
  */
 typedef struct
 {
-    float hard_iron[IST8310_AXIS_NUM];                  /* 硬铁偏置 (µT)，先减 */
+    float hard_iron[IST8310_AXIS_NUM];                   /* 硬铁偏置 (µT)，先减 */
     float soft_iron[IST8310_AXIS_NUM][IST8310_AXIS_NUM]; /* 软铁 3×3 行主序；全 0 → 单位阵 */
     float mount_rot[IST8310_AXIS_NUM][IST8310_AXIS_NUM]; /* 磁计→IMU 安装旋转，行主序；全 0 → 单位阵 */
-    float scale[IST8310_AXIS_NUM];                      /* 每轴尺度，**最后除**；0 或 1 = 不修正 */
+    float scale[IST8310_AXIS_NUM];                       /* 每轴尺度，**最后除**；0 或 1 = 不修正 */
 } IST8310Calib_s;
 
 /*============================ 私有助手 ============================*/
@@ -88,8 +88,8 @@ static inline int IST8310Calib_MatIsZero(const float m[IST8310_AXIS_NUM][IST8310
 }
 
 /** @brief out = M·v（3×3 行主序乘 3×1），out 可与 v 同一数组 */
-static inline void IST8310Calib_MatVec(const float m[IST8310_AXIS_NUM][IST8310_AXIS_NUM], const float v[IST8310_AXIS_NUM],
-                                       float out[IST8310_AXIS_NUM])
+static inline void IST8310Calib_MatVec(const float m[IST8310_AXIS_NUM][IST8310_AXIS_NUM],
+                                       const float v[IST8310_AXIS_NUM], float out[IST8310_AXIS_NUM])
 {
     float r[IST8310_AXIS_NUM];
     for (int i = 0; i < IST8310_AXIS_NUM; i++)

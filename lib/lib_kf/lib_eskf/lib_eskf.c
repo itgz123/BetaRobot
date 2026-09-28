@@ -230,7 +230,7 @@ Eskf_Status_e EskfInject(EskfInstance *eskf)
     if (eskf->reset_jac != NULL)
     {
         eskf->reset_jac(eskf->ctx, eskf->delta, eskf->G);
-        Lib_KfCore_MatMul(eskf->wA, eskf->G, eskf->P, n, n, n); /* wA = G·P   */
+        Lib_KfCore_MatMul(eskf->wA, eskf->G, eskf->P, n, n, n);     /* wA = G·P   */
         Lib_KfCore_MatMulABt(eskf->wB, eskf->wA, eskf->G, n, n, n); /* wB = wA·Gᵀ */
         for (int i = 0; i < n * n; i++)
         {

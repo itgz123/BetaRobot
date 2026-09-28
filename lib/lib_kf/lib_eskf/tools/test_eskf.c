@@ -404,9 +404,16 @@ static void case_static(void)
 
     float P0[N_ATT * N_ATT];
     p0_diag(P0, 0.25f, 1e-4f); /* σ_att=0.5 rad, σ_bias=0.01 rad/s */
-    Eskf_Init_Config_s cfg = {.n = N_ATT, .m = M_ATT, .l = 0, .opt = ESKF_OPT_JOSEPH,
-                              .ctx = &c, .propagate = att_propagate, .measure = att_measure_acc,
-                              .inject = att_inject, .reset_jac = NULL, .P0 = P0};
+    Eskf_Init_Config_s cfg = {.n = N_ATT,
+                              .m = M_ATT,
+                              .l = 0,
+                              .opt = ESKF_OPT_JOSEPH,
+                              .ctx = &c,
+                              .propagate = att_propagate,
+                              .measure = att_measure_acc,
+                              .inject = att_inject,
+                              .reset_jac = NULL,
+                              .P0 = P0};
     check(EskfInit(&eskf, &cfg) == ESKF_OK, "EskfInit 失败");
 
     const float dt = 0.005f;
@@ -521,9 +528,16 @@ static void case_rotation_360(void)
 
     float P0[N_ATT * N_ATT];
     p0_diag(P0, 1e-3f, 1e-6f);
-    Eskf_Init_Config_s cfg = {.n = N_ATT, .m = M_ATT, .l = 0, .opt = ESKF_OPT_JOSEPH,
-                              .ctx = &c, .propagate = att_propagate, .measure = att_measure_acc,
-                              .inject = att_inject, .reset_jac = NULL, .P0 = P0};
+    Eskf_Init_Config_s cfg = {.n = N_ATT,
+                              .m = M_ATT,
+                              .l = 0,
+                              .opt = ESKF_OPT_JOSEPH,
+                              .ctx = &c,
+                              .propagate = att_propagate,
+                              .measure = att_measure_acc,
+                              .inject = att_inject,
+                              .reset_jac = NULL,
+                              .P0 = P0};
     check(EskfInit(&eskf, &cfg) == ESKF_OK, "EskfInit 失败");
 
     g_update_fail = 0;
@@ -614,9 +628,16 @@ static void case_bias_observable(void)
 
     float P0[N_ATT * N_ATT];
     p0_diag(P0, 1e-4f, 1e-4f); /* σ_att=0.01 rad, σ_bias=0.01 rad/s（零偏必须"不自负"） */
-    Eskf_Init_Config_s cfg = {.n = N_ATT, .m = M_ATT, .l = 0, .opt = ESKF_OPT_JOSEPH,
-                              .ctx = &c, .propagate = att_propagate, .measure = att_measure_acc,
-                              .inject = att_inject, .reset_jac = NULL, .P0 = P0};
+    Eskf_Init_Config_s cfg = {.n = N_ATT,
+                              .m = M_ATT,
+                              .l = 0,
+                              .opt = ESKF_OPT_JOSEPH,
+                              .ctx = &c,
+                              .propagate = att_propagate,
+                              .measure = att_measure_acc,
+                              .inject = att_inject,
+                              .reset_jac = NULL,
+                              .P0 = P0};
     check(EskfInit(&eskf, &cfg) == ESKF_OK, "EskfInit 失败");
 
     const float dt = 0.005f;
@@ -706,9 +727,16 @@ static void case_inject_and_reset(void)
         att_ctx_init(&c, 0.87f, 0.0f);
         float P0[N_ATT * N_ATT];
         p0_diag(P0, 0.01f, 1e-4f);
-        Eskf_Init_Config_s cfg = {.n = N_ATT, .m = M_ATT, .l = 0, .opt = 0, .ctx = &c,
-                                  .propagate = att_propagate, .measure = att_measure_acc, .inject = att_inject,
-                                  .reset_jac = NULL, .P0 = P0};
+        Eskf_Init_Config_s cfg = {.n = N_ATT,
+                                  .m = M_ATT,
+                                  .l = 0,
+                                  .opt = 0,
+                                  .ctx = &c,
+                                  .propagate = att_propagate,
+                                  .measure = att_measure_acc,
+                                  .inject = att_inject,
+                                  .reset_jac = NULL,
+                                  .P0 = P0};
         check(EskfInit(&eskf, &cfg) == ESKF_OK, "EskfInit 失败");
         q_from_euler(0.05f, -0.02f, 0.1f, c.q);
         c.b[0] = 0.003f;
@@ -784,9 +812,16 @@ static void case_inject_and_reset(void)
         att_ctx_init(&c, 0.87f, 0.0f);
         float P0[N_ATT * N_ATT];
         p0_diag(P0, 0.01f, 1e-4f);
-        Eskf_Init_Config_s cfg = {.n = N_ATT, .m = M_ATT, .l = 0, .opt = 0, .ctx = &c,
-                                  .propagate = att_propagate, .measure = att_measure_acc, .inject = att_inject,
-                                  .reset_jac = att_reset_jac, .P0 = P0};
+        Eskf_Init_Config_s cfg = {.n = N_ATT,
+                                  .m = M_ATT,
+                                  .l = 0,
+                                  .opt = 0,
+                                  .ctx = &c,
+                                  .propagate = att_propagate,
+                                  .measure = att_measure_acc,
+                                  .inject = att_inject,
+                                  .reset_jac = att_reset_jac,
+                                  .P0 = P0};
         check(EskfInit(&eskf, &cfg) == ESKF_OK, "EskfInit 失败");
         q_from_euler(0.05f, -0.02f, 0.1f, c.q);
 
@@ -865,9 +900,16 @@ static double run_and_get_p00(int use_jac, const AttCtx *c_src)
     AttCtx c = *c_src;
     float P0[N_ATT * N_ATT];
     p0_diag(P0, 0.01f, 1e-4f);
-    Eskf_Init_Config_s cfg = {.n = N_ATT, .m = M_ATT, .l = 0, .opt = 0, .ctx = &c,
-                              .propagate = att_propagate, .measure = att_measure_acc, .inject = att_inject,
-                              .reset_jac = use_jac ? att_reset_jac : NULL, .P0 = P0};
+    Eskf_Init_Config_s cfg = {.n = N_ATT,
+                              .m = M_ATT,
+                              .l = 0,
+                              .opt = 0,
+                              .ctx = &c,
+                              .propagate = att_propagate,
+                              .measure = att_measure_acc,
+                              .inject = att_inject,
+                              .reset_jac = use_jac ? att_reset_jac : NULL,
+                              .P0 = P0};
     if (EskfInit(&eskf, &cfg) != ESKF_OK)
     {
         return -1.0;
@@ -935,9 +977,16 @@ static void case_residual_sign(void)
     att_ctx_init(&c, 0.87f, 0.0f);
     float P0[N_ATT * N_ATT];
     p0_diag(P0, 0.01f, 1e-6f);
-    Eskf_Init_Config_s cfg = {.n = N_ATT, .m = M_ATT, .l = 0, .opt = 0, .ctx = &c,
-                              .propagate = att_propagate, .measure = att_measure_acc, .inject = att_inject,
-                              .reset_jac = NULL, .P0 = P0};
+    Eskf_Init_Config_s cfg = {.n = N_ATT,
+                              .m = M_ATT,
+                              .l = 0,
+                              .opt = 0,
+                              .ctx = &c,
+                              .propagate = att_propagate,
+                              .measure = att_measure_acc,
+                              .inject = att_inject,
+                              .reset_jac = NULL,
+                              .P0 = P0};
     check(EskfInit(&eskf, &cfg) == ESKF_OK, "EskfInit 失败");
 
     /* 名义 = 单位阵；真值带已知的小姿态误差 δθ_true（机体系） */
@@ -988,9 +1037,16 @@ static void case_multirate(void)
     const float w_world[3] = {0.0f, 0.0f, 1.2f};
     float P0[N_ATT * N_ATT];
     p0_diag(P0, 1e-3f, 1e-6f);
-    Eskf_Init_Config_s cfg = {.n = N_ATT, .m = M_ATT, .l = 0, .opt = ESKF_OPT_JOSEPH,
-                              .ctx = &c, .propagate = att_propagate, .measure = att_measure_acc,
-                              .inject = att_inject, .reset_jac = NULL, .P0 = P0};
+    Eskf_Init_Config_s cfg = {.n = N_ATT,
+                              .m = M_ATT,
+                              .l = 0,
+                              .opt = ESKF_OPT_JOSEPH,
+                              .ctx = &c,
+                              .propagate = att_propagate,
+                              .measure = att_measure_acc,
+                              .inject = att_inject,
+                              .reset_jac = NULL,
+                              .P0 = P0};
     check(EskfInit(&eskf, &cfg) == ESKF_OK, "EskfInit 失败");
 
     const float dt = 0.005f;
@@ -1120,8 +1176,14 @@ static void case_guard(void)
     p0_diag(P0, 0.01f, 1e-4f);
 
     /* 回调缺失 → ESKF_ERR_CFG */
-    Eskf_Init_Config_s no_p = {.n = N_ATT, .m = M_ATT, .l = 0, .ctx = &c, .propagate = NULL,
-                               .measure = att_measure_acc, .inject = att_inject, .P0 = P0};
+    Eskf_Init_Config_s no_p = {.n = N_ATT,
+                               .m = M_ATT,
+                               .l = 0,
+                               .ctx = &c,
+                               .propagate = NULL,
+                               .measure = att_measure_acc,
+                               .inject = att_inject,
+                               .P0 = P0};
     Eskf_Init_Config_s no_m = no_p;
     no_m.propagate = att_propagate;
     no_m.measure = NULL;
@@ -1151,8 +1213,16 @@ static void case_guard(void)
     check(e_cfg && e_dim && e_null, "参数校验未按预期拒绝");
 
     /* 时序违规：Update 后未 Inject 就 Predict / 再 Update */
-    Eskf_Init_Config_s ok = {.n = N_ATT, .m = M_ATT, .l = 0, .opt = 0, .ctx = &c, .propagate = att_propagate,
-                             .measure = att_measure_acc, .inject = att_inject, .reset_jac = NULL, .P0 = P0};
+    Eskf_Init_Config_s ok = {.n = N_ATT,
+                             .m = M_ATT,
+                             .l = 0,
+                             .opt = 0,
+                             .ctx = &c,
+                             .propagate = att_propagate,
+                             .measure = att_measure_acc,
+                             .inject = att_inject,
+                             .reset_jac = NULL,
+                             .P0 = P0};
     check(EskfInit(&eskf, &ok) == ESKF_OK, "EskfInit 失败");
     float z[3] = {0.1f, -0.2f, 0.97f};
     check(EskfPredict(&eskf, NULL, 0.005f) == ESKF_OK, "Predict 失败");
@@ -1162,8 +1232,16 @@ static void case_guard(void)
     const int seq3 = (EskfInject(&eskf) == ESKF_OK) && (EskfPredict(&eskf, NULL, 0.005f) == ESKF_OK);
 
     /* 奇异保护：δ/P 逐位不变 */
-    Eskf_Init_Config_s sing = {.n = N_ATT, .m = M_ATT, .l = 0, .opt = 0, .ctx = &c, .propagate = bad_propagate,
-                               .measure = zero_measure, .inject = noop_inject, .reset_jac = NULL, .P0 = P0};
+    Eskf_Init_Config_s sing = {.n = N_ATT,
+                               .m = M_ATT,
+                               .l = 0,
+                               .opt = 0,
+                               .ctx = &c,
+                               .propagate = bad_propagate,
+                               .measure = zero_measure,
+                               .inject = noop_inject,
+                               .reset_jac = NULL,
+                               .P0 = P0};
     check(EskfInit(&eskf, &sing) == ESKF_OK, "EskfInit 失败");
     check(EskfPredict(&eskf, NULL, 0.005f) == ESKF_OK, "Predict 失败");
     float ds[N_ATT], Ps[N_ATT * N_ATT];
@@ -1175,7 +1253,8 @@ static void case_guard(void)
     const int after = (EskfPredict(&eskf, NULL, 0.005f) == ESKF_OK);
 
     /* m_now 越界 */
-    const int e_mnow = (EskfUpdateM(&eskf, 0, z, NULL) == ESKF_ERR_DIM) && (EskfUpdateM(&eskf, M_ATT + 1, z, NULL) == ESKF_ERR_DIM);
+    const int e_mnow =
+        (EskfUpdateM(&eskf, 0, z, NULL) == ESKF_ERR_DIM) && (EskfUpdateM(&eskf, M_ATT + 1, z, NULL) == ESKF_ERR_DIM);
 
     printf("  用例8b 时序/奇异: 越序Predict=%d 越序Update=%d Inject后恢复=%d 奇异=%d 逐位不变=%d 之后可Predict=%d "
            "m_now越界=%d\n",

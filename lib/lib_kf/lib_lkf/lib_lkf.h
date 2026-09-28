@@ -162,7 +162,7 @@ typedef struct LkfInstance
  * @note 按上限分配所需矩阵与工作区，RAM 占用 ≈ (5N² + 3NM + 3M² + N·L + 2N + M) floats
  * @note 例：LKF_INSTANCE_DEF(kf_imu, 9, 6, 0);
  */
-#define LKF_INSTANCE_DEF(name, N, M, L)                                                                             \
+#define LKF_INSTANCE_DEF(name, N, M, L)                                                                                \
     static float name##_x[N];                                                                                          \
     static float name##_P[(N) * (N)];                                                                                  \
     static float name##_F[(N) * (N)];                                                                                  \
@@ -177,23 +177,23 @@ typedef struct LkfInstance
     static float name##_wD[(M) ? 2 * (M) * (M) : 1];                                                                   \
     static float name##_wE[N];                                                                                         \
     static float name##_wF[(M) ? (M) : 1];                                                                             \
-    static LkfInstance name = {.n_max = (N),                                                                        \
-                                  .m_max = (M),                                                                        \
-                                  .l_max = (L),                                                                        \
-                                  .x = name##_x,                                                                       \
-                                  .P = name##_P,                                                                       \
-                                  .F = name##_F,                                                                       \
-                                  .Q = name##_Q,                                                                       \
-                                  .H = name##_H,                                                                       \
-                                  .R = name##_R,                                                                       \
-                                  .B = name##_B,                                                                       \
-                                  .wA = name##_wA,                                                                     \
-                                  .wB = name##_wB,                                                                     \
-                                  .wC = name##_wC,                                                                     \
-                                  .wG = name##_wG,                                                                     \
-                                  .wD = name##_wD,                                                                     \
-                                  .wE = name##_wE,                                                                     \
-                                  .wF = name##_wF}
+    static LkfInstance name = {.n_max = (N),                                                                           \
+                               .m_max = (M),                                                                           \
+                               .l_max = (L),                                                                           \
+                               .x = name##_x,                                                                          \
+                               .P = name##_P,                                                                          \
+                               .F = name##_F,                                                                          \
+                               .Q = name##_Q,                                                                          \
+                               .H = name##_H,                                                                          \
+                               .R = name##_R,                                                                          \
+                               .B = name##_B,                                                                          \
+                               .wA = name##_wA,                                                                        \
+                               .wB = name##_wB,                                                                        \
+                               .wC = name##_wC,                                                                        \
+                               .wG = name##_wG,                                                                        \
+                               .wD = name##_wD,                                                                        \
+                               .wE = name##_wE,                                                                        \
+                               .wF = name##_wF}
 
 /*============================ 矩阵元素索引宏 ============================*/
 

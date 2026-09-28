@@ -280,12 +280,12 @@ typedef struct EskfInstance
 /*============================ 矩阵元素索引宏 ============================*/
 
 /* 以活跃维为行距直读/改写实例矩阵元素（行主序） */
-#define ESKF_DELTA(eskf, i) ((eskf)->delta[(i)])                   /* δx(i)        */
-#define ESKF_P(eskf, i, j) ((eskf)->P[(i) * (eskf)->n + (j)])      /* P(i,j) n×n   */
-#define ESKF_F(eskf, i, j) ((eskf)->F[(i) * (eskf)->n + (j)])      /* F(i,j) n×n   */
-#define ESKF_Q(eskf, i, j) ((eskf)->Q[(i) * (eskf)->n + (j)])      /* Q(i,j) n×n   */
-#define ESKF_H(eskf, i, j) ((eskf)->H[(i) * (eskf)->n + (j)])      /* H(i,j) m×n   */
-#define ESKF_R(eskf, i, j) ((eskf)->R[(i) * (eskf)->m + (j)])      /* R(i,j) m×m   */
+#define ESKF_DELTA(eskf, i) ((eskf)->delta[(i)])              /* δx(i)        */
+#define ESKF_P(eskf, i, j) ((eskf)->P[(i) * (eskf)->n + (j)]) /* P(i,j) n×n   */
+#define ESKF_F(eskf, i, j) ((eskf)->F[(i) * (eskf)->n + (j)]) /* F(i,j) n×n   */
+#define ESKF_Q(eskf, i, j) ((eskf)->Q[(i) * (eskf)->n + (j)]) /* Q(i,j) n×n   */
+#define ESKF_H(eskf, i, j) ((eskf)->H[(i) * (eskf)->n + (j)]) /* H(i,j) m×n   */
+#define ESKF_R(eskf, i, j) ((eskf)->R[(i) * (eskf)->m + (j)]) /* R(i,j) m×m   */
 
 /*============================ 公开接口声明 ============================*/
 

@@ -278,8 +278,8 @@ static double max_rel_diff(const float *a, const double *b, int cnt)
  * @param multi_rate 非 0 时每步改用两次标量 LkfUpdateM（H_scalar/R_scalar 各一维）
  */
 static double run_case(LkfInstance *kf, const double *F, const double *Q, const double *H, const double *R,
-                       const double *P0, const double *x0, int n, int m, uint8_t opt, int steps,
-                       const double *H2, const double *R2, int multi_rate, double *out_p)
+                       const double *P0, const double *x0, int n, int m, uint8_t opt, int steps, const double *H2,
+                       const double *R2, int multi_rate, double *out_p)
 {
     RefKf ref;
     ref.n = n;
@@ -303,7 +303,16 @@ static double run_case(LkfInstance *kf, const double *F, const double *Q, const 
     TO_FLOAT(R2f, R2s, 1);
 
     Lkf_Init_Config_s cfg = {
-        .n = (uint8_t)n, .m = (uint8_t)m, .l = 0, .opt = opt, .x0 = x0f, .P0 = P0f, .F = Ff, .Q = Qf, .H = Hf, .R = Rf,
+        .n = (uint8_t)n,
+        .m = (uint8_t)m,
+        .l = 0,
+        .opt = opt,
+        .x0 = x0f,
+        .P0 = P0f,
+        .F = Ff,
+        .Q = Qf,
+        .H = Hf,
+        .R = Rf,
     };
     if (LkfInit(kf, &cfg) != LKF_OK)
     {
@@ -448,11 +457,11 @@ static void case_update_equiv(void)
     double R[4] = {0.04, 0.005, 0.005, 0.09};
     double P0[4] = {1.0, 0.0, 0.0, 10.0};
     double x0[2] = {0.3, -0.2};
-    TO_FLOAT(Ff, F, 4) TO_FLOAT(Qf, Q, 4) TO_FLOAT(Hf, H, 4) TO_FLOAT(Rf, R, 4) TO_FLOAT(P0f, P0, 4)
-        TO_FLOAT(x0f, x0, 2)
+    TO_FLOAT(Ff, F, 4)
+    TO_FLOAT(Qf, Q, 4) TO_FLOAT(Hf, H, 4) TO_FLOAT(Rf, R, 4) TO_FLOAT(P0f, P0, 4) TO_FLOAT(x0f, x0, 2)
 
-            Lkf_Init_Config_s cfg = {.n = n, .m = m, .l = 0, .opt = 0, .x0 = x0f, .P0 = P0f,
-                                        .F = Ff, .Q = Qf, .H = Hf, .R = Rf};
+        Lkf_Init_Config_s cfg = {
+            .n = n, .m = m, .l = 0, .opt = 0, .x0 = x0f, .P0 = P0f, .F = Ff, .Q = Qf, .H = Hf, .R = Rf};
     LkfInit(&kf_a, &cfg);
     LkfInit(&kf_b, &cfg);
 
@@ -486,8 +495,7 @@ static void case_singular(void)
     float P0[4] = {1.0f, 0.0f, 0.0f, 1.0f};
     float x0[2] = {1.0f, 2.0f};
 
-    Lkf_Init_Config_s cfg = {.n = n, .m = m, .l = 0, .opt = 0, .x0 = x0, .P0 = P0,
-                                .F = F, .Q = Q, .H = Hz, .R = Rz};
+    Lkf_Init_Config_s cfg = {.n = n, .m = m, .l = 0, .opt = 0, .x0 = x0, .P0 = P0, .F = F, .Q = Q, .H = Hz, .R = Rz};
     LkfInit(&kf_s, &cfg);
     LkfPredict(&kf_s, NULL);
 
@@ -498,11 +506,9 @@ static void case_singular(void)
     float z[1] = {5.0f};
     const Lkf_Status_e st = LkfUpdate(&kf_s, z);
 
-    const int unchanged =
-        (memcmp(xs, kf_s.x, sizeof(xs)) == 0) && (memcmp(Ps, kf_s.P, sizeof(Ps)) == 0);
+    const int unchanged = (memcmp(xs, kf_s.x, sizeof(xs)) == 0) && (memcmp(Ps, kf_s.P, sizeof(Ps)) == 0);
     printf("  用例5 奇异保护: 返回码=%d x/P 逐位不变=%d\n", (int)st, unchanged);
-    check(st == LKF_ERR_SINGULAR, "    期望 LKF_ERR_SINGULAR(%d)，实得 %d\n", (double)LKF_ERR_SINGULAR,
-          (double)st);
+    check(st == LKF_ERR_SINGULAR, "    期望 LKF_ERR_SINGULAR(%d)，实得 %d\n", (double)LKF_ERR_SINGULAR, (double)st);
     check(unchanged != 0, "    x/P 被改动了\n", 0.0, 0.0);
 
     /* 奇异后仍能继续预测（状态未被破坏） */
