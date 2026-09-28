@@ -8,7 +8,7 @@
 
 #include "drvlib_bmi088_kalman.h"
 
-#if defined(DRVLIB_BMI088_KALMAN_USED) && defined(DRV_BMI088_USED) && defined(LIB_KF_USED)
+#if defined(DRVLIB_BMI088_KALMAN_USED) && defined(DRV_BMI088_USED) && defined(LIB_LKF_USED)
 
 #include <math.h> /* NAN：温度不可用的表示（lib_math 间接包含，这里显式写出） */
 #include "bsp_log.h"
@@ -68,8 +68,8 @@ LOG_INSTANCE_DEF(g_bmi088_kalman_log, "bmi088_kalman", DRVLIB_BMI088_KALMAN_LOG_
 
 /*============================ 内部函数声明 ============================*/
 
-static void KalmanAxisInit(KalmanInstance *kf, float r_tilt);
-static float KalmanAxisStep(KalmanInstance *kf, float rate, float dt, const BMI088KalmanInstance *inst, uint8_t meas_ok,
+static void KalmanAxisInit(LkfInstance *kf, float r_tilt);
+static float KalmanAxisStep(LkfInstance *kf, float rate, float dt, const BMI088KalmanInstance *inst, uint8_t meas_ok,
                             float z, float r_now);
 
 /*============================ 内部函数实现 ============================*/
@@ -82,7 +82,7 @@ static float KalmanAxisStep(KalmanInstance *kf, float rate, float dt, const BMI0
  * @note 只有 H/R 是常量，F/Q/B 的 dt 相关项每帧在 KalmanAxisStep 里改写；
  *       opt 用 Joseph 更新：n=2 的代价可忽略，换来协方差长期不发散
  */
-static void KalmanAxisInit(KalmanInstance *kf, float r_tilt)
+static void KalmanAxisInit(LkfInstance *kf, float r_tilt)
 {
     const float P0[4] = {BMI088_KALMAN_P0_TILT, 0.0f, 0.0f, BMI088_KALMAN_P0_BIAS};
     const float F[4] = {1.0f, 0.0f, 0.0f, 1.0f};
@@ -90,11 +90,11 @@ static void KalmanAxisInit(KalmanInstance *kf, float r_tilt)
     const float R[1] = {r_tilt};
     const float B[2] = {0.0f, 0.0f};
 
-    Kalman_Init_Config_s cfg = {
+    Lkf_Init_Config_s cfg = {
         .n = 2,
         .m = 1,
         .l = 1, /* 控制输入 u = 运动学角速率 (rad/s) */
-        .opt = KALMAN_OPT_JOSEPH,
+        .opt = LKF_OPT_JOSEPH,
         .x0 = NULL, /* 状态零起步：姿态紧接着被播种值覆盖 */
         .P0 = P0,
         .F = F,
@@ -103,7 +103,7 @@ static void KalmanAxisInit(KalmanInstance *kf, float r_tilt)
         .R = R,
         .B = B,
     };
-    KalmanInit(kf, &cfg);
+    LkfInit(kf, &cfg);
 }
 
 /**
@@ -117,26 +117,26 @@ static void KalmanAxisInit(KalmanInstance *kf, float r_tilt)
  * @param r_now 本帧量测噪声方差 (rad²)
  * @return 倾角估计 (rad)
  */
-static float KalmanAxisStep(KalmanInstance *kf, float rate, float dt, const BMI088KalmanInstance *inst, uint8_t meas_ok,
+static float KalmanAxisStep(LkfInstance *kf, float rate, float dt, const BMI088KalmanInstance *inst, uint8_t meas_ok,
                             float z, float r_now)
 {
     float u[1] = {rate};
 
-    /* 时变模型：lib_kf 不感知时间，dt 由调用方折进 F/B/Q 后传入 */
-    KF_F(kf, 0, 1) = -dt; /* θ ← θ + (rate - b)·dt */
-    KF_B(kf, 0, 0) = dt;
-    KF_Q(kf, 0, 0) = inst->q_tilt * dt;
-    KF_Q(kf, 1, 1) = inst->q_bias * dt;
+    /* 时变模型：lib_lkf 不感知时间，dt 由调用方折进 F/B/Q 后传入 */
+    LKF_F(kf, 0, 1) = -dt; /* θ ← θ + (rate - b)·dt */
+    LKF_B(kf, 0, 0) = dt;
+    LKF_Q(kf, 0, 0) = inst->q_tilt * dt;
+    LKF_Q(kf, 1, 1) = inst->q_bias * dt;
 
-    KalmanPredict(kf, u);
+    LkfPredict(kf, u);
 
     if (meas_ok)
     {
-        KF_R(kf, 0, 0) = r_now;
-        KalmanUpdate(kf, &z);
+        LKF_R(kf, 0, 0) = r_now;
+        LkfUpdate(kf, &z);
     }
 
-    return KF_X(kf, 0);
+    return LKF_X(kf, 0);
 }
 
 /*⚠ 标定修正函数 BMI088AxisCorrect 与标定结构体在 drvlib_bmi088_calib.h（共用），
@@ -367,10 +367,10 @@ void BMI088KalmanUpdate(BMI088KalmanInstance *inst)
         inst->seeded = 1;
         inst->valid = 1;
         /* KF 状态同步到播种值：否则滤波器要从 0 慢慢爬到安装倾角，这段时间姿态是错的 */
-        KF_X(inst->kf_roll, 0) = inst->euler.roll;
-        KF_X(inst->kf_roll, 1) = 0.0f;
-        KF_X(inst->kf_pitch, 0) = inst->euler.pitch;
-        KF_X(inst->kf_pitch, 1) = 0.0f;
+        LKF_X(inst->kf_roll, 0) = inst->euler.roll;
+        LKF_X(inst->kf_roll, 1) = 0.0f;
+        LKF_X(inst->kf_pitch, 0) = inst->euler.pitch;
+        LKF_X(inst->kf_pitch, 1) = 0.0f;
 
         BSPLOG(&g_bmi088_kalman_log, LOG_LEVEL_INFO, "attitude seeded: roll=%d pitch=%d (mrad)",
                (int)(inst->euler.roll * 1000.0f), (int)(inst->euler.pitch * 1000.0f));
@@ -427,4 +427,4 @@ BMI088Kalman_Data_t BMI088KalmanGetData(const BMI088KalmanInstance *inst)
     return d;
 }
 
-#endif /* DRVLIB_BMI088_KALMAN_USED && DRV_BMI088_USED && LIB_KF_USED */
+#endif /* DRVLIB_BMI088_KALMAN_USED && DRV_BMI088_USED && LIB_LKF_USED */

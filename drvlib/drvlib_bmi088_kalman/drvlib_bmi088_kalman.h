@@ -4,7 +4,7 @@
  *
  * ═══════════════════ 分层定位 ═══════════════════
  *   drv_bmi088 : 只做通信（寄存器/初始化/物理量换算/时间戳/温度）
- *   lib_kf     : 通用线性卡尔曼（纯算法，无时间/硬件依赖）
+ *   lib_lkf     : 通用线性卡尔曼（纯算法，无时间/硬件依赖）
  *   本模块     : 器件 + 算法联合 —— 读通信层数据、按标定参数修正、跑线性 KF 出姿态
  *   对上（app）: 只暴露 姿态 / 角速度 / 零偏 / 温度 / 数据有效性
  *
@@ -37,7 +37,7 @@
  *   旋转后的 yaw 直接用 ψ̇ 积分得到世界系航向，不存在"gyro.z 只有真值
  *   cosθ·cosφ≈0.96"的标度损失（那种损失只在"直接拿 ωz 当 ψ̇"时出现）。
  *
- * roll / pitch 各用一个 2 状态线性 KF（lib_kf），状态 x = [倾角, 零偏残差]：
+ * roll / pitch 各用一个 2 状态线性 KF（lib_lkf），状态 x = [倾角, 零偏残差]：
  *   预测：θ ← θ + (rate - b)·dt ，b ← b      （F=[[1,-dt],[0,1]]，B·u=[dt·rate, 0]）
  *   量测：z = 加速度计反算倾角                  （H=[1,0]）
  *   其中 rate 是**已扣标定零偏**的运动学速率，故 b 是"标定之后剩余的残差"：
@@ -109,11 +109,11 @@
 
 #include "app_cfg.h"
 
-/* 依赖两个被组合的模块：drv 通信层、lib_kf 算法层（任一未开则本模块整体不编译） */
-#if defined(DRVLIB_BMI088_KALMAN_USED) && defined(DRV_BMI088_USED) && defined(LIB_KF_USED)
+/* 依赖两个被组合的模块：drv 通信层、lib_lkf 算法层（任一未开则本模块整体不编译） */
+#if defined(DRVLIB_BMI088_KALMAN_USED) && defined(DRV_BMI088_USED) && defined(LIB_LKF_USED)
 
 #include "drv_bmi088.h"
-#include "lib_kf.h"
+#include "lib_lkf.h"
 #include "lib_math.h"
 #include "drvlib_bmi088_calib.h" /* 与 drvlib_bmi088_mahony 共用的标定结构与修正函数 */
 
@@ -219,8 +219,8 @@ typedef struct BMI088KalmanInstance
 {
     /* 子模块实例（由 DEF 宏绑定指针） */
     BMI088Instance *imu;      /* drv_bmi088 实例 */
-    KalmanInstance *kf_roll;  /* roll 轴 2 状态线性 KF（状态 [倾角, 零偏残差]） */
-    KalmanInstance *kf_pitch; /* pitch 轴，同上 */
+    LkfInstance *kf_roll;  /* roll 轴 2 状态线性 KF（状态 [倾角, 零偏残差]） */
+    LkfInstance *kf_pitch; /* pitch 轴，同上 */
 
     /* 标定参数（config 拷贝）与本帧生效零偏 */
     BMI088_AxisCalib_s gyro_calib;
@@ -265,8 +265,8 @@ typedef struct BMI088KalmanInstance
  */
 #define BMI088_KALMAN_INSTANCE_DEF(name)                                                                               \
     BMI088_INSTANCE_DEF(name##_imu);                                                                                   \
-    KALMAN_INSTANCE_DEF(name##_kf_roll, 2, 1, 1);                                                                      \
-    KALMAN_INSTANCE_DEF(name##_kf_pitch, 2, 1, 1);                                                                     \
+    LKF_INSTANCE_DEF(name##_kf_roll, 2, 1, 1);                                                                      \
+    LKF_INSTANCE_DEF(name##_kf_pitch, 2, 1, 1);                                                                     \
     static BMI088KalmanInstance name = {.imu = &name##_imu, .kf_roll = &name##_kf_roll, .kf_pitch = &name##_kf_pitch}
 
 /*============================ 公开接口 ============================*/

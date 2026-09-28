@@ -11,8 +11,8 @@
  *
  * ⚠ "姿态模型"指：哪个向量是参考方向（世界系 +Z 重力）、本帧量测可不可信
  *   （|acc| 门限）、量测怎么归一化。内核只要一个"机体系参考误差向量"，
- *   这些判断全在本模块 —— 与 lib_kf / drvlib_bmi088_kalman 的分工一一对应
- *   （lib_kf 只解卡尔曼流程，模型矩阵与门限都在那边模块里）。
+ *   这些判断全在本模块 —— 与 lib_lkf / drvlib_bmi088_kalman 的分工一一对应
+ *   （lib_lkf 只解卡尔曼流程，模型矩阵与门限都在那边模块里）。
  *
  * 与 drvlib_bmi088_kalman 是**同一件事的两种实现**（二选一，不必同时开）：
  *   - 输出数据字段同名同义（euler/gyro/acc/yaw_rate/bias/dt/temperature/valid），
