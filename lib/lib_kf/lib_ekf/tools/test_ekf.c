@@ -180,13 +180,24 @@ static void case_linear_equivalent(void)
     float P0[4] = {1.0f, 0.0f, 0.0f, 10.0f};
     float x0[2] = {0.2f, -0.1f};
 
-    Ekf_Init_Config_s ecfg = {.n = n, .m = m, .l = 0, .opt = 0, .ctx = &ekf_lin,
-                              .f_fn = lin_f, .F_fn = NULL, .h_fn = lin_h, .H_fn = NULL,
-                              .x0 = x0, .P0 = P0, .F = F, .Q = Q, .H = H, .R = R};
+    Ekf_Init_Config_s ecfg = {.n = n,
+                              .m = m,
+                              .l = 0,
+                              .opt = 0,
+                              .ctx = &ekf_lin,
+                              .f_fn = lin_f,
+                              .F_fn = NULL,
+                              .h_fn = lin_h,
+                              .H_fn = NULL,
+                              .x0 = x0,
+                              .P0 = P0,
+                              .F = F,
+                              .Q = Q,
+                              .H = H,
+                              .R = R};
     check(EkfInit(&ekf_lin, &ecfg) == EKF_OK, "EkfInit 失败");
 
-    Lkf_Init_Config_s kcfg = {.n = n, .m = m, .l = 0, .opt = 0, .x0 = x0, .P0 = P0,
-                                 .F = F, .Q = Q, .H = H, .R = R};
+    Lkf_Init_Config_s kcfg = {.n = n, .m = m, .l = 0, .opt = 0, .x0 = x0, .P0 = P0, .F = F, .Q = Q, .H = H, .R = R};
     check(LkfInit(&kf_ref, &kcfg) == LKF_OK, "LkfInit 失败");
 
     rnd_seed(31u);
@@ -294,9 +305,19 @@ static void case_pendulum(void)
     float P0[4] = {1.0f, 0.0f, 0.0f, 1.0f};
     float x0[2] = {0.0f, 0.0f}; /* 初值故意偏离真值 θ=0.5 */
 
-    Ekf_Init_Config_s cfg = {.n = 2, .m = 1, .l = 0, .opt = 0, .ctx = &ctx,
-                             .f_fn = pend_f, .F_fn = pend_F, .h_fn = pend_h, .H_fn = pend_H,
-                             .x0 = x0, .P0 = P0, .Q = Q, .R = R};
+    Ekf_Init_Config_s cfg = {.n = 2,
+                             .m = 1,
+                             .l = 0,
+                             .opt = 0,
+                             .ctx = &ctx,
+                             .f_fn = pend_f,
+                             .F_fn = pend_F,
+                             .h_fn = pend_h,
+                             .H_fn = pend_H,
+                             .x0 = x0,
+                             .P0 = P0,
+                             .Q = Q,
+                             .R = R};
     check(EkfInit(&ekf_pend, &cfg) == EKF_OK, "EkfInit 失败");
 
     float truth[2] = {0.5f, 0.0f};
@@ -451,9 +472,19 @@ static void case_radar(void)
         P0[i * 4 + i] = 1.0f;
     }
 
-    Ekf_Init_Config_s cfg = {.n = 4, .m = 2, .l = 0, .opt = EKF_OPT_JOSEPH, .ctx = &ctx,
-                             .f_fn = radar_f, .F_fn = radar_F, .h_fn = radar_h, .H_fn = radar_H,
-                             .x0 = x0, .P0 = P0, .Q = Q, .R = R};
+    Ekf_Init_Config_s cfg = {.n = 4,
+                             .m = 2,
+                             .l = 0,
+                             .opt = EKF_OPT_JOSEPH,
+                             .ctx = &ctx,
+                             .f_fn = radar_f,
+                             .F_fn = radar_F,
+                             .h_fn = radar_h,
+                             .H_fn = radar_H,
+                             .x0 = x0,
+                             .P0 = P0,
+                             .Q = Q,
+                             .R = R};
     check(EkfInit(&ekf_radar, &cfg) == EKF_OK, "EkfInit 失败");
 
     float truth[4] = {10.0f, 5.0f, 1.0f, 0.5f};
@@ -497,15 +528,27 @@ static void case_partial(void)
     const int n = 2, m = 2;
     float F[4] = {1.0f, 0.01f, 0.0f, 1.0f};
     float Q[4] = {1e-6f, 0.0f, 0.0f, 1e-6f};
-    float H[4] = {1.0f, 0.0f, 0.0f, 1.0f}; /* 行0 测位置、行1 测速度 */
+    float H[4] = {1.0f, 0.0f, 0.0f, 1.0f};    /* 行0 测位置、行1 测速度 */
     float Rb[4] = {0.04f, 0.0f, 0.0f, 0.09f}; /* 对角 → 顺序更新与批更新等价 */
     float P0[4] = {1.0f, 0.0f, 0.0f, 10.0f};
     float x0[2] = {0.0f, 0.0f};
 
     SelCtx ctx = {.e = &ekf_seq, .Hsrc = H, .sel = -1};
-    Ekf_Init_Config_s cfg = {.n = n, .m = m, .l = 0, .opt = 0, .ctx = &ctx,
-                             .f_fn = NULL, .F_fn = NULL, .h_fn = sel_h, .H_fn = sel_H,
-                             .x0 = x0, .P0 = P0, .F = F, .Q = Q, .H = H, .R = Rb};
+    Ekf_Init_Config_s cfg = {.n = n,
+                             .m = m,
+                             .l = 0,
+                             .opt = 0,
+                             .ctx = &ctx,
+                             .f_fn = NULL,
+                             .F_fn = NULL,
+                             .h_fn = sel_h,
+                             .H_fn = sel_H,
+                             .x0 = x0,
+                             .P0 = P0,
+                             .F = F,
+                             .Q = Q,
+                             .H = H,
+                             .R = Rb};
     check(EkfInit(&ekf_seq, &cfg) == EKF_OK, "EkfInit 失败");
 
     /* 对照实例：同样的常量模型，但走一次批更新 Update(2) */
@@ -585,9 +628,21 @@ static void case_singular(void)
     float P0[4] = {1.0f, 0.0f, 0.0f, 1.0f};
     float x0[2] = {1.0f, 2.0f};
 
-    Ekf_Init_Config_s cfg = {.n = 2, .m = 1, .l = 0, .opt = 0, .ctx = NULL,
-                             .f_fn = NULL, .F_fn = NULL, .h_fn = sing_h, .H_fn = sing_H,
-                             .x0 = x0, .P0 = P0, .F = F, .Q = Q, .H = NULL, .R = R};
+    Ekf_Init_Config_s cfg = {.n = 2,
+                             .m = 1,
+                             .l = 0,
+                             .opt = 0,
+                             .ctx = NULL,
+                             .f_fn = NULL,
+                             .F_fn = NULL,
+                             .h_fn = sing_h,
+                             .H_fn = sing_H,
+                             .x0 = x0,
+                             .P0 = P0,
+                             .F = F,
+                             .Q = Q,
+                             .H = NULL,
+                             .R = R};
     check(EkfInit(&ekf_sing, &cfg) == EKF_OK, "EkfInit 失败");
     EkfPredict(&ekf_sing, NULL, 0.01f);
 
@@ -614,9 +669,21 @@ static void case_joseph_pd(void)
     float P0[4] = {1e-6f, 0.0f, 0.0f, 1e6f}; /* 条件数 1e12，量测只观测 x0 */
 
     SelCtx ctx = {.e = &ekf_jos, .Hsrc = H, .sel = -1};
-    Ekf_Init_Config_s cfg = {.n = 2, .m = 1, .l = 0, .opt = EKF_OPT_JOSEPH, .ctx = &ctx,
-                             .f_fn = NULL, .F_fn = NULL, .h_fn = sel_h, .H_fn = NULL,
-                             .x0 = NULL, .P0 = P0, .F = F, .Q = Q, .H = H, .R = R};
+    Ekf_Init_Config_s cfg = {.n = 2,
+                             .m = 1,
+                             .l = 0,
+                             .opt = EKF_OPT_JOSEPH,
+                             .ctx = &ctx,
+                             .f_fn = NULL,
+                             .F_fn = NULL,
+                             .h_fn = sel_h,
+                             .H_fn = NULL,
+                             .x0 = NULL,
+                             .P0 = P0,
+                             .F = F,
+                             .Q = Q,
+                             .H = H,
+                             .R = R};
     check(EkfInit(&ekf_jos, &cfg) == EKF_OK, "EkfInit 失败");
 
     rnd_seed(77u);
@@ -682,8 +749,20 @@ static void case_param_and_ctx(void)
 
     /* ctx 透传：回调里计数 */
     SelCtx c = {.e = &ekf_bad, .Hsrc = H, .sel = -1};
-    Ekf_Init_Config_s ok = {.n = 2, .m = 1, .l = 0, .ctx = &c, .f_fn = NULL, .F_fn = NULL,
-                            .h_fn = sel_h, .H_fn = sel_H, .x0 = x0, .P0 = P0, .F = F, .Q = Q, .H = H, .R = R};
+    Ekf_Init_Config_s ok = {.n = 2,
+                            .m = 1,
+                            .l = 0,
+                            .ctx = &c,
+                            .f_fn = NULL,
+                            .F_fn = NULL,
+                            .h_fn = sel_h,
+                            .H_fn = sel_H,
+                            .x0 = x0,
+                            .P0 = P0,
+                            .F = F,
+                            .Q = Q,
+                            .H = H,
+                            .R = R};
     check(EkfInit(&ekf_bad, &ok) == EKF_OK, "EkfInit 失败");
     float z = 0.5f;
     for (int i = 0; i < 10; i++)

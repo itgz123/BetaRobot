@@ -8,7 +8,7 @@
 
 #include "drvlib_bmi088_ist8310_eskf.h"
 
-#if defined(DRVLIB_BMI088_IST8310_ESKF_USED) && defined(DRV_BMI088_USED) && defined(DRV_IST8310_USED) &&                 \
+#if defined(DRVLIB_BMI088_IST8310_ESKF_USED) && defined(DRV_BMI088_USED) && defined(DRV_IST8310_USED) &&               \
     defined(LIB_ESKF_USED)
 
 #include <math.h> /* NAN */
@@ -369,15 +369,16 @@ int8_t BMI088IST8310EskfConfig(BMI088IST8310EskfInstance *inst, const BMI088IST8
     if (magcfg.work_mode != IST8310_MODE_INT || magcfg.i2c_mode != BSP_IT_MODE)
     {
         BSPLOG(&g_bmi088_ist8310_eskf_log, LOG_LEVEL_WARNING,
-               "Config: ist8310 work_mode/i2c_mode forced to INT/IT (was %d/%d)",
-               (int)magcfg.work_mode, (int)magcfg.i2c_mode);
+               "Config: ist8310 work_mode/i2c_mode forced to INT/IT (was %d/%d)", (int)magcfg.work_mode,
+               (int)magcfg.i2c_mode);
         magcfg.work_mode = IST8310_MODE_INT;
         magcfg.i2c_mode = BSP_IT_MODE;
     }
     if (IST8310Config(inst->magdrv, &magcfg) != 0)
     {
         /* 磁计配不上就按"无磁"退化跑：姿态仍由六轴维持（见 .h 退化路径），不阻断启动 */
-        BSPLOG(&g_bmi088_ist8310_eskf_log, LOG_LEVEL_WARNING, "Config: ist8310 config failed, magnetic dead-reckoning only");
+        BSPLOG(&g_bmi088_ist8310_eskf_log, LOG_LEVEL_WARNING,
+               "Config: ist8310 config failed, magnetic dead-reckoning only");
     }
 
     /* ---- 标定参数：整份拷贝进实例（NULL = 完全不修正） ---- */
@@ -441,8 +442,8 @@ int8_t BMI088IST8310EskfConfig(BMI088IST8310EskfInstance *inst, const BMI088IST8
     else
     {
         float auto_rej = 0.3f * inst->mag_ref_uT;
-        inst->mag_reject = (auto_rej > BMI088_IST8310_ESKF_DEF_MAG_REJECT) ? auto_rej
-                                                                          : BMI088_IST8310_ESKF_DEF_MAG_REJECT;
+        inst->mag_reject =
+            (auto_rej > BMI088_IST8310_ESKF_DEF_MAG_REJECT) ? auto_rej : BMI088_IST8310_ESKF_DEF_MAG_REJECT;
     }
 
     /* ---- 建 ESKF：δx = [δθ(3); δb(3)]，量测 3 维（方向），无控制输入 ---- */
@@ -638,8 +639,7 @@ void BMI088IST8310EskfUpdate(BMI088IST8310EskfInstance *inst)
             (void)EskfReset(inst->eskf);
             euler_t se = Lib_Math_QuatToEuler(inst->q_nom);
             BSPLOG(&g_bmi088_ist8310_eskf_log, LOG_LEVEL_INFO, "seeded: roll=%d pitch=%d yaw=%d (mrad) mag=%d",
-                   (int)(se.roll * 1000.0f), (int)(se.pitch * 1000.0f), (int)(se.yaw * 1000.0f),
-                   (int)(mseed != NULL));
+                   (int)(se.roll * 1000.0f), (int)(se.pitch * 1000.0f), (int)(se.yaw * 1000.0f), (int)(mseed != NULL));
         }
     }
 
@@ -672,8 +672,8 @@ void BMI088IST8310EskfUpdate(BMI088IST8310EskfInstance *inst)
             if (z_a_ok && Lib_Math_Fabs(err) < inst->acc_reject)
             {
                 /* 门限内 R 连续放大：越不像"只剩重力"越不信它 */
-                inst->r_acc_now = inst->r_acc * (1.0f + inst->r_inflate * (err * err) /
-                                                           (inst->acc_reject * inst->acc_reject));
+                inst->r_acc_now =
+                    inst->r_acc * (1.0f + inst->r_inflate * (err * err) / (inst->acc_reject * inst->acc_reject));
                 if (EskfUpdateM(inst->eskf, 3, z_a, EskfMeasureAcc) == ESKF_OK)
                 {
                     (void)EskfInject(inst->eskf); /* 硬约束：Update 后必须立即 Inject */
@@ -704,8 +704,8 @@ void BMI088IST8310EskfUpdate(BMI088IST8310EskfInstance *inst)
             }
             else if (Lib_Math_Fabs(e_m) < inst->mag_reject)
             {
-                inst->r_mag_now = inst->r_mag * (1.0f + inst->r_inflate * (e_m * e_m) /
-                                                           (inst->mag_reject * inst->mag_reject));
+                inst->r_mag_now =
+                    inst->r_mag * (1.0f + inst->r_inflate * (e_m * e_m) / (inst->mag_reject * inst->mag_reject));
                 if (EskfUpdateM(inst->eskf, 3, z_m, EskfMeasureMag) == ESKF_OK)
                 {
                     (void)EskfInject(inst->eskf);

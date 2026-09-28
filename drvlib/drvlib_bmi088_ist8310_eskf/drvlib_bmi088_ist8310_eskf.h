@@ -88,7 +88,7 @@
 #include "app_cfg.h"
 
 /* 依赖四个被组合的模块：两个 drv 通信层 + lib_eskf + lib_math（任一未开则整体不编译） */
-#if defined(DRVLIB_BMI088_IST8310_ESKF_USED) && defined(DRV_BMI088_USED) && defined(DRV_IST8310_USED) &&                 \
+#if defined(DRVLIB_BMI088_IST8310_ESKF_USED) && defined(DRV_BMI088_USED) && defined(DRV_IST8310_USED) &&               \
     defined(LIB_ESKF_USED)
 
 #include "drv_bmi088.h"
@@ -134,10 +134,10 @@
 /* δθ / δb 协方差初值：姿态按 ±3°、零偏残差按 ±0.01 rad/s */
 #ifndef BMI088_IST8310_ESKF_DEF_P0_ATT
 #define BMI088_IST8310_ESKF_DEF_P0_ATT 3e-3f /* (3°=0.0524rad)² ≈ 2.7e-3 */
-#endif                                         // !BMI088_IST8310_ESKF_DEF_P0_ATT
+#endif                                       // !BMI088_IST8310_ESKF_DEF_P0_ATT
 #ifndef BMI088_IST8310_ESKF_DEF_P0_BIAS
 #define BMI088_IST8310_ESKF_DEF_P0_BIAS 1e-4f /* (0.01 rad/s)² */
-#endif                                         // !BMI088_IST8310_ESKF_DEF_P0_BIAS
+#endif                                        // !BMI088_IST8310_ESKF_DEF_P0_BIAS
 
 /* acc 门限：|acc| 偏离 1g 超过该值 (m/s²) 就整帧跳过 acc 更新 */
 #ifndef BMI088_IST8310_ESKF_ACC_REJECT
@@ -187,7 +187,7 @@
 /* 温漂补偿用的温度低通系数 (0~1)：温度噪声直接用会把噪声注入角速率（yaw 是它的纯积分） */
 #ifndef BMI088_IST8310_ESKF_TEMP_LPF_ALPHA
 #define BMI088_IST8310_ESKF_TEMP_LPF_ALPHA 0.01f /* ≈0.2s @500Hz */
-#endif                                            // !BMI088_IST8310_ESKF_TEMP_LPF_ALPHA
+#endif                                           // !BMI088_IST8310_ESKF_TEMP_LPF_ALPHA
 
 /*============================ 配置结构体 ============================*/
 
@@ -207,8 +207,8 @@ typedef struct
     IST8310_Config_s mag;
 
     /* ---- PC 端标定结果（NULL = 完全不修正） ---- */
-    const BMI088_Calib_s *calib_imu;  /* 陀螺 + 加速度计 */
-    const IST8310Calib_s *calib_mag;  /* 硬铁/软铁/安装旋转/尺度 */
+    const BMI088_Calib_s *calib_imu; /* 陀螺 + 加速度计 */
+    const IST8310Calib_s *calib_mag; /* 硬铁/软铁/安装旋转/尺度 */
 
     /* ---- 世界系参考 ----
      * mag_* 决定 yaw 相对**哪个方向**：若以视觉世界系为准，用 declination 对齐。
@@ -219,12 +219,12 @@ typedef struct
     float mag_ref_uT;      /* 磁感应强度 (µT)；0 → 用缺省宏并告警（必须按实际标定填） */
 
     /* ---- ESKF 噪声参数 ---- */
-    float q_att;  /* δθ 过程噪声 (rad²/s)；0 → 缺省宏 */
-    float q_bias; /* δb 过程噪声 (rad²/s³)；**0 是合法值**，原样使用 */
-    float r_acc;  /* acc 方向量测噪声 (rad²)；0 → 缺省宏 */
-    float r_mag;  /* mag 方向量测噪声 (rad²)；0 → 缺省宏 */
-    float p0_att; /* δθ 初值方差 (rad²)；0 → 缺省宏 */
-    float p0_bias;/* δb 初值方差 (rad²/s²)；0 → 缺省宏 */
+    float q_att;   /* δθ 过程噪声 (rad²/s)；0 → 缺省宏 */
+    float q_bias;  /* δb 过程噪声 (rad²/s³)；**0 是合法值**，原样使用 */
+    float r_acc;   /* acc 方向量测噪声 (rad²)；0 → 缺省宏 */
+    float r_mag;   /* mag 方向量测噪声 (rad²)；0 → 缺省宏 */
+    float p0_att;  /* δθ 初值方差 (rad²)；0 → 缺省宏 */
+    float p0_bias; /* δb 初值方差 (rad²/s²)；0 → 缺省宏 */
 
     /* ---- 门限与自适应（见头文件可覆盖缺省值一节） ---- */
     float acc_reject;     /* 0 → 缺省宏 */
@@ -249,21 +249,21 @@ typedef struct
  */
 typedef struct
 {
-    euler_t euler;       /* 姿态 (rad)，ZYX 顺序，yaw 已由磁计约束、不再无界漂移 */
-    quaternion_t quat;   /* 名义四元数（机体系→世界系），与 euler 同源 */
-    float gyro[3];       /* 已按标定修正的角速度 (rad/s)，机体系 */
-    float acc[3];        /* 已按标定修正的加速度 (m/s²)，机体系 */
-    float mag[3];        /* 已按标定修正的磁感应强度 (µT)，IMU 机体系 */
-    float yaw_rate;      /* 世界系 yaw 角速度 (rad/s)，即 ψ̇，已扣全部零偏 */
-    float bias[3];       /* 本帧生效零偏 (rad/s) = 标定值 + 温漂 + ESKF 残余估计 */
-    float dt;            /* 本帧陀螺传播步长 (s)：0 = 本帧无新陀螺样本 */
-    float temperature;   /* 原始温度 (℃)，不可用为 NAN（补偿用的是它滤过之后的版本） */
+    euler_t euler;           /* 姿态 (rad)，ZYX 顺序，yaw 已由磁计约束、不再无界漂移 */
+    quaternion_t quat;       /* 名义四元数（机体系→世界系），与 euler 同源 */
+    float gyro[3];           /* 已按标定修正的角速度 (rad/s)，机体系 */
+    float acc[3];            /* 已按标定修正的加速度 (m/s²)，机体系 */
+    float mag[3];            /* 已按标定修正的磁感应强度 (µT)，IMU 机体系 */
+    float yaw_rate;          /* 世界系 yaw 角速度 (rad/s)，即 ψ̇，已扣全部零偏 */
+    float bias[3];           /* 本帧生效零偏 (rad/s) = 标定值 + 温漂 + ESKF 残余估计 */
+    float dt;                /* 本帧陀螺传播步长 (s)：0 = 本帧无新陀螺样本 */
+    float temperature;       /* 原始温度 (℃)，不可用为 NAN（补偿用的是它滤过之后的版本） */
     uint64_t time_stamp_g;   /* 本帧陀螺时间戳 (us)，0 = 尚无数据 */
     uint64_t time_stamp_mag; /* 最近一帧磁计时间戳 (us)，0 = 从未拿到 */
-    uint8_t valid;       /* 1 = 姿态可用（已播种）；dt==0 的帧不清零 */
-    uint8_t mag_valid;   /* 1 = 磁计链路有数据（时间戳在前推、模长非 0） */
-    uint8_t mag_used;    /* 1 = 本帧的磁量测真的进了滤波器（通过门限） */
-    uint8_t acc_used;    /* 1 = 本帧的 acc 量测真的进了滤波器（通过门限） */
+    uint8_t valid;           /* 1 = 姿态可用（已播种）；dt==0 的帧不清零 */
+    uint8_t mag_valid;       /* 1 = 磁计链路有数据（时间戳在前推、模长非 0） */
+    uint8_t mag_used;        /* 1 = 本帧的磁量测真的进了滤波器（通过门限） */
+    uint8_t acc_used;        /* 1 = 本帧的 acc 量测真的进了滤波器（通过门限） */
 } BMI088IST8310Eskf_Data_t;
 
 /*============================ 实例结构体 ============================*/
@@ -276,9 +276,9 @@ typedef struct
 typedef struct BMI088IST8310EskfInstance
 {
     /* 子模块实例（由 DEF 宏绑定指针） */
-    BMI088Instance *imu;    /* drv_bmi088 */
-    IST8310Instance *magdrv;/* drv_ist8310 */
-    EskfInstance *eskf;     /* lib_eskf 误差状态滤波器（n=6, m=3, l=0） */
+    BMI088Instance *imu;     /* drv_bmi088 */
+    IST8310Instance *magdrv; /* drv_ist8310 */
+    EskfInstance *eskf;      /* lib_eskf 误差状态滤波器（n=6, m=3, l=0） */
 
     /* ---- 标定参数（config 拷贝）与本帧生效零偏 ---- */
     BMI088_AxisCalib_s gyro_calib;
@@ -289,15 +289,15 @@ typedef struct BMI088IST8310EskfInstance
     float acc_bias[BMI088_AXIS_NUM];  /* 标定 + 温漂 */
 
     /* ---- 名义状态（ESKF 的"外层状态"） ---- */
-    quaternion_t q_nom;     /* 机体系→世界系名义四元数 */
-    float bias_nom[3];      /* ESKF 估计的残余零偏 (rad/s) */
+    quaternion_t q_nom; /* 机体系→世界系名义四元数 */
+    float bias_nom[3];  /* ESKF 估计的残余零偏 (rad/s) */
 
     /* ---- 回调间传递的每帧暂存（由 Update 填，各回调读） ---- */
-    float gyro_cal[3];      /* 本帧修正后角速度 (rad/s) */
-    float r_acc_now;        /* 本帧 acc 量测噪声方差 (rad²)，含门限自适应 */
-    float r_mag_now;        /* 本帧 mag 量测噪声方差 (rad²)，含门限自适应 */
-    float acc_resid;        /* 本帧 acc 残差模长 |z_a - h_a|（注入前算，供 VOFA 观察） */
-    float mag_resid;        /* 本帧 mag 残差模长 |z_m - h_m|（注入前算，供 VOFA 观察） */
+    float gyro_cal[3]; /* 本帧修正后角速度 (rad/s) */
+    float r_acc_now;   /* 本帧 acc 量测噪声方差 (rad²)，含门限自适应 */
+    float r_mag_now;   /* 本帧 mag 量测噪声方差 (rad²)，含门限自适应 */
+    float acc_resid;   /* 本帧 acc 残差模长 |z_a - h_a|（注入前算，供 VOFA 观察） */
+    float mag_resid;   /* 本帧 mag 残差模长 |z_m - h_m|（注入前算，供 VOFA 观察） */
 
     /* ---- 世界系单位磁参考（Config 时由倾角/偏角算好） ---- */
     float m_w[3];

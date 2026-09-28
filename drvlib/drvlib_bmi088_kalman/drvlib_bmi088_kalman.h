@@ -218,7 +218,7 @@ typedef struct
 typedef struct BMI088KalmanInstance
 {
     /* 子模块实例（由 DEF 宏绑定指针） */
-    BMI088Instance *imu;      /* drv_bmi088 实例 */
+    BMI088Instance *imu;   /* drv_bmi088 实例 */
     LkfInstance *kf_roll;  /* roll 轴 2 状态线性 KF（状态 [倾角, 零偏残差]） */
     LkfInstance *kf_pitch; /* pitch 轴，同上 */
 
@@ -265,8 +265,8 @@ typedef struct BMI088KalmanInstance
  */
 #define BMI088_KALMAN_INSTANCE_DEF(name)                                                                               \
     BMI088_INSTANCE_DEF(name##_imu);                                                                                   \
-    LKF_INSTANCE_DEF(name##_kf_roll, 2, 1, 1);                                                                      \
-    LKF_INSTANCE_DEF(name##_kf_pitch, 2, 1, 1);                                                                     \
+    LKF_INSTANCE_DEF(name##_kf_roll, 2, 1, 1);                                                                         \
+    LKF_INSTANCE_DEF(name##_kf_pitch, 2, 1, 1);                                                                        \
     static BMI088KalmanInstance name = {.imu = &name##_imu, .kf_roll = &name##_kf_roll, .kf_pitch = &name##_kf_pitch}
 
 /*============================ 公开接口 ============================*/

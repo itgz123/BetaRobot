@@ -264,13 +264,13 @@ typedef struct EkfInstance
 /*============================ 矩阵元素索引宏 ============================*/
 
 /* 以活跃维为行距直读/改写实例矩阵元素（行主序） */
-#define EKF_X(ekf, i) ((ekf)->x[(i)])                       /* x(i)          */
-#define EKF_P(ekf, i, j) ((ekf)->P[(i) * (ekf)->n + (j)])   /* P(i,j) n×n   */
-#define EKF_F(ekf, i, j) ((ekf)->F[(i) * (ekf)->n + (j)])   /* F(i,j) n×n   */
-#define EKF_Q(ekf, i, j) ((ekf)->Q[(i) * (ekf)->n + (j)])   /* Q(i,j) n×n   */
-#define EKF_H(ekf, i, j) ((ekf)->H[(i) * (ekf)->n + (j)])   /* H(i,j) m×n   */
-#define EKF_R(ekf, i, j) ((ekf)->R[(i) * (ekf)->m + (j)])   /* R(i,j) m×m   */
-#define EKF_B(ekf, i, j) ((ekf)->B[(i) * (ekf)->l + (j)])   /* B(i,j) n×l   */
+#define EKF_X(ekf, i) ((ekf)->x[(i)])                     /* x(i)          */
+#define EKF_P(ekf, i, j) ((ekf)->P[(i) * (ekf)->n + (j)]) /* P(i,j) n×n   */
+#define EKF_F(ekf, i, j) ((ekf)->F[(i) * (ekf)->n + (j)]) /* F(i,j) n×n   */
+#define EKF_Q(ekf, i, j) ((ekf)->Q[(i) * (ekf)->n + (j)]) /* Q(i,j) n×n   */
+#define EKF_H(ekf, i, j) ((ekf)->H[(i) * (ekf)->n + (j)]) /* H(i,j) m×n   */
+#define EKF_R(ekf, i, j) ((ekf)->R[(i) * (ekf)->m + (j)]) /* R(i,j) m×m   */
+#define EKF_B(ekf, i, j) ((ekf)->B[(i) * (ekf)->l + (j)]) /* B(i,j) n×l   */
 
 /*============================ 公开接口声明 ============================*/
 
