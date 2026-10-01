@@ -3,7 +3,7 @@
     {
       "name": "CMake",
       "compilerPath": "arm-none-eabi-gcc",
-      "intelliSenseMode": "windows-gcc-arm",
+      "intelliSenseMode": "gcc-arm",
       "compileCommands": "${workspaceFolder}/build/compile_commands.json",
       "cStandard": "c11",
       "cppStandard": "c++17"
