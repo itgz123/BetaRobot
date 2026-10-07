@@ -1,24 +1,49 @@
 /**
- * @file referee2026_common_cmd.h
- * @brief 常规链路 24 条命令的数据段 + 0x0301 机器人交互数据的 8 种子内容
+ * @file referee2026_common.h
+ * @brief **常规链路**的完整驱动：24 条命令（21 条有 RX / 3 条只发，其中 0x0301 收发双向）
  *
- * 依据：RoboMaster 2026 高校系列赛通信协议 V2.0.0 §1.2 常规链路数据说明（表 1-6 ~ 表 1-38）。
- * 命令码与元信息（长度 / 接收方 / 频率）见 referee2026_common_frame.h 的
- * `Referee2026CommonDataId_e`；元信息表的定义在同名的 .c 里。组内保持表 1-5 顺序。
+ * 一个链路一个公开头，**用哪条链路就 include 哪个**：
+ *   link_common/referee2026_common.h   常规链路 24 条（本文件）
+ *   link_video/referee2026_video.h     图传链路 4 条
+ *   link_none/referee2026_none.h       非链路 1 条
+ *   link_radar/referee2026_radar.h     雷达无线链路 6 条
+ * 四条链路**互不依赖**：协议层公共的东西在 public/ 里（帧格式与 ID 见 referee2026_frame.h、
+ * 公共数据块与元信息结构见 referee2026_cmd.h），链路无关的收发内核与四条链路**共用的**
+ * Register/Config/Send 见模块根的 drv_referee2026.h —— 各链路不再各写一份接口。
  *
- * 公共约定（packed / 小端 / 位域 union 写法 / 文档笔误口径）见 core/referee2026_cmd.h ——
- * 那里放着跨链路的公共组成块，本文件 include 它。
- * 每条命令的**数据段长度**以 `REFEREE2026_COMMON_LEN_<TAG>` 宏为准（紧挨对应结构体上方，值取
- * 官方"字节偏移量字段表"的合计），文件末尾的长度断言与 referee2026_common_frame.c 的元信息表
- * **共用同一个宏** —— 一处定义、两处引用，改长度只改宏。
+ * 本文件按顺序放七样东西：
+ *   ① 命令数据段（24 条结构体 + `REFEREE2026_COMMON_LEN_<TAG>` 长度宏）
+ *   ② 0x0301 命令的 8 种子内容（UI 图形 / 哨兵·雷达自主决策指令）
+ *   ③ 长度自校验（数据段 + 子内容 + 位域宽度）
+ *   ④ 数据名枚举 `Referee2026CommonDataId_e`（取值即元信息表下标）与元信息表声明
+ *   ⑤ 接收过滤掩码 `Referee2026CommonFilter_e`
+ *   ⑥ 快照结构体 `Referee2026CommonSnapshot_t` —— app 直接读它
+ *   ⑦ 驱动实例（实例结构体类型 + 两个拼接别名）—— 实例定义宏与收发接口一律在模块根的
+ *       drv_referee2026.h，本链路不定义
+ *
+ * 依据：RoboMaster 2026 机甲大师高校系列赛通信协议 V2.0.0（20260626）§1.2 常规链路数据说明
+ *       （表 1-6 ~ 表 1-38）+ 表 1-5 命令码 ID 一览里"所属数据链路 = 常规链路"的 24 行；
+ *       组内保持表 1-5 顺序。
+ *
+ * @note 本链路是四条里最长的一条（24/35 条命令、最长数据段 118B），元信息表 24 × 12 = 288B
+ *       （真被引用时才进 `.rodata` —— 现在没有 app 落实例，它连同快照被 `--gc-sections` 丢掉）。
+ * @note 公共约定（packed / 小端 / 位域 union 写法 / 文档笔误口径）见 public/referee2026_cmd.h ——
+ *       那里放着跨链路的公共组成块，本文件 include 它。
+ * @note 每条命令的**数据段长度**以 `REFEREE2026_COMMON_LEN_<TAG>` 宏为准（紧挨对应结构体上方，值取
+ *       官方"字节偏移量字段表"的合计），文件末尾的长度断言与 referee2026_common.c 的元信息表
+ *       **共用同一个宏** —— 一处定义、两处引用，改长度只改宏。
+ * @note 本文件只依赖 <stdint.h>、public/referee2026_frame.h 与 public/referee2026_cmd.h
+ *       （后两者同样只依赖 <stdint.h>），协议部分 PC 端可单独语法检查；驱动部分
+ *       （第 ⑦ 节）要 HAL，故整节在 `HAL_UART_MODULE_ENABLED` 里。
  */
 
-#ifndef __REFEREE2026_COMMON_CMD_H
-#define __REFEREE2026_COMMON_CMD_H
+#ifndef __REFEREE2026_COMMON_H
+#define __REFEREE2026_COMMON_H
 
 #include <stdint.h>
 
-#include "referee2026_cmd.h"
+#include "referee2026_cmd.h"   /* Referee2026CmdInfo_t / Referee2026BuffItem_t */
+#include "referee2026_frame.h" /* REFEREE2026_FRAME_MAX 等帧层常量 */
 
 #pragma pack(push, 1)
 
@@ -616,10 +641,15 @@ typedef union
 /**
  * @brief 0x0301 机器人交互数据（表 1-25）—— 统一数据段头 + 最多 112B 的子内容
  *
+ * @note **本命令是变长的**：`sizeof` 是最大形态（118B），真机的帧头 `data_length` 在
+ *       `min_len`(6) 与 `data_len`(118) 之间，`user_data` 的实际长度 = `data_length - 6`。
+ *       故本结构体只当"读法说明书 + 快照成员的尺寸"，别拿 `sizeof` 当"这帧有多长"。
  * @note 子内容按 `data_cmd_id` 解释，见第五节；`user_data` 里放的是**已对齐到偏移 6**
  *       的子内容结构体（即子内容自己的偏移 0 从这里开始）。
  * @note 带宽：每 1000ms 英雄/工程/步兵/空中/飞镖可收 3720B，雷达与哨兵可收 5120B；
  *       本 cmd_id 上行频率上限 30Hz。
+ * @note 本命令**双向**（全协议唯一）：既由本机发给服务器/选手端，也接收队友机器人的
+ *       `0x0200~0x02FF`（"机器人之间通信"）。方向的唯一出处仍是元信息表的 `dir`。
  */
 typedef struct
 {
@@ -715,26 +745,41 @@ typedef struct
 } Referee2026CustomInfo_t;
 
 /*============================================
- *   二、0x0301 命令的子内容（8 种）
+ *   二、0x0301 命令的子内容（8 种具名 + 1 段自定区间）
  *============================================*/
 
 /**
  * @brief 0x0301 的 `data_cmd_id` 取值（表 1-26 ~ 表 1-34）
- * @note 只列**文档开放**的子内容 ID；其余值收到即忽略。
+ * @note 只列**文档给了固定结构体**的子内容 ID；表里另行开放的 `0x0200~0x02FF`
+ *       （"机器人之间通信"，`user_data` ≤ 112B，内容由各队自定）见下面的
+ *       {@link REFEREE2026_INTERACTION_CMD_ROBOT_TO_ROBOT_MIN}，本模块不解释其内容，
+ *       原样收进快照由 app 自己解。**不认识的值收到即忽略**（照常写快照，不报错）。
  * @note 与图传链路的 0xA9 自定义客户端协议是两套东西：这里是"机器人 ↔ 机器人/选手端"，
  *       0xA9 那套（GameStatus、MapClickCmd 等）走图传，不在本协议范围内。
  */
 typedef enum : uint16_t
 {
-    REFEREE2026_INTERACTION_CMD_LAYER_DELETE = 0x0100,     //!< 删除图层
-    REFEREE2026_INTERACTION_CMD_FIGURE_1 = 0x0101,         //!< 绘制一个图形
-    REFEREE2026_INTERACTION_CMD_FIGURE_2 = 0x0102,         //!< 绘制两个图形
-    REFEREE2026_INTERACTION_CMD_FIGURE_5 = 0x0103,         //!< 绘制五个图形
-    REFEREE2026_INTERACTION_CMD_FIGURE_7 = 0x0104,         //!< 绘制七个图形
-    REFEREE2026_INTERACTION_CMD_CLIENT_CHARACTER = 0x0110, //!< 自定义客户端绘制字符（仅图传链路客户端）
-    REFEREE2026_INTERACTION_CMD_SENTRY_DECISION = 0x0120,  //!< 哨兵自主决策指令（发往服务器 0x8080）
-    REFEREE2026_INTERACTION_CMD_RADAR_DECISION = 0x0121,   //!< 雷达自主决策指令（发往服务器 0x8080）
+    REFEREE2026_INTERACTION_CMD_LAYER_DELETE = 0x0100, //!< 删除图层
+    REFEREE2026_INTERACTION_CMD_FIGURE_1 = 0x0101,     //!< 绘制一个图形
+    REFEREE2026_INTERACTION_CMD_FIGURE_2 = 0x0102,     //!< 绘制两个图形
+    REFEREE2026_INTERACTION_CMD_FIGURE_5 = 0x0103,     //!< 绘制五个图形
+    REFEREE2026_INTERACTION_CMD_FIGURE_7 = 0x0104,     //!< 绘制七个图形
+    //! 自定义客户端绘制字符（表 1-32）。**常规链路的子内容**（发给本机器人对应的选手端），
+    //! 与图传链路无关 —— 别去图传链路找它。
+    REFEREE2026_INTERACTION_CMD_CLIENT_CHARACTER = 0x0110,
+    REFEREE2026_INTERACTION_CMD_SENTRY_DECISION = 0x0120, //!< 哨兵自主决策指令（发往服务器 0x8080）
+    REFEREE2026_INTERACTION_CMD_RADAR_DECISION = 0x0121,  //!< 雷达自主决策指令（发往服务器 0x8080）
 } Referee2026InteractionCmdId_e;
+
+/**
+ * @brief `0x0200~0x02FF`：机器人之间通信的子内容 ID **区间**（表 1-25 里开放的整段）
+ * @note 这一段协议**没有**给固定结构体：`user_data` ≤ 112B、内容由各队自定，故不能进上面那个
+ *       枚举（枚举只能列有名字的常量）。本模块不解释它，收到就原样写进快照的
+ *       `robot_interaction.user_data`，由 app 按 `data_cmd_id` 自己分发。
+ * @note 判据写成 `cmd >= MIN && cmd <= MAX`；区间是**闭区间**（含两端）。
+ */
+#define REFEREE2026_INTERACTION_CMD_ROBOT_TO_ROBOT_MIN 0x0200u
+#define REFEREE2026_INTERACTION_CMD_ROBOT_TO_ROBOT_MAX 0x02FFu
 
 /**
  * @brief 子内容 0x0100 删除图层（表 1-26，文档名 `interaction_layer_delete_t`）
@@ -867,7 +912,7 @@ typedef struct
 #pragma pack(pop)
 
 /*============================================
- *   长度自校验
+ *   三、长度自校验
  *============================================*/
 
 /* 逐条把 sizeof 钉死在"字节偏移量字段表"给出的总长上。
@@ -926,7 +971,7 @@ _Static_assert(sizeof(Referee2026SentryCmd_t) == 4, "子内容 0x0120 长度不�
 _Static_assert(sizeof(Referee2026RadarCmd_t) == 8, "子内容 0x0121 长度不符");
 
 /* 位域结构体自身的宽度自检：查"多写了位"（跨出标量宽）。
- * "少写"查不出来，故每个位域结构体末尾都补了 reserved —— 见 core/referee2026_cmd.h。 */
+ * "少写"查不出来，故每个位域结构体末尾都补了 reserved —— 见 public/referee2026_cmd.h。 */
 _Static_assert(sizeof(Referee2026EventDataBits_t) == sizeof(uint32_t), "0x0101 位域超出 32 位");
 _Static_assert(sizeof(Referee2026DartInfoBits_t) == sizeof(uint16_t), "0x0105 位域超出 16 位");
 _Static_assert(sizeof(Referee2026RemainingEnergyBits_t) == sizeof(uint8_t), "0x0204 位域超出 8 位");
@@ -940,4 +985,222 @@ _Static_assert(sizeof(Referee2026RadarInfo_t) == sizeof(uint8_t), "0x020E 位域
 _Static_assert(sizeof(Referee2026SentryCmd_t) == sizeof(uint32_t), "子内容 0x0120 位域超出 32 位");
 _Static_assert(sizeof(Referee2026InteractionFigure_t) == 3 + 3 * sizeof(uint32_t), "子内容 0x0101 位域超出 96 位");
 
-#endif /* __REFEREE2026_COMMON_CMD_H */
+/*============================================
+ *   四、数据名与命令元信息表
+ *============================================*/
+
+/**
+ * @brief 常规链路 24 条命令的数据名
+ * @note **取值是顺序的 0..23**，末项 `_COUNT`；取值即 `referee2026_common_cmd_info[]` 的下标。
+ *       只给首项标 `= 0`、其余交给编译器自增，取值必然连续无洞；顺序错位也不会串表
+ *       （.c 里用的是指定初始化器 `[成员] = ...`）。
+ * @note 成员名后缀逐字沿用原命令一览表的 tag，便于与官方表 1-5 逐行对照。
+ * @note 行尾注释逐字抄自表 1-5 的"说明"列；括号里的 **"发送方→接收方"是原 `Referee2026Receiver_e`
+ *       字段的语义**，那个字段已删（运行期零消费者），语义并到这里。左端只写角色不写具体 ID
+ *       （服务器 / 选手端 / 雷达 / 哨兵 / 机器人），右端同理；表 1-5 的"接收方"若写作 `-`
+ *       （0x0301），则由发送方在报文内 `receiver_id` 里填，此处如实标注。
+ * @note 右端角色与已删的 {@link Referee2026Receiver_e} 位掩码逐一对应，不再是位掩码而是文字。
+ */
+typedef enum : uint8_t
+{
+    /* --- 常规链路（24 条） --- */
+    REFEREE2026_COMMON_DATA_GAME_STATUS = 0, //!< 比赛状态数据，固定以 1Hz 频率发送（服务器→全体机器人）
+    REFEREE2026_COMMON_DATA_GAME_RESULT,     //!< 比赛结果数据，比赛结束触发发送（服务器→全体机器人）
+    REFEREE2026_COMMON_DATA_GAME_ROBOT_HP,   //!< 机器人血量数据，固定以 3Hz 频率发送（服务器→全体机器人）
+    REFEREE2026_COMMON_DATA_EVENT_DATA,      //!< 场地事件数据，固定以 1Hz 频率发送（服务器→己方全体机器人）
+    REFEREE2026_COMMON_DATA_REFEREE_WARNING, //!< 裁判警告数据，己方判罚/判负时触发发送，其余时间以 1Hz
+                                             //!< 频率发送（服务器→被判罚方全体机器人）
+    REFEREE2026_COMMON_DATA_DART_LAUNCH,     //!< 飞镖发射相关数据，固定以 1Hz 频率发送（服务器→己方全体机器人）
+    REFEREE2026_COMMON_DATA_ROBOT_STATUS,    //!< 机器人性能体系数据，固定以 10Hz 频率发送（服务器→对应机器人）
+    REFEREE2026_COMMON_DATA_POWER_HEAT, //!< 实时底盘缓冲能量和射击热量数据，固定以 10Hz 频率发送（服务器→对应机器人）
+    /* 0x0203：总表 16B / 字段表 12B，见"三、长度自校验"里的说明 */
+    REFEREE2026_COMMON_DATA_ROBOT_POS,         //!< 机器人位置数据，固定以 1Hz 频率发送（服务器→对应机器人）
+    REFEREE2026_COMMON_DATA_BUFF,              //!< 机器人增益和底盘能量数据，固定以 3Hz 频率发送（服务器→对应机器人）
+    REFEREE2026_COMMON_DATA_ROBOT_HURT,        //!< 伤害状态数据，伤害发生后发送（服务器→对应机器人）
+    REFEREE2026_COMMON_DATA_SHOOT_DATA,        //!< 实时射击数据，弹丸发射后发送（服务器→对应机器人）
+    REFEREE2026_COMMON_DATA_PROJECTILE_ALLOW,  //!< 允许发弹量与剩余金币数，固定以 10Hz
+                                               //!< 频率发送（服务器→己方英雄/步兵/哨兵/空中）
+    REFEREE2026_COMMON_DATA_RFID_STATUS,       //!< 机器人 RFID 模块状态，固定以 3Hz 频率发送（服务器→己方装有 RFID
+                                               //!< 模块的机器人）
+    REFEREE2026_COMMON_DATA_DART_CLIENT_CMD,   //!< 飞镖选手端指令数据，固定以 3Hz 频率发送（服务器→己方飞镖）
+    REFEREE2026_COMMON_DATA_GROUND_ROBOT_POS,  //!< 地面机器人位置数据，固定以 1Hz
+                                               //!< 频率发送，仅发给己方哨兵（服务器→己方哨兵）
+    REFEREE2026_COMMON_DATA_RADAR_MARK,        //!< 雷达标记进度数据，固定以 1Hz 频率发送（服务器→己方雷达）
+    REFEREE2026_COMMON_DATA_SENTRY_INFO,       //!< 哨兵自主决策信息同步，固定以 1Hz 频率发送（服务器→己方哨兵）
+    REFEREE2026_COMMON_DATA_RADAR_INFO,        //!< 雷达自主决策信息同步，固定以 1Hz 频率发送（服务器→己方雷达）
+    REFEREE2026_COMMON_DATA_ROBOT_INTERACTION, //!< 机器人交互数据，发送方触发发送，频率上限为 30Hz
+                                               //!< （机器人↔机器人/选手端，接收方由报文内 receiver_id 指定；
+                                               //!< **全协议唯一双向的一条**，本链路唯一变长的数据段）
+    /* 0x0303：总表 15B / 字段表 12B，见"三、长度自校验"里的说明 */
+    REFEREE2026_COMMON_DATA_MINI_MAP_INTERACT, //!< 选手端小地图交互数据，选手端触发发送（选手端→对应机器人）
+    REFEREE2026_COMMON_DATA_MINI_MAP_RADAR,    //!< 选手端小地图接收雷达数据，频率上限为 5Hz（雷达→己方所有选手端）
+    /* 0x0307：总表 103B / 字段表 105B —— 三条不一致里唯一"总表更小"的一条 */
+    REFEREE2026_COMMON_DATA_MINI_MAP_PATH,  //!< 选手端小地图接收路径数据，频率上限为
+                                            //!< 1Hz（哨兵/半自动机器人→对应操作手的选手端）
+    REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, //!< 选手端小地图接收机器人数据，频率上限为 3Hz（机器人→己方所有选手端）
+    REFEREE2026_COMMON_DATA_COUNT,          //!< 命令条数（数组维度，非命令）
+} Referee2026CommonDataId_e;
+
+/**
+ * @brief 常规链路命令的元信息表（定义在 referee2026_common.c）
+ * @note 字段语义（`data_len` 的字段表口径、频率两列的三种取值、`dir`、`snap_off`）统一写在
+ *       public/referee2026_cmd.h 的 {@link Referee2026CmdInfo_t} 上方，本文件不重复。
+ * @note 24 条里**4 条带 TX 位**：0x0305 雷达→选手端、0x0307 哨兵→选手端、0x0308 机器人→选手端
+ *       这 3 条只发不收，另加 **0x0301 机器人交互（双向）**；其余 20 条本框架只收不发 —— 往裁判
+ *       系统总线上打一帧对方不收的命令是实打实的干扰，`dir` 就是拦这个的。
+ * @note 头文件**无条件声明**；"会不会真编出这张表"由 .c 里的 `DRV_REFEREE2026_USED` &&
+ *       `REFEREE2026_LINK_COMMON_USED` 决定。未启用的链路若有人引用本数组，会在**链接期**报
+ *       未定义 —— 这是设计使然：没编进来的链路本就不该被用。
+ */
+extern const Referee2026CmdInfo_t referee2026_common_cmd_info[REFEREE2026_COMMON_DATA_COUNT];
+
+/*============================================
+ *   五、接收过滤掩码
+ *============================================*/
+
+/**
+ * @brief 常规链路的接收过滤掩码
+ * @note 取值一律 `1u << <数据名>`，故第 i 位 = "收不收 `referee2026_common_cmd_info[i]`"，
+ *       与内核 `core->filter` 的位序严格一致（内核在 ISR 里就是拿下标去移位比对的）。
+ * @note 四条链路的掩码**统一用 `uint32_t`**，免得内核还要按链路分宽度 —— 代价是每条链路的
+ *       命令数上限 32（本链路 24 条，够用）。
+ * @note **只给收得到的命令设位**：0x0305 / 0x0307 / 0x0308 只发不收（`dir` 里没有 RX），
+ *       给了位也没意义 —— 内核派发时会先看方向、再看掩码。故这里 21 位、3 个空洞。
+ * @note 真要"只关心血量和热量"，`Config` 里或上 `_FILTER_GAME_ROBOT_HP | _FILTER_POWER_HEAT`
+ *       即可 —— 少一次 118B 的 memcpy（0x0301）在 ISR 里是实打实的省。
+ */
+typedef enum : uint32_t
+{
+    REFEREE2026_COMMON_FILTER_NONE = 0, //!< 什么都不收
+    //! 本链路全部 21 条 RX 命令 —— `Config` 里填它 = 默认全收（与 `REFEREE2026_FILTER_DEFAULT` 等价）
+    REFEREE2026_COMMON_FILTER_DEFAULT = 0xFFFFFFFFu,
+    REFEREE2026_COMMON_FILTER_GAME_STATUS = 1u << REFEREE2026_COMMON_DATA_GAME_STATUS, //!< 收 0x0001 比赛状态
+    REFEREE2026_COMMON_FILTER_GAME_RESULT = 1u << REFEREE2026_COMMON_DATA_GAME_RESULT, //!< 收 0x0002 比赛结果
+    //! 收 0x0003 机器人血量
+    REFEREE2026_COMMON_FILTER_GAME_ROBOT_HP = 1u << REFEREE2026_COMMON_DATA_GAME_ROBOT_HP,
+    REFEREE2026_COMMON_FILTER_EVENT_DATA = 1u << REFEREE2026_COMMON_DATA_EVENT_DATA, //!< 收 0x0101 场地事件
+    //! 收 0x0104 裁判警告
+    REFEREE2026_COMMON_FILTER_REFEREE_WARNING = 1u << REFEREE2026_COMMON_DATA_REFEREE_WARNING,
+    REFEREE2026_COMMON_FILTER_DART_LAUNCH = 1u << REFEREE2026_COMMON_DATA_DART_LAUNCH, //!< 收 0x0105 飞镖发射
+    //! 收 0x0201 机器人性能体系
+    REFEREE2026_COMMON_FILTER_ROBOT_STATUS = 1u << REFEREE2026_COMMON_DATA_ROBOT_STATUS,
+    //! 收 0x0202 缓冲能量与射击热量
+    REFEREE2026_COMMON_FILTER_POWER_HEAT = 1u << REFEREE2026_COMMON_DATA_POWER_HEAT,
+    REFEREE2026_COMMON_FILTER_ROBOT_POS = 1u << REFEREE2026_COMMON_DATA_ROBOT_POS,   //!< 收 0x0203 机器人位置
+    REFEREE2026_COMMON_FILTER_BUFF = 1u << REFEREE2026_COMMON_DATA_BUFF,             //!< 收 0x0204 增益与底盘能量
+    REFEREE2026_COMMON_FILTER_ROBOT_HURT = 1u << REFEREE2026_COMMON_DATA_ROBOT_HURT, //!< 收 0x0206 伤害状态
+    REFEREE2026_COMMON_FILTER_SHOOT_DATA = 1u << REFEREE2026_COMMON_DATA_SHOOT_DATA, //!< 收 0x0207 实时射击
+    //! 收 0x0208 允许发弹量与剩余金币
+    REFEREE2026_COMMON_FILTER_PROJECTILE_ALLOW = 1u << REFEREE2026_COMMON_DATA_PROJECTILE_ALLOW,
+    //! 收 0x0209 RFID 模块状态
+    REFEREE2026_COMMON_FILTER_RFID_STATUS = 1u << REFEREE2026_COMMON_DATA_RFID_STATUS,
+    //! 收 0x020A 飞镖选手端指令
+    REFEREE2026_COMMON_FILTER_DART_CLIENT_CMD = 1u << REFEREE2026_COMMON_DATA_DART_CLIENT_CMD,
+    //! 收 0x020B 地面机器人位置
+    REFEREE2026_COMMON_FILTER_GROUND_ROBOT_POS = 1u << REFEREE2026_COMMON_DATA_GROUND_ROBOT_POS,
+    REFEREE2026_COMMON_FILTER_RADAR_MARK = 1u << REFEREE2026_COMMON_DATA_RADAR_MARK,   //!< 收 0x020C 雷达标记进度
+    REFEREE2026_COMMON_FILTER_SENTRY_INFO = 1u << REFEREE2026_COMMON_DATA_SENTRY_INFO, //!< 收 0x020D 哨兵决策同步
+    REFEREE2026_COMMON_FILTER_RADAR_INFO = 1u << REFEREE2026_COMMON_DATA_RADAR_INFO,   //!< 收 0x020E 雷达决策同步
+    //! 收 0x0301 机器人交互（队友机器人发来的"机器人之间通信"段；本链路唯一双向的命令）
+    REFEREE2026_COMMON_FILTER_ROBOT_INTERACTION = 1u << REFEREE2026_COMMON_DATA_ROBOT_INTERACTION,
+    //! 收 0x0303 选手端小地图交互
+    REFEREE2026_COMMON_FILTER_MINI_MAP_INTERACT = 1u << REFEREE2026_COMMON_DATA_MINI_MAP_INTERACT,
+} Referee2026CommonFilter_e;
+
+/*============================================
+ *   六、快照结构体（app 直接读这里）
+ *============================================*/
+
+/* 快照是一个**逐字节的镜像**：每收到一条命令，内核就把数据段 memcpy 到
+ * `(uint8_t *)&snapshot + snap_off`。故它必须与数据段一样是紧凑的 —— 一旦让编译器按自然对齐
+ * 插填充，成员偏移就不再等于"前面各段长度之和"，末尾那条 `sizeof == Σ LEN` 的断言会当场挂掉
+ * （常规链路混着 1/2/4/8 字节成员与 float，不 pack 必然被填出十几个空洞）。
+ * 注意 pack 会让 float / uint64 落在非对齐偏移上，读取由编译器拆成合规的字节访问序列 ——
+ * 这与上面那批数据段结构体（`Referee2026ShootData_t` 的 float 就在偏移 3）是同一回事。 */
+#pragma pack(push, 1)
+
+/**
+ * @brief 常规链路 RX 快照
+ * @note **只有收得到的命令有成员**（21 个），顺序与数据名枚举一致 —— 只发不收的
+ *       0x0305 / 0x0307 / 0x0308 不在其中。每个成员的字节偏移被记在元信息表的
+ *       `snap_off` 里（`.c` 里用 `offsetof` 算出来）。
+ * @note `robot_interaction`（0x0301）是**变长**的：成员按最大 118B 留，收到的帧可能只有
+ *       6~118B。内核只 memcpy 收到的那些字节、并把余下的**清零**，故读不到的尾部读出来是 0
+ *       而不是上一帧的残留；`data_cmd_id` 决定该读哪一段（见第五节）。
+ * @note 读法见 drv_referee2026.h 的"快照的读法"（tick 三步读，防读到半帧）：
+ *       本链路没有哪条命令的 memcpy 是原子的（最小的 0x0002 也有 1B，而 0x0301 有 118B），
+ *       故 tick 三步读不能省。
+ */
+typedef struct
+{
+    Referee2026GameStatus_t game_status;               //!< 0x0001 比赛状态
+    Referee2026GameResult_t game_result;               //!< 0x0002 比赛结果
+    Referee2026GameRobotHp_t game_robot_hp;            //!< 0x0003 机器人血量
+    Referee2026EventData_t event_data;                 //!< 0x0101 场地事件
+    Referee2026RefereeWarning_t referee_warning;       //!< 0x0104 裁判警告
+    Referee2026DartLaunch_t dart_launch;               //!< 0x0105 飞镖发射
+    Referee2026RobotStatus_t robot_status;             //!< 0x0201 机器人性能体系
+    Referee2026PowerHeat_t power_heat;                 //!< 0x0202 缓冲能量与射击热量
+    Referee2026RobotPos_t robot_pos;                   //!< 0x0203 机器人位置
+    Referee2026Buff_t buff;                            //!< 0x0204 增益与底盘能量
+    Referee2026HurtData_t robot_hurt;                  //!< 0x0206 伤害状态
+    Referee2026ShootData_t shoot_data;                 //!< 0x0207 实时射击
+    Referee2026ProjectileAllowance_t projectile_allow; //!< 0x0208 允许发弹量与剩余金币
+    Referee2026RfidStatus_t rfid_status;               //!< 0x0209 RFID 模块状态
+    Referee2026DartClientCmd_t dart_client_cmd;        //!< 0x020A 飞镖选手端指令
+    Referee2026GroundRobotPosition_t ground_robot_pos; //!< 0x020B 地面机器人位置
+    Referee2026RadarMarkData_t radar_mark;             //!< 0x020C 雷达标记进度
+    Referee2026SentryInfo_t sentry_info;               //!< 0x020D 哨兵自主决策信息同步
+    Referee2026RadarInfo_t radar_info;                 //!< 0x020E 雷达自主决策信息同步
+    Referee2026RobotInteraction_t robot_interaction;   //!< 0x0301 机器人交互数据（变长，见上）
+    Referee2026MiniMapCommand_t mini_map_interact;     //!< 0x0303 选手端小地图交互
+} Referee2026CommonSnapshot_t;
+
+#pragma pack(pop)
+
+/*============================================
+ *   七、驱动实例与接口
+ *============================================*/
+
+/* 这一节要 HAL（`USARTInstance` / `DMA_RAM`），故先把开关本身引进来再判它 ——
+ * 顺序颠倒的话 `HAL_UART_MODULE_ENABLED` 此刻还不可见，判据恒假、整节静默消失。
+ * 这一行的代价是本头从此要求 `main.h` 在包含路径上（与 drv_dbus.h 等既有驱动一致）；
+ * 上面六节（协议部分）本身只依赖 <stdint.h>，与 HAL 无关。 */
+#include "main.h"
+
+#ifdef HAL_UART_MODULE_ENABLED
+
+#include "drv_referee2026.h"
+
+/**
+ * @brief 常规链路驱动实例
+ * @note `core` **必须是第一个成员**（与仓库其余驱动的 vtable 习惯一致；本模块的代码本身不
+ *       依赖这一点，回调一律从 `usart->parent` 取回内核 —— 那里存的是 `&inst->core`）。
+ * @note 收发接口（Register / Config / Send）都是模块根那份 `Referee2026*`，调用时传
+ *       `&inst.core` —— 例如 `Referee2026Config(&common_inst.core, &cfg)`。
+ */
+typedef struct
+{
+    Referee2026Core_t core;                             //!< 收发内核
+    Referee2026CommonSnapshot_t snapshot;               //!< RX 快照（21 条）
+    uint32_t tick[REFEREE2026_COMMON_DATA_COUNT];       //!< 每条的最近收到时刻（seqlock 头尾序号）
+    uint32_t tx_last_us[REFEREE2026_COMMON_DATA_COUNT]; //!< 每条的最近发送时刻（限速用）
+} Referee2026Common_t;
+
+/**
+ * @brief 实例结构体类型与元信息表的**拼接别名** —— 供模块根的 REFEREE2026_INSTANCE_DEF 使用
+ * @note 实例定义宏四条链路只写一份（在 `drv_referee2026.h`），按链路名拼出三样东西，
+ *       本头提供其中两样（`_DATA_COUNT` 本链路早就有了）：
+ *       `REFEREE2026_<LINK>_INSTANCE_TYPE` / `_CMD_INFO` / `_DATA_COUNT`。
+ *       故本头**一行收发/实例函数都不定义**，"本链路长什么样"全在这里、"怎么用"全在模块根。
+ * @note 为什么要这层别名、而不是让内核宏自己拼：C 预处理器**不能转换大小写** ——
+ *       `COMMON` 拼不出结构体名里的 `Common`，也拼不出表名里的小写 `common`。
+ * @example
+ *   REFEREE2026_INSTANCE_DEF(common_inst, COMMON);   // 常规链路
+ */
+#define REFEREE2026_COMMON_INSTANCE_TYPE Referee2026Common_t
+#define REFEREE2026_COMMON_CMD_INFO referee2026_common_cmd_info
+
+#endif /* HAL_UART_MODULE_ENABLED */
+
+#endif /* __REFEREE2026_COMMON_H */

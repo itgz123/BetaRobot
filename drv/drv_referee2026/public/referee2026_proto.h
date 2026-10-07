@@ -7,12 +7,14 @@
  *
  * 依据：RoboMaster 2026 机甲大师高校系列赛通信协议 V2.0.0（20260626）
  *   §1.1 串口协议格式（表 1-1 波特率等参数）
- *   串口协议附录 V1.9.0（0xA9 图传遥控帧的 CRC）
+ *   0xA9 图传遥控帧的 CRC：**出处不在本仓库**，且与参考工程口径相反，见下方 @warning
  *
  * 本文件只放"静态描述量"（编译期常量，无函数）：
  *   ① 串口外设配置：`referee2026_uart_init[]`（按链路一条）—— 协议要求的硬件参数
  *   ② CRC 类型：直接用 lib_crc 的 LIB_CRC_Algo_t / LIB_CRC_Table_t，不另造结构体
  *   ③ CRC 算法与查表：本模块自备的三张表 + 算法描述（定义在 referee2026_proto.c）
+ * 其中第 ① 节那张表**目前没有任何调用点**（只是"协议要求什么"的权威记录），
+ * 第 ③ 节的 0xA9 表也零运行期消费者 —— 见各自的 @note / @warning。
  *
  * @note **CRC 表归本模块所有，与 `LIB_CRC_TABLES_USED` 无关**（lib 有 6 张通用表，
  *       本模块不用它的）。本模块对 lib 的依赖只有**函数** `LIB_CRC_TableCalc` / `LIB_CRC_Direct`，
@@ -72,6 +74,11 @@
  *       若哪天要在运行期改波特率，可把对应行直接喂给 HAL_UART_Init 重初始化。
  * @note 表里给的是**协议侧**要求；实际用哪块板子的哪个 UART 由 app 在 Config 的 `uart_e`
  *       里给（板级映射见 bsp_map）。表与 uart_e 不一致时，以本表为准去改 CubeMX。
+ * @warning **本表与 `Referee2026LinkHasUart` 目前都没有调用点**：运行期的波特率来自
+ *          CubeMX 生成的 `huart` 初始化，本表只是一份"照这个配"的记录。风险正在于此 ——
+ *          若 CubeMX 里把某个口配成了别的波特率（例如图传口配成 115200、本表写 921600），
+ *          **编译与运行都不会报错**，只是链路静默收不到东西。改动 CubeMX 串口配置时，
+ *          请回来核这张表。
  */
 extern const UART_InitTypeDef referee2026_uart_init[REFEREE2026_LINK_TYPE_COUNT];
 
@@ -139,6 +146,11 @@ extern const Referee2026CrcAlgo_t referee2026_crc16_algo;
 /**
  * @brief 0xA9 图传遥控帧 CRC16 的算法描述（Init 0xFFFF，**非反射**）
  * @note 标准名 CRC-16/CCITT-FALSE。与上面那条同 poly 反方向，表也不同。
+ * @warning **本条的口径存疑且无权威出处可判**：本模块按非反射建模（出处"VT03·VT13 图传
+ *          说明书"不在仓库里），而参考工程 `rm_referee` 的 `imageRoad.c` 用**反射**表校验
+ *          `0xA9 0x53` 帧；官方协议与附录里没有 0xA9 帧，无法裁决。本模块不解析 0xA9，
+ *          这张表零运行期消费者 —— 真要实现前先拿到那份说明书钉死方向。
+ *          详见 referee2026_proto.c 里 `referee2026_crc16_remote_algo` 的 @warning。
  */
 extern const Referee2026CrcAlgo_t referee2026_crc16_remote_algo;
 
