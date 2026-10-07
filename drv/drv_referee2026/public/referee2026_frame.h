@@ -1,22 +1,25 @@
 /**
  * @file referee2026_frame.h
- * @brief 2026 赛季 RoboMaster 裁判系统**协议模型**：串口帧格式 / 四种链路档 / ID 编号 /
- *        接收方位（纯定义，零依赖）
+ * @brief 2026 赛季 RoboMaster 裁判系统**协议模型**：串口帧格式 / 四种链路档 / ID 编号
+ *        （纯定义，零依赖）
  *
  * 依据：RoboMaster 2026 机甲大师高校系列赛通信协议 V2.0.0（20260626）
  *   §1.1 串口协议格式（表 1-1 波特率 / 表 1-2 通信协议格式 / 表 1-3 frame_header / 表 1-4 偏移）
- *   表 1-5 命令码 ID 一览的"所属数据链路"与"发送方·接收方"两列
- *   （命令码一览本身已按链路拆到各 link 目录的 referee2026_<link>_frame.h，本文件不再收录）
+ *   表 1-5 命令码 ID 一览的"所属数据链路"列
+ *   （命令码一览本身已按链路拆到各 link 目录的 referee2026_<link>.h，本文件不再收录）
  *   附录二 ID 编号说明
  *
- * 本文件只回答"协议长什么样"，四样东西在这里一次写清、别处只管引用：
+ * 本文件只回答"协议长什么样"，三样东西在这里一次写清、别处只管引用：
  *   ① 帧格式：Referee2026FrameOffset_e / Referee2026FrameConst_e（表 1-2/1-3/1-4）
  *   ② 数据链路类型：Referee2026LinkType_e（§1.1 正文，三种 + "非链路"一档）
  *   ③ ID 编号：Referee2026Color_e（阵营偏移 + 选手端 ID 基址）× Referee2026RobotType_e
  *      → 拼出机器人 ID 与选手端 ID + 换算函数
- *   ④ 接收方位：Referee2026Receiver_e（表 1-5 "→" 右侧的位掩码，供上层做命令过滤）
- * 命令码与每条命令的元信息（数据段长度 / 接收方 / 发送频率）**不在本文件** —— 已按链路拆进
- * link_common / link_video / link_none / link_radar 各自的 referee2026_<link>_frame.h。
+ * 命令码与每条命令的元信息（数据段长度 / 方向 / 发送频率）**不在本文件** —— 已按链路拆进
+ * link_common / link_video / link_none / link_radar 各自的 referee2026_<link>.h。
+ *
+ * 表 1-5 的"发送方/接收方"列曾以位掩码（`Referee2026Receiver_e`）收在这里，现已删除：
+ * 它运行期零消费者，而"这条命令发不发得出去"由各链路元信息表的 `dir` 字段回答。原语义逐条
+ * 记在各链路数据名枚举成员的行尾注释里（`发送方→接收方`）。
  *
  * 本文件**只依赖 <stdint.h>**：不 include HAL / bsp / lib / app_cfg，PC 端可单独编译自检。
  * 需要 HAL 与 lib_crc 的对接层（串口外设配置、CRC 算法与查表）在 referee2026_proto.h。
@@ -66,8 +69,8 @@ typedef enum : uint16_t
     REFEREE2026_TAIL_SIZE = 2,   //!< CRC16 长度
     REFEREE2026_DATA_MAX = 300,  //!< 数据段长度上限（0x0310）
     //! 最大整帧 = 帧头 + cmd_id + 数据段 + 帧尾 = 309B
-    REFEREE2026_FRAME_MAX = REFEREE2026_HEADER_SIZE + REFEREE2026_CMD_ID_SIZE + REFEREE2026_DATA_MAX +
-        REFEREE2026_TAIL_SIZE,
+    REFEREE2026_FRAME_MAX =
+        REFEREE2026_HEADER_SIZE + REFEREE2026_CMD_ID_SIZE + REFEREE2026_DATA_MAX + REFEREE2026_TAIL_SIZE,
 } Referee2026FrameConst_e;
 
 /*============================================
@@ -157,43 +160,7 @@ typedef enum : uint8_t
  * 红方 0x0100+1~6 = 0x0101~0x0106、蓝方 0x0164+1~6 = 0x0165~0x016A，与机器人 ID 1~6 / 101~106 一一对应。 */
 
 /*============================================
- *   四、接收方（表 1-5 "发送方/接收方"列的右半）
- *============================================*/
-
-/**
- * @brief 接收方：**位掩码**，一行可以同时命中多个接收方
- *
- * 为什么不复用 Referee2026Color_e / Referee2026RobotType_e（那两个说的是"某台具体设备是谁"）：
- *   1. 接收方是"一组设备"而不是一个地址：0x0208 的接收方是"己方英雄、步兵、哨兵、空中机器人"
- *      四种角色，0x0001 是"全体机器人"，0x0101 是"己方全体机器人"——一个 ID 装不下；
- *   2. 接收方里还有**不是机器人**的东西：选手端、自定义控制器、自定义客户端、雷达；
- *   3. 接收方随阵营/相对关系而变（己方 / 被判罚方 / 双方全体），不是绝对地址；
- *   4. 一台具体机器人的 ID 是"我是谁"，接收方是"这帧发给谁"——后者是帧的属性，不是设备的属性。
- * 故此处另立一套角色语义的位掩码，与 ID 枚举各管一头。
- */
-typedef enum : uint32_t
-{
-    REFEREE2026_RX_NONE = 0x00000000u,           //!< 表 1-5 写作 `-`：由发送方在报文里填 receiver_id
-    REFEREE2026_RX_ALL_ROBOTS = 1u << 0,         //!< 双方全体机器人（服务器广播）
-    REFEREE2026_RX_SELF_ROBOTS = 1u << 1,        //!< 己方全体机器人
-    REFEREE2026_RX_TARGET_ROBOTS = 1u << 2,      //!< 本机/被指定的那一台（"对应机器人"）
-    REFEREE2026_RX_PENALIZED_ROBOTS = 1u << 3,   //!< 被判罚方全体机器人
-    REFEREE2026_RX_SELF_HERO = 1u << 4,          //!< 己方英雄
-    REFEREE2026_RX_SELF_INFANTRY = 1u << 5,      //!< 己方步兵（3/4/5 号）
-    REFEREE2026_RX_SELF_SENTRY = 1u << 6,        //!< 己方哨兵
-    REFEREE2026_RX_SELF_AERIAL = 1u << 7,        //!< 己方空中
-    REFEREE2026_RX_SELF_DART = 1u << 8,          //!< 己方飞镖
-    REFEREE2026_RX_SELF_RADAR = 1u << 9,         //!< 己方雷达机器人（作为数据收方）
-    REFEREE2026_RX_SELF_RFID = 1u << 10,         //!< 己方装有 RFID 模块的机器人
-    REFEREE2026_RX_SELF_STATIONS = 1u << 11,     //!< 己方所有选手端
-    REFEREE2026_RX_OWN_STATION = 1u << 12,       //!< 对应操作手的那个选手端
-    REFEREE2026_RX_CUSTOM_CONTROLLER = 1u << 13, //!< 自定义控制器
-    REFEREE2026_RX_CUSTOM_CLIENT = 1u << 14,     //!< 自定义客户端
-    REFEREE2026_RX_RADAR = 1u << 15,             //!< 雷达（雷达无线链路的接收端，收电磁波）
-} Referee2026Receiver_e;
-
-/*============================================
- *   五、ID 换算函数（附录二）
+ *   四、ID 换算函数（附录二）
  *============================================*/
 
 /* 放在文件末尾：这一节是纯派生逻辑，一眼看完前面的枚举/表就够用了。
