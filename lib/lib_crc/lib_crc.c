@@ -107,6 +107,7 @@ int8_t LIB_CRC_GenTable(const LIB_CRC_Algo_t *algo, uint32_t table[256])
 {
     uint32_t width;
     uint32_t poly;
+    uint32_t mask;
 
     /* 校验表与算法匹配：仅 8/16/32 位支持逐字节查表（7 位须走 LIB_CRC_Direct） */
     if (algo == NULL || table == NULL)
@@ -115,7 +116,8 @@ int8_t LIB_CRC_GenTable(const LIB_CRC_Algo_t *algo, uint32_t table[256])
     if (width != 8 && width != 16 && width != 32)
         return -1;
 
-    poly = algo->poly & ((width >= 32) ? 0xFFFFFFFFu : ((1u << width) - 1u));
+    mask = (width >= 32) ? 0xFFFFFFFFu : ((1u << width) - 1u);
+    poly = algo->poly & mask;
     if (algo->reverse_in)
         poly = CRC_BitReflect(poly, (uint8_t)width);
 
@@ -125,17 +127,24 @@ int8_t LIB_CRC_GenTable(const LIB_CRC_Algo_t *algo, uint32_t table[256])
 
         if (algo->reverse_in)
         {
-            /* 反射表：i 作为 8 位输入，LSB-first 右移 8 次 */
+            /* 反射表：i 作为 8 位输入，LSB-first 右移 8 次。
+             * 右移天然把结果收在 width 位内（初值 ≤ 0xFF，poly 也已掩码），无需再掩。 */
             crc = i;
             for (uint8_t bit = 0; bit < 8; bit++)
                 crc = (crc & 1u) ? (uint32_t)((crc >> 1) ^ poly) : (crc >> 1);
         }
         else
         {
-            /* 非反射表：i 放寄存器高位，MSB-first 左移 8 次 */
-            crc = i << (width - 8);
+            /* 非反射表：i 放寄存器高位，MSB-first 左移 8 次。
+             * ⚠ 每步都必须按 width 掩码：`crc << 1` 会把最高位挤出 width 之外，不管的话
+             * 表项里会留下 width 以上的垃圾位（16 位表里出现 0x11021、8 位表里出现 0x107）——
+             * 表值就不再是规范的 CRC 表。
+             * 查表计算本身不受影响（LIB_CRC_TableCalc 取索引只看高 8 位，且每步末尾
+             * `crc &= mask` 会把垃圾位清掉），所以这是个**只在直接索引表时才会现形**的坑。 */
+            crc = (i << (width - 8)) & mask;
             for (uint8_t bit = 0; bit < 8; bit++)
-                crc = (crc & (1u << (width - 1))) ? (uint32_t)(((crc << 1) ^ poly)) : (uint32_t)(crc << 1);
+                crc = (crc & (1u << (width - 1))) ? (uint32_t)(((crc << 1) ^ poly) & mask)
+                                                  : (uint32_t)((crc << 1) & mask);
         }
         table[i] = crc;
     }
