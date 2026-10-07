@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """生成 lib_crc_tables.c / lib_crc_tables.h：6 张 Flash 表 + 8 个算法描述符。
 
-表生成逐位逻辑复刻 lib_crc.c 的 LIB_CRC_GenTable（& MASK32 复现 uint32 回卷语义），
+表生成逐位逻辑复刻 lib_crc.c 的 LIB_CRC_GenTable（含"每步按 width 掩码"的语义），
 保证 Flash 表与运行时 LIB_CRC_GenTable 生成的值完全一致，可混用。
 脚本运行前先自校验每个算法的标准 check 向量（"123456789"），不通过不输出。
 
@@ -26,7 +26,9 @@ def reflect(value, width):
 
 
 def gen_table(poly, width, refin):
-    """复刻 C LIB_CRC_GenTable 的逐位逻辑（含 uint32 回卷语义）。"""
+    """复刻 C LIB_CRC_GenTable 的逐位逻辑（含按 width 掩码的语义）。"""
+    mask = MASK32 if width >= 32 else (1 << width) - 1
+    poly &= mask
     if refin:
         poly = reflect(poly, width)
     table = []
@@ -35,16 +37,18 @@ def gen_table(poly, width, refin):
             crc = i
             for _ in range(8):
                 if crc & 1:
-                    crc = ((crc >> 1) ^ poly) & MASK32
+                    crc = ((crc >> 1) ^ poly) & mask
                 else:
-                    crc = (crc >> 1) & MASK32
+                    crc = (crc >> 1) & mask
         else:
-            crc = (i << (width - 8)) & MASK32
+            # 非反射路径每步按 width 掩码：不掩的话表项会带 width 以上的垃圾位
+            # （16 位表出现 0x11021），与规范 CRC 表不符 —— 见 lib_crc.c 的注释。
+            crc = (i << (width - 8)) & mask
             for _ in range(8):
                 if crc & (1 << (width - 1)):
-                    crc = ((crc << 1) ^ poly) & MASK32
+                    crc = ((crc << 1) ^ poly) & mask
                 else:
-                    crc = (crc << 1) & MASK32
+                    crc = (crc << 1) & mask
         table.append(crc)
     return table
 

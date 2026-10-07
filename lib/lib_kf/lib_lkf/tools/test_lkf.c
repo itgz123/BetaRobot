@@ -461,10 +461,11 @@ static void case_update_equiv(void)
     TO_FLOAT(Qf, Q, 4)
     TO_FLOAT(Hf, H, 4)
     TO_FLOAT(Rf, R, 4)
-    TO_FLOAT(P0f, P0, 4) TO_FLOAT(x0f, x0, 2)
+    TO_FLOAT(P0f, P0, 4)
+    TO_FLOAT(x0f, x0, 2)
 
-        Lkf_Init_Config_s cfg = {
-            .n = n, .m = m, .l = 0, .opt = 0, .x0 = x0f, .P0 = P0f, .F = Ff, .Q = Qf, .H = Hf, .R = Rf};
+    Lkf_Init_Config_s cfg = {
+        .n = n, .m = m, .l = 0, .opt = 0, .x0 = x0f, .P0 = P0f, .F = Ff, .Q = Qf, .H = Hf, .R = Rf};
     LkfInit(&kf_a, &cfg);
     LkfInit(&kf_b, &cfg);
 
