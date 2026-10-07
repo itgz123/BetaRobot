@@ -17,6 +17,12 @@ set(MODULE_SOURCES
     drvs_motor/drvs_djimotor_broadcast/drvs_djimotor_broadcast.c
     drvs_motor/drvs_lkmotor_broadcast/drvs_lkmotor_broadcast.c
     drv_axis_lite/drv_axis_mit_lite.c
+    drv_referee2026/core/referee2026_proto.c
+    # referee2026：每条链路自己的命令元信息表（数据名枚举 + 元信息数组）
+    drv_referee2026/link_common/referee2026_common_frame.c
+    drv_referee2026/link_video/referee2026_video_frame.c
+    drv_referee2026/link_none/referee2026_none_frame.c
+    drv_referee2026/link_radar/referee2026_radar_frame.c
     drv_planner/drv_planner.c
     drv_pid/drv_pid.c
     drv_terminal_lite/drv_terminal_lite.c
@@ -54,6 +60,12 @@ set(MODULE_INCLUDE_DIRS
     drvs_motor/drvs_djimotor_broadcast
     drvs_motor/drvs_lkmotor_broadcast
     drv_axis_lite
+    # referee2026：core 放跨链路公共块与帧/ID/命令码模型，link_* 各自放本链路命令的数据段
+    drv_referee2026/core
+    drv_referee2026/link_common
+    drv_referee2026/link_video
+    drv_referee2026/link_none
+    drv_referee2026/link_radar
     drv_planner
     drv_pid
     drv_terminal_lite
