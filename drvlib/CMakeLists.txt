@@ -3,6 +3,7 @@ set(MODULE_SOURCES
     drvlib_bmi088_ist8310_eskf/drvlib_bmi088_ist8310_eskf.c
     drvlib_bmi088_kalman/drvlib_bmi088_kalman.c
     drvlib_bmi088_mahony/drvlib_bmi088_mahony.c
+    drvlib_motor/drvlib_motor.c
 )
 
 # drvlib 层头文件路径
@@ -14,4 +15,5 @@ set(MODULE_INCLUDE_DIRS
     drvlib_bmi088_kalman
     drvlib_bmi088_mahony
     drvlib_ist8310_calib
+    drvlib_motor
 )
