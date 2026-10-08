@@ -17,8 +17,9 @@
  *     也不需要归还缓冲（BSPLOG 是"发完不管"的宏，没有返回值）。
  *
  * BSPLOG 在 BSP_LOG_USED 与 LOG_UART 均定义时把参数透传给核心实现 BSPLogV()
- * （bsp_log.c，限频/组装/发送都在 .c 里做）；任一未定义时 BSPLOG 为空宏、
- * 初始化函数为空实现，日志关闭（与 bsp_log.c 的 #if 实现条件保持一致）。
+ * （bsp_log.c，限频/组装/发送都在 .c 里做）；任一未定义时日志关闭，BSPLOG
+ * 仍解析并类型检查其实参但不发射代码、初始化函数为空实现
+ * （与 bsp_log.c 的 #if 实现条件保持一致）。
  *
  * 用法：
  *     BSPLogInit();                            // 内含默认实例 g_log 的初始化
@@ -122,21 +123,22 @@ typedef struct
  *       指定初始化器 .module_name 词法上是 "."+"module_name" 两个 token，若形参也叫
  *       module_name，预处理器会把其中 module_name 当形参替换成实参字符串，产生语法错误。
  */
-/* 日志实例定义：日志关闭（BSP_LOG_USED 或 LOG_UART 未定义）时为空宏，
- * 不分配 LOGInstance，零 RAM 占用 */
+/* 日志实例定义：日志关闭（BSP_LOG_USED 或 LOG_UART 未定义）时不分配实例，
+ * 只留一条 extern 声明 —— 零 RAM/Flash，但实例名依然存在（有类型、可取址），
+ * BSPLOG 的实参因此仍是合法表达式、仍受编译期检查（见下方关闭态的 BSPLOG）。 */
 #if (defined(BSP_LOG_USED)) && (defined(LOG_UART))
 #define LOG_INSTANCE_DEF(name, module, limit)                                                                          \
     LOGInstance name = {.module_name = (module),                                                                       \
                         .module_name_len = sizeof(module) - 1, /* 字面量长度 */                                        \
                         .times_per_second = (limit)}
 #else
-#define LOG_INSTANCE_DEF(name, module, limit)
+#define LOG_INSTANCE_DEF(name, module, limit) extern LOGInstance name
 #endif
 
 /*============ 外部接口（2 个） ============*/
 
-#if (defined(BSP_LOG_USED)) && (defined(LOG_UART))
-/*============ 日志宏 ============*/
+/* 以下声明与日志开关无关（定义才分开关）：关闭态下 BSPLOG 仍要"看到"实例与
+ * 形参类型才能做编译期检查（见关闭态的 BSPLOG），但不会发射对它们的引用。 */
 
 /* 默认日志实例（bsp_log.c 定义，编译期初始化为模块名 "bsp_log"、
  * 默认限频 10 条/秒，可由 BSP_LOG_LOG_LIMIT 覆盖）：
@@ -148,18 +150,23 @@ extern uint64_t level_cnt[LOG_LEVEL_NUM];
  * 恒 0 = 那条窄路径从未发生；非 0 = 日志链曾靠它自救过，值就是救回的槽数。 */
 extern uint32_t g_log_orphan_cnt;
 
-/* 级别过滤判断宏：level 低于 LOG_FILTER_LEVEL 返回真（本条剔除）。
- * LOG_FILTER_LEVEL 为编译期常量、level 为调用点字面量枚举值，
- * -O 下判断折叠，过滤分支连 BSPLogV 调用一起消失。 */
-#define BSPLOG_FILTER(level) ((level) < LOG_FILTER_LEVEL)
-
 /* 核心实现（bsp_log.c）：限频检查 + 组装 "[颜色][分级][时间戳][模块名]:内容[重置]\r\n"
  * 并经日志串口 DMA 发送。BSPLOG 只做编译期过滤后把参数透传给本函数。
  * @note 日志串口尚未配置（BSPLogInit 未跑 / 其 USARTConfig 失败）时本函数直接丢弃：
  *       没有传输层就没有地方可发，硬发只会触发"实例未配置"错误日志，
  *       而那条错误日志同样发不出去、会滞留在 WAIT_SEND 队列里等下一次成功发送
- *       时以旧时间戳冒出来。 */
+ *       时以旧时间戳冒出来。
+ * @note 日志关闭时本函数**不定义**，声明仍然保留：关闭态的 BSPLOG 把它放在
+ *       __builtin_choose_expr 的未选中分支里做纯编译期检查。 */
 void BSPLogV(LOGInstance *inst, LOG_LEVEL level, const char *fmt, ...);
+
+#if (defined(BSP_LOG_USED)) && (defined(LOG_UART))
+/*============ 日志宏 ============*/
+
+/* 级别过滤判断宏：level 低于 LOG_FILTER_LEVEL 返回真（本条剔除）。
+ * LOG_FILTER_LEVEL 为编译期常量、level 为调用点字面量枚举值，
+ * -O 下判断折叠，过滤分支连 BSPLogV 调用一起消失。 */
+#define BSPLOG_FILTER(level) ((level) < LOG_FILTER_LEVEL)
 
 /* 发送日志：过滤（level 低于 LOG_FILTER_LEVEL 整条剔除）+ 透传参数给 BSPLogV */
 #define BSPLOG(inst, level, fmt, ...)                                                                                  \
@@ -182,9 +189,17 @@ void BSPLogInit(void);
 
 #else /* 日志关闭：BSP_LOG_USED 或 LOG_UART 未定义（与 bsp_log.c 的 #if 一致） */
 
-/* 日志实例未分配（LOG_INSTANCE_DEF 为空宏）、BSPLogInit 无可初始化外设，
- * 均定义为空宏吃掉调用点；关闭态 2 个接口全是空宏，零代码零 RAM。 */
-#define BSPLOG(inst, level, fmt, ...) ((void)0)
+/* 关闭态：整条日志在编译期消失，实参不求值、零代码零 RAM。
+ * 但实参仍写进 __builtin_choose_expr 的**未选中分支**：编译器照常解析并
+ * 类型检查它们（实例名拼写错误、类型不匹配在关闭态一样查得出来），只是不为
+ * 之发射代码。所以"只服务于日志的局部变量"不再退化成 -Wunused-variable ——
+ * 这正是旧版空宏 `((void)0)` 丢掉实参后留下的坑（见 bsp_spi.c 的 SPI_LogStartFail）。
+ * 未选中分支不发射引用，而关闭态的实例只有 extern 声明（见 LOG_INSTANCE_DEF）、
+ * g_log/BSPLogV 也没有定义，二者都靠这一点才不产生未定义符号。 */
+#define BSPLOG(inst, level, fmt, ...)                                                                                  \
+    ((void)__builtin_choose_expr(0, BSPLogV((inst), (level), (fmt), ##__VA_ARGS__), (void)0))
+
+/* BSPLogInit 无可初始化外设（实例未分配），定义为空宏吃掉调用点；零代码零 RAM。 */
 #define BSPLogInit() ((void)0)
 
 #endif /* (defined(BSP_LOG_USED)) && (defined(LOG_UART)) */
