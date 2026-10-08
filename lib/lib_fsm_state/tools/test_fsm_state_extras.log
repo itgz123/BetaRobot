@@ -1,0 +1,44 @@
+lib_fsm_state PC 端检验
+(PARANOID 开：运行时自检生效)
+(UML_ORDER 开：表驱动动作为 退出 → 动作 → 进入)
+(TRACE 开：每次派发打印一行，下面会有 [fsm] 输出)
+[fsm] OFF --(0)--> ON : SWITCHED
+[fsm] ON --(3)--> ON : NOT_HANDLED
+[fsm] ON --(0)--> OFF : SWITCHED
+[fsm] OFF --(0)--> OFF : NOT_HANDLED
+[fsm] ERR --(3)--> ERR : INTERNAL
+[fsm] ERR --(2)--> OFF : SWITCHED
+[fsm] OFF --(4)--> OFF : SWITCHED
+[fsm] OFF --(3)--> OFF : NOT_HANDLED
+[fsm] WAIT --(3)--> WAIT : INTERNAL
+[fsm] WAIT --(3)--> WAIT : INTERNAL
+[fsm] WAIT --(3)--> ERR : SWITCHED
+[fsm] WAIT --(1)--> ERR : SWITCHED
+[fsm] WAIT --(0)--> WAIT : NOT_HANDLED
+[fsm] WAIT --(2)--> OFF : SWITCHED
+[fsm] WAIT2 --(3)--> WAIT2 : INTERNAL
+[fsm] WAIT2 --(2)--> OFF : SWITCHED
+[fsm] ANY --(2)--> OFF : SWITCHED
+[fsm] ANY --(3)--> ERR : SWITCHED
+[fsm] SILENT --(3)--> SILENT : NOT_HANDLED
+[fsm] WAIT --(0)--> ERR : SWITCHED
+[fsm] WAIT --(0)--> WAIT : NOT_HANDLED
+[fsm] OFF --(5)--> ERR : SWITCHED
+[fsm] OFF --(5)--> OFF : NOT_HANDLED
+[fsm] OFF --(5)--> ERR : SWITCHED
+[fsm] ERR --(-2147483648)--> WAIT : SWITCHED
+[fsm] OFF --(1)--> ERR : SWITCHED
+[fsm] ERR --(0)--> WAIT : SWITCHED
+[fsm] WAIT --(3)--> WAIT : INTERNAL
+[fsm] WAIT --(2)--> OFF : SWITCHED
+[fsm] WAIT --(2)--> OFF : SWITCHED
+[fsm] OFF --(3)--> OFF : NOT_HANDLED
+[fsm] ERR --(3)--> ERR : INTERNAL
+[fsm] OFF --(4)--> OFF : SWITCHED
+[fsm] OFF --(3)--> OFF : NOT_HANDLED
+[fsm] SILENT --(0)--> SILENT : NOT_HANDLED
+[fsm] OFF --(0)--> ON : SWITCHED
+[fsm] WAIT --(3)--> WAIT : INTERNAL
+[fsm] WAIT --(3)--> WAIT : INTERNAL
+[fsm] OFF --(0)--> ON : SWITCHED
+checks=164 fails=0 -> PASS

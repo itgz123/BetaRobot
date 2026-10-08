@@ -1,0 +1,2 @@
+lib_fsm_table PC 端检验
+checks=132 fails=0 -> PASS
