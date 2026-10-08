@@ -169,9 +169,6 @@ static void SPI_LogStartFail(const SPIInstance *instance, const char *what, BSP_
     SPI_HandleTypeDef *hspi = instance->handle;
     int tx_state = (hspi->hdmatx != NULL) ? (int)hspi->hdmatx->State : -1;
     int rx_state = (hspi->hdmarx != NULL) ? (int)hspi->hdmarx->State : -1;
-    /* BLOCK 是"跑了但没成功"（HAL 返回 TIMEOUT/ERROR），IT/DMA 才是"没启动起来" */
-    const char *phase = (mode == BSP_BLOCK_MODE) ? "failed" : "start failed";
-
     if (idx < SPI_NUM_MAX)
     {
         s_spi_status[idx].err_start++;
@@ -182,9 +179,13 @@ static void SPI_LogStartFail(const SPIInstance *instance, const char *what, BSP_
         s_spi_status[idx].dma_rx_state = (rx_state < 0) ? 0xFF : (uint8_t)rx_state;
     }
 
+    /* BLOCK 是"跑了但没成功"（HAL 返回 TIMEOUT/ERROR），IT/DMA 才是"没启动起来"。
+     * 失败阶段这里直接写表达式而不是先存局部变量：日志关闭（BSP_LOG_USED / LOG_UART
+     * 未定义）时 BSPLOG 展开为空宏，只服务于日志的局部变量会变成
+     * -Wunused-variable（本函数其余量都还被计数分支用着，不受影响）。 */
     BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "SPI %s %s (spi_e=%d, mode=%d, spi=%d, tx_dma=%d, rx_dma=%d, err=0x%lX)!",
-           what, phase, (int)instance->spi_e, (int)mode, (int)hspi->State, tx_state, rx_state,
-           (unsigned long)hspi->ErrorCode);
+           what, (mode == BSP_BLOCK_MODE) ? "failed" : "start failed", (int)instance->spi_e, (int)mode,
+           (int)hspi->State, tx_state, rx_state, (unsigned long)hspi->ErrorCode);
 }
 
 /**
