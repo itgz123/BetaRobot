@@ -12,6 +12,8 @@ set(MODULE_SOURCES
     lib_crc/lib_crc.c
     lib_crc/lib_crc_tables.c
     lib_format/lib_format.c
+    lib_fsm_state/lib_fsm_state.c
+    lib_fsm_table/lib_fsm_table.c
     lib_hamming/lib_hamming.c
     lib_hamming/lib_hamming_ext.c
     lib_kf/lib_ekf/lib_ekf.c
@@ -37,6 +39,8 @@ set(MODULE_INCLUDE_DIRS
     lib_crc
     lib_dh_matrix
     lib_format
+    lib_fsm_state
+    lib_fsm_table
     lib_hamming
     lib_kf
     lib_kf/lib_ekf
