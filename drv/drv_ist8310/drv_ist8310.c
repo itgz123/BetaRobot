@@ -47,10 +47,8 @@ static const uint16_t s_meas_delay_ms[IST8310_AVG_NUM] = {
 
 /* BSP 子模块封装 */
 static int8_t IST8310_WaitXfer(IST8310Instance *inst, uint32_t timeout_ms);
-static int8_t IST8310_ReadReg(IST8310Instance *inst, uint8_t reg, uint8_t len, BSP_Transfer_Mode_e mode,
-                              uint32_t timeout_ms);
-static int8_t IST8310_WriteReg(IST8310Instance *inst, uint8_t reg, uint8_t data, BSP_Transfer_Mode_e mode,
-                               uint32_t timeout_ms);
+static int8_t IST8310_ReadReg(IST8310Instance *inst, uint8_t reg, uint8_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
+static int8_t IST8310_WriteReg(IST8310Instance *inst, uint8_t reg, uint8_t data, BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
 /* 采集链记账 */
 static void IST8310_NoteFailure(IST8310Instance *inst);
 /* 器件操作 */
@@ -122,15 +120,11 @@ static int8_t IST8310_WaitXfer(IST8310Instance *inst, uint32_t timeout_ms)
  *       回调就在同级中断里，进不来；0 = "忙就放弃本次"）—— 两种需求都不该被"实例默认值"绑住。
  * @note 传 IT/DMA 时只能在任务上下文调用（本函数要等完成回调）。
  */
-static int8_t IST8310_ReadReg(IST8310Instance *inst, uint8_t reg, uint8_t len, BSP_Transfer_Mode_e mode,
-                              uint32_t timeout_ms)
+static int8_t IST8310_ReadReg(IST8310Instance *inst, uint8_t reg, uint8_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
 {
     if (mode == BSP_BLOCK_MODE)
     {
-        return (I2CMemRead(inst->i2c_inst, IST8310_I2C_ADDR_7BIT, reg, I2C_MEM_ADDR_SIZE_8BIT, len, mode, timeout_ms) ==
-                BSP_OK)
-                   ? 0
-                   : -1;
+        return (I2CMemRead(inst->i2c_inst, IST8310_I2C_ADDR_7BIT, reg, I2C_MEM_ADDR_SIZE_8BIT, len, mode, timeout_ms) == BSP_OK) ? 0 : -1;
     }
 
     /* 发起前清标志：否则上一笔残留的完成标记会让本笔立刻"成功"返回，
@@ -160,22 +154,17 @@ static int8_t IST8310_ReadReg(IST8310Instance *inst, uint8_t reg, uint8_t len, B
  *       所以传栈变量是安全的，「不能传栈变量」的约束不适用于本函数。
  *       （发起后**不等待**的异步写不适用这条，见 IST8310_TriggerMeas 用 req_buff 的理由。）
  */
-static int8_t IST8310_WriteReg(IST8310Instance *inst, uint8_t reg, uint8_t data, BSP_Transfer_Mode_e mode,
-                               uint32_t timeout_ms)
+static int8_t IST8310_WriteReg(IST8310Instance *inst, uint8_t reg, uint8_t data, BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
 {
     if (mode == BSP_BLOCK_MODE)
     {
-        return (I2CMemWrite(inst->i2c_inst, IST8310_I2C_ADDR_7BIT, reg, I2C_MEM_ADDR_SIZE_8BIT, &data, 1, mode,
-                            timeout_ms) == BSP_OK)
-                   ? 0
-                   : -1;
+        return (I2CMemWrite(inst->i2c_inst, IST8310_I2C_ADDR_7BIT, reg, I2C_MEM_ADDR_SIZE_8BIT, &data, 1, mode, timeout_ms) == BSP_OK) ? 0 : -1;
     }
 
     inst->xfer_done = 0;
     inst->xfer_error = 0;
 
-    if (I2CMemWrite(inst->i2c_inst, IST8310_I2C_ADDR_7BIT, reg, I2C_MEM_ADDR_SIZE_8BIT, &data, 1, mode, timeout_ms) !=
-        BSP_OK)
+    if (I2CMemWrite(inst->i2c_inst, IST8310_I2C_ADDR_7BIT, reg, I2C_MEM_ADDR_SIZE_8BIT, &data, 1, mode, timeout_ms) != BSP_OK)
     {
         return -1;
     }
@@ -259,8 +248,7 @@ static int8_t IST8310_InitDeviceBlocking(IST8310Instance *inst)
                 break;
             }
         }
-        BSPLOG(&g_ist8310_log, LOG_LEVEL_WARNING, "WAI mismatch (got 0x%02X, want 0x%02X), retry %d/%d", wai,
-               IST8310_WAI_VALUE, i + 1, IST8310_WAI_RETRY);
+        BSPLOG(&g_ist8310_log, LOG_LEVEL_WARNING, "WAI mismatch (got 0x%02X, want 0x%02X), retry %d/%d", wai, IST8310_WAI_VALUE, i + 1, IST8310_WAI_RETRY);
         DWT_Delay(IST8310_WAI_RETRY_DELAY_S);
     }
     if (wai != IST8310_WAI_VALUE)
@@ -329,8 +317,7 @@ static int8_t IST8310_InitDeviceBlocking(IST8310Instance *inst)
     }
 
     /* 7) 回到待机（软复位后的默认态，显式写一次让语义明确） */
-    if (IST8310_WriteReg(inst, IST8310_CNTL1_REG, IST8310_CNTL1_MODE_STANDBY, BSP_BLOCK_MODE, inst->i2c_timeout_ms) !=
-        0)
+    if (IST8310_WriteReg(inst, IST8310_CNTL1_REG, IST8310_CNTL1_MODE_STANDBY, BSP_BLOCK_MODE, inst->i2c_timeout_ms) != 0)
     {
         BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "CNTL1 standby write failed");
         return -1;
@@ -344,8 +331,7 @@ static int8_t IST8310_InitDeviceBlocking(IST8310Instance *inst)
     }
     if ((inst->i2c_inst->rx_buff[0] & (uint8_t)(IST8310_CNTL2_DREN | IST8310_CNTL2_DRP)) != cntl2)
     {
-        BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "CNTL2 verify failed (wrote 0x%02X, read 0x%02X)", cntl2,
-               inst->i2c_inst->rx_buff[0]);
+        BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "CNTL2 verify failed (wrote 0x%02X, read 0x%02X)", cntl2, inst->i2c_inst->rx_buff[0]);
         return -1;
     }
 
@@ -389,8 +375,8 @@ static int8_t IST8310_TriggerMeas(IST8310Instance *inst, uint8_t wait)
         inst->xfer_error = 0;
     }
 
-    if (I2CMemWrite(inst->i2c_inst, IST8310_I2C_ADDR_7BIT, IST8310_CNTL1_REG, I2C_MEM_ADDR_SIZE_8BIT, inst->req_buff, 1,
-                    inst->i2c_mode, wait ? inst->i2c_timeout_ms : 0) != BSP_OK)
+    if (I2CMemWrite(inst->i2c_inst, IST8310_I2C_ADDR_7BIT, IST8310_CNTL1_REG, I2C_MEM_ADDR_SIZE_8BIT, inst->req_buff, 1, inst->i2c_mode,
+                    wait ? inst->i2c_timeout_ms : 0) != BSP_OK)
     {
         /* 启动失败不会有完成回调，bsp_i2c 已复位句柄并回调了 err_callback */
         return -1;
@@ -424,8 +410,7 @@ static int8_t IST8310_Recover(IST8310Instance *inst)
         inst->recover_count++;
     }
 
-    BSPLOG(&g_ist8310_log, LOG_LEVEL_WARNING, "Recover start (count=%d, fail=%d)", inst->recover_count,
-           inst->fail_count);
+    BSPLOG(&g_ist8310_log, LOG_LEVEL_WARNING, "Recover start (count=%d, fail=%d)", inst->recover_count, inst->fail_count);
 
     /* 1) 外设级总线恢复（DeInit + Init + 复位句柄状态）。
      *    `(void)` 是有意的：本例给出的判据（连续 3 次传输失败 / 看门狗离线）都是**实例级**
@@ -444,8 +429,7 @@ static int8_t IST8310_Recover(IST8310Instance *inst)
             return -1;
         }
         IST8310_ResetPulse(inst);
-        if (I2CIsDeviceReady(inst->i2c_inst, IST8310_I2C_ADDR_7BIT, IST8310_PROBE_TRIALS, inst->i2c_timeout_ms) !=
-            BSP_OK)
+        if (I2CIsDeviceReady(inst->i2c_inst, IST8310_I2C_ADDR_7BIT, IST8310_PROBE_TRIALS, inst->i2c_timeout_ms) != BSP_OK)
         {
             BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "Device still not ready after RSTN pulse");
             return -1;
@@ -561,8 +545,7 @@ static void IST8310_IntCallback(GPIOInstance *gpio_inst)
      * 同级中断里，等也是白等；而且等出问题也没法在这里收尾（收尾要经 HAL_DMA_Abort，
      * 它按 HAL_GetTick 自旋等 DMA 的 EN 位，中断里 tick 不前进 = 死等）。
      * 忙（BSP_BUSY）时本帧直接放弃，交给任务侧看门狗（link_us 停滞）补发请求 */
-    if (I2CMemRead(inst->i2c_inst, IST8310_I2C_ADDR_7BIT, IST8310_DATAXL_REG, I2C_MEM_ADDR_SIZE_8BIT, IST8310_DATA_LEN,
-                   inst->i2c_mode, 0) != BSP_OK)
+    if (I2CMemRead(inst->i2c_inst, IST8310_I2C_ADDR_7BIT, IST8310_DATAXL_REG, I2C_MEM_ADDR_SIZE_8BIT, IST8310_DATA_LEN, inst->i2c_mode, 0) != BSP_OK)
     {
         /* 启动失败不会有完成回调。I2CMemRead 内部已复位 BSP 句柄并回调了
          * 本驱动的 err_callback，这里再兜一次传输锁，双保险 */
@@ -758,12 +741,10 @@ int8_t IST8310Config(IST8310Instance *inst, const IST8310_Config_s *config)
 {
     BSP_RETURN_IF_TRUE_LOG(inst == NULL, -1, BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, -1, BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->i2c_e >= I2C_NUM_MAX, -1,
-                           BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "i2c_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(config->i2c_e >= I2C_NUM_MAX, -1, BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "i2c_e out of range!"));
     BSP_RETURN_IF_TRUE_LOG(config->work_mode != IST8310_MODE_POLLING && config->work_mode != IST8310_MODE_INT, -1,
                            BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "Invalid work_mode=%d!", (int)config->work_mode));
-    BSP_RETURN_IF_TRUE_LOG(config->i2c_mode > BSP_DMA_MODE, -1,
-                           BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "Invalid i2c_mode=%d!", (int)config->i2c_mode));
+    BSP_RETURN_IF_TRUE_LOG(config->i2c_mode > BSP_DMA_MODE, -1, BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "Invalid i2c_mode=%d!", (int)config->i2c_mode));
     /* 中断模式的传输方式只允许 IT（BLOCK/DMA 都拒绝）。理由分三层：
      * - **BLOCK**：这两笔传输都由中断发起（DRDY EXTI 发起读、读完成回调发起下一个请求），
      *   而 HAL 的阻塞 I2C 用 HAL_GetTick 计时 —— HAL tick 源的 NVIC 优先级数值不小于
@@ -784,18 +765,13 @@ int8_t IST8310Config(IST8310Instance *inst, const IST8310_Config_s *config)
      *   之后总线通常是空闲的，链路往往自愈）；且 6 字节读 + 1 字节写在 400kHz 下约 0.2ms，
      *   DMA 省下的 CPU 时间在这里毫无意义。
      * 轮询模式不受此限：每笔传输都由任务发起，调用方自己就是补刀点，DMA 无妨。 */
-    BSP_RETURN_IF_TRUE_LOG(
-        config->work_mode == IST8310_MODE_INT && config->i2c_mode != BSP_IT_MODE, -1,
-        BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR,
-               "INT mode requires BSP_IT_MODE (got %d): the self-sustaining chain issues transfers from ISR",
-               (int)config->i2c_mode));
-    BSP_RETURN_IF_TRUE_LOG(config->avg >= IST8310_AVG_NUM, -1,
-                           BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "Invalid avg=%d!", (int)config->avg));
-    BSP_RETURN_IF_TRUE_LOG(
-        config->pd_pulse != IST8310_PD_PULSE_LONG && config->pd_pulse != IST8310_PD_PULSE_NORMAL, -1,
-        BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "Invalid pd_pulse=0x%02X!", (unsigned)config->pd_pulse));
-    BSP_RETURN_IF_TRUE_LOG(config->i2c_timeout_ms == 0, -1,
-                           BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "i2c_timeout_ms must be > 0!"));
+    BSP_RETURN_IF_TRUE_LOG(config->work_mode == IST8310_MODE_INT && config->i2c_mode != BSP_IT_MODE, -1,
+                           BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR,
+                                  "INT mode requires BSP_IT_MODE (got %d): the self-sustaining chain issues transfers from ISR", (int)config->i2c_mode));
+    BSP_RETURN_IF_TRUE_LOG(config->avg >= IST8310_AVG_NUM, -1, BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "Invalid avg=%d!", (int)config->avg));
+    BSP_RETURN_IF_TRUE_LOG(config->pd_pulse != IST8310_PD_PULSE_LONG && config->pd_pulse != IST8310_PD_PULSE_NORMAL, -1,
+                           BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "Invalid pd_pulse=0x%02X!", (unsigned)config->pd_pulse));
+    BSP_RETURN_IF_TRUE_LOG(config->i2c_timeout_ms == 0, -1, BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "i2c_timeout_ms must be > 0!"));
     /* 中断模式没接 DRDY 就等于没有数据来源，直接拒绝配置而不是留个哑巴实例 */
     BSP_RETURN_IF_TRUE_LOG(config->work_mode == IST8310_MODE_INT && config->drdy_e >= GPIO_NUM_MAX, -1,
                            BSPLOG(&g_ist8310_log, LOG_LEVEL_ERROR, "INT mode requires a valid drdy_e!"));
@@ -915,8 +891,8 @@ int8_t IST8310Config(IST8310Instance *inst, const IST8310_Config_s *config)
         return -1;
     }
 
-    BSPLOG(&g_ist8310_log, LOG_LEVEL_INFO, "IST8310 config success (mode=%d, i2c=%d, avg=%d, meas_delay=%dms)",
-           (int)inst->work_mode, (int)inst->i2c_mode, (int)inst->avg, inst->meas_delay_ms);
+    BSPLOG(&g_ist8310_log, LOG_LEVEL_INFO, "IST8310 config success (mode=%d, i2c=%d, avg=%d, meas_delay=%dms)", (int)inst->work_mode, (int)inst->i2c_mode,
+           (int)inst->avg, inst->meas_delay_ms);
     return 0;
 }
 
@@ -980,8 +956,7 @@ int8_t IST8310CheckReady(IST8310Instance *inst)
     }
     if (inst->work_mode == IST8310_MODE_INT)
     {
-        BSPLOG(&g_ist8310_log, LOG_LEVEL_WARNING,
-               "CheckReady is meaningless in INT mode (DRDY is expressed by the interrupt)");
+        BSPLOG(&g_ist8310_log, LOG_LEVEL_WARNING, "CheckReady is meaningless in INT mode (DRDY is expressed by the interrupt)");
         return -1;
     }
 
@@ -1006,8 +981,7 @@ static IST8310_Data_t IST8310_ReadPolling(IST8310Instance *inst)
 {
     if (!inst->data_ready)
     {
-        BSPLOG(&g_ist8310_log, LOG_LEVEL_WARNING,
-               "Read without a confirmed ready (CheckReady skipped?), frame may be stale");
+        BSPLOG(&g_ist8310_log, LOG_LEVEL_WARNING, "Read without a confirmed ready (CheckReady skipped?), frame may be stale");
     }
 
     if (IST8310_ReadReg(inst, IST8310_DATAXL_REG, IST8310_DATA_LEN, inst->i2c_mode, inst->i2c_timeout_ms) != 0)
@@ -1055,8 +1029,8 @@ static IST8310_Data_t IST8310_ReadInt(IST8310Instance *inst)
 
     if ((DWT_GetTimeUs() - inst->link_us) > inst->link_timeout_us)
     {
-        BSPLOG(&g_ist8310_log, LOG_LEVEL_WARNING, "Sample link stalled (no progress in %dms), re-requesting (fail=%d)",
-               (int)(inst->link_timeout_us / 1000ull), (int)inst->fail_count);
+        BSPLOG(&g_ist8310_log, LOG_LEVEL_WARNING, "Sample link stalled (no progress in %dms), re-requesting (fail=%d)", (int)(inst->link_timeout_us / 1000ull),
+               (int)inst->fail_count);
         IST8310_NoteFailure(inst);
 
         if (inst->recover_request)
@@ -1163,8 +1137,7 @@ IST8310_Data_t IST8310Sample(IST8310Instance *inst, uint32_t poll_interval_ms, u
              * 连着失败就没必要陪它耗满超时了 —— 直接作废这一帧 */
             if (++err_streak >= IST8310_RECOVER_FAIL_TH)
             {
-                BSPLOG(&g_ist8310_log, LOG_LEVEL_WARNING, "Sample aborted: %d consecutive status read failures",
-                       (int)err_streak);
+                BSPLOG(&g_ist8310_log, LOG_LEVEL_WARNING, "Sample aborted: %d consecutive status read failures", (int)err_streak);
                 return (IST8310_Data_t){0};
             }
         }

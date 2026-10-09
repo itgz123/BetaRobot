@@ -37,8 +37,7 @@ static void SBUSUARTDaemonCallback(void *owner);
 #define DRV_SBUS_DAEMON_RELOAD_DEFAULT 100
 #endif
 /* 兜底值自身不能再是 0 —— 否则"把 0 提升为兜底值"等于没提升，自恢复又会静默失效 */
-_Static_assert(DRV_SBUS_DAEMON_RELOAD_DEFAULT != 0,
-               "DRV_SBUS_DAEMON_RELOAD_DEFAULT must be non-zero (0 would silently disable RX self-heal)");
+_Static_assert(DRV_SBUS_DAEMON_RELOAD_DEFAULT != 0, "DRV_SBUS_DAEMON_RELOAD_DEFAULT must be non-zero (0 would silently disable RX self-heal)");
 
 #ifndef DRV_SBUS_LOG_LIMIT
 #define DRV_SBUS_LOG_LIMIT 10
@@ -108,8 +107,7 @@ int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config)
     const SBUS_ChRange_s *range = &config->ch_range;
     if ((range->ch_min >= range->ch_center) || (range->ch_center >= range->ch_max))
     {
-        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "Invalid ch_range: min=%u center=%u max=%u", range->ch_min,
-               range->ch_center, range->ch_max);
+        BSPLOG(&g_sbus_log, LOG_LEVEL_ERROR, "Invalid ch_range: min=%u center=%u max=%u", range->ch_min, range->ch_center, range->ch_max);
         return -1;
     }
 
@@ -137,8 +135,7 @@ int8_t SBUSConfig(SBUSInstance *instance, const SBUS_Config_s *config)
         if (daemon_reload == 0)
         {
             daemon_reload = DRV_SBUS_DAEMON_RELOAD_DEFAULT;
-            BSPLOG(&g_sbus_log, LOG_LEVEL_WARNING, "daemon_reload=0 disables RX self-heal, forced to %u",
-                   daemon_reload);
+            BSPLOG(&g_sbus_log, LOG_LEVEL_WARNING, "daemon_reload=0 disables RX self-heal, forced to %u", daemon_reload);
         }
 
         Daemon_Config_s daemon_cfg = {
@@ -204,8 +201,7 @@ static SBUS_Data_t SBUSDecodeFrame(const SBUSInstance *inst, const uint8_t *data
     }
 
     // 帧尾检查
-    if (frame->frame.footer != SBUS_FOOTER && frame->frame.footer != SBUS_FOOTER_FRAME_LOST &&
-        frame->frame.footer != SBUS_FOOTER_FAILSAFE)
+    if (frame->frame.footer != SBUS_FOOTER && frame->frame.footer != SBUS_FOOTER_FRAME_LOST && frame->frame.footer != SBUS_FOOTER_FAILSAFE)
     {
         BSPLOG(&g_sbus_log, LOG_LEVEL_WARNING, "Invalid frame footer: 0x%02X", frame->frame.footer);
         result.frame_lost = 1;
@@ -226,8 +222,7 @@ static SBUS_Data_t SBUSDecodeFrame(const SBUSInstance *inst, const uint8_t *data
         uint8_t byte_off = bit_off / 8;      // 从 raw[1] 起的字节偏移
         uint8_t bit_rem = bit_off % 8;       // 字节内位偏移
         // 从 raw[1 + byte_off] 读取最多 3 字节，超出的位被 0x07FF 清除
-        uint16_t raw = (uint16_t)(((uint32_t)frame->raw[1 + byte_off] >> bit_rem) |
-                                  ((uint32_t)frame->raw[1 + byte_off + 1] << (8 - bit_rem)) |
+        uint16_t raw = (uint16_t)(((uint32_t)frame->raw[1 + byte_off] >> bit_rem) | ((uint32_t)frame->raw[1 + byte_off + 1] << (8 - bit_rem)) |
                                   ((uint32_t)frame->raw[1 + byte_off + 2] << (16 - bit_rem))) &
                        0x07FF;
         int32_t offset = (int32_t)raw - center;
@@ -360,8 +355,7 @@ static void SBUSUARTRxCallback(USARTInstance *usart_inst)
     // 检查帧长度
     if (usart_inst->rx_len != SBUS_FRAME_SIZE)
     {
-        BSPLOG(&g_sbus_log, LOG_LEVEL_WARNING, "Frame length error: %d (expected %d)", usart_inst->rx_len,
-               SBUS_FRAME_SIZE);
+        BSPLOG(&g_sbus_log, LOG_LEVEL_WARNING, "Frame length error: %d (expected %d)", usart_inst->rx_len, SBUS_FRAME_SIZE);
         return;
     }
 

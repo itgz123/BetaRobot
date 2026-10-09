@@ -196,8 +196,7 @@ Eskf_Status_e EskfUpdateM(EskfInstance *eskf, uint8_t m_now, const float *z, Esk
     mfn(eskf->ctx, z, m, y, eskf->H, eskf->R);
 
     /* δ ← δ + K·y，P ← (I-KH)·P 或 Joseph；奇异时不改动 δ/P */
-    if (Lib_KfCore_Update(eskf->delta, eskf->P, n, m, eskf->H, eskf->R, y, eskf->opt, eskf->wA, eskf->wB, eskf->wC,
-                          eskf->wG, eskf->wD) != 0)
+    if (Lib_KfCore_Update(eskf->delta, eskf->P, n, m, eskf->H, eskf->R, y, eskf->opt, eskf->wA, eskf->wB, eskf->wC, eskf->wG, eskf->wD) != 0)
     {
         return ESKF_ERR_SINGULAR;
     }

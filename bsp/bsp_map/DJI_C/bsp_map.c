@@ -18,12 +18,10 @@ const GPIO_Map_t gpio_map[GPIO_NUM_MAX] = {
 };
 
 const TIM_Map_t tim_map[TIM_NUM_MAX] = {
-    [TIM_PWM_1] = {&htim1, TIM_CHANNEL_1},   [TIM_PWM_2] = {&htim1, TIM_CHANNEL_2},
-    [TIM_PWM_3] = {&htim1, TIM_CHANNEL_3},   [TIM_PWM_4] = {&htim1, TIM_CHANNEL_4},
-    [TIM_PWM_5] = {&htim8, TIM_CHANNEL_1},   [TIM_PWM_6] = {&htim8, TIM_CHANNEL_2},
-    [TIM_PWM_7] = {&htim8, TIM_CHANNEL_3},   [TIM_LED_B] = {&htim5, TIM_CHANNEL_1},
-    [TIM_LED_G] = {&htim5, TIM_CHANNEL_2},   [TIM_LED_R] = {&htim5, TIM_CHANNEL_3},
-    [TIM_LASER] = {&htim3, TIM_CHANNEL_3},   [TIM_BUZZER] = {&htim4, TIM_CHANNEL_3},
+    [TIM_PWM_1] = {&htim1, TIM_CHANNEL_1},   [TIM_PWM_2] = {&htim1, TIM_CHANNEL_2}, [TIM_PWM_3] = {&htim1, TIM_CHANNEL_3},
+    [TIM_PWM_4] = {&htim1, TIM_CHANNEL_4},   [TIM_PWM_5] = {&htim8, TIM_CHANNEL_1}, [TIM_PWM_6] = {&htim8, TIM_CHANNEL_2},
+    [TIM_PWM_7] = {&htim8, TIM_CHANNEL_3},   [TIM_LED_B] = {&htim5, TIM_CHANNEL_1}, [TIM_LED_G] = {&htim5, TIM_CHANNEL_2},
+    [TIM_LED_R] = {&htim5, TIM_CHANNEL_3},   [TIM_LASER] = {&htim3, TIM_CHANNEL_3}, [TIM_BUZZER] = {&htim4, TIM_CHANNEL_3},
     [TIM_HEATER] = {&htim10, TIM_CHANNEL_1},
 };
 

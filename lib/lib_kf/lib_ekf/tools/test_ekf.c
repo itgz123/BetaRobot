@@ -209,8 +209,7 @@ static void case_linear_equivalent(void)
         LkfPredict(&kf_ref, NULL);
         EkfUpdate(&ekf_lin, z);
         LkfUpdate(&kf_ref, z);
-        if (memcmp(ekf_lin.x, kf_ref.x, sizeof(float) * (size_t)n) != 0 ||
-            memcmp(ekf_lin.P, kf_ref.P, sizeof(float) * (size_t)(n * n)) != 0)
+        if (memcmp(ekf_lin.x, kf_ref.x, sizeof(float) * (size_t)n) != 0 || memcmp(ekf_lin.P, kf_ref.P, sizeof(float) * (size_t)(n * n)) != 0)
         {
             bad++;
         }
@@ -305,19 +304,8 @@ static void case_pendulum(void)
     float P0[4] = {1.0f, 0.0f, 0.0f, 1.0f};
     float x0[2] = {0.0f, 0.0f}; /* 初值故意偏离真值 θ=0.5 */
 
-    Ekf_Init_Config_s cfg = {.n = 2,
-                             .m = 1,
-                             .l = 0,
-                             .opt = 0,
-                             .ctx = &ctx,
-                             .f_fn = pend_f,
-                             .F_fn = pend_F,
-                             .h_fn = pend_h,
-                             .H_fn = pend_H,
-                             .x0 = x0,
-                             .P0 = P0,
-                             .Q = Q,
-                             .R = R};
+    Ekf_Init_Config_s cfg = {
+        .n = 2, .m = 1, .l = 0, .opt = 0, .ctx = &ctx, .f_fn = pend_f, .F_fn = pend_F, .h_fn = pend_h, .H_fn = pend_H, .x0 = x0, .P0 = P0, .Q = Q, .R = R};
     check(EkfInit(&ekf_pend, &cfg) == EKF_OK, "EkfInit 失败");
 
     float truth[2] = {0.5f, 0.0f};
@@ -357,8 +345,7 @@ static void case_pendulum(void)
     }
 
     const double nis_mean = ctx.nis_sum / (double)ctx.nis_cnt;
-    printf("  用例2 单摆: 末段 max|Δθ|=%.4f rad  NIS 均值=%.3f  末端 θ_est=%.4f θ_true=%.4f\n", worst_tail, nis_mean,
-           ekf_pend.x[0], truth[0]);
+    printf("  用例2 单摆: 末段 max|Δθ|=%.4f rad  NIS 均值=%.3f  末端 θ_est=%.4f θ_true=%.4f\n", worst_tail, nis_mean, ekf_pend.x[0], truth[0]);
     check(worst_tail < 0.02f, "单摆 θ 稳态误差超限");
     check(nis_mean > 0.5 && nis_mean < 2.0, "单摆 NIS 均值不在 [0.5, 2]");
 }
@@ -707,8 +694,7 @@ static void case_joseph_pd(void)
             sym_bad++;
         }
     }
-    printf("  用例6 病态P0+Joseph: 非正定步数=%d 非对称步数=%d 末端 P=%g/%g\n", pd_bad, sym_bad,
-           (double)EKF_P(&ekf_jos, 0, 0), (double)EKF_P(&ekf_jos, 1, 1));
+    printf("  用例6 病态P0+Joseph: 非正定步数=%d 非对称步数=%d 末端 P=%g/%g\n", pd_bad, sym_bad, (double)EKF_P(&ekf_jos, 0, 0), (double)EKF_P(&ekf_jos, 1, 1));
     check(pd_bad == 0, "Joseph 下 P 失去正定性");
     check(sym_bad == 0, "P 未保持对称");
 }
@@ -731,8 +717,8 @@ static void case_param_and_ctx(void)
     const int d1 = (EkfInit(&ekf_bad, &bad1) == EKF_ERR_DIM);
     const int d2 = (EkfInit(&ekf_bad, &bad2) == EKF_ERR_DIM);
     const int d3 = (EkfInit(&ekf_bad, &bad3) == EKF_ERR_DIM);
-    const int nl = (EkfInit(NULL, &bad2) == EKF_ERR_NULL) && (EkfInit(&ekf_bad, NULL) == EKF_ERR_NULL) &&
-                   (EkfPredict(NULL, NULL, 0.0f) == EKF_ERR_NULL) && (EkfUpdate(NULL, R) == EKF_ERR_NULL);
+    const int nl = (EkfInit(NULL, &bad2) == EKF_ERR_NULL) && (EkfInit(&ekf_bad, NULL) == EKF_ERR_NULL) && (EkfPredict(NULL, NULL, 0.0f) == EKF_ERR_NULL) &&
+                   (EkfUpdate(NULL, R) == EKF_ERR_NULL);
 
     /* h_fn 缺失 → EKF_ERR_CFG */
     Ekf_Init_Config_s noh = {.n = 2, .m = 1, .l = 0, .h_fn = NULL, .x0 = x0, .P0 = P0, .F = F, .Q = Q, .H = H, .R = R};
@@ -743,26 +729,13 @@ static void case_param_and_ctx(void)
     EkfInit(&ekf_bad, &noh);
     const int m_now_bad = (EkfUpdateM(&ekf_bad, 0, R) == EKF_ERR_DIM) && (EkfUpdateM(&ekf_bad, 2, R) == EKF_ERR_DIM);
 
-    printf("  用例7 参数校验: n越界=%d n=0=%d m越界=%d 空指针=%d h缺失=%d m_now越界=%d\n", d1, d2, d3, nl, cfg_missing,
-           m_now_bad);
+    printf("  用例7 参数校验: n越界=%d n=0=%d m越界=%d 空指针=%d h缺失=%d m_now越界=%d\n", d1, d2, d3, nl, cfg_missing, m_now_bad);
     check(d1 && d2 && d3 && nl && cfg_missing && m_now_bad, "参数校验未按预期拒绝");
 
     /* ctx 透传：回调里计数 */
     SelCtx c = {.e = &ekf_bad, .Hsrc = H, .sel = -1};
-    Ekf_Init_Config_s ok = {.n = 2,
-                            .m = 1,
-                            .l = 0,
-                            .ctx = &c,
-                            .f_fn = NULL,
-                            .F_fn = NULL,
-                            .h_fn = sel_h,
-                            .H_fn = sel_H,
-                            .x0 = x0,
-                            .P0 = P0,
-                            .F = F,
-                            .Q = Q,
-                            .H = H,
-                            .R = R};
+    Ekf_Init_Config_s ok = {
+        .n = 2, .m = 1, .l = 0, .ctx = &c, .f_fn = NULL, .F_fn = NULL, .h_fn = sel_h, .H_fn = sel_H, .x0 = x0, .P0 = P0, .F = F, .Q = Q, .H = H, .R = R};
     check(EkfInit(&ekf_bad, &ok) == EKF_OK, "EkfInit 失败");
     float z = 0.5f;
     for (int i = 0; i < 10; i++)
@@ -775,10 +748,8 @@ static void case_param_and_ctx(void)
 
     /* EkfSetState / EkfReset */
     float ns[2] = {7.0f, -3.0f};
-    check(EkfSetState(&ekf_bad, ns, NULL) == EKF_OK && ekf_bad.x[0] == 7.0f && ekf_bad.x[1] == -3.0f,
-          "EkfSetState 未生效");
-    check(EkfReset(&ekf_bad) == EKF_OK && ekf_bad.x[0] == 0.0f && ekf_bad.P[0] == 1.0f && ekf_bad.P[3] == 1.0f,
-          "EkfReset 未生效");
+    check(EkfSetState(&ekf_bad, ns, NULL) == EKF_OK && ekf_bad.x[0] == 7.0f && ekf_bad.x[1] == -3.0f, "EkfSetState 未生效");
+    check(EkfReset(&ekf_bad) == EKF_OK && ekf_bad.x[0] == 0.0f && ekf_bad.P[0] == 1.0f && ekf_bad.P[3] == 1.0f, "EkfReset 未生效");
 }
 
 int main(void)

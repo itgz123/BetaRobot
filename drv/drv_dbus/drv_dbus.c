@@ -41,8 +41,7 @@ static void DBUSUARTDaemonCallback(void *owner);
 #define DRV_DBUS_DAEMON_RELOAD_DEFAULT 100
 #endif
 /* 兜底值自身不能再是 0 —— 否则"把 0 提升为兜底值"等于没提升，自恢复又会静默失效 */
-_Static_assert(DRV_DBUS_DAEMON_RELOAD_DEFAULT != 0,
-               "DRV_DBUS_DAEMON_RELOAD_DEFAULT must be non-zero (0 would silently disable RX self-heal)");
+_Static_assert(DRV_DBUS_DAEMON_RELOAD_DEFAULT != 0, "DRV_DBUS_DAEMON_RELOAD_DEFAULT must be non-zero (0 would silently disable RX self-heal)");
 
 #ifndef DRV_DBUS_LOG_LIMIT
 #define DRV_DBUS_LOG_LIMIT 10
@@ -132,8 +131,7 @@ int8_t DBUSConfig(DBUSInstance *instance, const DBUS_Config_s *config)
         if (daemon_reload == 0)
         {
             daemon_reload = DRV_DBUS_DAEMON_RELOAD_DEFAULT;
-            BSPLOG(&g_dbus_log, LOG_LEVEL_WARNING, "daemon_reload=0 disables RX self-heal, forced to %u",
-                   daemon_reload);
+            BSPLOG(&g_dbus_log, LOG_LEVEL_WARNING, "daemon_reload=0 disables RX self-heal, forced to %u", daemon_reload);
         }
 
         Daemon_Config_s daemon_cfg = {

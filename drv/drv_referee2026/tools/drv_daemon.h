@@ -52,15 +52,15 @@ typedef struct
 } Daemon_Config_s;
 
 /** 静态定义 daemon 实例 */
-#define DAEMON_INSTANCE_DEF(name)                                                                                      \
-    static DaemonInstance name = {                                                                                     \
-        .reload_count = 0,                                                                                             \
-        .fault_action = DAEMON_FAULT_NONE,                                                                             \
-        .temp_count = 0,                                                                                               \
-        .is_online = 1,                                                                                                \
-        .callback = NULL,                                                                                              \
-        .owner_id = NULL,                                                                                              \
-        .last_reload_us = 0,                                                                                           \
+#define DAEMON_INSTANCE_DEF(name)                                                                                                                              \
+    static DaemonInstance name = {                                                                                                                             \
+        .reload_count = 0,                                                                                                                                     \
+        .fault_action = DAEMON_FAULT_NONE,                                                                                                                     \
+        .temp_count = 0,                                                                                                                                       \
+        .is_online = 1,                                                                                                                                        \
+        .callback = NULL,                                                                                                                                      \
+        .owner_id = NULL,                                                                                                                                      \
+        .last_reload_us = 0,                                                                                                                                   \
     }
 
 void DaemonConfig(DaemonInstance *inst, const Daemon_Config_s *config);

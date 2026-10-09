@@ -158,8 +158,7 @@ static void FsmStateCheckNode(const LibFsmStateNode_s *node)
  * @brief 派发收尾：放下重入标志、回调跟踪钩子、（TRACE 开关下）打印一行
  * @return 原样返回 result，方便调用处写成 return FsmStateFinish(...)
  */
-static LibFsmStateResult_e FsmStateFinish(LibFsmStateMachine_s *fsm, const LibFsmStateNode_s *from,
-                                          const LibFsmStateNode_s *to, LibFsmStateEvent_t event,
+static LibFsmStateResult_e FsmStateFinish(LibFsmStateMachine_s *fsm, const LibFsmStateNode_s *from, const LibFsmStateNode_s *to, LibFsmStateEvent_t event,
                                           LibFsmStateResult_e result)
 {
     fsm->dispatching = 0u;
@@ -170,8 +169,7 @@ static LibFsmStateResult_e FsmStateFinish(LibFsmStateMachine_s *fsm, const LibFs
     }
 
 #ifdef LIB_FSM_STATE_TRACE
-    printf("[fsm] %s --(%d)--> %s : %s\n", FsmStateNodeName(from), (int)event, FsmStateNodeName(to),
-           FsmStateResultName(result));
+    printf("[fsm] %s --(%d)--> %s : %s\n", FsmStateNodeName(from), (int)event, FsmStateNodeName(to), FsmStateResultName(result));
 #endif
 
     return result;
@@ -341,8 +339,7 @@ const LibFsmStateNode_s *LibFsmStateSelfExternal(void)
     return FSM_STATE_SELF_MARK;
 }
 
-const LibFsmStateNode_s *LibFsmStateDefaultHandle(LibFsmStateMachine_s *fsm, LibFsmStateEvent_t event,
-                                                  const void *event_data)
+const LibFsmStateNode_s *LibFsmStateDefaultHandle(LibFsmStateMachine_s *fsm, LibFsmStateEvent_t event, const void *event_data)
 {
     const LibFsmStateNode_s *node;
     const LibFsmStateTransition_s *transition;

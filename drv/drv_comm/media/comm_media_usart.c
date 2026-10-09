@@ -84,8 +84,7 @@ static int8_t MediaUsartSend(CommMedia *media, const uint8_t *data)
      *   BSP_HW_ERR    —— HAL 启动失败，可能是瞬态；
      *   BSP_BUSY      —— 背压（上层应排队），立即重试必然还是忙；
      *   BSP_PARAM_ERR —— 参数/配置错误（如该口根本没配 TX DMA），重试永远不会成功。 */
-    if ((ret == BSP_TIMEOUT || ret == BSP_HW_ERR) &&
-        USARTTransmit(usart, m->tx_buff, m->tx_buff_size, m->tx_mode, m->timeout_ms) == BSP_OK)
+    if ((ret == BSP_TIMEOUT || ret == BSP_HW_ERR) && USARTTransmit(usart, m->tx_buff, m->tx_buff_size, m->tx_mode, m->timeout_ms) == BSP_OK)
         return 0;
 
     m->tx_fail++;
@@ -210,8 +209,7 @@ int8_t MediaUsartConfig(CommMediaUsart *media, CommMediaUsartConfig_s *cfg)
     /* 4. 启动接收常开流（bsp 的 USARTConfig 不再自动启动接收） */
     if (USARTReceive(usart, rx_len, cfg->rx_mode, 0) != BSP_OK)
     {
-        BSPLOG(&g_media_usart_log, LOG_LEVEL_ERROR, "receive start failed (mode=%d, len=%u), offline hook will retry",
-               (int)cfg->rx_mode, rx_len);
+        BSPLOG(&g_media_usart_log, LOG_LEVEL_ERROR, "receive start failed (mode=%d, len=%u), offline hook will retry", (int)cfg->rx_mode, rx_len);
         return -1;
     }
 

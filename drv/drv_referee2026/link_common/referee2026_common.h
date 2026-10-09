@@ -924,8 +924,7 @@ typedef struct
  *   0x0303 sizeof 12 而总表 15（官方结构体也是 12，总表多算 3B）
  *   0x0307 sizeof 105 而总表 103（三条里唯一"总表更小"，字段表逐项相加为 105）
  */
-#define REFEREE2026_CMD_STATIC_ASSERT(cmd_id, ...)                                                                     \
-    _Static_assert(__VA_ARGS__, "命令 0x" #cmd_id " 的数据段长度与字段表不符")
+#define REFEREE2026_CMD_STATIC_ASSERT(cmd_id, ...) _Static_assert(__VA_ARGS__, "命令 0x" #cmd_id " 的数据段长度与字段表不符")
 
 REFEREE2026_CMD_STATIC_ASSERT(0x0001, sizeof(Referee2026GameStatus_t) == REFEREE2026_COMMON_LEN_GAME_STATUS);
 REFEREE2026_CMD_STATIC_ASSERT(0x0002, sizeof(Referee2026GameResult_t) == REFEREE2026_COMMON_LEN_GAME_RESULT);
@@ -935,27 +934,21 @@ REFEREE2026_CMD_STATIC_ASSERT(0x0104, sizeof(Referee2026RefereeWarning_t) == REF
 REFEREE2026_CMD_STATIC_ASSERT(0x0105, sizeof(Referee2026DartLaunch_t) == REFEREE2026_COMMON_LEN_DART_LAUNCH);
 REFEREE2026_CMD_STATIC_ASSERT(0x0201, sizeof(Referee2026RobotStatus_t) == REFEREE2026_COMMON_LEN_ROBOT_STATUS);
 REFEREE2026_CMD_STATIC_ASSERT(0x0202, sizeof(Referee2026PowerHeat_t) == REFEREE2026_COMMON_LEN_POWER_HEAT);
-REFEREE2026_CMD_STATIC_ASSERT(0x0203, sizeof(Referee2026RobotPos_t) ==
-                                          REFEREE2026_COMMON_LEN_ROBOT_POS); // 总表 16，见其 @warning
+REFEREE2026_CMD_STATIC_ASSERT(0x0203, sizeof(Referee2026RobotPos_t) == REFEREE2026_COMMON_LEN_ROBOT_POS); // 总表 16，见其 @warning
 REFEREE2026_CMD_STATIC_ASSERT(0x0204, sizeof(Referee2026Buff_t) == REFEREE2026_COMMON_LEN_BUFF);
 REFEREE2026_CMD_STATIC_ASSERT(0x0206, sizeof(Referee2026HurtData_t) == REFEREE2026_COMMON_LEN_ROBOT_HURT);
 REFEREE2026_CMD_STATIC_ASSERT(0x0207, sizeof(Referee2026ShootData_t) == REFEREE2026_COMMON_LEN_SHOOT_DATA);
-REFEREE2026_CMD_STATIC_ASSERT(0x0208,
-                              sizeof(Referee2026ProjectileAllowance_t) == REFEREE2026_COMMON_LEN_PROJECTILE_ALLOW);
+REFEREE2026_CMD_STATIC_ASSERT(0x0208, sizeof(Referee2026ProjectileAllowance_t) == REFEREE2026_COMMON_LEN_PROJECTILE_ALLOW);
 REFEREE2026_CMD_STATIC_ASSERT(0x0209, sizeof(Referee2026RfidStatus_t) == REFEREE2026_COMMON_LEN_RFID_STATUS);
 REFEREE2026_CMD_STATIC_ASSERT(0x020A, sizeof(Referee2026DartClientCmd_t) == REFEREE2026_COMMON_LEN_DART_CLIENT_CMD);
-REFEREE2026_CMD_STATIC_ASSERT(0x020B,
-                              sizeof(Referee2026GroundRobotPosition_t) == REFEREE2026_COMMON_LEN_GROUND_ROBOT_POS);
+REFEREE2026_CMD_STATIC_ASSERT(0x020B, sizeof(Referee2026GroundRobotPosition_t) == REFEREE2026_COMMON_LEN_GROUND_ROBOT_POS);
 REFEREE2026_CMD_STATIC_ASSERT(0x020C, sizeof(Referee2026RadarMarkData_t) == REFEREE2026_COMMON_LEN_RADAR_MARK);
 REFEREE2026_CMD_STATIC_ASSERT(0x020D, sizeof(Referee2026SentryInfo_t) == REFEREE2026_COMMON_LEN_SENTRY_INFO);
 REFEREE2026_CMD_STATIC_ASSERT(0x020E, sizeof(Referee2026RadarInfo_t) == REFEREE2026_COMMON_LEN_RADAR_INFO);
-REFEREE2026_CMD_STATIC_ASSERT(0x0301,
-                              sizeof(Referee2026RobotInteraction_t) == REFEREE2026_COMMON_LEN_ROBOT_INTERACTION);
-REFEREE2026_CMD_STATIC_ASSERT(0x0303, sizeof(Referee2026MiniMapCommand_t) ==
-                                          REFEREE2026_COMMON_LEN_MINI_MAP_INTERACT); // 总表 15，见其 @warning
+REFEREE2026_CMD_STATIC_ASSERT(0x0301, sizeof(Referee2026RobotInteraction_t) == REFEREE2026_COMMON_LEN_ROBOT_INTERACTION);
+REFEREE2026_CMD_STATIC_ASSERT(0x0303, sizeof(Referee2026MiniMapCommand_t) == REFEREE2026_COMMON_LEN_MINI_MAP_INTERACT); // 总表 15，见其 @warning
 REFEREE2026_CMD_STATIC_ASSERT(0x0305, sizeof(Referee2026MiniMapRadar_t) == REFEREE2026_COMMON_LEN_MINI_MAP_RADAR);
-REFEREE2026_CMD_STATIC_ASSERT(0x0307, sizeof(Referee2026MiniMapPath_t) ==
-                                          REFEREE2026_COMMON_LEN_MINI_MAP_PATH); // 总表 103，见其 @warning
+REFEREE2026_CMD_STATIC_ASSERT(0x0307, sizeof(Referee2026MiniMapPath_t) == REFEREE2026_COMMON_LEN_MINI_MAP_PATH); // 总表 103，见其 @warning
 REFEREE2026_CMD_STATIC_ASSERT(0x0308, sizeof(Referee2026CustomInfo_t) == REFEREE2026_COMMON_LEN_MINI_MAP_ROBOT);
 
 #undef REFEREE2026_CMD_STATIC_ASSERT
@@ -1012,7 +1005,7 @@ typedef enum : uint8_t
                                              //!< 频率发送（服务器→被判罚方全体机器人）
     REFEREE2026_COMMON_DATA_DART_LAUNCH,     //!< 飞镖发射相关数据，固定以 1Hz 频率发送（服务器→己方全体机器人）
     REFEREE2026_COMMON_DATA_ROBOT_STATUS,    //!< 机器人性能体系数据，固定以 10Hz 频率发送（服务器→对应机器人）
-    REFEREE2026_COMMON_DATA_POWER_HEAT, //!< 实时底盘缓冲能量和射击热量数据，固定以 10Hz 频率发送（服务器→对应机器人）
+    REFEREE2026_COMMON_DATA_POWER_HEAT,      //!< 实时底盘缓冲能量和射击热量数据，固定以 10Hz 频率发送（服务器→对应机器人）
     /* 0x0203：总表 16B / 字段表 12B，见"三、长度自校验"里的说明 */
     REFEREE2026_COMMON_DATA_ROBOT_POS,         //!< 机器人位置数据，固定以 1Hz 频率发送（服务器→对应机器人）
     REFEREE2026_COMMON_DATA_BUFF,              //!< 机器人增益和底盘能量数据，固定以 3Hz 频率发送（服务器→对应机器人）

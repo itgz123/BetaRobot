@@ -86,8 +86,7 @@ uint32_t LIB_CRC_Direct(const LIB_CRC_Algo_t *algo, const uint8_t *data, uint32_
         {
             crc ^= data[i] << (width - 8);
             for (uint8_t bit = 0; bit < 8; bit++)
-                crc = (crc & (1u << (width - 1))) ? (uint32_t)(((crc << 1) ^ poly) & mask)
-                                                  : (uint32_t)((crc << 1) & mask);
+                crc = (crc & (1u << (width - 1))) ? (uint32_t)(((crc << 1) ^ poly) & mask) : (uint32_t)((crc << 1) & mask);
         }
     }
 
@@ -143,8 +142,7 @@ int8_t LIB_CRC_GenTable(const LIB_CRC_Algo_t *algo, uint32_t table[256])
              * `crc &= mask` 会把垃圾位清掉），所以这是个**只在直接索引表时才会现形**的坑。 */
             crc = (i << (width - 8)) & mask;
             for (uint8_t bit = 0; bit < 8; bit++)
-                crc = (crc & (1u << (width - 1))) ? (uint32_t)(((crc << 1) ^ poly) & mask)
-                                                  : (uint32_t)((crc << 1) & mask);
+                crc = (crc & (1u << (width - 1))) ? (uint32_t)(((crc << 1) ^ poly) & mask) : (uint32_t)((crc << 1) & mask);
         }
         table[i] = crc;
     }

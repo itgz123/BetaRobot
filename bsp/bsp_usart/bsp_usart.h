@@ -94,8 +94,8 @@ typedef struct USARTInstance
  * @example
  *   USART_INSTANCE_DEF(sbus_uart, 64);
  */
-#define USART_INSTANCE_DEF(name, buff_sz)                                                                              \
-    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};                                                              \
+#define USART_INSTANCE_DEF(name, buff_sz)                                                                                                                      \
+    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};                                                                                                      \
     static USARTInstance name = {.rx_buff = name##_rx_buff, .rx_buff_size = buff_sz}
 
 /*------------- 配置结构体 --------------*/
@@ -161,8 +161,7 @@ BSP_Status_e USARTConfig(USARTInstance *instance, const USART_Config_s *config);
  * @note tx_callback 内续发是允许的（HAL 已把 gState 置回 READY），但不得在回调内调
  *       USARTConfig / USARTReceive。
  */
-BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode,
-                           uint32_t timeout_ms);
+BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
 
 /**
  * @brief 启动接收（模式每次调用传参）

@@ -138,8 +138,7 @@ typedef void (*LibFsmStateAction_fn)(LibFsmStateMachine_s *fsm, const void *even
  *         （要外部自转移就返回 LibFsmStateSelfExternal()）
  * @note 判事件、过守卫、执行动作都在这里面；框架只负责按顺序调 exit / entry
  */
-typedef const LibFsmStateNode_s *(*LibFsmStateHandle_fn)(LibFsmStateMachine_s *fsm, LibFsmStateEvent_t event,
-                                                         const void *event_data);
+typedef const LibFsmStateNode_s *(*LibFsmStateHandle_fn)(LibFsmStateMachine_s *fsm, LibFsmStateEvent_t event, const void *event_data);
 
 /**
  * @brief 跟踪钩子：每次派发结束调用一次（三种结局都调）
@@ -150,8 +149,8 @@ typedef const LibFsmStateNode_s *(*LibFsmStateHandle_fn)(LibFsmStateMachine_s *f
  * @param result 本次结局
  * @note 跑在派发末尾、dispatching 标志已放下之后；里面不要再去派发同一状态机
  */
-typedef void (*LibFsmStateTrace_fn)(LibFsmStateMachine_s *fsm, const LibFsmStateNode_s *from,
-                                    const LibFsmStateNode_s *to, LibFsmStateEvent_t event, LibFsmStateResult_e result);
+typedef void (*LibFsmStateTrace_fn)(LibFsmStateMachine_s *fsm, const LibFsmStateNode_s *from, const LibFsmStateNode_s *to, LibFsmStateEvent_t event,
+                                    LibFsmStateResult_e result);
 
 /** @brief 状态的虚表：进入 / 退出 / 处理事件 */
 typedef struct
@@ -207,9 +206,9 @@ struct LibFsmStateMachine_s
 };
 
 /** @brief 转移表静态断言：非空 + 元素类型正确（写在表定义之后，编译期拦住抄错类型/空表） */
-#define LIB_FSM_STATE_CHECK_TABLE(tbl)                                                                                 \
-    _Static_assert(sizeof(tbl) / sizeof((tbl)[0]) > 0u, "转移表不能为空");                                             \
-    _Static_assert(sizeof((tbl)[0]) == sizeof(LibFsmStateTransition_s), "转移表元素类型必须是 "                        \
+#define LIB_FSM_STATE_CHECK_TABLE(tbl)                                                                                                                         \
+    _Static_assert(sizeof(tbl) / sizeof((tbl)[0]) > 0u, "转移表不能为空");                                                                                     \
+    _Static_assert(sizeof((tbl)[0]) == sizeof(LibFsmStateTransition_s), "转移表元素类型必须是 "                                                                \
                                                                         "LibFsmStateTransition_s")
 
 /*============================================
@@ -300,7 +299,6 @@ const LibFsmStateNode_s *LibFsmStateSelfExternal(void);
  *       1. 状态的 ops->handle 留空、transitions 非空 → 框架自动回退到本函数
  *       2. 状态的 ops->handle 显式写成 LibFsmStateDefaultHandle
  */
-const LibFsmStateNode_s *LibFsmStateDefaultHandle(LibFsmStateMachine_s *fsm, LibFsmStateEvent_t event,
-                                                  const void *event_data);
+const LibFsmStateNode_s *LibFsmStateDefaultHandle(LibFsmStateMachine_s *fsm, LibFsmStateEvent_t event, const void *event_data);
 
 #endif /* __LIB_FSM_STATE_H */

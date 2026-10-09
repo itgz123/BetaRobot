@@ -88,8 +88,7 @@ static inline int IST8310Calib_MatIsZero(const float m[IST8310_AXIS_NUM][IST8310
 }
 
 /** @brief out = M·v（3×3 行主序乘 3×1），out 可与 v 同一数组 */
-static inline void IST8310Calib_MatVec(const float m[IST8310_AXIS_NUM][IST8310_AXIS_NUM],
-                                       const float v[IST8310_AXIS_NUM], float out[IST8310_AXIS_NUM])
+static inline void IST8310Calib_MatVec(const float m[IST8310_AXIS_NUM][IST8310_AXIS_NUM], const float v[IST8310_AXIS_NUM], float out[IST8310_AXIS_NUM])
 {
     float r[IST8310_AXIS_NUM];
     for (int i = 0; i < IST8310_AXIS_NUM; i++)
@@ -150,8 +149,7 @@ static inline void IST8310CalibLoad(IST8310Calib_s *dst, const IST8310Calib_s *s
  *       「零初始化 == 完全不修正」）。代价是每次调用多 18 次浮点比较 —— 换帧率
  *       100~200Hz 下可忽略，换来的是"忘了 Load 就静默输出 0"这个坑不存在。
  */
-static inline void IST8310MagCorrect(const float raw[IST8310_AXIS_NUM], const IST8310Calib_s *c,
-                                     float out[IST8310_AXIS_NUM])
+static inline void IST8310MagCorrect(const float raw[IST8310_AXIS_NUM], const IST8310Calib_s *c, float out[IST8310_AXIS_NUM])
 {
     float v[IST8310_AXIS_NUM];
 

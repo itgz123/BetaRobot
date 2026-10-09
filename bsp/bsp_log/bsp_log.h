@@ -127,9 +127,9 @@ typedef struct
  * 只留一条 extern 声明 —— 零 RAM/Flash，但实例名依然存在（有类型、可取址），
  * BSPLOG 的实参因此仍是合法表达式、仍受编译期检查（见下方关闭态的 BSPLOG）。 */
 #if (defined(BSP_LOG_USED)) && (defined(LOG_UART))
-#define LOG_INSTANCE_DEF(name, module, limit)                                                                          \
-    LOGInstance name = {.module_name = (module),                                                                       \
-                        .module_name_len = sizeof(module) - 1, /* 字面量长度 */                                        \
+#define LOG_INSTANCE_DEF(name, module, limit)                                                                                                                  \
+    LOGInstance name = {.module_name = (module),                                                                                                               \
+                        .module_name_len = sizeof(module) - 1, /* 字面量长度 */                                                                                \
                         .times_per_second = (limit)}
 #else
 #define LOG_INSTANCE_DEF(name, module, limit) extern LOGInstance name
@@ -169,14 +169,14 @@ void BSPLogV(LOGInstance *inst, LOG_LEVEL level, const char *fmt, ...);
 #define BSPLOG_FILTER(level) ((level) < LOG_FILTER_LEVEL)
 
 /* 发送日志：过滤（level 低于 LOG_FILTER_LEVEL 整条剔除）+ 透传参数给 BSPLogV */
-#define BSPLOG(inst, level, fmt, ...)                                                                                  \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        if (BSPLOG_FILTER(level))                                                                                      \
-        {                                                                                                              \
-            break; /* 级别低于过滤值：整条剔除 */                                                                      \
-        }                                                                                                              \
-        BSPLogV((inst), (level), (fmt), ##__VA_ARGS__);                                                                \
+#define BSPLOG(inst, level, fmt, ...)                                                                                                                          \
+    do                                                                                                                                                         \
+    {                                                                                                                                                          \
+        if (BSPLOG_FILTER(level))                                                                                                                              \
+        {                                                                                                                                                      \
+            break; /* 级别低于过滤值：整条剔除 */                                                                                                              \
+        }                                                                                                                                                      \
+        BSPLogV((inst), (level), (fmt), ##__VA_ARGS__);                                                                                                        \
     } while (0)
 
 /**
@@ -196,8 +196,7 @@ void BSPLogInit(void);
  * 这正是旧版空宏 `((void)0)` 丢掉实参后留下的坑（见 bsp_spi.c 的 SPI_LogStartFail）。
  * 未选中分支不发射引用，而关闭态的实例只有 extern 声明（见 LOG_INSTANCE_DEF）、
  * g_log/BSPLogV 也没有定义，二者都靠这一点才不产生未定义符号。 */
-#define BSPLOG(inst, level, fmt, ...)                                                                                  \
-    ((void)__builtin_choose_expr(0, BSPLogV((inst), (level), (fmt), ##__VA_ARGS__), (void)0))
+#define BSPLOG(inst, level, fmt, ...) ((void)__builtin_choose_expr(0, BSPLogV((inst), (level), (fmt), ##__VA_ARGS__), (void)0))
 
 /* BSPLogInit 无可初始化外设（实例未分配），定义为空宏吃掉调用点；零代码零 RAM。 */
 #define BSPLogInit() ((void)0)

@@ -244,37 +244,37 @@ typedef struct EskfInstance
  *       （n=6、m=3、l=0 时 336 floats ≈ 1.31 KB）
  * @note 例：ESKF_INSTANCE_DEF(eskf_att, 6, 3, 0);
  */
-#define ESKF_INSTANCE_DEF(name, N, M, L)                                                                               \
-    static float name##_delta[N];                                                                                      \
-    static float name##_P[(N) * (N)];                                                                                  \
-    static float name##_P0[(N) * (N)];                                                                                 \
-    static float name##_F[(N) * (N)];                                                                                  \
-    static float name##_Q[(N) * (N)];                                                                                  \
-    static float name##_H[(M) ? (M) * (N) : 1];                                                                        \
-    static float name##_R[(M) ? (M) * (M) : 1];                                                                        \
-    static float name##_G[(N) * (N)];                                                                                  \
-    static float name##_wA[(N) * (N)];                                                                                 \
-    static float name##_wB[(N) * (N)];                                                                                 \
-    static float name##_wC[(M) ? (N) * (M) : 1];                                                                       \
-    static float name##_wG[(M) ? (N) * (M) : 1];                                                                       \
-    static float name##_wD[(M) ? 2 * (M) * (M) : 1];                                                                   \
-    static float name##_wF[(M) ? (M) : 1];                                                                             \
-    static EskfInstance name = {.n_max = (N),                                                                          \
-                                .m_max = (M),                                                                          \
-                                .l_max = (L),                                                                          \
-                                .delta = name##_delta,                                                                 \
-                                .P = name##_P,                                                                         \
-                                .P0 = name##_P0,                                                                       \
-                                .F = name##_F,                                                                         \
-                                .Q = name##_Q,                                                                         \
-                                .H = name##_H,                                                                         \
-                                .R = name##_R,                                                                         \
-                                .G = name##_G,                                                                         \
-                                .wA = name##_wA,                                                                       \
-                                .wB = name##_wB,                                                                       \
-                                .wC = name##_wC,                                                                       \
-                                .wG = name##_wG,                                                                       \
-                                .wD = name##_wD,                                                                       \
+#define ESKF_INSTANCE_DEF(name, N, M, L)                                                                                                                       \
+    static float name##_delta[N];                                                                                                                              \
+    static float name##_P[(N) * (N)];                                                                                                                          \
+    static float name##_P0[(N) * (N)];                                                                                                                         \
+    static float name##_F[(N) * (N)];                                                                                                                          \
+    static float name##_Q[(N) * (N)];                                                                                                                          \
+    static float name##_H[(M) ? (M) * (N) : 1];                                                                                                                \
+    static float name##_R[(M) ? (M) * (M) : 1];                                                                                                                \
+    static float name##_G[(N) * (N)];                                                                                                                          \
+    static float name##_wA[(N) * (N)];                                                                                                                         \
+    static float name##_wB[(N) * (N)];                                                                                                                         \
+    static float name##_wC[(M) ? (N) * (M) : 1];                                                                                                               \
+    static float name##_wG[(M) ? (N) * (M) : 1];                                                                                                               \
+    static float name##_wD[(M) ? 2 * (M) * (M) : 1];                                                                                                           \
+    static float name##_wF[(M) ? (M) : 1];                                                                                                                     \
+    static EskfInstance name = {.n_max = (N),                                                                                                                  \
+                                .m_max = (M),                                                                                                                  \
+                                .l_max = (L),                                                                                                                  \
+                                .delta = name##_delta,                                                                                                         \
+                                .P = name##_P,                                                                                                                 \
+                                .P0 = name##_P0,                                                                                                               \
+                                .F = name##_F,                                                                                                                 \
+                                .Q = name##_Q,                                                                                                                 \
+                                .H = name##_H,                                                                                                                 \
+                                .R = name##_R,                                                                                                                 \
+                                .G = name##_G,                                                                                                                 \
+                                .wA = name##_wA,                                                                                                               \
+                                .wB = name##_wB,                                                                                                               \
+                                .wC = name##_wC,                                                                                                               \
+                                .wG = name##_wG,                                                                                                               \
+                                .wD = name##_wD,                                                                                                               \
                                 .wF = name##_wF}
 
 /*============================ 矩阵元素索引宏 ============================*/

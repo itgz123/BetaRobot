@@ -37,8 +37,7 @@
 #define DRV_COMM_DAEMON_RELOAD_DEFAULT 100
 #endif
 /* 兜底值自身不能再是 0 —— 否则"把 0 提升为兜底值"等于没提升，离线自恢复又会静默失效 */
-_Static_assert(DRV_COMM_DAEMON_RELOAD_DEFAULT != 0,
-               "DRV_COMM_DAEMON_RELOAD_DEFAULT must be non-zero (0 would silently disable offline self-heal)");
+_Static_assert(DRV_COMM_DAEMON_RELOAD_DEFAULT != 0, "DRV_COMM_DAEMON_RELOAD_DEFAULT must be non-zero (0 would silently disable offline self-heal)");
 
 #ifndef DRV_COMM_LOG_LIMIT
 #define DRV_COMM_LOG_LIMIT 10
@@ -265,8 +264,7 @@ int8_t CommConfig(CommInstance *inst, const CommConfig_s *cfg)
         if (daemon_reload == 0 && offline_hook != NULL)
         {
             daemon_reload = DRV_COMM_DAEMON_RELOAD_DEFAULT;
-            BSPLOG(&g_comm_log, LOG_LEVEL_WARNING, "daemon_reload=0 disables offline self-heal, forced to %u",
-                   daemon_reload);
+            BSPLOG(&g_comm_log, LOG_LEVEL_WARNING, "daemon_reload=0 disables offline self-heal, forced to %u", daemon_reload);
         }
 
         Daemon_Config_s daemon_cfg = {

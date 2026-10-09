@@ -280,8 +280,7 @@ static void USB_ProcessTxLocked(USBInstance *inst)
     idx = USB_InstanceToIndex(inst);
 
     /* 计算到环尾的连续数据量 */
-    avail = (inst->tx_head > inst->tx_tail) ? (uint16_t)(inst->tx_head - inst->tx_tail)
-                                            : (uint16_t)(APP_TX_DATA_SIZE - inst->tx_tail);
+    avail = (inst->tx_head > inst->tx_tail) ? (uint16_t)(inst->tx_head - inst->tx_tail) : (uint16_t)(APP_TX_DATA_SIZE - inst->tx_tail);
     len = (avail > USB_TX_BUF_SIZE) ? USB_TX_BUF_SIZE : avail;
 
     memcpy(inst->tx_buf, &inst->tx_ring[inst->tx_tail], len);
@@ -388,8 +387,7 @@ BSP_Status_e USBRegister(USBInstance *instance)
     uint8_t i;
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_usb_idx >= USB_INSTANCE_NUM, BSP_PARAM_ERR,
-                           BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(s_usb_idx >= USB_INSTANCE_NUM, BSP_PARAM_ERR, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Exceeded max instance count!"));
 
     /* 防重复注册 */
     for (i = 0; i < s_usb_idx; i++)
@@ -412,8 +410,7 @@ BSP_Status_e USBConfig(USBInstance *instance, const USB_Config_s *config)
     uint8_t found = 0;
     uint8_t i;
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR,
-                           BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Config: instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Config: instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, BSP_PARAM_ERR, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Config is NULL!"));
 
     /* 验证实例已注册 */
@@ -529,8 +526,7 @@ BSP_Status_e USBRecoverTxIfStuck(USBInstance *instance, uint32_t stuck_ms)
     uint8_t ep_abort_failed;
     uint8_t idx;
 
-    BSP_RETURN_IF_TRUE_LOG(inst == NULL, BSP_PARAM_ERR,
-                           BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "RecoverTx: no active instance!"));
+    BSP_RETURN_IF_TRUE_LOG(inst == NULL, BSP_PARAM_ERR, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "RecoverTx: no active instance!"));
 
     if (stuck_ms == 0)
         stuck_ms = USB_TX_STUCK_DEFAULT_MS;
@@ -570,8 +566,7 @@ BSP_Status_e USBRecoverTxIfStuck(USBInstance *instance, uint32_t stuck_ms)
         s_usb_status[idx].tx_stuck++;
         s_usb_status[idx].last_err_us = now;
     }
-    BSPLOG(&g_usb_log, LOG_LEVEL_WARNING, "TX stuck: %u bytes pending for >%ums, forcing flush", USB_RingUsed(inst),
-           stuck_ms);
+    BSPLOG(&g_usb_log, LOG_LEVEL_WARNING, "TX stuck: %u bytes pending for >%ums, forcing flush", USB_RingUsed(inst), stuck_ms);
 
     /* ① 中止 CDC IN 端点上的在途传输。
      *    注意：这一步对"主机把端点停掉了/根本没在轮询"是治本的；对"纯 TxState 卡住"
@@ -618,8 +613,7 @@ BSP_Status_e USBRecoverRxIfStalled(USBInstance *instance, uint32_t period_ms)
     uint8_t idx;
     uint8_t armed;
 
-    BSP_RETURN_IF_TRUE_LOG(inst == NULL, BSP_PARAM_ERR,
-                           BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "RecoverRx: no active instance!"));
+    BSP_RETURN_IF_TRUE_LOG(inst == NULL, BSP_PARAM_ERR, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "RecoverRx: no active instance!"));
 
     if (period_ms == 0)
         period_ms = USB_RX_STALL_DEFAULT_MS;
@@ -686,8 +680,7 @@ BSP_Status_e USBReenumerate(USBInstance *instance)
     PCD_HandleTypeDef *hpcd;
     USBInstance *inst = (instance != NULL) ? instance : (USBInstance *)s_active_inst;
 
-    BSP_RETURN_IF_TRUE_LOG(inst == NULL, BSP_PARAM_ERR,
-                           BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Reenumerate: no active instance!"));
+    BSP_RETURN_IF_TRUE_LOG(inst == NULL, BSP_PARAM_ERR, BSPLOG(&g_usb_log, LOG_LEVEL_ERROR, "Reenumerate: no active instance!"));
 
     hpcd = USB_GetPcd();
     if (hpcd == NULL)

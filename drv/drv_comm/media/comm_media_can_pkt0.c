@@ -244,14 +244,12 @@ static void MediaCanPkt0ProbeBus(CANInstance *can)
         return;
 
     now = DWT_GetTimeUs();
-    if (s_can_recover_us[idx] != 0 &&
-        (now - s_can_recover_us[idx]) < ((uint64_t)DRV_COMM_MEDIA_CAN_RECOVER_PERIOD_MS * 1000u))
+    if (s_can_recover_us[idx] != 0 && (now - s_can_recover_us[idx]) < ((uint64_t)DRV_COMM_MEDIA_CAN_RECOVER_PERIOD_MS * 1000u))
         return; /* 限频：同一条总线这段时间内已经看过一眼 */
     s_can_recover_us[idx] = now;
 
     if (CANRecover(can) == BSP_HW_ERR)
-        BSPLOG(&g_media_can_pkt0_log, LOG_LEVEL_ERROR, "CANRecover failed (can_e=%u), bus still unavailable",
-               (unsigned)idx);
+        BSPLOG(&g_media_can_pkt0_log, LOG_LEVEL_ERROR, "CANRecover failed (can_e=%u), bus still unavailable", (unsigned)idx);
 }
 
 /* bsp 接收适配钩子：每包 = [pkt_idx][数据片]，按分包序号连续重组整帧。
@@ -369,8 +367,7 @@ int8_t MediaCanPkt0Config(CommMediaCanPkt0 *media, CommMediaCanPkt0Config_s *cfg
         return -1;
 
     /* 帧格式 mode：仅三种合法值；BxCAN 非 CLASSIC 由 bsp 拒绝（此处不做硬件判断） */
-    if (cfg->mode != CAN_FRAME_FORMAT_CLASSIC && cfg->mode != CAN_FRAME_FORMAT_FD &&
-        cfg->mode != CAN_FRAME_FORMAT_FD_BRS)
+    if (cfg->mode != CAN_FRAME_FORMAT_CLASSIC && cfg->mode != CAN_FRAME_FORMAT_FD && cfg->mode != CAN_FRAME_FORMAT_FD_BRS)
         return -1;
 
     /* 帧长按所选 mode 精确校验：CLASSIC ≤ 1792 / FD ≤ 16128（序号 0..255 × 单片长） */

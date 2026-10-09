@@ -94,16 +94,14 @@ const Referee2026CmdInfo_t referee2026_radar_cmd_info[] = {
         },
 };
 
-_Static_assert(sizeof(referee2026_radar_cmd_info) / sizeof(referee2026_radar_cmd_info[0]) ==
-                   REFEREE2026_RADAR_DATA_COUNT,
+_Static_assert(sizeof(referee2026_radar_cmd_info) / sizeof(referee2026_radar_cmd_info[0]) == REFEREE2026_RADAR_DATA_COUNT,
                "雷达无线链路命令元信息表项数必须等于数据名枚举数");
 
 /* 快照成员个数 == 本链路 `dir & RX` 的命令数（6 条全收）。把总长钉死在 6 个数据段的合计上：
  * 加一条 RX 命令却忘了在快照里加成员，这条断言就会挂（24+12+10+8+41+6）。 */
-_Static_assert(sizeof(Referee2026RadarSnapshot_t) ==
-                   REFEREE2026_RADAR_LEN_RADAR_OPPONENT_POS + REFEREE2026_RADAR_LEN_RADAR_OPPONENT_HP +
-                       REFEREE2026_RADAR_LEN_RADAR_OPPONENT_AMMO + REFEREE2026_RADAR_LEN_RADAR_OPPONENT_STATE +
-                       REFEREE2026_RADAR_LEN_RADAR_OPPONENT_BUFF + REFEREE2026_RADAR_LEN_RADAR_KEY,
+_Static_assert(sizeof(Referee2026RadarSnapshot_t) == REFEREE2026_RADAR_LEN_RADAR_OPPONENT_POS + REFEREE2026_RADAR_LEN_RADAR_OPPONENT_HP +
+                                                         REFEREE2026_RADAR_LEN_RADAR_OPPONENT_AMMO + REFEREE2026_RADAR_LEN_RADAR_OPPONENT_STATE +
+                                                         REFEREE2026_RADAR_LEN_RADAR_OPPONENT_BUFF + REFEREE2026_RADAR_LEN_RADAR_KEY,
                "雷达无线链路快照成员数与 RX 命令数不符");
 
 #endif /* DRV_REFEREE2026_USED && REFEREE2026_LINK_RADAR_USED && HAL_UART_MODULE_ENABLED */

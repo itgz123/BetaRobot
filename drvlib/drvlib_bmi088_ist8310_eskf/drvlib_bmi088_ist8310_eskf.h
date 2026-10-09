@@ -88,8 +88,7 @@
 #include "app_cfg.h"
 
 /* 依赖四个被组合的模块：两个 drv 通信层 + lib_eskf + lib_math（任一未开则整体不编译） */
-#if defined(DRVLIB_BMI088_IST8310_ESKF_USED) && defined(DRV_BMI088_USED) && defined(DRV_IST8310_USED) &&               \
-    defined(LIB_ESKF_USED)
+#if defined(DRVLIB_BMI088_IST8310_ESKF_USED) && defined(DRV_BMI088_USED) && defined(DRV_IST8310_USED) && defined(LIB_ESKF_USED)
 
 #include "drv_bmi088.h"
 #include "drv_ist8310.h"
@@ -346,15 +345,12 @@ typedef struct BMI088IST8310EskfInstance
  *
  * @example BMI088_IST8310_ESKF_INSTANCE_DEF(imu);
  */
-#define BMI088_IST8310_ESKF_INSTANCE_DEF(name)                                                                         \
-    BMI088_INSTANCE_DEF(name##_imu);                                                                                   \
-    IST8310_INSTANCE_DEF(name##_magdrv);                                                                               \
-    ESKF_INSTANCE_DEF(name##_eskf, 6, 3, 0);                                                                           \
-    static BMI088IST8310EskfInstance name = {.imu = &name##_imu,                                                       \
-                                             .magdrv = &name##_magdrv,                                                 \
-                                             .eskf = &name##_eskf,                                                     \
-                                             .q_nom = {1.0f, 0.0f, 0.0f, 0.0f},                                        \
-                                             .g_w = {0.0f, 0.0f, 1.0f}}
+#define BMI088_IST8310_ESKF_INSTANCE_DEF(name)                                                                                                                 \
+    BMI088_INSTANCE_DEF(name##_imu);                                                                                                                           \
+    IST8310_INSTANCE_DEF(name##_magdrv);                                                                                                                       \
+    ESKF_INSTANCE_DEF(name##_eskf, 6, 3, 0);                                                                                                                   \
+    static BMI088IST8310EskfInstance name = {                                                                                                                  \
+        .imu = &name##_imu, .magdrv = &name##_magdrv, .eskf = &name##_eskf, .q_nom = {1.0f, 0.0f, 0.0f, 0.0f}, .g_w = {0.0f, 0.0f, 1.0f}}
 
 /*============================ 公开接口 ============================*/
 

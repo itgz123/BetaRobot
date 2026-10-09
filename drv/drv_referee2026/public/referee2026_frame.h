@@ -69,8 +69,7 @@ typedef enum : uint16_t
     REFEREE2026_TAIL_SIZE = 2,   //!< CRC16 长度
     REFEREE2026_DATA_MAX = 300,  //!< 数据段长度上限（0x0310）
     //! 最大整帧 = 帧头 + cmd_id + 数据段 + 帧尾 = 309B
-    REFEREE2026_FRAME_MAX =
-        REFEREE2026_HEADER_SIZE + REFEREE2026_CMD_ID_SIZE + REFEREE2026_DATA_MAX + REFEREE2026_TAIL_SIZE,
+    REFEREE2026_FRAME_MAX = REFEREE2026_HEADER_SIZE + REFEREE2026_CMD_ID_SIZE + REFEREE2026_DATA_MAX + REFEREE2026_TAIL_SIZE,
 } Referee2026FrameConst_e;
 
 /*============================================
@@ -197,9 +196,7 @@ static inline Referee2026RobotType_e Referee2026TypeOfRobot(uint16_t robot_id)
 {
     uint8_t type = (uint8_t)(robot_id % REFEREE2026_COLOR_BLUE); // 蓝方阵营值 100 即阵营偏移
 
-    return (type >= REFEREE2026_ROBOT_TYPE_HERO && type <= REFEREE2026_ROBOT_TYPE_OUTPOST)
-               ? (Referee2026RobotType_e)type
-               : (Referee2026RobotType_e)0;
+    return (type >= REFEREE2026_ROBOT_TYPE_HERO && type <= REFEREE2026_ROBOT_TYPE_OUTPOST) ? (Referee2026RobotType_e)type : (Referee2026RobotType_e)0;
 }
 
 /**
@@ -228,9 +225,8 @@ static inline uint16_t Referee2026ClientIdOfRobot(uint16_t robot_id)
         return 0; // 哨兵/飞镖/雷达/基地/前哨站没有选手端；类型非法（0）也已由 HasClient 挡住
     }
 
-    uint16_t base = (Referee2026ColorOfRobot(robot_id) == REFEREE2026_COLOR_BLUE)
-                        ? (uint16_t)REFEREE2026_CLIENT_ID_BLUE_BASE
-                        : (uint16_t)REFEREE2026_CLIENT_ID_RED_BASE;
+    uint16_t base =
+        (Referee2026ColorOfRobot(robot_id) == REFEREE2026_COLOR_BLUE) ? (uint16_t)REFEREE2026_CLIENT_ID_BLUE_BASE : (uint16_t)REFEREE2026_CLIENT_ID_RED_BASE;
 
     /* 与 Referee2026RobotIdOf 同构：基址 + 类型，一次加法（基址已含"减一"）。 */
     return (uint16_t)(base + (uint16_t)type);

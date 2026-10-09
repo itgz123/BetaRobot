@@ -48,20 +48,20 @@
 static int g_checks = 0;
 static int g_fails = 0;
 
-#define CHECK(cond, ...)                                                                                               \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        g_checks++;                                                                                                    \
-        if (!(cond))                                                                                                   \
-        {                                                                                                              \
-            g_fails++;                                                                                                 \
-            if (g_fails <= 30)                                                                                         \
-            {                                                                                                          \
-                printf("FAIL %d: ", __LINE__);                                                                         \
-                printf(__VA_ARGS__);                                                                                   \
-                printf("\n");                                                                                          \
-            }                                                                                                          \
-        }                                                                                                              \
+#define CHECK(cond, ...)                                                                                                                                       \
+    do                                                                                                                                                         \
+    {                                                                                                                                                          \
+        g_checks++;                                                                                                                                            \
+        if (!(cond))                                                                                                                                           \
+        {                                                                                                                                                      \
+            g_fails++;                                                                                                                                         \
+            if (g_fails <= 30)                                                                                                                                 \
+            {                                                                                                                                                  \
+                printf("FAIL %d: ", __LINE__);                                                                                                                 \
+                printf(__VA_ARGS__);                                                                                                                           \
+                printf("\n");                                                                                                                                  \
+            }                                                                                                                                                  \
+        }                                                                                                                                                      \
     } while (0)
 
 /*============================================
@@ -153,8 +153,7 @@ BSP_Status_e USARTReceive(USARTInstance *instance, uint16_t len, BSP_Transfer_Mo
     return BSP_OK;
 }
 
-BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode,
-                           uint32_t timeout_ms)
+BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
 {
     (void)instance;
     (void)timeout_ms;
@@ -251,23 +250,20 @@ static Counts_t Counts(void)
  *       （`rx_valid == rx_ok + rx_filtered + rx_unknown`）。它一旦破了，说明有个分支
  *       既没派发也没计数 —— 那是帧"凭空消失"，最难查的一类。
  */
-static void CheckCounts(Counts_t base, const char *what, uint32_t d_valid, uint32_t d_ok, uint32_t d_filtered,
-                        uint32_t d_unknown, uint32_t d_crc, uint32_t d_len)
+static void CheckCounts(Counts_t base, const char *what, uint32_t d_valid, uint32_t d_ok, uint32_t d_filtered, uint32_t d_unknown, uint32_t d_crc,
+                        uint32_t d_len)
 {
     const Counts_t c = Counts();
 
-    CHECK(c.valid - base.valid == d_valid, "%s: rx_valid +%u != +%u", what, (unsigned)(c.valid - base.valid),
-          (unsigned)d_valid);
+    CHECK(c.valid - base.valid == d_valid, "%s: rx_valid +%u != +%u", what, (unsigned)(c.valid - base.valid), (unsigned)d_valid);
     CHECK(c.ok - base.ok == d_ok, "%s: rx_ok +%u != +%u", what, (unsigned)(c.ok - base.ok), (unsigned)d_ok);
-    CHECK(c.filtered - base.filtered == d_filtered, "%s: rx_filtered +%u != +%u", what,
-          (unsigned)(c.filtered - base.filtered), (unsigned)d_filtered);
-    CHECK(c.unknown - base.unknown == d_unknown, "%s: rx_unknown +%u != +%u", what,
-          (unsigned)(c.unknown - base.unknown), (unsigned)d_unknown);
+    CHECK(c.filtered - base.filtered == d_filtered, "%s: rx_filtered +%u != +%u", what, (unsigned)(c.filtered - base.filtered), (unsigned)d_filtered);
+    CHECK(c.unknown - base.unknown == d_unknown, "%s: rx_unknown +%u != +%u", what, (unsigned)(c.unknown - base.unknown), (unsigned)d_unknown);
     CHECK(c.crc - base.crc == d_crc, "%s: rx_crc_err +%u != +%u", what, (unsigned)(c.crc - base.crc), (unsigned)d_crc);
     CHECK(c.len - base.len == d_len, "%s: rx_len_err +%u != +%u", what, (unsigned)(c.len - base.len), (unsigned)d_len);
 
-    CHECK(c.valid == c.ok + c.filtered + c.unknown, "%s: rx_valid(%u) != ok(%u)+filtered(%u)+unknown(%u)", what,
-          (unsigned)c.valid, (unsigned)c.ok, (unsigned)c.filtered, (unsigned)c.unknown);
+    CHECK(c.valid == c.ok + c.filtered + c.unknown, "%s: rx_valid(%u) != ok(%u)+filtered(%u)+unknown(%u)", what, (unsigned)c.valid, (unsigned)c.ok,
+          (unsigned)c.filtered, (unsigned)c.unknown);
 }
 
 /** 整块快照的哨兵值：Config 之后填空，任何一次写入都能被 SnapshotUntouched 看出来 */
@@ -402,21 +398,18 @@ static void test_layout(void)
          * 的省略写法 —— 它是合法取值里最小的那个，漏填会变成"0 字节的帧也算合法"）。
          * 定长命令两者相等；变长命令（0x0301）min_len < data_len。 */
         CHECK(e->min_len != 0u, "第 %u 条 min_len 为 0（未填）", (unsigned)i);
-        CHECK(e->min_len <= e->data_len, "第 %u 条 min_len=%u > data_len=%u", (unsigned)i, (unsigned)e->min_len,
-              (unsigned)e->data_len);
+        CHECK(e->min_len <= e->data_len, "第 %u 条 min_len=%u > data_len=%u", (unsigned)i, (unsigned)e->min_len, (unsigned)e->data_len);
 
         if (is_rx)
         {
             n_rx++;
-            CHECK(e->snap_off == off, "第 %u 条 snap_off=%u，密排期望 %u", (unsigned)i, (unsigned)e->snap_off,
-                  (unsigned)off);
+            CHECK(e->snap_off == off, "第 %u 条 snap_off=%u，密排期望 %u", (unsigned)i, (unsigned)e->snap_off, (unsigned)off);
             off = (uint16_t)(off + e->data_len);
         }
         else
         {
             /* 非 RX 的命令没有落点；写 0 而不是"前面之和"，且派发路径会按 dir 早退 */
-            CHECK(e->snap_off == 0u, "第 %u 条非 RX 命令的 snap_off 应为 0，实为 %u", (unsigned)i,
-                  (unsigned)e->snap_off);
+            CHECK(e->snap_off == 0u, "第 %u 条非 RX 命令的 snap_off 应为 0，实为 %u", (unsigned)i, (unsigned)e->snap_off);
         }
 
         if (is_tx && !is_rx)
@@ -441,8 +434,7 @@ static void test_layout(void)
 
     CHECK(n_dup == 0u, "命令码重复 %u 对", (unsigned)n_dup);
     CHECK(n_freq_bad == 0u, "固定频率超过上限的行有 %u 条", (unsigned)n_freq_bad);
-    CHECK(off == (uint16_t)sizeof(t_inst.snapshot), "RX 段总长 %u != 快照 %u", (unsigned)off,
-          (unsigned)sizeof(t_inst.snapshot));
+    CHECK(off == (uint16_t)sizeof(t_inst.snapshot), "RX 段总长 %u != 快照 %u", (unsigned)off, (unsigned)sizeof(t_inst.snapshot));
 
     /* 与方案里那张普查表对齐：常规链路 24 条 = 21 收 + 3 只发（0x0301 收发双向，算在 RX 里） */
     CHECK(n_rx == 21u, "RX 条数 %u != 21", (unsigned)n_rx);
@@ -454,8 +446,7 @@ static void test_layout(void)
     CHECK((info[REFEREE2026_COMMON_DATA_ROBOT_INTERACTION].dir & REFEREE2026_DIR_TX) != 0, "0x0301 应有 TX 位");
     /* 它是唯一的变长命令：min_len 是报文头，data_len 是含满额子内容的上界 */
     CHECK(info[REFEREE2026_COMMON_DATA_ROBOT_INTERACTION].min_len == 6u, "0x0301 的 min_len 应为 6（报文头）");
-    CHECK(info[REFEREE2026_COMMON_DATA_ROBOT_INTERACTION].min_len <
-              info[REFEREE2026_COMMON_DATA_ROBOT_INTERACTION].data_len,
+    CHECK(info[REFEREE2026_COMMON_DATA_ROBOT_INTERACTION].min_len < info[REFEREE2026_COMMON_DATA_ROBOT_INTERACTION].data_len,
           "0x0301 的 min_len 应小于 data_len（否则就不再是变长命令）");
 
     /* 只发的那 3 条（0x0305 / 0x0307 / 0x0308）在表里必须都没有 RX 位 */
@@ -463,8 +454,8 @@ static void test_layout(void)
     CHECK((info[REFEREE2026_COMMON_DATA_MINI_MAP_PATH].dir & REFEREE2026_DIR_RX) == 0, "0x0307 不该有 RX 位");
     CHECK((info[REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT].dir & REFEREE2026_DIR_RX) == 0, "0x0308 不该有 RX 位");
 
-    printf("  常规链路表 %u 条：RX %u / 只发 %u；RX 段 %u B == 快照 %u B（密排）\n", (unsigned)t_inst.core.count,
-           (unsigned)n_rx, (unsigned)n_tx_only, (unsigned)off, (unsigned)sizeof(t_inst.snapshot));
+    printf("  常规链路表 %u 条：RX %u / 只发 %u；RX 段 %u B == 快照 %u B（密排）\n", (unsigned)t_inst.core.count, (unsigned)n_rx, (unsigned)n_tx_only,
+           (unsigned)off, (unsigned)sizeof(t_inst.snapshot));
 }
 
 /** 配置路径：Register/Config 的调用去向与字段落位 */
@@ -498,8 +489,7 @@ static void test_config(void)
     /* ④ daemon：reload 填 0 必须被提升（本驱动挂了离线钩子，0 若真禁用就静默失效）；
      *    owner_id 必须指回内核（离线钩子靠它取回实例） */
     CHECK(g_daemon.config_calls == 1, "DaemonConfig 调用 %d 次", g_daemon.config_calls);
-    CHECK(g_daemon.last_cfg.reload_count == (uint16_t)REFEREE2026_DAEMON_RELOAD_MS, "reload 未提升：%u",
-          (unsigned)g_daemon.last_cfg.reload_count);
+    CHECK(g_daemon.last_cfg.reload_count == (uint16_t)REFEREE2026_DAEMON_RELOAD_MS, "reload 未提升：%u", (unsigned)g_daemon.last_cfg.reload_count);
     CHECK(g_daemon.last_cfg.fault_action == DAEMON_FAULT_BUZZER_SHORT, "故障动作未透传");
     CHECK(g_daemon.last_cfg.owner_id == (void *)&t_inst.core, "owner_id 未指回内核");
     /* 钩子都是本文件的 static，名字取不到；这里只验"挂上了"，行为在 test_hooks 里经
@@ -514,8 +504,8 @@ static void test_config(void)
     CHECK(g_bsp.last_cfg.tx_callback != NULL, "tx_callback 未挂");
     CHECK(g_bsp.last_cfg.err_callback != NULL, "err_callback 未挂");
     CHECK(g_bsp.receive_calls == 1, "USARTReceive 调用 %d 次", g_bsp.receive_calls);
-    CHECK(g_bsp.last_rx_req_len == (uint16_t)REFEREE2026_RX_BUFF_SIZE, "接收请求长度 %u != %u",
-          (unsigned)g_bsp.last_rx_req_len, (unsigned)REFEREE2026_RX_BUFF_SIZE);
+    CHECK(g_bsp.last_rx_req_len == (uint16_t)REFEREE2026_RX_BUFF_SIZE, "接收请求长度 %u != %u", (unsigned)g_bsp.last_rx_req_len,
+          (unsigned)REFEREE2026_RX_BUFF_SIZE);
     CHECK(g_bsp.last_rx_mode == BSP_DMA_MODE, "接收模式不是 DMA");
     CHECK(REFEREE2026_RX_BUFF_SIZE >= (uint32_t)REFEREE2026_FRAME_MAX, "接收缓冲小于最长帧");
 
@@ -525,8 +515,7 @@ static void test_config(void)
 
     /* ⑦ 空指针必须被挡住 */
     CHECK(Referee2026Config(NULL, NULL) == BSP_PARAM_ERR, "Config(NULL) 未报参数错");
-    CHECK(Referee2026Send(NULL, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, g_frame, 0u) == BSP_PARAM_ERR,
-          "Send(NULL) 未报参数错");
+    CHECK(Referee2026Send(NULL, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, g_frame, 0u) == BSP_PARAM_ERR, "Send(NULL) 未报参数错");
 }
 
 /** 好帧：一条 0x0202 走完全程 */
@@ -689,8 +678,7 @@ static void test_bad_frames(void)
         g_frame[REFEREE2026_OFF_DATA_LEN] = 0x2Du; /* 301 = DATA_MAX + 1 */
         g_frame[REFEREE2026_OFF_DATA_LEN + 1] = 0x01u;
         g_frame[REFEREE2026_OFF_SEQ] = 0x5Au;
-        g_frame[REFEREE2026_OFF_CRC8] =
-            (uint8_t)LIB_CRC_TableCalc(&referee2026_crc8_table, g_frame, REFEREE2026_OFF_CRC8);
+        g_frame[REFEREE2026_OFF_CRC8] = (uint8_t)LIB_CRC_TableCalc(&referee2026_crc8_table, g_frame, REFEREE2026_OFF_CRC8);
 
         const Counts_t base = Counts();
 
@@ -906,26 +894,21 @@ static void test_tx(void)
     /* ① 方向：0x0202 收得到，但本链路发不出去 */
     const Counts_t base = Counts();
 
-    CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_POWER_HEAT, &ph, (uint16_t)sizeof(ph)) == BSP_PARAM_ERR,
-          "给收命令发帧应报参数错");
+    CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_POWER_HEAT, &ph, (uint16_t)sizeof(ph)) == BSP_PARAM_ERR, "给收命令发帧应报参数错");
     CHECK(g_bsp.transmit_calls == 0, "被拒的帧仍然调了 USARTTransmit");
 
     /* ② 长度不符 */
-    CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, tx_payload,
-                          (uint16_t)sizeof(tx_payload) - 1u) == BSP_PARAM_ERR,
+    CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, tx_payload, (uint16_t)sizeof(tx_payload) - 1u) == BSP_PARAM_ERR,
           "长度不符应报参数错");
-    CHECK(Referee2026Send(&t_inst.core, (Referee2026CommonDataId_e)REFEREE2026_COMMON_DATA_COUNT, tx_payload,
-                          (uint16_t)sizeof(tx_payload)) == BSP_PARAM_ERR,
+    CHECK(Referee2026Send(&t_inst.core, (Referee2026CommonDataId_e)REFEREE2026_COMMON_DATA_COUNT, tx_payload, (uint16_t)sizeof(tx_payload)) == BSP_PARAM_ERR,
           "下标越界应报参数错");
-    CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, NULL, 34u) == BSP_PARAM_ERR,
-          "空载荷应报参数错");
+    CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, NULL, 34u) == BSP_PARAM_ERR, "空载荷应报参数错");
     CHECK(g_bsp.transmit_calls == 0, "参数错的帧调了 USARTTransmit");
     CHECK(Counts().tx_ok - base.tx_ok == 0u, "参数错的帧计了 tx_ok");
 
     /* ③ 正常发一帧：组帧结果与独立实现逐字节相同（seq 从 0 起） */
     {
-        const uint16_t n_ok = Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, tx_payload,
-                                              (uint16_t)sizeof(tx_payload));
+        const uint16_t n_ok = Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, tx_payload, (uint16_t)sizeof(tx_payload));
 
         CHECK(n_ok == BSP_OK, "发送失败：%d", (int)n_ok);
         CHECK(g_bsp.transmit_calls == 1, "USARTTransmit 调用 %d 次", g_bsp.transmit_calls);
@@ -947,9 +930,7 @@ static void test_tx(void)
     {
         const Counts_t b = Counts();
 
-        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, tx_payload,
-                              (uint16_t)sizeof(tx_payload)) == BSP_BUSY,
-              "在途时未报忙");
+        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, tx_payload, (uint16_t)sizeof(tx_payload)) == BSP_BUSY, "在途时未报忙");
         CHECK(Counts().tx_dropped - b.tx_dropped == 1u, "在途丢弃未计数");
         CHECK(g_bsp.transmit_calls == 1, "在途时仍调了 USARTTransmit"); /* 被拒的帧连组帧都没做 */
     }
@@ -960,9 +941,7 @@ static void test_tx(void)
     {
         const Counts_t b = Counts();
 
-        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, tx_payload,
-                              (uint16_t)sizeof(tx_payload)) == BSP_BUSY,
-              "限速窗口内未报忙");
+        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, tx_payload, (uint16_t)sizeof(tx_payload)) == BSP_BUSY, "限速窗口内未报忙");
         CHECK(Counts().tx_dropped - b.tx_dropped == 1u, "限速丢弃未计数");
     }
 
@@ -970,9 +949,7 @@ static void test_tx(void)
     {
         g_now_us += 333333u;
 
-        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, tx_payload,
-                              (uint16_t)sizeof(tx_payload)) == BSP_OK,
-              "过了限速窗口仍被拒");
+        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, tx_payload, (uint16_t)sizeof(tx_payload)) == BSP_OK, "过了限速窗口仍被拒");
 
         const uint16_t n = BuildFrame(g_frame, 1u, 0x0308u, tx_payload, (uint16_t)sizeof(tx_payload));
 
@@ -989,18 +966,14 @@ static void test_tx(void)
 
         const Counts_t b = Counts();
 
-        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, tx_payload,
-                              (uint16_t)sizeof(tx_payload)) == BSP_HW_ERR,
-              "外设错误未透传");
+        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, tx_payload, (uint16_t)sizeof(tx_payload)) == BSP_HW_ERR, "外设错误未透传");
         CHECK(Counts().tx_dropped - b.tx_dropped == 1u, "外设错误未计入丢弃");
         CHECK(t_inst.core.tx_busy == 0u, "外设错误后未归还在途标志");
 
         /* 归还之后应能正常再发 */
         g_bsp.transmit_ret = BSP_OK;
         g_now_us += 333333u;
-        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, tx_payload,
-                              (uint16_t)sizeof(tx_payload)) == BSP_OK,
-              "归还后仍发不出去");
+        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, tx_payload, (uint16_t)sizeof(tx_payload)) == BSP_OK, "归还后仍发不出去");
     }
 
     /* ⑧ 变长命令 0x0301 的发送：长度判据是 `min_len <= len <= data_len`（6..118）。
@@ -1012,20 +985,16 @@ static void test_tx(void)
         uint8_t short_buf[5] = {0};
         uint8_t over[REFEREE2026_COMMON_LEN_ROBOT_INTERACTION + 1u] = {0};
 
-        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_ROBOT_INTERACTION, short_buf,
-                              (uint16_t)sizeof(short_buf)) == BSP_PARAM_ERR,
+        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_ROBOT_INTERACTION, short_buf, (uint16_t)sizeof(short_buf)) == BSP_PARAM_ERR,
               "0x0301 数据段短于 min_len 应报参数错");
-        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_ROBOT_INTERACTION, over, (uint16_t)sizeof(over)) ==
-                  BSP_PARAM_ERR,
+        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_ROBOT_INTERACTION, over, (uint16_t)sizeof(over)) == BSP_PARAM_ERR,
               "0x0301 数据段长于 data_len 应报参数错");
 
         const Counts_t b = Counts();
 
-        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_ROBOT_INTERACTION, head, (uint16_t)sizeof(head)) ==
-                  BSP_OK,
+        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_ROBOT_INTERACTION, head, (uint16_t)sizeof(head)) == BSP_OK,
               "0x0301 最短报文（6B）发不出去");
-        CHECK(g_bsp.last_tx_len == (uint16_t)(9u + sizeof(head)), "0x0301 最短报文整帧长 %u != %u",
-              (unsigned)g_bsp.last_tx_len, (unsigned)(9u + sizeof(head)));
+        CHECK(g_bsp.last_tx_len == (uint16_t)(9u + sizeof(head)), "0x0301 最短报文整帧长 %u != %u", (unsigned)g_bsp.last_tx_len, (unsigned)(9u + sizeof(head)));
         CHECK(Counts().tx_ok - b.tx_ok == 1u, "0x0301 最短报文未计 tx_ok");
     }
 
@@ -1091,9 +1060,7 @@ static void test_hooks(void)
         uint8_t pay[REFEREE2026_COMMON_LEN_MINI_MAP_ROBOT];
 
         Fill(pay, (uint16_t)sizeof(pay), 0xF0u);
-        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, pay, (uint16_t)sizeof(pay)) ==
-                  BSP_OK,
-              "发送失败");
+        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, pay, (uint16_t)sizeof(pay)) == BSP_OK, "发送失败");
         CHECK(t_inst.core.tx_busy == 1u, "发送后未置在途");
 
         usart->tx_callback(usart);
@@ -1108,9 +1075,7 @@ static void test_hooks(void)
         Fill(pay, (uint16_t)sizeof(pay), 0xF0u);
         g_now_us += 333333u; /* 越过 0x0308 的 3Hz 窗口，让这一发真能出去 */
 
-        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, pay, (uint16_t)sizeof(pay)) ==
-                  BSP_OK,
-              "发送失败");
+        CHECK(Referee2026Send(&t_inst.core, REFEREE2026_COMMON_DATA_MINI_MAP_ROBOT, pay, (uint16_t)sizeof(pay)) == BSP_OK, "发送失败");
         CHECK(t_inst.core.tx_busy == 1u, "发送后未置在途");
 
         usart->err_callback(usart, USART_ERR_RX_STALLED);
@@ -1177,8 +1142,7 @@ static void test_tx_only_link(void)
     cc.mouse_left = 1u;
     cc.mouse_right = 0u;
 
-    CHECK(Referee2026Send(&t_none.core, REFEREE2026_NONE_DATA_CUSTOM_CLIENT_DATA, &cc, (uint16_t)sizeof(cc)) == BSP_OK,
-          "非链路发送失败");
+    CHECK(Referee2026Send(&t_none.core, REFEREE2026_NONE_DATA_CUSTOM_CLIENT_DATA, &cc, (uint16_t)sizeof(cc)) == BSP_OK, "非链路发送失败");
 
     const uint16_t n = BuildFrame(g_frame, 0u, 0x0306u, &cc, (uint16_t)sizeof(cc));
 
@@ -1186,11 +1150,9 @@ static void test_tx_only_link(void)
     CHECK(g_bsp.last_tx_len == n, "整帧长 %u != %u", (unsigned)g_bsp.last_tx_len, (unsigned)n);
     CHECK(memcmp(g_bsp.tx_copy, g_frame, n) == 0, "非链路组帧与独立实现不一致");
 
-    CHECK(Referee2026Send(&t_none.core, REFEREE2026_NONE_DATA_CUSTOM_CLIENT_DATA, &cc, 7u) == BSP_PARAM_ERR,
-          "长度不符应报参数错");
+    CHECK(Referee2026Send(&t_none.core, REFEREE2026_NONE_DATA_CUSTOM_CLIENT_DATA, &cc, 7u) == BSP_PARAM_ERR, "长度不符应报参数错");
     CHECK(Referee2026Config(NULL, NULL) == BSP_PARAM_ERR, "Config(NULL) 未报参数错");
-    CHECK(Referee2026Send(NULL, REFEREE2026_NONE_DATA_CUSTOM_CLIENT_DATA, &cc, (uint16_t)sizeof(cc)) == BSP_PARAM_ERR,
-          "Send(NULL) 未报参数错");
+    CHECK(Referee2026Send(NULL, REFEREE2026_NONE_DATA_CUSTOM_CLIENT_DATA, &cc, (uint16_t)sizeof(cc)) == BSP_PARAM_ERR, "Send(NULL) 未报参数错");
 }
 
 /**
@@ -1224,10 +1186,8 @@ static void test_video_link(void)
 
     /* daemon 仍要装上（离线钩子是接收停摆后唯一的重启入口），但故障动作必须被强制 NONE */
     CHECK(g_daemon.config_calls == 1, "图传未配 daemon（接收停摆自恢复会一起失效）");
-    CHECK(g_daemon.last_cfg.fault_action == DAEMON_FAULT_NONE, "无周期 RX 的链路未强制 NONE，实为 %d",
-          (int)g_daemon.last_cfg.fault_action);
-    CHECK(g_daemon.last_cfg.reload_count == (uint16_t)REFEREE2026_DAEMON_RELOAD_MS, "图传 reload 未提升：%u",
-          (unsigned)g_daemon.last_cfg.reload_count);
+    CHECK(g_daemon.last_cfg.fault_action == DAEMON_FAULT_NONE, "无周期 RX 的链路未强制 NONE，实为 %d", (int)g_daemon.last_cfg.fault_action);
+    CHECK(g_daemon.last_cfg.reload_count == (uint16_t)REFEREE2026_DAEMON_RELOAD_MS, "图传 reload 未提升：%u", (unsigned)g_daemon.last_cfg.reload_count);
     CHECK(g_daemon.last_cfg.callback != NULL, "图传未挂离线钩子");
     CHECK(g_bsp.receive_calls == 1, "图传未起接收常开流");
     CHECK(g_bsp.last_rx_mode == BSP_DMA_MODE, "图传接收不是 DMA 模式");
@@ -1263,11 +1223,8 @@ static void test_video_link(void)
         Fill(pay, (uint16_t)sizeof(pay), 0x41u);
         Fill(rx_pay, (uint16_t)sizeof(rx_pay), 0x42u);
 
-        CHECK(Referee2026Send(&t_video.core, REFEREE2026_VIDEO_DATA_ROBOT_TO_CLIENT, pay, (uint16_t)sizeof(pay)) ==
-                  BSP_OK,
-              "图传 0x0310 发不出去");
-        CHECK(Referee2026Send(&t_video.core, REFEREE2026_VIDEO_DATA_CUSTOM_CONTROLLER, rx_pay,
-                              (uint16_t)sizeof(rx_pay)) == BSP_PARAM_ERR,
+        CHECK(Referee2026Send(&t_video.core, REFEREE2026_VIDEO_DATA_ROBOT_TO_CLIENT, pay, (uint16_t)sizeof(pay)) == BSP_OK, "图传 0x0310 发不出去");
+        CHECK(Referee2026Send(&t_video.core, REFEREE2026_VIDEO_DATA_CUSTOM_CONTROLLER, rx_pay, (uint16_t)sizeof(rx_pay)) == BSP_PARAM_ERR,
               "只收的 0x0302 竟然发出去了");
     }
 }

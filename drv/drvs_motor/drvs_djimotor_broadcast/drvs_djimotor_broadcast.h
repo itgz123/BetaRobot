@@ -135,8 +135,7 @@ typedef union
 _Static_assert(sizeof(DrvsDJIBroadcastTxFrameParts_s) == 8, "DJI 控制帧必须是 8 字节");
 
 /* 槽位公式不变量：槽位 == 帧内通道序号（取两端钉死，防止改 group 基址时漏改公式） */
-_Static_assert(((0x201u - 0x201u) % DRVS_DJI_BC_SLOTS) == 0u &&
-                   ((0x208u - 0x201u) % DRVS_DJI_BC_SLOTS) == (DRVS_DJI_BC_SLOTS - 1u),
+_Static_assert(((0x201u - 0x201u) % DRVS_DJI_BC_SLOTS) == 0u && ((0x208u - 0x201u) % DRVS_DJI_BC_SLOTS) == (DRVS_DJI_BC_SLOTS - 1u),
                "DJI 槽位公式不变量被破坏");
 
 /*============================================
@@ -260,12 +259,12 @@ typedef struct
 /*============================================
  *              单电机实例 / 广播组定义宏
  *============================================*/
-#define DRVS_DJIMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                     \
-    CAN_INSTANCE_DEF(name##_can);                                                                                      \
-    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
-    static DrvsDJIMotorBroadcast_s name = {                                                                            \
-        .can = &name##_can,                                                                                            \
-        .daemon = &name##_daemon,                                                                                      \
+#define DRVS_DJIMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                                                             \
+    CAN_INSTANCE_DEF(name##_can);                                                                                                                              \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                                                        \
+    static DrvsDJIMotorBroadcast_s name = {                                                                                                                    \
+        .can = &name##_can,                                                                                                                                    \
+        .daemon = &name##_daemon,                                                                                                                              \
     }
 
 /**

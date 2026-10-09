@@ -51,14 +51,12 @@ HAL_StatusTypeDef HalCanReconfigureFdcan(FDCAN_HandleTypeDef *hfdcan, const FDCA
     }
 
     /* 参数范围校验（HAL assert_param 在此工程为空操作，必须自行校验） */
-    if ((init->FrameFormat != FDCAN_FRAME_CLASSIC) && (init->FrameFormat != FDCAN_FRAME_FD_NO_BRS) &&
-        (init->FrameFormat != FDCAN_FRAME_FD_BRS))
+    if ((init->FrameFormat != FDCAN_FRAME_CLASSIC) && (init->FrameFormat != FDCAN_FRAME_FD_NO_BRS) && (init->FrameFormat != FDCAN_FRAME_FD_BRS))
     {
         return HAL_ERROR;
     }
-    if ((init->Mode != FDCAN_MODE_NORMAL) && (init->Mode != FDCAN_MODE_RESTRICTED_OPERATION) &&
-        (init->Mode != FDCAN_MODE_BUS_MONITORING) && (init->Mode != FDCAN_MODE_INTERNAL_LOOPBACK) &&
-        (init->Mode != FDCAN_MODE_EXTERNAL_LOOPBACK))
+    if ((init->Mode != FDCAN_MODE_NORMAL) && (init->Mode != FDCAN_MODE_RESTRICTED_OPERATION) && (init->Mode != FDCAN_MODE_BUS_MONITORING) &&
+        (init->Mode != FDCAN_MODE_INTERNAL_LOOPBACK) && (init->Mode != FDCAN_MODE_EXTERNAL_LOOPBACK))
     {
         return HAL_ERROR;
     }
@@ -68,15 +66,13 @@ HAL_StatusTypeDef HalCanReconfigureFdcan(FDCAN_HandleTypeDef *hfdcan, const FDCA
         return HAL_ERROR;
     }
 
-    if ((init->NominalPrescaler < 1U) || (init->NominalPrescaler > 512U) || (init->NominalSyncJumpWidth < 1U) ||
-        (init->NominalSyncJumpWidth > 128U) || (init->NominalTimeSeg1 < 1U) || (init->NominalTimeSeg1 > 256U) ||
-        (init->NominalTimeSeg2 < 1U) || (init->NominalTimeSeg2 > 128U))
+    if ((init->NominalPrescaler < 1U) || (init->NominalPrescaler > 512U) || (init->NominalSyncJumpWidth < 1U) || (init->NominalSyncJumpWidth > 128U) ||
+        (init->NominalTimeSeg1 < 1U) || (init->NominalTimeSeg1 > 256U) || (init->NominalTimeSeg2 < 1U) || (init->NominalTimeSeg2 > 128U))
     {
         return HAL_ERROR;
     }
-    if ((init->DataPrescaler < 1U) || (init->DataPrescaler > 32U) || (init->DataSyncJumpWidth < 1U) ||
-        (init->DataSyncJumpWidth > 16U) || (init->DataTimeSeg1 < 1U) || (init->DataTimeSeg1 > 32U) ||
-        (init->DataTimeSeg2 < 1U) || (init->DataTimeSeg2 > 16U))
+    if ((init->DataPrescaler < 1U) || (init->DataPrescaler > 32U) || (init->DataSyncJumpWidth < 1U) || (init->DataSyncJumpWidth > 16U) ||
+        (init->DataTimeSeg1 < 1U) || (init->DataTimeSeg1 > 32U) || (init->DataTimeSeg2 < 1U) || (init->DataTimeSeg2 > 16U))
     {
         return HAL_ERROR;
     }
@@ -171,13 +167,11 @@ HAL_StatusTypeDef HalCanReconfigureBxcan(CAN_HandleTypeDef *hcan, const CAN_Init
     }
 
     /* 参数范围校验（HAL assert_param 在此工程为空操作，必须自行校验） */
-    if ((init->Mode != CAN_MODE_NORMAL) && (init->Mode != CAN_MODE_LOOPBACK) && (init->Mode != CAN_MODE_SILENT) &&
-        (init->Mode != CAN_MODE_SILENT_LOOPBACK))
+    if ((init->Mode != CAN_MODE_NORMAL) && (init->Mode != CAN_MODE_LOOPBACK) && (init->Mode != CAN_MODE_SILENT) && (init->Mode != CAN_MODE_SILENT_LOOPBACK))
     {
         return HAL_ERROR;
     }
-    if ((init->SyncJumpWidth != CAN_SJW_1TQ) && (init->SyncJumpWidth != CAN_SJW_2TQ) &&
-        (init->SyncJumpWidth != CAN_SJW_4TQ))
+    if ((init->SyncJumpWidth != CAN_SJW_1TQ) && (init->SyncJumpWidth != CAN_SJW_2TQ) && (init->SyncJumpWidth != CAN_SJW_4TQ))
     {
         return HAL_ERROR;
     }
@@ -191,8 +185,7 @@ HAL_StatusTypeDef HalCanReconfigureBxcan(CAN_HandleTypeDef *hcan, const CAN_Init
     }
     if (!HalCanIsValidFunctionalState(init->TimeTriggeredMode) || !HalCanIsValidFunctionalState(init->AutoBusOff) ||
         !HalCanIsValidFunctionalState(init->AutoWakeUp) || !HalCanIsValidFunctionalState(init->AutoRetransmission) ||
-        !HalCanIsValidFunctionalState(init->ReceiveFifoLocked) ||
-        !HalCanIsValidFunctionalState(init->TransmitFifoPriority))
+        !HalCanIsValidFunctionalState(init->ReceiveFifoLocked) || !HalCanIsValidFunctionalState(init->TransmitFifoPriority))
     {
         return HAL_ERROR;
     }

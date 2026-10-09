@@ -432,8 +432,7 @@ int8_t DJIMotorBroadcastConfig(DJIMotorBroadcastInstance *inst, DJIMotorBroadcas
         // 环绕模式：自动启用位置环误差归一化
         if (cfg->controller_setting.position_mode == MOTOR_POSITION_WRAP)
         {
-            cfg->pid_angle_setting.error_normalize_range =
-                cfg->controller_setting.angle_limit_max - cfg->controller_setting.angle_limit_min;
+            cfg->pid_angle_setting.error_normalize_range = cfg->controller_setting.angle_limit_max - cfg->controller_setting.angle_limit_min;
             cfg->pid_angle_setting.config_mask |= PID_ENABLE_ERROR_NORMALIZE;
         }
 
@@ -522,9 +521,7 @@ static void DJIMotorBroadcast_Calculate(DJIMotorBroadcastInstance *inst)
         {
             position_feedforward = *setting->position_feedforward_ptr;
         }
-        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr)
-                      ? *setting->angle_external_ptr
-                      : md.position;
+        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr) ? *setting->angle_external_ptr : md.position;
         setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, position_feedforward);
     }
 
@@ -536,9 +533,7 @@ static void DJIMotorBroadcast_Calculate(DJIMotorBroadcastInstance *inst)
         {
             speed_feedforward = *setting->speed_feedforward_ptr;
         }
-        measure = (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr)
-                      ? *setting->speed_external_ptr
-                      : md.speed;
+        measure = (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr) ? *setting->speed_external_ptr : md.speed;
         output = PIDCalculate(&ctrl->pid_speed, setpoint, measure, speed_feedforward);
     }
     else

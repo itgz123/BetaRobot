@@ -27,20 +27,20 @@
 static int g_checks = 0;
 static int g_fails = 0;
 
-#define CHECK(cond, ...)                                                                                               \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        g_checks++;                                                                                                    \
-        if (!(cond))                                                                                                   \
-        {                                                                                                              \
-            g_fails++;                                                                                                 \
-            if (g_fails <= 30)                                                                                         \
-            {                                                                                                          \
-                printf("FAIL %d: ", __LINE__);                                                                         \
-                printf(__VA_ARGS__);                                                                                   \
-                printf("\n");                                                                                          \
-            }                                                                                                          \
-        }                                                                                                              \
+#define CHECK(cond, ...)                                                                                                                                       \
+    do                                                                                                                                                         \
+    {                                                                                                                                                          \
+        g_checks++;                                                                                                                                            \
+        if (!(cond))                                                                                                                                           \
+        {                                                                                                                                                      \
+            g_fails++;                                                                                                                                         \
+            if (g_fails <= 30)                                                                                                                                 \
+            {                                                                                                                                                  \
+                printf("FAIL %d: ", __LINE__);                                                                                                                 \
+                printf(__VA_ARGS__);                                                                                                                           \
+                printf("\n");                                                                                                                                  \
+            }                                                                                                                                                  \
+        }                                                                                                                                                      \
     } while (0)
 
 static uint32_t g_rng = 0x9E3779B9u;
@@ -188,8 +188,7 @@ static void test_single_bit(void)
         {
             /* 编码区单 bit 错：汉明必纠回，payload 不变，且走复核路径 */
             CHECK(r == 1, "编码区单错未纠回 bit=%u r=%d", b, r);
-            CHECK(t->rx_fixed == 1u && t->rx_err == 0u, "单错计数不对 bit=%u fixed=%u err=%u", b, t->rx_fixed,
-                  t->rx_err);
+            CHECK(t->rx_fixed == 1u && t->rx_err == 0u, "单错计数不对 bit=%u fixed=%u err=%u", b, t->rx_fixed, t->rx_err);
         }
         else
         {
@@ -252,8 +251,7 @@ static void test_two_bits(void)
     /* 同块双错必检出；跨块双错是两次独立单错，会被纠正后接受 */
     CHECK(cross_blk > 0u && same_blk > 0u, "双错分类统计异常");
     CHECK(dropped == same_blk, "同块双错应全部丢弃：dropped=%u same_blk=%u", dropped, same_blk);
-    printf("  双错组合 %u（同块丢弃 %u，跨块纠回 %u）\n", same_blk + cross_blk, dropped,
-           same_blk + cross_blk - dropped);
+    printf("  双错组合 %u（同块丢弃 %u，跨块纠回 %u）\n", same_blk + cross_blk, dropped, same_blk + cross_blk - dropped);
 }
 
 /*------------------------------------------------------------------
@@ -306,8 +304,7 @@ static void test_three_bits(void)
     }
 
     /* 三错时汉明可能误纠，但重编码 + 原 CRC 复核应把绝大多数挡掉 */
-    printf("  三错抽样 %u：接受 %u，其中错误 payload %u（漏检率 %.2f%%）\n", 20000u, accepted, wrong,
-           (double)wrong * 100.0 / 20000.0);
+    printf("  三错抽样 %u：接受 %u，其中错误 payload %u（漏检率 %.2f%%）\n", 20000u, accepted, wrong, (double)wrong * 100.0 / 20000.0);
     CHECK(wrong * 100u <= 20000u * 2u, "三错漏检率过高：wrong=%u/20000", wrong);
 }
 
@@ -334,8 +331,7 @@ static void test_seq(void)
     /* 跳 3 帧：累计丢帧 2（seq+1 与 seq+2 缺失） */
     g_frame[1] = (uint8_t)(seq_before + 3u);
     /* seq 参与 CRC，改后须重算 CRC 才不会被当坏帧 */
-    g_frame[t->enc_bytes + 2u] =
-        (uint8_t)LIB_CRC_TableCalc(&LIB_CRC_TBL_CRC8, &g_frame[1], (uint32_t)t->enc_bytes + 1u);
+    g_frame[t->enc_bytes + 2u] = (uint8_t)LIB_CRC_TableCalc(&LIB_CRC_TBL_CRC8, &g_frame[1], (uint32_t)t->enc_bytes + 1u);
     CHECK(ProtoUnpack(&t->base, g_frame) != NULL, "跳号帧未被接受");
     CHECK(t->lost_frames == 2u, "跳号丢帧计数 %u != 2", t->lost_frames);
     CHECK(t->rx_err == 0u, "跳号帧不应计坏帧");

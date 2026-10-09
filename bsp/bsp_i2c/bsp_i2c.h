@@ -124,8 +124,8 @@ typedef struct I2CInstance
  * @example
  *   I2C_INSTANCE_DEF(ist8310_i2c, IST8310_BUFF_SIZE);
  */
-#define I2C_INSTANCE_DEF(name, buff_sz)                                                                                \
-    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};                                                              \
+#define I2C_INSTANCE_DEF(name, buff_sz)                                                                                                                        \
+    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};                                                                                                      \
     static I2CInstance name = {.rx_buff = name##_rx_buff, .buff_size = buff_sz}
 
 /*------------- 从机地址形态 --------------*/
@@ -210,8 +210,8 @@ BSP_Status_e I2CConfig(I2CInstance *instance, const I2C_Config_s *config);
  * @retval BSP_HW_ERR    HAL 启动读取失败（真失败：`ErrorCode` 是 NACK/BERR/DMA…）；是否
  *                       回调 err_callback 同 BSP_TIMEOUT（IT/DMA 回调，BLOCK 不回调）
  */
-BSP_Status_e I2CMemRead(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_addr, I2C_MemAddrSize_e mem_addr_size,
-                        uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
+BSP_Status_e I2CMemRead(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_addr, I2C_MemAddrSize_e mem_addr_size, uint16_t len, BSP_Transfer_Mode_e mode,
+                        uint32_t timeout_ms);
 
 /**
  * @brief 写从机寄存器（Mem 模式）
@@ -226,8 +226,8 @@ BSP_Status_e I2CMemRead(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_a
  * @retval BSP_OK        已受理（BLOCK=已完成；IT/DMA=已启动，完成看 tx_callback）
  * @retval 其余          同 I2CMemRead（该口没有 TX DMA 时 BSP_PARAM_ERR）
  */
-BSP_Status_e I2CMemWrite(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_addr, I2C_MemAddrSize_e mem_addr_size,
-                         const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
+BSP_Status_e I2CMemWrite(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_addr, I2C_MemAddrSize_e mem_addr_size, const uint8_t *data, uint16_t len,
+                         BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
 
 /**
  * @brief 原始发送（不带寄存器地址，对应 SPI 的 SPITransmit）
@@ -241,8 +241,7 @@ BSP_Status_e I2CMemWrite(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_
  *
  * @note 从机地址自身占一笔"数据"，故传给 HAL 的 Size 就是 len（不含地址字节）。
  */
-BSP_Status_e I2CMasterTransmit(I2CInstance *instance, uint16_t dev_addr, const uint8_t *data, uint16_t len,
-                               BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
+BSP_Status_e I2CMasterTransmit(I2CInstance *instance, uint16_t dev_addr, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
 
 /**
  * @brief 原始接收（对应 SPI 的 SPIReceive）
@@ -253,8 +252,7 @@ BSP_Status_e I2CMasterTransmit(I2CInstance *instance, uint16_t dev_addr, const u
  * @param timeout_ms 超时（毫秒），语义同 I2CMemRead
  * @retval BSP_OK 已受理；其余同 I2CMemRead
  */
-BSP_Status_e I2CMasterReceive(I2CInstance *instance, uint16_t dev_addr, uint16_t len, BSP_Transfer_Mode_e mode,
-                              uint32_t timeout_ms);
+BSP_Status_e I2CMasterReceive(I2CInstance *instance, uint16_t dev_addr, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
 
 /**
  * @brief 探测从机是否应答

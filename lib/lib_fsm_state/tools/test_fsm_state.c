@@ -36,17 +36,17 @@
 static int g_checks = 0;
 static int g_fails = 0;
 
-#define CHECK(cond, ...)                                                                                               \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        g_checks++;                                                                                                    \
-        if (!(cond))                                                                                                   \
-        {                                                                                                              \
-            g_fails++;                                                                                                 \
-            printf("FAIL %d: ", __LINE__);                                                                             \
-            printf(__VA_ARGS__);                                                                                       \
-            printf("\n");                                                                                              \
-        }                                                                                                              \
+#define CHECK(cond, ...)                                                                                                                                       \
+    do                                                                                                                                                         \
+    {                                                                                                                                                          \
+        g_checks++;                                                                                                                                            \
+        if (!(cond))                                                                                                                                           \
+        {                                                                                                                                                      \
+            g_fails++;                                                                                                                                         \
+            printf("FAIL %d: ", __LINE__);                                                                                                                     \
+            printf(__VA_ARGS__);                                                                                                                               \
+            printf("\n");                                                                                                                                      \
+        }                                                                                                                                                      \
     } while (0)
 
 /*============================ 轨迹串：记录回调被调用的顺序 ============================*/
@@ -350,9 +350,8 @@ static const LibFsmStateTransition_s s_wait_table[] = {
 #ifndef LIB_FSM_STATE_PARANOID
     {E_RESET, NULL, ActShouldNotRun, NULL}, /* 配置错误：next 为 NULL */
 #endif
-    {E_RESET, NULL, ActTableReset, &n_off},
-    {E_TICK, GuardTickLimited, ActTableTick, &n_wait}, /* 返回自身 = 内部转移 */
-    {E_TICK, NULL, ActTableTickOverflow, &n_err},      /* 守卫拒绝时落到这条 */
+    {E_RESET, NULL, ActTableReset, &n_off},       {E_TICK, GuardTickLimited, ActTableTick, &n_wait}, /* 返回自身 = 内部转移 */
+    {E_TICK, NULL, ActTableTickOverflow, &n_err},                                                    /* 守卫拒绝时落到这条 */
     {E_FAULT, NULL, ActTableFault, &n_err},
 };
 
@@ -405,31 +404,19 @@ static const LibFsmStateOps_s s_any_ops = {.entry = AnyEntry, .exit = AnyExit, .
 /* 什么都不做的状态：没有 handle、也没有转移表（作为"死状态"落点是合法的，因为 ops 非 NULL） */
 static const LibFsmStateOps_s s_silent_ops = {.entry = NULL, .exit = NULL, .handle = NULL};
 
-static const LibFsmStateNode_s n_off = {
-    .name = "OFF", .ops = &s_off_ops, .transitions = NULL, .transition_count = 0u, .data = &s_off_data};
-static const LibFsmStateNode_s n_on = {
-    .name = "ON", .ops = &s_on_ops, .transitions = NULL, .transition_count = 0u, .data = NULL};
-static const LibFsmStateNode_s n_err = {
-    .name = "ERR", .ops = &s_err_ops, .transitions = NULL, .transition_count = 0u, .data = NULL};
+static const LibFsmStateNode_s n_off = {.name = "OFF", .ops = &s_off_ops, .transitions = NULL, .transition_count = 0u, .data = &s_off_data};
+static const LibFsmStateNode_s n_on = {.name = "ON", .ops = &s_on_ops, .transitions = NULL, .transition_count = 0u, .data = NULL};
+static const LibFsmStateNode_s n_err = {.name = "ERR", .ops = &s_err_ops, .transitions = NULL, .transition_count = 0u, .data = NULL};
 /* 表驱动：handle 留空 → 框架自动回退 LibFsmStateDefaultHandle */
-static const LibFsmStateNode_s n_wait = {.name = "WAIT",
-                                         .ops = &s_wait_ops,
-                                         .transitions = s_wait_table,
-                                         .transition_count = WAIT_TABLE_N,
-                                         .data = &s_wait_data};
+static const LibFsmStateNode_s n_wait = {
+    .name = "WAIT", .ops = &s_wait_ops, .transitions = s_wait_table, .transition_count = WAIT_TABLE_N, .data = &s_wait_data};
 /* 同构的表 + 显式 handle：表动作会访问 fsm->current->data，所以这个节点也要自带 data */
-static const LibFsmStateNode_s n_wait2 = {.name = "WAIT2",
-                                          .ops = &s_wait2_ops,
-                                          .transitions = s_wait2_table,
-                                          .transition_count = WAIT_TABLE_N,
-                                          .data = &s_wait2_data};
-static const LibFsmStateNode_s n_any = {
-    .name = "ANY", .ops = &s_any_ops, .transitions = s_any_table, .transition_count = ANY_TABLE_N, .data = NULL};
-static const LibFsmStateNode_s n_silent = {
-    .name = "SILENT", .ops = &s_silent_ops, .transitions = NULL, .transition_count = 0u, .data = NULL};
+static const LibFsmStateNode_s n_wait2 = {
+    .name = "WAIT2", .ops = &s_wait2_ops, .transitions = s_wait2_table, .transition_count = WAIT_TABLE_N, .data = &s_wait2_data};
+static const LibFsmStateNode_s n_any = {.name = "ANY", .ops = &s_any_ops, .transitions = s_any_table, .transition_count = ANY_TABLE_N, .data = NULL};
+static const LibFsmStateNode_s n_silent = {.name = "SILENT", .ops = &s_silent_ops, .transitions = NULL, .transition_count = 0u, .data = NULL};
 /* 没有虚表也没有转移表：弱校验会判定它"不像状态节点" */
-static const LibFsmStateNode_s n_bogus = {
-    .name = "BOGUS", .ops = NULL, .transitions = NULL, .transition_count = 0u, .data = NULL};
+static const LibFsmStateNode_s n_bogus = {.name = "BOGUS", .ops = NULL, .transitions = NULL, .transition_count = 0u, .data = NULL};
 
 /*============================ 跟踪钩子：记录每次派发的结局 ============================*/
 
@@ -445,8 +432,8 @@ typedef struct
 static trace_rec_s g_recs[TRACE_MAX];
 static int g_rec_n;
 
-static void TraceHook(LibFsmStateMachine_s *fsm, const LibFsmStateNode_s *from, const LibFsmStateNode_s *to,
-                      LibFsmStateEvent_t event, LibFsmStateResult_e result)
+static void TraceHook(LibFsmStateMachine_s *fsm, const LibFsmStateNode_s *from, const LibFsmStateNode_s *to, LibFsmStateEvent_t event,
+                      LibFsmStateResult_e result)
 {
     (void)fsm;
     if (g_rec_n < TRACE_MAX)
@@ -484,8 +471,7 @@ static void TestInit(void)
     CHECK(s_off_data.exit_cnt == 0, "Init 不是转移，不该调 exit，实际 %d 次", s_off_data.exit_cnt);
     CHECK(fsm.ctx == &ctx, "ctx 应原样存进状态机");
     CHECK(LibFsmStateIsIn(&fsm, &n_off), "IsIn 应认得出当前状态");
-    CHECK(LibFsmStateCurrentName(&fsm) != NULL && strcmp(LibFsmStateCurrentName(&fsm), "OFF") == 0,
-          "当前状态名 = %s，期望 OFF", LibFsmStateCurrentName(&fsm));
+    CHECK(LibFsmStateCurrentName(&fsm) != NULL && strcmp(LibFsmStateCurrentName(&fsm), "OFF") == 0, "当前状态名 = %s，期望 OFF", LibFsmStateCurrentName(&fsm));
     CHECK(fsm.error_state == NULL && fsm.default_state == NULL && fsm.trace_fn == NULL, "Init 后可选字段应为空");
 
     /* 重复 Init = 复位：先退出旧状态（用旧 ctx），再落点跑新状态 entry */
@@ -493,8 +479,7 @@ static void TestInit(void)
     LibFsmStateInit(&fsm, &n_on, &ctx);
     CHECK(LibFsmStateCurrent(&fsm) == &n_on, "重新 Init 后应落到 ON");
     CHECK_TRACE("oN");
-    CHECK(s_off_data.exit_cnt == 1, "重复 Init 应补一次旧状态的 exit（否则 entry 申请的资源会泄漏），实际 %d 次",
-          s_off_data.exit_cnt);
+    CHECK(s_off_data.exit_cnt == 1, "重复 Init 应补一次旧状态的 exit（否则 entry 申请的资源会泄漏），实际 %d 次", s_off_data.exit_cnt);
     CHECK(s_off_data.enter_cnt == 1, "重复 Init 不该重跑旧状态的 entry，实际 %d 次", s_off_data.enter_cnt);
 
     /* 可选字段会被清零：配在 Init 之前是留不住的 */
@@ -502,8 +487,7 @@ static void TestInit(void)
     fsm.default_state = &n_on;
     fsm.trace_fn = TraceHook;
     LibFsmStateInit(&fsm, &n_on, &ctx);
-    CHECK(fsm.error_state == NULL && fsm.default_state == NULL && fsm.trace_fn == NULL,
-          "Init 应把 error_state / default_state / trace_fn 清零");
+    CHECK(fsm.error_state == NULL && fsm.default_state == NULL && fsm.trace_fn == NULL, "Init 应把 error_state / default_state / trace_fn 清零");
 
     /* initial 为 NULL：退出旧状态 + 停在"无状态" */
     TraceReset();
@@ -740,8 +724,7 @@ static void TestFallbackStates(void)
     CHECK(LibFsmStateDispatch(&fsm, E_BAD, NULL) == LIB_FSM_STATE_RESULT_SWITCHED, "两者都配时应落 error_state");
     CHECK(LibFsmStateIsIn(&fsm, &n_err), "状态应为 ERR");
     TraceReset();
-    CHECK(LibFsmStateDispatch(&fsm, LIB_FSM_STATE_EVENT_ANY, NULL) == LIB_FSM_STATE_RESULT_SWITCHED,
-          "ERR 没人处理这个事件 → 落 default_state");
+    CHECK(LibFsmStateDispatch(&fsm, LIB_FSM_STATE_EVENT_ANY, NULL) == LIB_FSM_STATE_RESULT_SWITCHED, "ERR 没人处理这个事件 → 落 default_state");
     CHECK(LibFsmStateIsIn(&fsm, &n_wait), "状态应为兜底状态 WAIT");
     CHECK_TRACE("eW"); /* 退出 ERR → 进入 WAIT */
 }
@@ -760,8 +743,7 @@ static void TestMixed(void)
     CHECK(LibFsmStateDispatch(&fsm, E_FAULT, NULL) == LIB_FSM_STATE_RESULT_SWITCHED, "OFF --E_FAULT--> ERR");
     CHECK_TRACE("foE");
 
-    CHECK(LibFsmStateDispatch(&fsm, E_TOGGLE, NULL) == LIB_FSM_STATE_RESULT_SWITCHED,
-          "ERR --E_TOGGLE--> WAIT（切到表驱动状态）");
+    CHECK(LibFsmStateDispatch(&fsm, E_TOGGLE, NULL) == LIB_FSM_STATE_RESULT_SWITCHED, "ERR --E_TOGGLE--> WAIT（切到表驱动状态）");
     CHECK(LibFsmStateIsIn(&fsm, &n_wait), "状态应为 WAIT");
     CHECK_TRACE("foE4eW");
 
@@ -833,8 +815,7 @@ static void TestNullSafety(void)
     LibFsmStateMachine_s zeroed = {0}; /* 尚未 Init */
     LibFsmStateMachine_s fsm = {0};
 
-    CHECK(LibFsmStateDispatch(NULL, E_TOGGLE, NULL) == LIB_FSM_STATE_RESULT_NOT_HANDLED,
-          "fsm 为 NULL 时应返回 NOT_HANDLED");
+    CHECK(LibFsmStateDispatch(NULL, E_TOGGLE, NULL) == LIB_FSM_STATE_RESULT_NOT_HANDLED, "fsm 为 NULL 时应返回 NOT_HANDLED");
     CHECK(LibFsmStateCurrent(NULL) == NULL, "fsm 为 NULL 时当前状态应为 NULL");
     CHECK(LibFsmStateCurrentName(NULL) == NULL, "fsm 为 NULL 时状态名应为 NULL");
     CHECK(LibFsmStateIsIn(NULL, &n_off) == false, "fsm 为 NULL 时 IsIn 应为 false");
@@ -842,8 +823,7 @@ static void TestNullSafety(void)
 
     /* 零初始化、未 Init 的状态机：current 为 NULL，一切照旧安全 */
     TraceReset();
-    CHECK(LibFsmStateDispatch(&zeroed, E_TOGGLE, NULL) == LIB_FSM_STATE_RESULT_NOT_HANDLED,
-          "未初始化时应返回 NOT_HANDLED");
+    CHECK(LibFsmStateDispatch(&zeroed, E_TOGGLE, NULL) == LIB_FSM_STATE_RESULT_NOT_HANDLED, "未初始化时应返回 NOT_HANDLED");
     CHECK(LibFsmStateCurrent(&zeroed) == NULL, "未初始化时 current 应为 NULL");
     CHECK(LibFsmStateIsIn(&zeroed, NULL) == false, "IsIn(未初始化, NULL) 应为 false");
     CHECK(g_trace_len == 0, "未初始化时不得调用任何回调，轨迹 = \"%s\"", g_trace);
@@ -857,8 +837,8 @@ static void TestNullSafety(void)
     CHECK(LibFsmStateDefaultHandle(NULL, E_TICK, NULL) == NULL, "NULL 状态机时也返回 NULL");
 
     /* 状态名照常可读 */
-    CHECK(LibFsmStateCurrentName(&fsm) != NULL && strcmp(LibFsmStateCurrentName(&fsm), "SILENT") == 0,
-          "当前状态名 = %s，期望 SILENT", LibFsmStateCurrentName(&fsm));
+    CHECK(LibFsmStateCurrentName(&fsm) != NULL && strcmp(LibFsmStateCurrentName(&fsm), "SILENT") == 0, "当前状态名 = %s，期望 SILENT",
+          LibFsmStateCurrentName(&fsm));
 }
 
 /*============================ 16、17：event_data / ctx / 状态数据共享 ============================*/
@@ -880,8 +860,7 @@ static void TestCtxAndNodeData(void)
     LibFsmStateInit(&b, &n_off, &ctx_b);
 
     /* 状态数据挂在静态单例上：两个实例各自 Init 都会累加同一份 s_off_data */
-    CHECK(s_off_data.enter_cnt == 2, "OFF 的 enter 次数 = %d，期望 2（data 是全局的，两实例共享）",
-          s_off_data.enter_cnt);
+    CHECK(s_off_data.enter_cnt == 2, "OFF 的 enter 次数 = %d，期望 2（data 是全局的，两实例共享）", s_off_data.enter_cnt);
     CHECK(n_off.data == &s_off_data, "n_off.data 应指向 s_off_data");
     CHECK(n_wait.data == &s_wait_data, "n_wait.data 应指向 s_wait_data");
     CHECK(n_wait2.data == &s_wait2_data, "n_wait2.data 应指向 s_wait2_data");
@@ -905,8 +884,7 @@ static void TestCtxAndNodeData(void)
     CHECK(s_wait_data.tick_cnt == 1, "状态自己的 tick 计数 = %d，期望 1", s_wait_data.tick_cnt);
     CHECK(LibFsmStateDispatch(&b, E_TICK, NULL) == LIB_FSM_STATE_RESULT_INTERNAL, "B 也 tick 一次");
     CHECK(s_wait_data.tick_cnt == 2, "两个实例共用同一份状态数据，tick 计数 = %d，期望 2", s_wait_data.tick_cnt);
-    CHECK(ctx_a.tick_cnt == 1 && ctx_b.tick_cnt == 1, "ctx 的 tick 计数各自为 1：A=%d B=%d", ctx_a.tick_cnt,
-          ctx_b.tick_cnt);
+    CHECK(ctx_a.tick_cnt == 1 && ctx_b.tick_cnt == 1, "ctx 的 tick 计数各自为 1：A=%d B=%d", ctx_a.tick_cnt, ctx_b.tick_cnt);
     CHECK(g_trace_len > 0, "轨迹串非空（回调确实被调用过）");
 
     /* event_data 为 NULL 也能穿透（handle 里做 NULL 判断） */
@@ -932,8 +910,7 @@ static void TestReentrancy(void)
     /* 回调里再派发同一状态机：内层被挡住（NOT_HANDLED），外层动作与状态不受影响 */
     g_reenter_result = -1;
     CHECK(LibFsmStateDispatch(&fsm, E_REENTER, NULL) == LIB_FSM_STATE_RESULT_NOT_HANDLED, "外层 handle 返回 NULL");
-    CHECK(g_reenter_result == (int)LIB_FSM_STATE_RESULT_NOT_HANDLED, "内层重入应被挡成 NOT_HANDLED，实际 %d",
-          g_reenter_result);
+    CHECK(g_reenter_result == (int)LIB_FSM_STATE_RESULT_NOT_HANDLED, "内层重入应被挡成 NOT_HANDLED，实际 %d", g_reenter_result);
     CHECK(ctx.toggle_cnt == 0, "内层重入不得执行动作，toggle 计数 = %d", ctx.toggle_cnt);
     CHECK(LibFsmStateIsIn(&fsm, &n_off), "重入不得改变状态");
     CHECK_TRACE("Rr");

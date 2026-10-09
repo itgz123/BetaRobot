@@ -233,20 +233,20 @@ typedef struct BMI088Instance
  * @example
  *   BMI088_INSTANCE_DEF(bmi088);
  */
-#define BMI088_INSTANCE_DEF(name)                                                                                      \
-    static uint8_t name##_tx_buff[BMI088_BUFF_SIZE] DMA_RAM = {0};                                                     \
-    SPI_INSTANCE_DEF(name##_spi, BMI088_BUFF_SIZE);                                                                    \
-    GPIO_INSTANCE_DEF(name##_cs_acc);                                                                                  \
-    GPIO_INSTANCE_DEF(name##_cs_gyro);                                                                                 \
-    GPIO_INSTANCE_DEF(name##_int_acc);                                                                                 \
-    GPIO_INSTANCE_DEF(name##_int_gyro);                                                                                \
-    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
-    static BMI088Instance name = {.spi_inst = &name##_spi,                                                             \
-                                  .cs_acc = &name##_cs_acc,                                                            \
-                                  .cs_gyro = &name##_cs_gyro,                                                          \
-                                  .int_acc = &name##_int_acc,                                                          \
-                                  .int_gyro = &name##_int_gyro,                                                        \
-                                  .daemon = &name##_daemon,                                                            \
+#define BMI088_INSTANCE_DEF(name)                                                                                                                              \
+    static uint8_t name##_tx_buff[BMI088_BUFF_SIZE] DMA_RAM = {0};                                                                                             \
+    SPI_INSTANCE_DEF(name##_spi, BMI088_BUFF_SIZE);                                                                                                            \
+    GPIO_INSTANCE_DEF(name##_cs_acc);                                                                                                                          \
+    GPIO_INSTANCE_DEF(name##_cs_gyro);                                                                                                                         \
+    GPIO_INSTANCE_DEF(name##_int_acc);                                                                                                                         \
+    GPIO_INSTANCE_DEF(name##_int_gyro);                                                                                                                        \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                                                        \
+    static BMI088Instance name = {.spi_inst = &name##_spi,                                                                                                     \
+                                  .cs_acc = &name##_cs_acc,                                                                                                    \
+                                  .cs_gyro = &name##_cs_gyro,                                                                                                  \
+                                  .int_acc = &name##_int_acc,                                                                                                  \
+                                  .int_gyro = &name##_int_gyro,                                                                                                \
+                                  .daemon = &name##_daemon,                                                                                                    \
                                   .tx_buff = name##_tx_buff}
 
 /*============================ 公开接口声明 ============================*/
