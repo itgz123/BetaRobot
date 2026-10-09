@@ -247,8 +247,7 @@ int8_t LibChassisForward(LibChassisInstance_s *inst, const LibChassisState_s *st
     return 0;
 }
 
-int8_t LibChassisAllocateTorque(LibChassisInstance_s *inst, const LibChassisState_s *st, vector3_t wrench,
-                                LibChassisTorque_s *out)
+int8_t LibChassisAllocateTorque(LibChassisInstance_s *inst, const LibChassisState_s *st, vector3_t wrench, LibChassisTorque_s *out)
 {
     if (inst == NULL || out == NULL)
         return -1;

@@ -368,24 +368,24 @@ void Referee2026RxIsr(Referee2026Core_t *core, const uint8_t *buf, uint16_t len)
  * @example
  *   REFEREE2026_INSTANCE_DEF(common_inst, COMMON);   // 用常规链路
  */
-#define REFEREE2026_INSTANCE_DEF(name, LINK)                                                                           \
-    USART_INSTANCE_DEF(name##_usart, REFEREE2026_RX_BUFF_SIZE);                                                        \
-    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
-    static uint8_t name##_asm_buf[REFEREE2026_CORE_BUF_SIZE];                                                          \
-    static uint8_t name##_tx_buf[REFEREE2026_CORE_BUF_SIZE] DMA_RAM = {0};                                             \
-    static REFEREE2026_##LINK##_INSTANCE_TYPE name = {                                                                 \
-        .core =                                                                                                        \
-            {                                                                                                          \
-                .usart = &name##_usart,                                                                                \
-                .daemon = &name##_daemon,                                                                              \
-                .info = REFEREE2026_##LINK##_CMD_INFO,                                                                 \
-                .count = REFEREE2026_##LINK##_DATA_COUNT,                                                              \
-                .snap = (uint8_t *)&name.snapshot,                                                                     \
-                .tick = name.tick,                                                                                     \
-                .tx_last_us = name.tx_last_us,                                                                         \
-                .asm_buf = name##_asm_buf,                                                                             \
-                .tx_buf = name##_tx_buf,                                                                               \
-            },                                                                                                         \
+#define REFEREE2026_INSTANCE_DEF(name, LINK)                                                                                                                   \
+    USART_INSTANCE_DEF(name##_usart, REFEREE2026_RX_BUFF_SIZE);                                                                                                \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                                                        \
+    static uint8_t name##_asm_buf[REFEREE2026_CORE_BUF_SIZE];                                                                                                  \
+    static uint8_t name##_tx_buf[REFEREE2026_CORE_BUF_SIZE] DMA_RAM = {0};                                                                                     \
+    static REFEREE2026_##LINK##_INSTANCE_TYPE name = {                                                                                                         \
+        .core =                                                                                                                                                \
+            {                                                                                                                                                  \
+                .usart = &name##_usart,                                                                                                                        \
+                .daemon = &name##_daemon,                                                                                                                      \
+                .info = REFEREE2026_##LINK##_CMD_INFO,                                                                                                         \
+                .count = REFEREE2026_##LINK##_DATA_COUNT,                                                                                                      \
+                .snap = (uint8_t *)&name.snapshot,                                                                                                             \
+                .tick = name.tick,                                                                                                                             \
+                .tx_last_us = name.tx_last_us,                                                                                                                 \
+                .asm_buf = name##_asm_buf,                                                                                                                     \
+                .tx_buf = name##_tx_buf,                                                                                                                       \
+            },                                                                                                                                                 \
     }
 
 #endif /* HAL_UART_MODULE_ENABLED */

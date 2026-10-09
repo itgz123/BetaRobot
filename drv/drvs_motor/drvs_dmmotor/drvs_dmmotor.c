@@ -127,8 +127,7 @@ static void DrvsDMMotorErrHook(CANInstance *can, CAN_ErrReason_e reason)
 
     /* 限频靠 LOG_INSTANCE_DEF 的 times_per_second（CAN_ERR_PROTOCOL 在总线异常时可每帧一次，
      * 没有这个上限会刷屏），细分原因/错误计数器见 bsp/bsp_can.md 的状态变量表 */
-    BSPLOG(&g_drvs_dmmotor_log, (reason == CAN_ERR_BUS_OFF) ? LOG_LEVEL_ERROR : LOG_LEVEL_WARNING,
-           "CAN bus error, reason=%u", (unsigned)reason);
+    BSPLOG(&g_drvs_dmmotor_log, (reason == CAN_ERR_BUS_OFF) ? LOG_LEVEL_ERROR : LOG_LEVEL_WARNING, "CAN bus error, reason=%u", (unsigned)reason);
 }
 
 static void DrvsDMMotorTxHook(CANInstance *can, uint32_t tx_mailbox, BSP_Status_e result)

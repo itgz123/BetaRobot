@@ -227,8 +227,7 @@ int8_t LibChassisForward(LibChassisInstance_s *inst, const LibChassisState_s *st
  * @note f = (J⁺)ᵀ·W = J·(JᵀJ)⁻¹·W（行数 m>3 时即最小**力**范数解）；驱动行
  *       τ_i = R_i·f_i，舵轮侧向行给出 lateral_force。如需按执行器能力加权/限幅，由上层再处理。
  */
-int8_t LibChassisAllocateTorque(LibChassisInstance_s *inst, const LibChassisState_s *st, vector3_t wrench,
-                                LibChassisTorque_s *out);
+int8_t LibChassisAllocateTorque(LibChassisInstance_s *inst, const LibChassisState_s *st, vector3_t wrench, LibChassisTorque_s *out);
 
 /**
  * @brief 在 φ 与 φ+180° 两个等价轮向中，选离当前舵角最近的解

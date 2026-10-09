@@ -78,8 +78,7 @@ typedef struct
 /* 逐条把 sizeof 钉死在"字节偏移量字段表"给出的总长上（理由见 public/referee2026_cmd.h 的公共约定）。
  * 放在头里而不是 .c 里：这样任何 include 本头的 TU 都会替我们校一遍，断言不会因为
  * "某个开关没开、.c 编成空 TU"而静默消失。 */
-#define REFEREE2026_CMD_STATIC_ASSERT(cmd_id, ...)                                                                     \
-    _Static_assert(__VA_ARGS__, "命令 0x" #cmd_id " 的数据段长度与字段表不符")
+#define REFEREE2026_CMD_STATIC_ASSERT(cmd_id, ...) _Static_assert(__VA_ARGS__, "命令 0x" #cmd_id " 的数据段长度与字段表不符")
 
 REFEREE2026_CMD_STATIC_ASSERT(0x0306, sizeof(Referee2026CustomClientData_t) == REFEREE2026_NONE_LEN_CUSTOM_CLIENT_DATA);
 
@@ -101,9 +100,8 @@ REFEREE2026_CMD_STATIC_ASSERT(0x0306, sizeof(Referee2026CustomClientData_t) == R
 typedef enum : uint8_t
 {
     /* --- 非链路（1 条） --- */
-    REFEREE2026_NONE_DATA_CUSTOM_CLIENT_DATA =
-        0, //!< 自定义控制器与选手端交互数据，发送方触发发送，频率上限为 30Hz（自定义控制器→己方选手端）
-    REFEREE2026_NONE_DATA_COUNT, //!< 命令条数（数组维度，非命令）
+    REFEREE2026_NONE_DATA_CUSTOM_CLIENT_DATA = 0, //!< 自定义控制器与选手端交互数据，发送方触发发送，频率上限为 30Hz（自定义控制器→己方选手端）
+    REFEREE2026_NONE_DATA_COUNT,                  //!< 命令条数（数组维度，非命令）
 } Referee2026NoneDataId_e;
 
 /**

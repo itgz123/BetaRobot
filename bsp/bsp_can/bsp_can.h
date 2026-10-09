@@ -54,8 +54,7 @@ typedef enum : uint8_t
 typedef enum : uint8_t
 {
     CAN_FILTER_MODE_MASK = 0, // 掩码匹配：(id & id0) == (id1 & id0) 命中。Mask: (id & id0) == (id1 & id0).
-    CAN_FILTER_MODE_LIST =
-        1, // 精确ID列表：id0、id1 两个精确ID（id1=CAN_ID_UNUSED 未用，仅匹配 id0）。List: two exact IDs.
+    CAN_FILTER_MODE_LIST = 1, // 精确ID列表：id0、id1 两个精确ID（id1=CAN_ID_UNUSED 未用，仅匹配 id0）。List: two exact IDs.
     CAN_FILTER_MODE_RANGE = 2 // 区间匹配：id0 <= id <= id1 命中。Range: id0 <= id <= id1.
 } CAN_Filter_Mode_e;
 
@@ -117,9 +116,9 @@ typedef struct
  */
 typedef struct CAN_Filter_s
 {
-    CAN_Filter_Mode_e mode; // 过滤模式。Filter mode.
-    uint32_t id0;           // MASK:掩码 / LIST:精确ID1 / RANGE:区间下限。Mask / exact ID1 / range lower bound.
-    uint32_t id1;           // MASK:匹配值 / LIST:精确ID2 / RANGE:区间上限。Match value / exact ID2 / range upper bound.
+    CAN_Filter_Mode_e mode;      // 过滤模式。Filter mode.
+    uint32_t id0;                // MASK:掩码 / LIST:精确ID1 / RANGE:区间下限。Mask / exact ID1 / range lower bound.
+    uint32_t id1;                // MASK:匹配值 / LIST:精确ID2 / RANGE:区间上限。Match value / exact ID2 / range upper bound.
     CAN_Frame_Type_e frame_type; // 帧类型过滤（仅接收该类型帧）。Frame type filter.
     void (*callback)(struct CANInstance *instance,
                      const CAN_Pack_s *pack); // 接收回调（匹配后调用；NULL 不接收）。Callback.
@@ -225,8 +224,7 @@ BSP_Status_e CANConfig(CANInstance *instance, const CAN_Config_s *config);
  * @retval BSP_TIMEOUT   等发送资源耗尽 timeout_ms
  * @retval BSP_HW_ERR    加入发送资源失败（HAL 返回错误）或实例尚未成功 CANConfig
  */
-BSP_Status_e CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeout_ms, uint32_t *tx_mailbox,
-                         uint8_t *tx_free_level);
+BSP_Status_e CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeout_ms, uint32_t *tx_mailbox, uint8_t *tx_free_level);
 
 /**
  * @brief CAN 发送资源自恢复入口（**任务上下文**，由调用方在自己的时基上周期调用或按需调用）

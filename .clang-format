@@ -12,7 +12,7 @@ Language: Cpp
 IndentWidth: 4
 TabWidth: 4
 UseTab: Never
-ColumnLimit: 120
+ColumnLimit: 160
 
 # Microsoft 预设此处为 false，会把 `typedef union\n{` 压成 `typedef union {`，
 # 与本仓库 struct/enum 的 Allman 写法不一致。

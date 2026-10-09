@@ -246,11 +246,10 @@ void BSP_FreeRTOSStatusRefresh(void);
 /* 以下 4 个函数由 FreeRTOS 内核在对应时机调用，本模块提供强符号实现覆盖
  * CubeMX 生成的 __weak 空实现；签名由内核固定，调用点参数 xTask 未使用 */
 
-void vApplicationIdleHook(void);         /* configUSE_IDLE_HOOK == 1 时每轮空闲调用 */
-void vApplicationTickHook(void);         /* configUSE_TICK_HOOK == 1 时每个 Tick 在中断里调用 */
-void vApplicationMallocFailedHook(void); /* configUSE_MALLOC_FAILED_HOOK == 1 时分配失败调用 */
-void vApplicationStackOverflowHook(TaskHandle_t xTask,
-                                   char *pcTaskName); /* configCHECK_FOR_STACK_OVERFLOW > 0 时栈溢出调用 */
+void vApplicationIdleHook(void);                                          /* configUSE_IDLE_HOOK == 1 时每轮空闲调用 */
+void vApplicationTickHook(void);                                          /* configUSE_TICK_HOOK == 1 时每个 Tick 在中断里调用 */
+void vApplicationMallocFailedHook(void);                                  /* configUSE_MALLOC_FAILED_HOOK == 1 时分配失败调用 */
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName); /* configCHECK_FOR_STACK_OVERFLOW > 0 时栈溢出调用 */
 
 #endif /* BSP_FREERTOS_STATUS_USED */
 

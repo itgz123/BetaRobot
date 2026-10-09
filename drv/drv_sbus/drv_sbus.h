@@ -131,12 +131,12 @@ typedef struct
  * @example
  *   SBUS_INSTANCE_DEF(sbus_inst);
  */
-#define SBUS_INSTANCE_DEF(name)                                                                                        \
-    USART_INSTANCE_DEF(name##_uart, SBUS_FRAME_SIZE);                                                                  \
-    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
-    static SBUSInstance name = {                                                                                       \
-        .usart_inst = &name##_uart,                                                                                    \
-        .daemon = &name##_daemon,                                                                                      \
+#define SBUS_INSTANCE_DEF(name)                                                                                                                                \
+    USART_INSTANCE_DEF(name##_uart, SBUS_FRAME_SIZE);                                                                                                          \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                                                        \
+    static SBUSInstance name = {                                                                                                                               \
+        .usart_inst = &name##_uart,                                                                                                                            \
+        .daemon = &name##_daemon,                                                                                                                              \
     }
 
 /*------------- 外部接口声明 --------------*/

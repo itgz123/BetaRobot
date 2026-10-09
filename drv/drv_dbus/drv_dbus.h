@@ -154,12 +154,12 @@ typedef struct
  * @example
  *   DBUS_INSTANCE_DEF(dbus_inst);
  */
-#define DBUS_INSTANCE_DEF(name)                                                                                        \
-    USART_INSTANCE_DEF(name##_uart, DBUS_FRAME_SIZE);                                                                  \
-    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
-    static DBUSInstance name = {                                                                                       \
-        .usart_inst = &name##_uart,                                                                                    \
-        .daemon = &name##_daemon,                                                                                      \
+#define DBUS_INSTANCE_DEF(name)                                                                                                                                \
+    USART_INSTANCE_DEF(name##_uart, DBUS_FRAME_SIZE);                                                                                                          \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                                                        \
+    static DBUSInstance name = {                                                                                                                               \
+        .usart_inst = &name##_uart,                                                                                                                            \
+        .daemon = &name##_daemon,                                                                                                                              \
     }
 
 /*------------- 外部接口声明 --------------*/

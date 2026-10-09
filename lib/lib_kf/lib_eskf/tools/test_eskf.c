@@ -250,8 +250,7 @@ static void att_propagate(void *ctx, const float *u, float dt, float *F, float *
 }
 
 /** @brief 归一化方向量测的公共部分：y = z - R(q_nom)ᵀ·ref，H = [[h]×, 0₃] */
-static void att_dir_measure(AttCtx *c, const float *z, int m_now, float *y, float *H, float *R, const float *ref,
-                            float var)
+static void att_dir_measure(AttCtx *c, const float *z, int m_now, float *y, float *H, float *R, const float *ref, float var)
 {
     float h[M_ATT];
     qrotT(c->q, ref, h);
@@ -491,8 +490,8 @@ static void case_static(void)
         }
     }
 
-    printf("  用例1 静置收敛: 误差角 roll=%.5f pitch=%.5f yaw=%.5f |总|=%.5f rad, max|δb|=%.2e, 更新失败=%d\n", err[0],
-           err[1], err[2], total, db, g_update_fail);
+    printf("  用例1 静置收敛: 误差角 roll=%.5f pitch=%.5f yaw=%.5f |总|=%.5f rad, max|δb|=%.2e, 更新失败=%d\n", err[0], err[1], err[2], total, db,
+           g_update_fail);
     check(g_update_fail == 0, "静置过程出现更新失败");
     check(fabsf(err[0]) < 0.005f && fabsf(err[1]) < 0.005f && fabsf(err[2]) < 0.005f, "静置姿态误差超限");
     check(db < 5e-4f, "零偏残差超限");
@@ -604,8 +603,8 @@ static void case_rotation_360(void)
     }
 
     const float end_err = q_angle(c.q, q_true);
-    printf("  用例2 解析旋转: 半程转过=%.2f°(期望180°) 末端误差=%.5f rad 中途最大=%.5f rad, 更新失败=%d\n",
-           mid_turn * 180.0f / 3.14159265f, end_err, worst, g_update_fail);
+    printf("  用例2 解析旋转: 半程转过=%.2f°(期望180°) 末端误差=%.5f rad 中途最大=%.5f rad, 更新失败=%d\n", mid_turn * 180.0f / 3.14159265f, end_err, worst,
+           g_update_fail);
     check(g_update_fail == 0, "旋转过程出现更新失败");
     check(fabsf(mid_turn - 3.14159265f) < 0.05f, "真值未按预期转过 180°（测试自身失效）");
     check(end_err < 0.002f, "末端姿态误差超限（H 符号 / δq 乘向可能写反）");
@@ -695,8 +694,7 @@ static void case_bias_observable(void)
         }
     }
     const float att_err = q_angle(c.q, q_true);
-    printf("  用例3 零偏可观测: 30s 后 max|Δb|=%.2e rad/s（真值 5e-3）, 姿态误差=%.5f rad, 更新失败=%d\n", db, att_err,
-           g_update_fail);
+    printf("  用例3 零偏可观测: 30s 后 max|Δb|=%.2e rad/s（真值 5e-3）, 姿态误差=%.5f rad, 更新失败=%d\n", db, att_err, g_update_fail);
     check(g_update_fail == 0, "零偏收敛过程出现更新失败");
     check(db < 1e-4f, "零偏残差超限");
 }
@@ -1119,8 +1117,7 @@ static void case_multirate(void)
         }
     }
 
-    printf("  用例7 多速率(acc 200Hz/mag 50Hz): mag 更新=%d 次, 最大姿态误差=%.5f rad, 更新失败=%d\n", mag_cnt, worst,
-           g_update_fail);
+    printf("  用例7 多速率(acc 200Hz/mag 50Hz): mag 更新=%d 次, 最大姿态误差=%.5f rad, 更新失败=%d\n", mag_cnt, worst, g_update_fail);
     check(g_update_fail == 0, "多速率过程出现更新失败");
     check(worst < 0.02f, "多速率下姿态发散");
     check(ESKF_P(&eskf, 0, 0) < 1.0f, "P 发散");
@@ -1176,22 +1173,14 @@ static void case_guard(void)
     p0_diag(P0, 0.01f, 1e-4f);
 
     /* 回调缺失 → ESKF_ERR_CFG */
-    Eskf_Init_Config_s no_p = {.n = N_ATT,
-                               .m = M_ATT,
-                               .l = 0,
-                               .ctx = &c,
-                               .propagate = NULL,
-                               .measure = att_measure_acc,
-                               .inject = att_inject,
-                               .P0 = P0};
+    Eskf_Init_Config_s no_p = {.n = N_ATT, .m = M_ATT, .l = 0, .ctx = &c, .propagate = NULL, .measure = att_measure_acc, .inject = att_inject, .P0 = P0};
     Eskf_Init_Config_s no_m = no_p;
     no_m.propagate = att_propagate;
     no_m.measure = NULL;
     Eskf_Init_Config_s no_i = no_m;
     no_i.measure = att_measure_acc;
     no_i.inject = NULL;
-    const int e_cfg = (EskfInit(&eskf, &no_p) == ESKF_ERR_CFG) && (EskfInit(&eskf, &no_m) == ESKF_ERR_CFG) &&
-                      (EskfInit(&eskf, &no_i) == ESKF_ERR_CFG);
+    const int e_cfg = (EskfInit(&eskf, &no_p) == ESKF_ERR_CFG) && (EskfInit(&eskf, &no_m) == ESKF_ERR_CFG) && (EskfInit(&eskf, &no_i) == ESKF_ERR_CFG);
 
     /* 维度越界 */
     Eskf_Init_Config_s bad_n = no_p;
@@ -1205,8 +1194,7 @@ static void case_guard(void)
     Eskf_Init_Config_s bad_l = bad_m;
     bad_l.m = M_ATT;
     bad_l.l = 1;
-    const int e_dim = (EskfInit(&eskf, &bad_n) == ESKF_ERR_DIM) && (EskfInit(&eskf, &bad_m) == ESKF_ERR_DIM) &&
-                      (EskfInit(&eskf, &bad_l) == ESKF_ERR_DIM);
+    const int e_dim = (EskfInit(&eskf, &bad_n) == ESKF_ERR_DIM) && (EskfInit(&eskf, &bad_m) == ESKF_ERR_DIM) && (EskfInit(&eskf, &bad_l) == ESKF_ERR_DIM);
     const int e_null = (EskfInit(NULL, &bad_l) == ESKF_ERR_NULL) && (EskfInit(&eskf, NULL) == ESKF_ERR_NULL) &&
                        (EskfPredict(NULL, NULL, 0.0f) == ESKF_ERR_NULL) && (EskfUpdate(NULL, P0) == ESKF_ERR_NULL);
     printf("  用例8 参数校验: 回调缺失=%d 维度越界=%d 空指针=%d\n", e_cfg, e_dim, e_null);
@@ -1253,8 +1241,7 @@ static void case_guard(void)
     const int after = (EskfPredict(&eskf, NULL, 0.005f) == ESKF_OK);
 
     /* m_now 越界 */
-    const int e_mnow =
-        (EskfUpdateM(&eskf, 0, z, NULL) == ESKF_ERR_DIM) && (EskfUpdateM(&eskf, M_ATT + 1, z, NULL) == ESKF_ERR_DIM);
+    const int e_mnow = (EskfUpdateM(&eskf, 0, z, NULL) == ESKF_ERR_DIM) && (EskfUpdateM(&eskf, M_ATT + 1, z, NULL) == ESKF_ERR_DIM);
 
     printf("  用例8b 时序/奇异: 越序Predict=%d 越序Update=%d Inject后恢复=%d 奇异=%d 逐位不变=%d 之后可Predict=%d "
            "m_now越界=%d\n",

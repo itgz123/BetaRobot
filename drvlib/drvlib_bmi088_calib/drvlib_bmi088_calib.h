@@ -92,8 +92,8 @@ static inline void BMI088CalibLoad(BMI088_AxisCalib_s *dst, const BMI088_AxisCal
  * @param c 标定参数（scale 已由 BMI088CalibLoad 归一，除法安全）
  * @param out 修正结果（可与 raw 同一数组）
  */
-static inline void BMI088AxisCorrect(const float raw[BMI088_AXIS_NUM], const float bias[BMI088_AXIS_NUM],
-                                     const BMI088_AxisCalib_s *c, float out[BMI088_AXIS_NUM])
+static inline void BMI088AxisCorrect(const float raw[BMI088_AXIS_NUM], const float bias[BMI088_AXIS_NUM], const BMI088_AxisCalib_s *c,
+                                     float out[BMI088_AXIS_NUM])
 {
     float x = raw[0] - bias[0];
     float y = raw[1] - bias[1];

@@ -46,8 +46,8 @@ typedef struct USARTInstance
 } USARTInstance;
 
 /** 静态定义 USART 实例（同时定义缓冲区） */
-#define USART_INSTANCE_DEF(name, buff_sz)                                                                              \
-    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};                                                              \
+#define USART_INSTANCE_DEF(name, buff_sz)                                                                                                                      \
+    static uint8_t name##_rx_buff[buff_sz] DMA_RAM = {0};                                                                                                      \
     static USARTInstance name = {.rx_buff = name##_rx_buff, .rx_buff_size = buff_sz}
 
 /** USART 运行时配置结构体 */
@@ -62,8 +62,7 @@ typedef struct
 
 BSP_Status_e USARTRegister(USARTInstance *instance);
 BSP_Status_e USARTConfig(USARTInstance *instance, const USART_Config_s *config);
-BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode,
-                           uint32_t timeout_ms);
+BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
 BSP_Status_e USARTReceive(USARTInstance *instance, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
 BSP_Status_e USARTRecoverRxIfStalled(USARTInstance *instance, uint32_t period_ms);
 BSP_Status_e USARTRecoverTxIfStuck(USARTInstance *instance, uint32_t stuck_ms);

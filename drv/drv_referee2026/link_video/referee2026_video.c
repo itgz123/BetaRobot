@@ -78,8 +78,7 @@ const Referee2026CmdInfo_t referee2026_video_cmd_info[] = {
         },
 };
 
-_Static_assert(sizeof(referee2026_video_cmd_info) / sizeof(referee2026_video_cmd_info[0]) ==
-                   REFEREE2026_VIDEO_DATA_COUNT,
+_Static_assert(sizeof(referee2026_video_cmd_info) / sizeof(referee2026_video_cmd_info[0]) == REFEREE2026_VIDEO_DATA_COUNT,
                "图传链路命令元信息表项数必须等于数据名枚举数");
 
 /* 快照成员个数 == 本链路 `dir & RX` 的命令数。表里 `snap_off == 0` 的项有两种可能

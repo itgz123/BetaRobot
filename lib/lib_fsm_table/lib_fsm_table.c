@@ -61,8 +61,7 @@ static void FsmTableRunStateAction(const LibFsmTableInstance_s *inst, LibFsmTabl
  * @param to           转移后状态
  * @param transitioned 是否发生了转移
  */
-static void FsmTableRunTrace(const LibFsmTableInstance_s *inst, LibFsmTableState_t from, LibFsmTableEvent_t event,
-                             LibFsmTableState_t to, bool transitioned)
+static void FsmTableRunTrace(const LibFsmTableInstance_s *inst, LibFsmTableState_t from, LibFsmTableEvent_t event, LibFsmTableState_t to, bool transitioned)
 {
     if (inst->trace_fn != NULL)
     {
@@ -74,8 +73,7 @@ static void FsmTableRunTrace(const LibFsmTableInstance_s *inst, LibFsmTableState
  * @brief 一条规则是否匹配当前状态与本次事件（含通配符）
  * @note 通配符只放宽"相等"，不影响守卫与优先级：通配符规则同样是"第一条命中即停"
  */
-static bool FsmTableMatch(const LibFsmTableInstance_s *inst, const LibFsmTableTransition_s *transition,
-                          LibFsmTableEvent_t event)
+static bool FsmTableMatch(const LibFsmTableInstance_s *inst, const LibFsmTableTransition_s *transition, LibFsmTableEvent_t event)
 {
     bool state_match = (transition->from == LIB_FSM_TABLE_ANY_STATE) || (transition->from == inst->current);
     bool event_match = (transition->event == LIB_FSM_TABLE_ANY_EVENT) || (transition->event == event);

@@ -294,9 +294,8 @@ MotorData_s RSMotor_GetData(void *inst)
 
     // 累加，偏置
     base->data_all.position_cnt += wraps;
-    double angle = ((double)base->data_all.position_cnt * (2.0 * (double)map->p_max)) +
-                   (double)position_single          // ① 累加
-                   + (double)base->position_offset; // ② 偏置
+    double angle = ((double)base->data_all.position_cnt * (2.0 * (double)map->p_max)) + (double)position_single // ① 累加
+                   + (double)base->position_offset;                                                             // ② 偏置
 
     // 方向
     angle *= setting->feedback_direction; // ③ 方向
@@ -491,8 +490,7 @@ int8_t RSMotorConfig(RSMotorInstance *inst, RSMotor_Config_s *cfg)
         // 环绕模式：自动启用位置环误差归一化
         if (cfg->controller_setting.position_mode == MOTOR_POSITION_WRAP)
         {
-            cfg->pid_angle_setting.error_normalize_range =
-                cfg->controller_setting.angle_limit_max - cfg->controller_setting.angle_limit_min;
+            cfg->pid_angle_setting.error_normalize_range = cfg->controller_setting.angle_limit_max - cfg->controller_setting.angle_limit_min;
             cfg->pid_angle_setting.config_mask |= PID_ENABLE_ERROR_NORMALIZE;
         }
 
@@ -579,9 +577,7 @@ static void RSMotor_Calculate(RSMotorInstance *inst)
         {
             position_feedforward = *setting->position_feedforward_ptr;
         }
-        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr)
-                      ? *setting->angle_external_ptr
-                      : md.position;
+        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr) ? *setting->angle_external_ptr : md.position;
         setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, position_feedforward);
     }
 
@@ -593,9 +589,7 @@ static void RSMotor_Calculate(RSMotorInstance *inst)
         {
             speed_feedforward = *setting->speed_feedforward_ptr;
         }
-        measure = (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr)
-                      ? *setting->speed_external_ptr
-                      : md.speed;
+        measure = (setting->speed_src == MOTOR_FEEDBACK_EXTERNAL && setting->speed_external_ptr) ? *setting->speed_external_ptr : md.speed;
         output = PIDCalculate(&ctrl->pid_speed, setpoint, measure, speed_feedforward);
     }
     else

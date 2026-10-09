@@ -109,12 +109,10 @@ typedef struct
 /* 逐条把 sizeof 钉死在"字节偏移量字段表"给出的总长上（理由见 public/referee2026_cmd.h 的公共约定）。
  * 放在头里而不是 .c 里：这样任何 include 本头的 TU 都会替我们校一遍，断言不会因为
  * "某个开关没开、.c 编成空 TU"而静默消失。 */
-#define REFEREE2026_CMD_STATIC_ASSERT(cmd_id, ...)                                                                     \
-    _Static_assert(__VA_ARGS__, "命令 0x" #cmd_id " 的数据段长度与字段表不符")
+#define REFEREE2026_CMD_STATIC_ASSERT(cmd_id, ...) _Static_assert(__VA_ARGS__, "命令 0x" #cmd_id " 的数据段长度与字段表不符")
 
 REFEREE2026_CMD_STATIC_ASSERT(0x0302, sizeof(Referee2026CustomRobotData_t) == REFEREE2026_VIDEO_LEN_CUSTOM_CONTROLLER);
-REFEREE2026_CMD_STATIC_ASSERT(0x0309,
-                              sizeof(Referee2026RobotCustomData_t) == REFEREE2026_VIDEO_LEN_CUSTOM_CONTROLLER_RX);
+REFEREE2026_CMD_STATIC_ASSERT(0x0309, sizeof(Referee2026RobotCustomData_t) == REFEREE2026_VIDEO_LEN_CUSTOM_CONTROLLER_RX);
 REFEREE2026_CMD_STATIC_ASSERT(0x0310, sizeof(Referee2026RobotCustomData2_t) == REFEREE2026_VIDEO_LEN_ROBOT_TO_CLIENT);
 REFEREE2026_CMD_STATIC_ASSERT(0x0311, sizeof(Referee2026ClientToRobotData_t) == REFEREE2026_VIDEO_LEN_CLIENT_TO_ROBOT);
 
@@ -136,10 +134,9 @@ REFEREE2026_CMD_STATIC_ASSERT(0x0311, sizeof(Referee2026ClientToRobotData_t) == 
 typedef enum : uint8_t
 {
     /* --- 图传链路（4 条） --- */
-    REFEREE2026_VIDEO_DATA_CUSTOM_CONTROLLER =
-        0, //!< 自定义控制器与机器人交互数据，发送方触发发送，频率上限为 30Hz（自定义控制器→机器人）
-    REFEREE2026_VIDEO_DATA_CUSTOM_CONTROLLER_RX, //!< 自定义控制器接收机器人数据，频率上限为 10Hz（机器人→自定义控制器）
-    REFEREE2026_VIDEO_DATA_ROBOT_TO_CLIENT, //!< 机器人发送给自定义客户端的数据，频率上限为 50Hz（机器人→自定义客户端）
+    REFEREE2026_VIDEO_DATA_CUSTOM_CONTROLLER = 0, //!< 自定义控制器与机器人交互数据，发送方触发发送，频率上限为 30Hz（自定义控制器→机器人）
+    REFEREE2026_VIDEO_DATA_CUSTOM_CONTROLLER_RX,  //!< 自定义控制器接收机器人数据，频率上限为 10Hz（机器人→自定义控制器）
+    REFEREE2026_VIDEO_DATA_ROBOT_TO_CLIENT,       //!< 机器人发送给自定义客户端的数据，频率上限为 50Hz（机器人→自定义客户端）
     /* 全部 35 条里速率最紧的一条 */
     REFEREE2026_VIDEO_DATA_CLIENT_TO_ROBOT, //!< 自定义客户端发送给机器人的自定义指令，频率上限为
                                             //!< 75Hz（自定义客户端→机器人）
@@ -174,10 +171,8 @@ typedef enum : uint32_t
     REFEREE2026_VIDEO_FILTER_NONE = 0, //!< 什么都不收
     //! 本链路全部 2 条 RX 命令 —— `Config` 里填它 = 默认全收（与 `REFEREE2026_FILTER_DEFAULT` 等价）
     REFEREE2026_VIDEO_FILTER_DEFAULT = 0xFFFFFFFFu,
-    REFEREE2026_VIDEO_FILTER_CUSTOM_CONTROLLER =
-        1u << REFEREE2026_VIDEO_DATA_CUSTOM_CONTROLLER, //!< 收 0x0302 自定义控制器→机器人
-    REFEREE2026_VIDEO_FILTER_CLIENT_TO_ROBOT =
-        1u << REFEREE2026_VIDEO_DATA_CLIENT_TO_ROBOT, //!< 收 0x0311 自定义客户端→机器人
+    REFEREE2026_VIDEO_FILTER_CUSTOM_CONTROLLER = 1u << REFEREE2026_VIDEO_DATA_CUSTOM_CONTROLLER, //!< 收 0x0302 自定义控制器→机器人
+    REFEREE2026_VIDEO_FILTER_CLIENT_TO_ROBOT = 1u << REFEREE2026_VIDEO_DATA_CLIENT_TO_ROBOT,     //!< 收 0x0311 自定义客户端→机器人
 } Referee2026VideoFilter_e;
 
 /*============================================

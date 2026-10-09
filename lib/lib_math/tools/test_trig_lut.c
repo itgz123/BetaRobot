@@ -161,9 +161,8 @@ int main(void)
 {
     const int M = LIB_MATH_TRIG_TABLE_SIZE;
     const int num = (4 * M * 16 > (1 << 16)) ? 4 * M * 16 : (1 << 16);
-    static const double special[] = {
-        0.0,   QUARTER_D, PI_D,  3.0 * QUARTER_D, TWO_PI_D - 1e-3, QUARTER_D - 1e-4, QUARTER_D + 1e-4,
-        -1e-4, 1e-4,      -PI_D, -TWO_PI_D,       TWO_PI_D + 1e-3};
+    static const double special[] = {0.0,   QUARTER_D, PI_D,  3.0 * QUARTER_D, TWO_PI_D - 1e-3, QUARTER_D - 1e-4, QUARTER_D + 1e-4,
+                                     -1e-4, 1e-4,      -PI_D, -TWO_PI_D,       TWO_PI_D + 1e-3};
     size_t k;
     double modeb_gate;
     int fail = 0;
@@ -179,8 +178,7 @@ int main(void)
     {
         double ma = mode_a_max();
         int ok = ma < TEST_MODE_A_TARGET;
-        printf("ModeA 纯插值+量化 max = %.3e   目标 < %.3e  [%s]\n", ma, (double)TEST_MODE_A_TARGET,
-               ok ? "PASS" : "FAIL");
+        printf("ModeA 纯插值+量化 max = %.3e   目标 < %.3e  [%s]\n", ma, (double)TEST_MODE_A_TARGET, ok ? "PASS" : "FAIL");
         if (!ok)
         {
             fail = 1;
@@ -196,14 +194,11 @@ int main(void)
     }
     printf("  grid %-22s %10d pts\n", "特殊边界点", (int)(sizeof(special) / sizeof(special[0])));
 
-    printf("ModeB sin  整管 max = %.3e  rms = %.3e  (%lu pts)\n", g_sin_max, sqrt(g_sin_rms / (double)g_n_sin),
-           g_n_sin);
-    printf("ModeB cos  整管 max = %.3e  rms = %.3e  (%lu pts)\n", g_cos_max, sqrt(g_cos_rms / (double)g_n_cos),
-           g_n_cos);
+    printf("ModeB sin  整管 max = %.3e  rms = %.3e  (%lu pts)\n", g_sin_max, sqrt(g_sin_rms / (double)g_n_sin), g_n_sin);
+    printf("ModeB cos  整管 max = %.3e  rms = %.3e  (%lu pts)\n", g_cos_max, sqrt(g_cos_rms / (double)g_n_cos), g_n_cos);
     if (g_n_tan > 0)
     {
-        printf("ModeB tan  整管 max = %.3e  rms = %.3e  (%lu pts, |cos|>1e-3)\n", g_tan_max,
-               sqrt(g_tan_rms / (double)g_n_tan), g_n_tan);
+        printf("ModeB tan  整管 max = %.3e  rms = %.3e  (%lu pts, |cos|>1e-3)\n", g_tan_max, sqrt(g_tan_rms / (double)g_n_tan), g_n_tan);
     }
     printf("一致性 cos(x)=sin(x+pi/2)   max = %.3e\n", g_cons_max);
     printf("一致性 SinCos 与单独调用    max = %.3e\n", g_sincos_max);

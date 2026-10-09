@@ -167,11 +167,9 @@ int8_t BMI088MahonyConfig(BMI088MahonyInstance *inst, const BMI088Mahony_Config_
         zero.bias[i] = inst->gyro_bias[i];
     inst->data = zero;
 
-    BSPLOG(&g_bmi088_mahony_log, LOG_LEVEL_INFO,
-           "config: kp=%d(1e-3) ki=%d(1e-3) gyro_bias(urad/s) %d %d %d tempco(1e-6/degC) %d %d %d temp_ref=%d",
-           (int)(inst->kp * 1000.0f), (int)(inst->ki * 1000.0f), (int)(inst->gyro_calib.bias[0] * 1e6f),
-           (int)(inst->gyro_calib.bias[1] * 1e6f), (int)(inst->gyro_calib.bias[2] * 1e6f),
-           (int)(inst->gyro_calib.bias_tempco[0] * 1e6f), (int)(inst->gyro_calib.bias_tempco[1] * 1e6f),
+    BSPLOG(&g_bmi088_mahony_log, LOG_LEVEL_INFO, "config: kp=%d(1e-3) ki=%d(1e-3) gyro_bias(urad/s) %d %d %d tempco(1e-6/degC) %d %d %d temp_ref=%d",
+           (int)(inst->kp * 1000.0f), (int)(inst->ki * 1000.0f), (int)(inst->gyro_calib.bias[0] * 1e6f), (int)(inst->gyro_calib.bias[1] * 1e6f),
+           (int)(inst->gyro_calib.bias[2] * 1e6f), (int)(inst->gyro_calib.bias_tempco[0] * 1e6f), (int)(inst->gyro_calib.bias_tempco[1] * 1e6f),
            (int)(inst->gyro_calib.bias_tempco[2] * 1e6f), (int)inst->temp_ref);
     return 0;
 }
@@ -281,8 +279,7 @@ void BMI088MahonyUpdate(BMI088MahonyInstance *inst)
         inst->seeded = 1;
         inst->valid = 1;
 
-        BSPLOG(&g_bmi088_mahony_log, LOG_LEVEL_INFO, "attitude seeded: roll=%d pitch=%d (mrad)",
-               (int)(init_e.roll * 1000.0f), (int)(init_e.pitch * 1000.0f));
+        BSPLOG(&g_bmi088_mahony_log, LOG_LEVEL_INFO, "attitude seeded: roll=%d pitch=%d (mrad)", (int)(init_e.roll * 1000.0f), (int)(init_e.pitch * 1000.0f));
     }
 
     /* ---- 姿态模型（本模块持有）：选参考方向 + 判量测可信 + 归一化 ----

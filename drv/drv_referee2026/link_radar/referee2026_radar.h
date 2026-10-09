@@ -163,13 +163,12 @@ typedef struct
 typedef struct
 {
     Referee2026BuffItem_t buff[5]; //!< 偏移 0 对方 5 台机器人的增益块，依次为英雄、工程、3 号步兵、4 号步兵、哨兵
-    uint8_t
-        sentry_posture; //!< 偏移 35 对方哨兵当前姿态：1 进攻 / 2 防御 / 3 移动 / 4 强化进攻 / 5 强化防御 / 6 强化移动
-    uint8_t hero_state; //!< 偏移 36 对方英雄机器人主要状态
-    uint8_t engineer_state;   //!< 偏移 37 对方工程机器人主要状态
-    uint8_t infantry_3_state; //!< 偏移 38 对方 3 号步兵机器人主要状态
-    uint8_t infantry_4_state; //!< 偏移 39 对方 4 号步兵机器人主要状态
-    uint8_t sentry_state;     //!< 偏移 40 对方哨兵机器人主要状态
+    uint8_t sentry_posture;        //!< 偏移 35 对方哨兵当前姿态：1 进攻 / 2 防御 / 3 移动 / 4 强化进攻 / 5 强化防御 / 6 强化移动
+    uint8_t hero_state;            //!< 偏移 36 对方英雄机器人主要状态
+    uint8_t engineer_state;        //!< 偏移 37 对方工程机器人主要状态
+    uint8_t infantry_3_state;      //!< 偏移 38 对方 3 号步兵机器人主要状态
+    uint8_t infantry_4_state;      //!< 偏移 39 对方 4 号步兵机器人主要状态
+    uint8_t sentry_state;          //!< 偏移 40 对方哨兵机器人主要状态
 } Referee2026RadarOpponentBuff_t;
 
 /* 0x0A06 数据段长度（字段表口径）—— 长度断言与命令元信息表共用，只写这一处。 */
@@ -193,18 +192,13 @@ typedef struct
 /* 逐条把 sizeof 钉死在"字节偏移量字段表"给出的总长上（理由见 public/referee2026_cmd.h 的公共约定）。
  * 放在头里而不是 .c 里：这样任何 include 本头的 TU 都会替我们校一遍，断言不会因为
  * "某个开关没开、.c 编成空 TU"而静默消失。 */
-#define REFEREE2026_CMD_STATIC_ASSERT(cmd_id, ...)                                                                     \
-    _Static_assert(__VA_ARGS__, "命令 0x" #cmd_id " 的数据段长度与字段表不符")
+#define REFEREE2026_CMD_STATIC_ASSERT(cmd_id, ...) _Static_assert(__VA_ARGS__, "命令 0x" #cmd_id " 的数据段长度与字段表不符")
 
-REFEREE2026_CMD_STATIC_ASSERT(0x0A01,
-                              sizeof(Referee2026RadarOpponentPos_t) == REFEREE2026_RADAR_LEN_RADAR_OPPONENT_POS);
+REFEREE2026_CMD_STATIC_ASSERT(0x0A01, sizeof(Referee2026RadarOpponentPos_t) == REFEREE2026_RADAR_LEN_RADAR_OPPONENT_POS);
 REFEREE2026_CMD_STATIC_ASSERT(0x0A02, sizeof(Referee2026RadarOpponentHp_t) == REFEREE2026_RADAR_LEN_RADAR_OPPONENT_HP);
-REFEREE2026_CMD_STATIC_ASSERT(0x0A03,
-                              sizeof(Referee2026RadarOpponentAmmo_t) == REFEREE2026_RADAR_LEN_RADAR_OPPONENT_AMMO);
-REFEREE2026_CMD_STATIC_ASSERT(0x0A04,
-                              sizeof(Referee2026RadarOpponentState_t) == REFEREE2026_RADAR_LEN_RADAR_OPPONENT_STATE);
-REFEREE2026_CMD_STATIC_ASSERT(0x0A05,
-                              sizeof(Referee2026RadarOpponentBuff_t) == REFEREE2026_RADAR_LEN_RADAR_OPPONENT_BUFF);
+REFEREE2026_CMD_STATIC_ASSERT(0x0A03, sizeof(Referee2026RadarOpponentAmmo_t) == REFEREE2026_RADAR_LEN_RADAR_OPPONENT_AMMO);
+REFEREE2026_CMD_STATIC_ASSERT(0x0A04, sizeof(Referee2026RadarOpponentState_t) == REFEREE2026_RADAR_LEN_RADAR_OPPONENT_STATE);
+REFEREE2026_CMD_STATIC_ASSERT(0x0A05, sizeof(Referee2026RadarOpponentBuff_t) == REFEREE2026_RADAR_LEN_RADAR_OPPONENT_BUFF);
 REFEREE2026_CMD_STATIC_ASSERT(0x0A06, sizeof(Referee2026RadarKey_t) == REFEREE2026_RADAR_LEN_RADAR_KEY);
 
 #undef REFEREE2026_CMD_STATIC_ASSERT
@@ -233,10 +227,10 @@ typedef enum : uint8_t
     REFEREE2026_RADAR_DATA_RADAR_OPPONENT_HP,      //!< 对方机器人的血量信息，以 10Hz 频率持续发送（雷达站→雷达机器人）
     REFEREE2026_RADAR_DATA_RADAR_OPPONENT_AMMO,    //!< 对方机器人的剩余发弹量信息，以 10Hz
                                                    //!< 频率持续发送（雷达站→雷达机器人）
-    REFEREE2026_RADAR_DATA_RADAR_OPPONENT_STATE, //!< 对方队伍的宏观状态信息，以 10Hz 频率持续发送（雷达站→雷达机器人）
-    REFEREE2026_RADAR_DATA_RADAR_OPPONENT_BUFF, //!< 对方各机器人当前增益效果，以 10Hz 频率持续发送（雷达站→雷达机器人）
-    REFEREE2026_RADAR_DATA_RADAR_KEY,           //!< 对方干扰波密钥，以 10Hz 频率持续发送（雷达站→雷达机器人）
-    REFEREE2026_RADAR_DATA_COUNT,               //!< 命令条数（数组维度，非命令）
+    REFEREE2026_RADAR_DATA_RADAR_OPPONENT_STATE,   //!< 对方队伍的宏观状态信息，以 10Hz 频率持续发送（雷达站→雷达机器人）
+    REFEREE2026_RADAR_DATA_RADAR_OPPONENT_BUFF,    //!< 对方各机器人当前增益效果，以 10Hz 频率持续发送（雷达站→雷达机器人）
+    REFEREE2026_RADAR_DATA_RADAR_KEY,              //!< 对方干扰波密钥，以 10Hz 频率持续发送（雷达站→雷达机器人）
+    REFEREE2026_RADAR_DATA_COUNT,                  //!< 命令条数（数组维度，非命令）
 } Referee2026RadarDataId_e;
 
 /**
@@ -268,16 +262,12 @@ typedef enum : uint32_t
     REFEREE2026_RADAR_FILTER_NONE = 0, //!< 什么都不收
     //! 本链路全部 6 条 RX 命令 —— `Config` 里填它 = 默认全收（与 `REFEREE2026_FILTER_DEFAULT` 等价）
     REFEREE2026_RADAR_FILTER_DEFAULT = 0xFFFFFFFFu,
-    REFEREE2026_RADAR_FILTER_RADAR_OPPONENT_POS = 1u
-                                                  << REFEREE2026_RADAR_DATA_RADAR_OPPONENT_POS,  //!< 收 0x0A01 对方位置
-    REFEREE2026_RADAR_FILTER_RADAR_OPPONENT_HP = 1u << REFEREE2026_RADAR_DATA_RADAR_OPPONENT_HP, //!< 收 0x0A02 对方血量
-    REFEREE2026_RADAR_FILTER_RADAR_OPPONENT_AMMO =
-        1u << REFEREE2026_RADAR_DATA_RADAR_OPPONENT_AMMO, //!< 收 0x0A03 对方允许发弹量
-    REFEREE2026_RADAR_FILTER_RADAR_OPPONENT_STATE =
-        1u << REFEREE2026_RADAR_DATA_RADAR_OPPONENT_STATE, //!< 收 0x0A04 对方宏观状态
-    REFEREE2026_RADAR_FILTER_RADAR_OPPONENT_BUFF =
-        1u << REFEREE2026_RADAR_DATA_RADAR_OPPONENT_BUFF,                        //!< 收 0x0A05 对方增益
-    REFEREE2026_RADAR_FILTER_RADAR_KEY = 1u << REFEREE2026_RADAR_DATA_RADAR_KEY, //!< 收 0x0A06 干扰波密钥
+    REFEREE2026_RADAR_FILTER_RADAR_OPPONENT_POS = 1u << REFEREE2026_RADAR_DATA_RADAR_OPPONENT_POS,     //!< 收 0x0A01 对方位置
+    REFEREE2026_RADAR_FILTER_RADAR_OPPONENT_HP = 1u << REFEREE2026_RADAR_DATA_RADAR_OPPONENT_HP,       //!< 收 0x0A02 对方血量
+    REFEREE2026_RADAR_FILTER_RADAR_OPPONENT_AMMO = 1u << REFEREE2026_RADAR_DATA_RADAR_OPPONENT_AMMO,   //!< 收 0x0A03 对方允许发弹量
+    REFEREE2026_RADAR_FILTER_RADAR_OPPONENT_STATE = 1u << REFEREE2026_RADAR_DATA_RADAR_OPPONENT_STATE, //!< 收 0x0A04 对方宏观状态
+    REFEREE2026_RADAR_FILTER_RADAR_OPPONENT_BUFF = 1u << REFEREE2026_RADAR_DATA_RADAR_OPPONENT_BUFF,   //!< 收 0x0A05 对方增益
+    REFEREE2026_RADAR_FILTER_RADAR_KEY = 1u << REFEREE2026_RADAR_DATA_RADAR_KEY,                       //!< 收 0x0A06 干扰波密钥
 } Referee2026RadarFilter_e;
 
 /*============================================

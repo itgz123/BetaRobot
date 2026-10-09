@@ -101,9 +101,8 @@ volatile SPI_Status_s s_spi_status[SPI_NUM_MAX];
 
 /* 两个 HAL 版本共有、且判据一致的错误位（F4 的 0x80 是 INVALID_CALLBACK，
  * H7 的 0x80 是 UDR —— 位域不同，故只能用交集做分类掩码，其余一律进 err_other） */
-#define SPI_ERROR_COMMON_MASK                                                                                          \
-    (uint32_t)(HAL_SPI_ERROR_MODF | HAL_SPI_ERROR_CRC | HAL_SPI_ERROR_OVR | HAL_SPI_ERROR_FRE | HAL_SPI_ERROR_DMA |    \
-               HAL_SPI_ERROR_FLAG | HAL_SPI_ERROR_ABORT)
+#define SPI_ERROR_COMMON_MASK                                                                                                                                  \
+    (uint32_t)(HAL_SPI_ERROR_MODF | HAL_SPI_ERROR_CRC | HAL_SPI_ERROR_OVR | HAL_SPI_ERROR_FRE | HAL_SPI_ERROR_DMA | HAL_SPI_ERROR_FLAG | HAL_SPI_ERROR_ABORT)
 
 /*------------- 私有函数：查表与计数 --------------*/
 
@@ -183,9 +182,9 @@ static void SPI_LogStartFail(const SPIInstance *instance, const char *what, BSP_
      * 失败阶段这里直接写表达式而不是先存局部变量：日志关闭（BSP_LOG_USED / LOG_UART
      * 未定义）时 BSPLOG 展开为空宏，只服务于日志的局部变量会变成
      * -Wunused-variable（本函数其余量都还被计数分支用着，不受影响）。 */
-    BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "SPI %s %s (spi_e=%d, mode=%d, spi=%d, tx_dma=%d, rx_dma=%d, err=0x%lX)!",
-           what, (mode == BSP_BLOCK_MODE) ? "failed" : "start failed", (int)instance->spi_e, (int)mode,
-           (int)hspi->State, tx_state, rx_state, (unsigned long)hspi->ErrorCode);
+    BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "SPI %s %s (spi_e=%d, mode=%d, spi=%d, tx_dma=%d, rx_dma=%d, err=0x%lX)!", what,
+           (mode == BSP_BLOCK_MODE) ? "failed" : "start failed", (int)instance->spi_e, (int)mode, (int)hspi->State, tx_state, rx_state,
+           (unsigned long)hspi->ErrorCode);
 }
 
 /**
@@ -209,8 +208,7 @@ static void SPI_LogStartFail(const SPIInstance *instance, const char *what, BSP_
  *       （此刻被更高优先级的中断抢进来发起传输）。同样按"忙"上报，让上层重试，
  *       而不是把一次可重试的争用记成硬件故障。
  */
-static BSP_Status_e SPI_StartFail(SPIInstance *instance, HAL_StatusTypeDef st, const char *what,
-                                  BSP_Transfer_Mode_e mode, uint8_t idx)
+static BSP_Status_e SPI_StartFail(SPIInstance *instance, HAL_StatusTypeDef st, const char *what, BSP_Transfer_Mode_e mode, uint8_t idx)
 {
     if (st == HAL_BUSY)
         return SPI_FailThenRet(instance, BSP_BUSY);
@@ -431,11 +429,9 @@ static BSP_Status_e SPI_WaitReady(SPIInstance *instance, uint32_t timeout_ms)
                 /* 上层愿意等却等不到 = 传输卡死；能复位就复位（任务上下文），
                  * 上下文不允许 Abort（中断/临界区）时如实报出"没复位"，不静默 */
                 if (SPI_RecoverTx(instance))
-                    BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "SPI busy timeout, state reset (spi_e=%d)!",
-                           (int)instance->spi_e);
+                    BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "SPI busy timeout, state reset (spi_e=%d)!", (int)instance->spi_e);
                 else
-                    BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "SPI busy timeout, reset skipped (ISR/critical) (spi_e=%d)!",
-                           (int)instance->spi_e);
+                    BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "SPI busy timeout, reset skipped (ISR/critical) (spi_e=%d)!", (int)instance->spi_e);
                 return BSP_TIMEOUT;
             }
         }
@@ -465,8 +461,7 @@ static uint8_t SPI_CheckDmaCapability(SPIInstance *instance, BSP_Transfer_Mode_e
 
         if (idx < SPI_NUM_MAX)
             s_spi_status[idx].err_no_dma++;
-        BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "SPI DMA not available (spi_e=%d, tx=%d, rx=%d)!", (int)instance->spi_e,
-               need_tx, need_rx);
+        BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "SPI DMA not available (spi_e=%d, tx=%d, rx=%d)!", (int)instance->spi_e, need_tx, need_rx);
         return 0;
     }
     return 1;
@@ -596,9 +591,8 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
     s_spi_status[idx].err_time_us = DWT_GetTimeUs();
 
     /* ③ 上报（保留解码日志，便于直接看出是哪种错） */
-    BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "Error detected, code=0x%lX (MODF:%d OVR:%d FRE:%d DMA:%d)",
-           (unsigned long)error_code, (error_code & HAL_SPI_ERROR_MODF) ? 1 : 0,
-           (error_code & HAL_SPI_ERROR_OVR) ? 1 : 0, (error_code & HAL_SPI_ERROR_FRE) ? 1 : 0,
+    BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "Error detected, code=0x%lX (MODF:%d OVR:%d FRE:%d DMA:%d)", (unsigned long)error_code,
+           (error_code & HAL_SPI_ERROR_MODF) ? 1 : 0, (error_code & HAL_SPI_ERROR_OVR) ? 1 : 0, (error_code & HAL_SPI_ERROR_FRE) ? 1 : 0,
            (error_code & HAL_SPI_ERROR_DMA) ? 1 : 0);
 
     if (instance != NULL && instance->err_callback != NULL)
@@ -614,8 +608,7 @@ void HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi)
 BSP_Status_e SPIRegister(SPIInstance *instance)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_spi_idx >= SPI_INSTANCE_NUM, BSP_PARAM_ERR,
-                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(s_spi_idx >= SPI_INSTANCE_NUM, BSP_PARAM_ERR, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Exceeded max instance count!"));
 
     // 防重复注册检查
     for (uint8_t i = 0; i < s_spi_idx; i++)
@@ -644,13 +637,11 @@ BSP_Status_e SPIConfig(SPIInstance *instance, const SPI_Config_s *config)
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, BSP_PARAM_ERR, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->spi_e >= SPI_NUM_MAX, BSP_PARAM_ERR,
-                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "spi_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(config->spi_e >= SPI_NUM_MAX, BSP_PARAM_ERR, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "spi_e out of range!"));
 
     new_idx = (uint8_t)config->spi_e;
 
-    BSP_RETURN_IF_TRUE_LOG(spi_map[new_idx].handle == NULL, BSP_PARAM_ERR,
-                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "SPI handle is NULL, check bsp_map mapping!"));
+    BSP_RETURN_IF_TRUE_LOG(spi_map[new_idx].handle == NULL, BSP_PARAM_ERR, BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "SPI handle is NULL, check bsp_map mapping!"));
 
     /* 同一 handle 不允许被两个实例占用：回调靠句柄反查实例，冲突则分发错乱 */
     for (uint8_t i = 0; i < s_spi_idx; i++)
@@ -704,19 +695,16 @@ BSP_Status_e SPIConfig(SPIInstance *instance, const SPI_Config_s *config)
     return BSP_OK;
 }
 
-BSP_Status_e SPITransmit(SPIInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode,
-                         uint32_t timeout_ms)
+BSP_Status_e SPITransmit(SPIInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
 {
     BSP_Status_e ret;
     uint8_t idx;
     HAL_StatusTypeDef hal_st;
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, SPI_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, SPI_FailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, SPI_FailThenRet(instance, BSP_PARAM_ERR),
                            BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Handle is NULL, call SPIConfig first!"));
-    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, SPI_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
+    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, SPI_FailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
     BSP_RETURN_IF_TRUE_LOG(data == NULL || len == 0, SPI_FailThenRet(instance, BSP_PARAM_ERR),
                            BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "Invalid transmit parameters!"));
 
@@ -768,17 +756,13 @@ BSP_Status_e SPIReceive(SPIInstance *instance, uint16_t len, BSP_Transfer_Mode_e
     uint8_t idx;
     HAL_StatusTypeDef hal_st;
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, SPI_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL || instance->rx_buff == NULL,
-                           SPI_FailThenRet(instance, BSP_PARAM_ERR),
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, SPI_FailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL || instance->rx_buff == NULL, SPI_FailThenRet(instance, BSP_PARAM_ERR),
                            BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Handle is NULL, call SPIConfig first!"));
-    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, SPI_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
+    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, SPI_FailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
     /* 静默截断会让上层拿到"比请求短"的数据却毫无察觉，直接拒绝 */
-    BSP_RETURN_IF_TRUE_LOG(
-        len == 0 || len > instance->buff_size, SPI_FailThenRet(instance, BSP_PARAM_ERR),
-        BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Invalid receive len=%d (buff=%d)!", len, instance->buff_size));
+    BSP_RETURN_IF_TRUE_LOG(len == 0 || len > instance->buff_size, SPI_FailThenRet(instance, BSP_PARAM_ERR),
+                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Invalid receive len=%d (buff=%d)!", len, instance->buff_size));
 
     idx = SPI_HspiToIndex(instance->handle);
 
@@ -826,24 +810,18 @@ BSP_Status_e SPIReceive(SPIInstance *instance, uint16_t len, BSP_Transfer_Mode_e
     return BSP_OK;
 }
 
-BSP_Status_e SPITransmitReceive(SPIInstance *instance, const uint8_t *tx_data, uint16_t len, BSP_Transfer_Mode_e mode,
-                                uint32_t timeout_ms)
+BSP_Status_e SPITransmitReceive(SPIInstance *instance, const uint8_t *tx_data, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
 {
     BSP_Status_e ret;
     uint8_t idx;
     HAL_StatusTypeDef hal_st;
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, SPI_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL || instance->rx_buff == NULL,
-                           SPI_FailThenRet(instance, BSP_PARAM_ERR),
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, SPI_FailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL || instance->rx_buff == NULL, SPI_FailThenRet(instance, BSP_PARAM_ERR),
                            BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Handle is NULL, call SPIConfig first!"));
-    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, SPI_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
-    BSP_RETURN_IF_TRUE_LOG(tx_data == NULL || len == 0 || len > instance->buff_size,
-                           SPI_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Invalid transmit/receive parameters (len=%d, buff=%d)!",
-                                  len, instance->buff_size));
+    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, SPI_FailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
+    BSP_RETURN_IF_TRUE_LOG(tx_data == NULL || len == 0 || len > instance->buff_size, SPI_FailThenRet(instance, BSP_PARAM_ERR),
+                           BSPLOG(&g_spi_log, LOG_LEVEL_ERROR, "Invalid transmit/receive parameters (len=%d, buff=%d)!", len, instance->buff_size));
 
     idx = SPI_HspiToIndex(instance->handle);
 
@@ -977,8 +955,7 @@ BSP_Status_e SPIRecoverTxIfStuck(SPIInstance *instance, uint32_t stuck_ms)
     (void)SPI_RecoverTx(instance);
 
     s_spi_ready_us[idx] = DWT_GetTimeUs(); /* 刚复位，重新计时 */
-    BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "SPI stuck >%dms, state reset (spi_e=%d)!", (int)stuck_ms,
-           (int)instance->spi_e);
+    BSPLOG(&g_spi_log, LOG_LEVEL_WARNING, "SPI stuck >%dms, state reset (spi_e=%d)!", (int)stuck_ms, (int)instance->spi_e);
     return BSP_OK;
 }
 

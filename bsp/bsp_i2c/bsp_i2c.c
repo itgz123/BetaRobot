@@ -111,9 +111,8 @@ volatile I2C_Status_s s_i2c_status[I2C_NUM_MAX];
 /* 两版 HAL（F4/H7）的 I2C 错误位定义逐位一致，故分类掩码可直接共用；
  * 掩码外的位（SIZE / DMA_PARAM / INVALID_CALLBACK / H7 的 INVALID_PARAM…）
  * 一律进 err_other，保证 err_total 与各项明细自洽。 */
-#define I2C_ERROR_KNOWN_MASK                                                                                           \
-    (uint32_t)(HAL_I2C_ERROR_BERR | HAL_I2C_ERROR_ARLO | HAL_I2C_ERROR_AF | HAL_I2C_ERROR_OVR | HAL_I2C_ERROR_DMA |    \
-               HAL_I2C_ERROR_TIMEOUT)
+#define I2C_ERROR_KNOWN_MASK                                                                                                                                   \
+    (uint32_t)(HAL_I2C_ERROR_BERR | HAL_I2C_ERROR_ARLO | HAL_I2C_ERROR_AF | HAL_I2C_ERROR_OVR | HAL_I2C_ERROR_DMA | HAL_I2C_ERROR_TIMEOUT)
 
 /* "启动即超时"的错误位（见 I2C_StartFail）：
  * - HAL_I2C_ERROR_TIMEOUT：HAL 等标志位/等 BUSY 落 超时（两版都有）；
@@ -129,18 +128,15 @@ volatile I2C_Status_s s_i2c_status[I2C_NUM_MAX];
 
 static uint8_t I2C_Hi2cToIndex(const I2C_HandleTypeDef *hi2c);
 static BSP_Status_e I2C_FailThenRet(const I2CInstance *instance, BSP_Status_e status);
-static void I2C_SnapshotReq(uint8_t idx, I2CInstance *instance, uint16_t hal_dev_addr, uint16_t mem_addr,
-                            I2C_MemAddrSize_e mem_addr_size, uint16_t len, BSP_Transfer_Mode_e mode);
+static void I2C_SnapshotReq(uint8_t idx, I2CInstance *instance, uint16_t hal_dev_addr, uint16_t mem_addr, I2C_MemAddrSize_e mem_addr_size, uint16_t len,
+                            BSP_Transfer_Mode_e mode);
 static void I2C_ResetHandle(I2CInstance *instance);
 static void I2C_RebuildPeriph(I2CInstance *instance);
 static void I2C_AbortOnError(I2CInstance *instance, const char *reason, uint8_t notify);
-static BSP_Status_e I2C_StartFail(I2CInstance *instance, HAL_StatusTypeDef st, const char *what, uint8_t idx,
-                                  BSP_Transfer_Mode_e mode);
+static BSP_Status_e I2C_StartFail(I2CInstance *instance, HAL_StatusTypeDef st, const char *what, uint8_t idx, BSP_Transfer_Mode_e mode);
 static BSP_Status_e I2C_WaitReady(I2CInstance *instance, uint32_t timeout_ms, const char *reason);
-static BSP_Status_e I2C_ClaimBus(I2CInstance *instance, BSP_Transfer_Mode_e mode, uint32_t timeout_ms,
-                                 const char *reason);
-static uint8_t I2C_CheckDmaCapability(I2CInstance *instance, BSP_Transfer_Mode_e mode, uint8_t need_tx,
-                                      uint8_t need_rx);
+static BSP_Status_e I2C_ClaimBus(I2CInstance *instance, BSP_Transfer_Mode_e mode, uint32_t timeout_ms, const char *reason);
+static uint8_t I2C_CheckDmaCapability(I2CInstance *instance, BSP_Transfer_Mode_e mode, uint8_t need_tx, uint8_t need_rx);
 static uint16_t I2C_ToHalMemAddrSize(I2C_MemAddrSize_e mem_addr_size);
 static BSP_Status_e I2C_EncodeDevAddr(const I2CInstance *instance, uint16_t dev_addr, uint16_t *out);
 static void I2C_ReportTxCplt(I2C_HandleTypeDef *hi2c);
@@ -195,8 +191,8 @@ static BSP_Status_e I2C_FailThenRet(const I2CInstance *instance, BSP_Status_e st
  * @note hal_dev_addr 是**编码后**的形式（与真正喂给 HAL 的一致），不是调用方传的原始地址：
  *       看快照时能直接与 HAL 侧行为对上，不必再自己左移一遍。
  */
-static void I2C_SnapshotReq(uint8_t idx, I2CInstance *instance, uint16_t hal_dev_addr, uint16_t mem_addr,
-                            I2C_MemAddrSize_e mem_addr_size, uint16_t len, BSP_Transfer_Mode_e mode)
+static void I2C_SnapshotReq(uint8_t idx, I2CInstance *instance, uint16_t hal_dev_addr, uint16_t mem_addr, I2C_MemAddrSize_e mem_addr_size, uint16_t len,
+                            BSP_Transfer_Mode_e mode)
 {
     if (idx >= I2C_NUM_MAX)
         return;
@@ -288,8 +284,7 @@ static void I2C_ResetHandle(I2CInstance *instance)
 
 #if defined(CPU_CORE) && (CPU_CORE == CORTEX_M7)
     /* H7：中断源在 CR1，逐个关掉 */
-    __HAL_I2C_DISABLE_IT(h, I2C_IT_ERRI | I2C_IT_TCI | I2C_IT_STOPI | I2C_IT_NACKI | I2C_IT_ADDRI | I2C_IT_RXI |
-                                I2C_IT_TXI);
+    __HAL_I2C_DISABLE_IT(h, I2C_IT_ERRI | I2C_IT_TCI | I2C_IT_STOPI | I2C_IT_NACKI | I2C_IT_ADDRI | I2C_IT_RXI | I2C_IT_TXI);
     h->XferISR = NULL;
 #else
     /* F4：中断源在 CR2 */
@@ -381,9 +376,8 @@ static void I2C_AbortOnError(I2CInstance *instance, const char *reason, uint8_t 
         s_i2c_status[idx].dma_rx_state = (rx_state < 0) ? 0xFF : (uint8_t)rx_state;
     }
 
-    BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "I2C %s (i2c_e=%d, state=0x%02X, err=0x%lX, lock=%d, tx_dma=%d, rx_dma=%d)",
-           reason, (int)instance->i2c_e, (unsigned)h->State, (unsigned long)h->ErrorCode, (int)h->Lock, tx_state,
-           rx_state);
+    BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "I2C %s (i2c_e=%d, state=0x%02X, err=0x%lX, lock=%d, tx_dma=%d, rx_dma=%d)", reason, (int)instance->i2c_e,
+           (unsigned)h->State, (unsigned long)h->ErrorCode, (int)h->Lock, tx_state, rx_state);
 
     I2C_ResetHandle(instance);
 
@@ -439,8 +433,7 @@ static void I2C_AbortOnError(I2CInstance *instance, const char *reason, uint8_t 
  *       把 ErrorCode 清零，之后再读就只剩 0（旧版把它记成 `err_start` 时，
  *       现场信息就是这样丢掉的）。
  */
-static BSP_Status_e I2C_StartFail(I2CInstance *instance, HAL_StatusTypeDef st, const char *what, uint8_t idx,
-                                  BSP_Transfer_Mode_e mode)
+static BSP_Status_e I2C_StartFail(I2CInstance *instance, HAL_StatusTypeDef st, const char *what, uint8_t idx, BSP_Transfer_Mode_e mode)
 {
     uint32_t err = instance->handle->ErrorCode; /* 复位前采样，见上 */
 
@@ -538,8 +531,7 @@ static BSP_Status_e I2C_WaitReady(I2CInstance *instance, uint32_t timeout_ms, co
  *       写法（都只看 `I2C_BusIsIdle`），统一到这里之后，四个收发接口就不必各写一遍
  *       `if (mode != BSP_BLOCK_MODE)`。
  */
-static BSP_Status_e I2C_ClaimBus(I2CInstance *instance, BSP_Transfer_Mode_e mode, uint32_t timeout_ms,
-                                 const char *reason)
+static BSP_Status_e I2C_ClaimBus(I2CInstance *instance, BSP_Transfer_Mode_e mode, uint32_t timeout_ms, const char *reason)
 {
     if (mode == BSP_BLOCK_MODE)
     {
@@ -573,8 +565,7 @@ static uint8_t I2C_CheckDmaCapability(I2CInstance *instance, BSP_Transfer_Mode_e
         {
             s_i2c_status[idx].err_no_dma++;
         }
-        BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "I2C DMA not available (i2c_e=%d, tx=%d, rx=%d)!", (int)instance->i2c_e,
-               need_tx, need_rx);
+        BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "I2C DMA not available (i2c_e=%d, tx=%d, rx=%d)!", (int)instance->i2c_e, need_tx, need_rx);
         return 0;
     }
     return 1;
@@ -775,8 +766,7 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
     s_i2c_status[idx].err_time_us = DWT_GetTimeUs();
 
     /* ③ 上报（保留解码日志，便于直接看出是哪种错） */
-    BSPLOG(&g_i2c_log, LOG_LEVEL_WARNING, "Error detected, code=0x%lX (BERR:%d ARLO:%d AF:%d OVR:%d DMA:%d TIMEOUT:%d)",
-           error_code,
+    BSPLOG(&g_i2c_log, LOG_LEVEL_WARNING, "Error detected, code=0x%lX (BERR:%d ARLO:%d AF:%d OVR:%d DMA:%d TIMEOUT:%d)", error_code,
            (error_code & HAL_I2C_ERROR_BERR) ? 1 : 0,     // 总线错误（起始/停止时序错乱）
            (error_code & HAL_I2C_ERROR_ARLO) ? 1 : 0,     // 仲裁丢失
            (error_code & HAL_I2C_ERROR_AF) ? 1 : 0,       // 从机 NACK（设备不在/地址错）
@@ -799,8 +789,7 @@ void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 BSP_Status_e I2CRegister(I2CInstance *instance)
 {
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR, BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(s_i2c_idx >= I2C_INSTANCE_NUM, BSP_PARAM_ERR,
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Exceeded max instance count!"));
+    BSP_RETURN_IF_TRUE_LOG(s_i2c_idx >= I2C_INSTANCE_NUM, BSP_PARAM_ERR, BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Exceeded max instance count!"));
 
     // 防重复注册检查
     for (uint8_t i = 0; i < s_i2c_idx; i++)
@@ -829,13 +818,11 @@ BSP_Status_e I2CConfig(I2CInstance *instance, const I2C_Config_s *config)
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, BSP_PARAM_ERR, BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(config == NULL, BSP_PARAM_ERR, BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Config is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(config->i2c_e >= I2C_NUM_MAX, BSP_PARAM_ERR,
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "i2c_e out of range!"));
+    BSP_RETURN_IF_TRUE_LOG(config->i2c_e >= I2C_NUM_MAX, BSP_PARAM_ERR, BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "i2c_e out of range!"));
 
     new_idx = (uint8_t)config->i2c_e;
 
-    BSP_RETURN_IF_TRUE_LOG(i2c_map[new_idx].handle == NULL, BSP_PARAM_ERR,
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "I2C handle is NULL, check bsp_map mapping!"));
+    BSP_RETURN_IF_TRUE_LOG(i2c_map[new_idx].handle == NULL, BSP_PARAM_ERR, BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "I2C handle is NULL, check bsp_map mapping!"));
 
     /* 同一 handle 不允许被两个实例占用：回调靠句柄反查实例，冲突则分发错乱
      * （同一总线上的多个从机共用一个实例，靠每次调用传 dev_addr 区分，见头文件） */
@@ -886,32 +873,26 @@ BSP_Status_e I2CConfig(I2CInstance *instance, const I2C_Config_s *config)
     return BSP_OK;
 }
 
-BSP_Status_e I2CMemRead(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_addr, I2C_MemAddrSize_e mem_addr_size,
-                        uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
+BSP_Status_e I2CMemRead(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_addr, I2C_MemAddrSize_e mem_addr_size, uint16_t len, BSP_Transfer_Mode_e mode,
+                        uint32_t timeout_ms)
 {
     BSP_Status_e ret;
     uint8_t idx;
     HAL_StatusTypeDef hal_st;
     uint16_t hal_addr = 0; /* 编码后的从机地址（喂 HAL 用，见 I2C_EncodeDevAddr） */
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, I2C_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL || instance->rx_buff == NULL,
-                           I2C_FailThenRet(instance, BSP_PARAM_ERR),
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, I2C_FailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL || instance->rx_buff == NULL, I2C_FailThenRet(instance, BSP_PARAM_ERR),
                            BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Handle is NULL, call I2CConfig first!"));
-    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, I2C_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
+    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, I2C_FailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
     /* 静默截断会让上层拿到"比请求短"的数据却毫无察觉，直接拒绝 */
-    BSP_RETURN_IF_TRUE_LOG(
-        len == 0 || len > instance->buff_size, I2C_FailThenRet(instance, BSP_PARAM_ERR),
-        BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid read len=%d (buff=%d)!", (int)len, (int)instance->buff_size));
-    BSP_RETURN_IF_TRUE_LOG(mem_addr_size != I2C_MEM_ADDR_SIZE_8BIT && mem_addr_size != I2C_MEM_ADDR_SIZE_16BIT,
-                           I2C_FailThenRet(instance, BSP_PARAM_ERR),
+    BSP_RETURN_IF_TRUE_LOG(len == 0 || len > instance->buff_size, I2C_FailThenRet(instance, BSP_PARAM_ERR),
+                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid read len=%d (buff=%d)!", (int)len, (int)instance->buff_size));
+    BSP_RETURN_IF_TRUE_LOG(mem_addr_size != I2C_MEM_ADDR_SIZE_8BIT && mem_addr_size != I2C_MEM_ADDR_SIZE_16BIT, I2C_FailThenRet(instance, BSP_PARAM_ERR),
                            BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid mem_addr_size=%d!", (int)mem_addr_size));
-    BSP_RETURN_IF_TRUE_LOG(I2C_EncodeDevAddr(instance, dev_addr, &hal_addr) != BSP_OK,
-                           I2C_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid dev_addr=0x%X (addressing mode=0x%lX)!",
-                                  (unsigned)dev_addr, (unsigned long)instance->handle->Init.AddressingMode));
+    BSP_RETURN_IF_TRUE_LOG(I2C_EncodeDevAddr(instance, dev_addr, &hal_addr) != BSP_OK, I2C_FailThenRet(instance, BSP_PARAM_ERR),
+                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid dev_addr=0x%X (addressing mode=0x%lX)!", (unsigned)dev_addr,
+                                  (unsigned long)instance->handle->Init.AddressingMode));
 
     idx = I2C_Hi2cToIndex(instance->handle);
 
@@ -933,16 +914,13 @@ BSP_Status_e I2CMemRead(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_a
     switch (mode)
     {
     case BSP_BLOCK_MODE:
-        hal_st = HAL_I2C_Mem_Read(instance->handle, hal_addr, mem_addr, I2C_ToHalMemAddrSize(mem_addr_size),
-                                  instance->rx_buff, len, timeout_ms);
+        hal_st = HAL_I2C_Mem_Read(instance->handle, hal_addr, mem_addr, I2C_ToHalMemAddrSize(mem_addr_size), instance->rx_buff, len, timeout_ms);
         break;
     case BSP_IT_MODE:
-        hal_st = HAL_I2C_Mem_Read_IT(instance->handle, hal_addr, mem_addr, I2C_ToHalMemAddrSize(mem_addr_size),
-                                     instance->rx_buff, len);
+        hal_st = HAL_I2C_Mem_Read_IT(instance->handle, hal_addr, mem_addr, I2C_ToHalMemAddrSize(mem_addr_size), instance->rx_buff, len);
         break;
     case BSP_DMA_MODE:
-        hal_st = HAL_I2C_Mem_Read_DMA(instance->handle, hal_addr, mem_addr, I2C_ToHalMemAddrSize(mem_addr_size),
-                                      instance->rx_buff, len);
+        hal_st = HAL_I2C_Mem_Read_DMA(instance->handle, hal_addr, mem_addr, I2C_ToHalMemAddrSize(mem_addr_size), instance->rx_buff, len);
         break;
     default:
         return I2C_FailThenRet(instance, BSP_PARAM_ERR);
@@ -967,8 +945,8 @@ BSP_Status_e I2CMemRead(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_a
     return BSP_OK;
 }
 
-BSP_Status_e I2CMemWrite(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_addr, I2C_MemAddrSize_e mem_addr_size,
-                         const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
+BSP_Status_e I2CMemWrite(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_addr, I2C_MemAddrSize_e mem_addr_size, const uint8_t *data, uint16_t len,
+                         BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
 {
     BSP_Status_e ret;
     uint8_t idx;
@@ -977,21 +955,17 @@ BSP_Status_e I2CMemWrite(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_
     uint8_t *tx = (uint8_t *)data; /* HAL 的 I2C 写接口形参是非 const 的 uint8_t*（两版头文件都一样），
                                     * 实现并不写这块内存；只在这里去一次 const，BSP 对外仍保持 const */
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, I2C_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, I2C_FailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, I2C_FailThenRet(instance, BSP_PARAM_ERR),
                            BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Handle is NULL, call I2CConfig first!"));
-    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, I2C_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
+    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, I2C_FailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
     BSP_RETURN_IF_TRUE_LOG(data == NULL || len == 0, I2C_FailThenRet(instance, BSP_PARAM_ERR),
                            BSPLOG(&g_i2c_log, LOG_LEVEL_WARNING, "Invalid write data/len!"));
-    BSP_RETURN_IF_TRUE_LOG(mem_addr_size != I2C_MEM_ADDR_SIZE_8BIT && mem_addr_size != I2C_MEM_ADDR_SIZE_16BIT,
-                           I2C_FailThenRet(instance, BSP_PARAM_ERR),
+    BSP_RETURN_IF_TRUE_LOG(mem_addr_size != I2C_MEM_ADDR_SIZE_8BIT && mem_addr_size != I2C_MEM_ADDR_SIZE_16BIT, I2C_FailThenRet(instance, BSP_PARAM_ERR),
                            BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid mem_addr_size=%d!", (int)mem_addr_size));
-    BSP_RETURN_IF_TRUE_LOG(I2C_EncodeDevAddr(instance, dev_addr, &hal_addr) != BSP_OK,
-                           I2C_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid dev_addr=0x%X (addressing mode=0x%lX)!",
-                                  (unsigned)dev_addr, (unsigned long)instance->handle->Init.AddressingMode));
+    BSP_RETURN_IF_TRUE_LOG(I2C_EncodeDevAddr(instance, dev_addr, &hal_addr) != BSP_OK, I2C_FailThenRet(instance, BSP_PARAM_ERR),
+                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid dev_addr=0x%X (addressing mode=0x%lX)!", (unsigned)dev_addr,
+                                  (unsigned long)instance->handle->Init.AddressingMode));
 
     idx = I2C_Hi2cToIndex(instance->handle);
 
@@ -1013,16 +987,13 @@ BSP_Status_e I2CMemWrite(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_
     switch (mode)
     {
     case BSP_BLOCK_MODE:
-        hal_st = HAL_I2C_Mem_Write(instance->handle, hal_addr, mem_addr, I2C_ToHalMemAddrSize(mem_addr_size), tx, len,
-                                   timeout_ms);
+        hal_st = HAL_I2C_Mem_Write(instance->handle, hal_addr, mem_addr, I2C_ToHalMemAddrSize(mem_addr_size), tx, len, timeout_ms);
         break;
     case BSP_IT_MODE:
-        hal_st =
-            HAL_I2C_Mem_Write_IT(instance->handle, hal_addr, mem_addr, I2C_ToHalMemAddrSize(mem_addr_size), tx, len);
+        hal_st = HAL_I2C_Mem_Write_IT(instance->handle, hal_addr, mem_addr, I2C_ToHalMemAddrSize(mem_addr_size), tx, len);
         break;
     case BSP_DMA_MODE:
-        hal_st =
-            HAL_I2C_Mem_Write_DMA(instance->handle, hal_addr, mem_addr, I2C_ToHalMemAddrSize(mem_addr_size), tx, len);
+        hal_st = HAL_I2C_Mem_Write_DMA(instance->handle, hal_addr, mem_addr, I2C_ToHalMemAddrSize(mem_addr_size), tx, len);
         break;
     default:
         return I2C_FailThenRet(instance, BSP_PARAM_ERR);
@@ -1041,8 +1012,7 @@ BSP_Status_e I2CMemWrite(I2CInstance *instance, uint16_t dev_addr, uint16_t mem_
     return BSP_OK;
 }
 
-BSP_Status_e I2CMasterTransmit(I2CInstance *instance, uint16_t dev_addr, const uint8_t *data, uint16_t len,
-                               BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
+BSP_Status_e I2CMasterTransmit(I2CInstance *instance, uint16_t dev_addr, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
 {
     BSP_Status_e ret;
     uint8_t idx;
@@ -1050,18 +1020,15 @@ BSP_Status_e I2CMasterTransmit(I2CInstance *instance, uint16_t dev_addr, const u
     uint16_t hal_addr = 0;         /* 编码后的从机地址（喂 HAL 用，见 I2C_EncodeDevAddr） */
     uint8_t *tx = (uint8_t *)data; /* 同 I2CMemWrite：HAL 写接口形参非 const，只在这里去一次 */
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, I2C_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, I2C_FailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
     BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, I2C_FailThenRet(instance, BSP_PARAM_ERR),
                            BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Handle is NULL, call I2CConfig first!"));
-    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, I2C_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
+    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, I2C_FailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
     BSP_RETURN_IF_TRUE_LOG(data == NULL || len == 0, I2C_FailThenRet(instance, BSP_PARAM_ERR),
                            BSPLOG(&g_i2c_log, LOG_LEVEL_WARNING, "Invalid transmit parameters!"));
-    BSP_RETURN_IF_TRUE_LOG(I2C_EncodeDevAddr(instance, dev_addr, &hal_addr) != BSP_OK,
-                           I2C_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid dev_addr=0x%X (addressing mode=0x%lX)!",
-                                  (unsigned)dev_addr, (unsigned long)instance->handle->Init.AddressingMode));
+    BSP_RETURN_IF_TRUE_LOG(I2C_EncodeDevAddr(instance, dev_addr, &hal_addr) != BSP_OK, I2C_FailThenRet(instance, BSP_PARAM_ERR),
+                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid dev_addr=0x%X (addressing mode=0x%lX)!", (unsigned)dev_addr,
+                                  (unsigned long)instance->handle->Init.AddressingMode));
 
     idx = I2C_Hi2cToIndex(instance->handle);
 
@@ -1109,28 +1076,22 @@ BSP_Status_e I2CMasterTransmit(I2CInstance *instance, uint16_t dev_addr, const u
     return BSP_OK;
 }
 
-BSP_Status_e I2CMasterReceive(I2CInstance *instance, uint16_t dev_addr, uint16_t len, BSP_Transfer_Mode_e mode,
-                              uint32_t timeout_ms)
+BSP_Status_e I2CMasterReceive(I2CInstance *instance, uint16_t dev_addr, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
 {
     BSP_Status_e ret;
     uint8_t idx;
     HAL_StatusTypeDef hal_st;
     uint16_t hal_addr = 0; /* 编码后的从机地址（喂 HAL 用，见 I2C_EncodeDevAddr） */
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, I2C_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL || instance->rx_buff == NULL,
-                           I2C_FailThenRet(instance, BSP_PARAM_ERR),
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, I2C_FailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL || instance->rx_buff == NULL, I2C_FailThenRet(instance, BSP_PARAM_ERR),
                            BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Handle is NULL, call I2CConfig first!"));
-    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, I2C_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
-    BSP_RETURN_IF_TRUE_LOG(
-        len == 0 || len > instance->buff_size, I2C_FailThenRet(instance, BSP_PARAM_ERR),
-        BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid receive len=%d (buff=%d)!", (int)len, (int)instance->buff_size));
-    BSP_RETURN_IF_TRUE_LOG(I2C_EncodeDevAddr(instance, dev_addr, &hal_addr) != BSP_OK,
-                           I2C_FailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid dev_addr=0x%X (addressing mode=0x%lX)!",
-                                  (unsigned)dev_addr, (unsigned long)instance->handle->Init.AddressingMode));
+    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, I2C_FailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
+    BSP_RETURN_IF_TRUE_LOG(len == 0 || len > instance->buff_size, I2C_FailThenRet(instance, BSP_PARAM_ERR),
+                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid receive len=%d (buff=%d)!", (int)len, (int)instance->buff_size));
+    BSP_RETURN_IF_TRUE_LOG(I2C_EncodeDevAddr(instance, dev_addr, &hal_addr) != BSP_OK, I2C_FailThenRet(instance, BSP_PARAM_ERR),
+                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "Invalid dev_addr=0x%X (addressing mode=0x%lX)!", (unsigned)dev_addr,
+                                  (unsigned long)instance->handle->Init.AddressingMode));
 
     idx = I2C_Hi2cToIndex(instance->handle);
 
@@ -1190,9 +1151,8 @@ BSP_Status_e I2CIsDeviceReady(I2CInstance *instance, uint16_t dev_addr, uint32_t
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL || instance->handle == NULL, BSP_PARAM_ERR,
                            BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "IsDeviceReady: invalid instance!"));
-    BSP_RETURN_IF_TRUE_LOG(
-        I2C_EncodeDevAddr(instance, dev_addr, &hal_addr) != BSP_OK, BSP_PARAM_ERR,
-        BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "IsDeviceReady: invalid dev_addr=0x%X!", (unsigned)dev_addr));
+    BSP_RETURN_IF_TRUE_LOG(I2C_EncodeDevAddr(instance, dev_addr, &hal_addr) != BSP_OK, BSP_PARAM_ERR,
+                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "IsDeviceReady: invalid dev_addr=0x%X!", (unsigned)dev_addr));
 
     idx = I2C_Hi2cToIndex(instance->handle);
 
@@ -1234,8 +1194,7 @@ BSP_Status_e I2CBusRecover(I2CInstance *instance)
     uint8_t busy_flag;
     uint8_t idle;
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL || instance->handle == NULL, BSP_PARAM_ERR,
-                           BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "BusRecover: invalid instance!"));
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL || instance->handle == NULL, BSP_PARAM_ERR, BSPLOG(&g_i2c_log, LOG_LEVEL_ERROR, "BusRecover: invalid instance!"));
 
     I2C_HandleTypeDef *h = instance->handle;
 
@@ -1290,8 +1249,8 @@ BSP_Status_e I2CBusRecover(I2CInstance *instance)
         s_i2c_status[idx].bus_recover++;
     }
 
-    BSPLOG(&g_i2c_log, LOG_LEVEL_WARNING, "Bus recover start (i2c_e=%d), busy_flag=%d, state=0x%02X, err=0x%lX",
-           (int)instance->i2c_e, (int)busy_flag, (unsigned)h->State, (unsigned long)h->ErrorCode);
+    BSPLOG(&g_i2c_log, LOG_LEVEL_WARNING, "Bus recover start (i2c_e=%d), busy_flag=%d, state=0x%02X, err=0x%lX", (int)instance->i2c_e, (int)busy_flag,
+           (unsigned)h->State, (unsigned long)h->ErrorCode);
 
     /* 1) 先让外设静默 + 解锁 + 清状态（Lock 残留会让后续 HAL 调用直接 HAL_BUSY） */
     I2C_ResetHandle(instance);
@@ -1306,8 +1265,7 @@ BSP_Status_e I2CBusRecover(I2CInstance *instance)
      *    仍置位 = 重建没能让总线松手，多半是从机真把 SCL/SDA 拉着（本层不翻转引脚，
      *    见 §2.B.1 的取舍），由 DRV 记 ERROR 并走 RSTN 脉冲 / 冷却重试。 */
     busy_flag = (__HAL_I2C_GET_FLAG(h, I2C_FLAG_BUSY) == SET) ? 1 : 0;
-    BSPLOG(&g_i2c_log, busy_flag ? LOG_LEVEL_ERROR : LOG_LEVEL_INFO,
-           "Bus recover done, busy=%d (1 = 引脚被从机拉死，需从机侧复位)", (int)busy_flag);
+    BSPLOG(&g_i2c_log, busy_flag ? LOG_LEVEL_ERROR : LOG_LEVEL_INFO, "Bus recover done, busy=%d (1 = 引脚被从机拉死，需从机侧复位)", (int)busy_flag);
     return busy_flag ? BSP_HW_ERR : BSP_OK;
 }
 

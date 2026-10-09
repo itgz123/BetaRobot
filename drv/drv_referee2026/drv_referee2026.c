@@ -112,8 +112,7 @@ static void Referee2026CoreRxDispatch(Referee2026Core_t *core)
 
     /* ① CRC16：覆盖「帧头 5B + cmd_id 2B + 数据段」，不含自身 2B 帧尾 */
     const uint16_t crc_rx = Referee2026CoreGetU16(&core->asm_buf[frame_len - REFEREE2026_TAIL_SIZE]);
-    const uint16_t crc_calc = (uint16_t)LIB_CRC_TableCalc(&referee2026_crc16_table, core->asm_buf,
-                                                          (uint32_t)(frame_len - REFEREE2026_TAIL_SIZE));
+    const uint16_t crc_calc = (uint16_t)LIB_CRC_TableCalc(&referee2026_crc16_table, core->asm_buf, (uint32_t)(frame_len - REFEREE2026_TAIL_SIZE));
 
     if (crc_rx != crc_calc)
     {
@@ -247,8 +246,7 @@ static void Referee2026CoreRxByte(Referee2026Core_t *core, uint8_t b)
 
         /* 帧头满了，先校 CRC8（覆盖前 4B：SOF / data_length 小端 / seq，不含 CRC8 自身）。
          * 一失败就重扫，**不等收满整帧** —— 这是噪声下最快回到对齐的路。 */
-        const uint8_t crc8_calc =
-            (uint8_t)LIB_CRC_TableCalc(&referee2026_crc8_table, core->asm_buf, REFEREE2026_OFF_CRC8);
+        const uint8_t crc8_calc = (uint8_t)LIB_CRC_TableCalc(&referee2026_crc8_table, core->asm_buf, REFEREE2026_OFF_CRC8);
 
         if (crc8_calc != core->asm_buf[REFEREE2026_OFF_CRC8])
         {
@@ -268,8 +266,7 @@ static void Referee2026CoreRxByte(Referee2026Core_t *core, uint8_t b)
             return;
         }
 
-        core->asm_total =
-            (uint16_t)(REFEREE2026_HEADER_SIZE + REFEREE2026_CMD_ID_SIZE + data_len + REFEREE2026_TAIL_SIZE);
+        core->asm_total = (uint16_t)(REFEREE2026_HEADER_SIZE + REFEREE2026_CMD_ID_SIZE + data_len + REFEREE2026_TAIL_SIZE);
         core->asm_state = REFEREE2026_RX_ST_BODY;
         return;
     }
@@ -392,8 +389,7 @@ BSP_Status_e Referee2026Send(Referee2026Core_t *core, uint16_t data_id, const vo
     memcpy(&f[REFEREE2026_OFF_DATA], data, len);
 
     const uint16_t frame_len = (uint16_t)(REFEREE2026_OFF_DATA + len + REFEREE2026_TAIL_SIZE);
-    const uint16_t crc16 =
-        (uint16_t)LIB_CRC_TableCalc(&referee2026_crc16_table, f, (uint32_t)(frame_len - REFEREE2026_TAIL_SIZE));
+    const uint16_t crc16 = (uint16_t)LIB_CRC_TableCalc(&referee2026_crc16_table, f, (uint32_t)(frame_len - REFEREE2026_TAIL_SIZE));
 
     Referee2026CorePutU16(&f[frame_len - REFEREE2026_TAIL_SIZE], crc16);
 
@@ -548,8 +544,7 @@ BSP_Status_e Referee2026Config(Referee2026Core_t *core, const Referee2026Config_
          * 注意**只清故障动作、不注销 daemon**：它还挂着 RX 停摆自恢复的离线钩子，那是唯一能在
          * 接收真停摆后把 DMA 拉起来的地方；用 `rx_periodic == 0` 就整个不挂 daemon，保护会一起没了。
          * 调用方若真想要这种链路的离线指示，得先让它有周期性（协议层面），不是在这里绕过。 */
-        const DaemonFaultAction_e fault =
-            (core->rx_periodic != 0u) ? cfg->daemon_fault : (DaemonFaultAction_e)DAEMON_FAULT_NONE;
+        const DaemonFaultAction_e fault = (core->rx_periodic != 0u) ? cfg->daemon_fault : (DaemonFaultAction_e)DAEMON_FAULT_NONE;
 
         /* 本驱动挂了离线钩子，故 reload 填 0（本义"禁用监控"）要提升成默认值，
          * 否则那层"接收停摆自恢复"会因少配一个字段而静默失效。 */

@@ -31,17 +31,17 @@
 static int g_checks = 0;
 static int g_fails = 0;
 
-#define CHECK(cond, ...)                                                                                               \
-    do                                                                                                                 \
-    {                                                                                                                  \
-        g_checks++;                                                                                                    \
-        if (!(cond))                                                                                                   \
-        {                                                                                                              \
-            g_fails++;                                                                                                 \
-            printf("FAIL %d: ", __LINE__);                                                                             \
-            printf(__VA_ARGS__);                                                                                       \
-            printf("\n");                                                                                              \
-        }                                                                                                              \
+#define CHECK(cond, ...)                                                                                                                                       \
+    do                                                                                                                                                         \
+    {                                                                                                                                                          \
+        g_checks++;                                                                                                                                            \
+        if (!(cond))                                                                                                                                           \
+        {                                                                                                                                                      \
+            g_fails++;                                                                                                                                         \
+            printf("FAIL %d: ", __LINE__);                                                                                                                     \
+            printf(__VA_ARGS__);                                                                                                                               \
+            printf("\n");                                                                                                                                      \
+        }                                                                                                                                                      \
     } while (0)
 
 /*============================ 轨迹串：记录回调被调用的顺序 ============================*/
@@ -254,8 +254,7 @@ static void TraceLogReset(void)
     g_tr_n = 0;
 }
 
-static void TraceHook(void *ctx, LibFsmTableState_t from, LibFsmTableEvent_t event, LibFsmTableState_t to,
-                      bool transitioned)
+static void TraceHook(void *ctx, LibFsmTableState_t from, LibFsmTableEvent_t event, LibFsmTableState_t to, bool transitioned)
 {
     ((test_ctx_s *)ctx)->trace_calls++;
 
@@ -272,8 +271,7 @@ static void TraceHook(void *ctx, LibFsmTableState_t from, LibFsmTableEvent_t eve
 /* 断言第 idx 条跟踪记录的内容 */
 static int RecIs(int idx, int from, int event, int to, int transitioned)
 {
-    return (idx < g_tr_n) && (g_tr[idx].from == from) && (g_tr[idx].event == event) && (g_tr[idx].to == to) &&
-           (g_tr[idx].transitioned == transitioned);
+    return (idx < g_tr_n) && (g_tr[idx].from == from) && (g_tr[idx].event == event) && (g_tr[idx].to == to) && (g_tr[idx].transitioned == transitioned);
 }
 
 /*------------- 各测试用的转移表 --------------*/
@@ -293,9 +291,8 @@ LIB_FSM_TABLE_CHECK_ACTIONS(s_actions, S_COUNT);
 
 /*------------- 装配辅助 --------------*/
 
-static void InitFsm(LibFsmTableInstance_s *fsm, test_ctx_s *ctx, const LibFsmTableTransition_s *table,
-                    uint32_t transition_count, const LibFsmTableStateActions_s *actions, uint32_t state_count,
-                    LibFsmTableState_t initial_state)
+static void InitFsm(LibFsmTableInstance_s *fsm, test_ctx_s *ctx, const LibFsmTableTransition_s *table, uint32_t transition_count,
+                    const LibFsmTableStateActions_s *actions, uint32_t state_count, LibFsmTableState_t initial_state)
 {
     LibFsmTableConfig_s cfg = {0};
 
@@ -519,8 +516,7 @@ static void TestInternalTransition(void)
     /* to 字段被忽略：写 99 也不会把状态改成 99 */
     InitFsm(&fsm, &ctx, ignore_to, 1u, s_actions, S_COUNT, S_RUN);
     CHECK(LibFsmTableDispatch(&fsm, E_TICK, NULL) == true, "内部转移应报告发生了转移");
-    CHECK(LibFsmTableCurrent(&fsm) == S_RUN, "内部转移忽略 to，状态 = %d，期望 %d", (int)LibFsmTableCurrent(&fsm),
-          (int)S_RUN);
+    CHECK(LibFsmTableCurrent(&fsm) == S_RUN, "内部转移忽略 to，状态 = %d，期望 %d", (int)LibFsmTableCurrent(&fsm), (int)S_RUN);
 
     /* 守卫拒绝内部转移 → 落到下一条外部规则 */
     ctx.action_cnt = 0;
@@ -583,8 +579,7 @@ static void TestAnyWildcard(void)
     InitFsm(&fsm, &ctx, shadow, 2u, s_actions, S_COUNT, S_IDLE);
     TraceReset();
     CHECK(LibFsmTableDispatch(&fsm, E_START, NULL) == true, "表头通配规则应命中");
-    CHECK(LibFsmTableCurrent(&fsm) == S_ERR, "状态 = %d，期望 %d（后面的规则被吃掉）", (int)LibFsmTableCurrent(&fsm),
-          (int)S_ERR);
+    CHECK(LibFsmTableCurrent(&fsm) == S_ERR, "状态 = %d，期望 %d（后面的规则被吃掉）", (int)LibFsmTableCurrent(&fsm), (int)S_ERR);
     CHECK_TRACE("i3E");
 
     /* 通配规则被守卫拒绝 → 落到下一条通配规则 */
@@ -668,8 +663,8 @@ static void TestNoTable(void)
 
     /* 实例指针为 NULL：不崩，返回 false / 哨兵 */
     CHECK(LibFsmTableDispatch(NULL, E_START, NULL) == false, "NULL 实例应返回 false");
-    CHECK(LibFsmTableCurrent(NULL) == LIB_FSM_TABLE_INVALID_STATE, "NULL 实例应返回哨兵 %d，实际 %d",
-          (int)LIB_FSM_TABLE_INVALID_STATE, (int)LibFsmTableCurrent(NULL));
+    CHECK(LibFsmTableCurrent(NULL) == LIB_FSM_TABLE_INVALID_STATE, "NULL 实例应返回哨兵 %d，实际 %d", (int)LIB_FSM_TABLE_INVALID_STATE,
+          (int)LibFsmTableCurrent(NULL));
     CHECK(LibFsmTableCurrent(NULL) != S_IDLE, "哨兵不得与合法状态 0 混淆");
     LibFsmTableInit(NULL, NULL); /* 只要求不崩 */
 
@@ -737,8 +732,7 @@ static void TestScanOrder(void)
         TraceReset();
 
         CHECK(LibFsmTableDispatch(&fsm, E_START, NULL) == true, "第 %d 条放行时应发生转移", accept_idx[k]);
-        CHECK(ctx.guard_calls == accept_idx[k] + 1, "命中第 %d 条时守卫应调用 %d 次，实际 %d 次", accept_idx[k],
-              accept_idx[k] + 1, ctx.guard_calls);
+        CHECK(ctx.guard_calls == accept_idx[k] + 1, "命中第 %d 条时守卫应调用 %d 次，实际 %d 次", accept_idx[k], accept_idx[k] + 1, ctx.guard_calls);
         CHECK(LibFsmTableCurrent(&fsm) == S_RUN, "状态 = %d，期望 %d", (int)LibFsmTableCurrent(&fsm), (int)S_RUN);
         CHECK(ctx.action_cnt == 1, "转移动作应只执行一次，实际 %d 次", ctx.action_cnt);
     }
@@ -762,29 +756,25 @@ static void TestTrace(void)
     TraceLogReset();
     CHECK(LibFsmTableDispatch(&fsm, E_START, &ev) == true, "应发生转移");
     CHECK(g_tr_n == 1, "跟踪记录数 = %d，期望 1", g_tr_n);
-    CHECK(RecIs(0, S_IDLE, E_START, S_RUN, 1), "记录 0 = {from:%d ev:%d to:%d tr:%d}", g_tr[0].from, g_tr[0].event,
-          g_tr[0].to, g_tr[0].transitioned);
+    CHECK(RecIs(0, S_IDLE, E_START, S_RUN, 1), "记录 0 = {from:%d ev:%d to:%d tr:%d}", g_tr[0].from, g_tr[0].event, g_tr[0].to, g_tr[0].transitioned);
 
     /* 命中：RUN → ERR */
     TraceLogReset();
     CHECK(LibFsmTableDispatch(&fsm, E_FAULT, NULL) == true, "RUN 下 E_FAULT 应转移到 ERR");
-    CHECK(RecIs(0, S_RUN, E_FAULT, S_ERR, 1), "记录 0 = {from:%d ev:%d to:%d tr:%d}", g_tr[0].from, g_tr[0].event,
-          g_tr[0].to, g_tr[0].transitioned);
+    CHECK(RecIs(0, S_RUN, E_FAULT, S_ERR, 1), "记录 0 = {from:%d ev:%d to:%d tr:%d}", g_tr[0].from, g_tr[0].event, g_tr[0].to, g_tr[0].transitioned);
 
     /* 未命中：也报一次，from == to == 当前状态、transitioned = false */
     TraceLogReset();
     CHECK(LibFsmTableDispatch(&fsm, E_STOP, NULL) == false, "ERR 下 E_STOP 无转移");
     CHECK(g_tr_n == 1, "未命中也要报一次，记录数 = %d，期望 1", g_tr_n);
-    CHECK(RecIs(0, S_ERR, E_STOP, S_ERR, 0), "记录 0 = {from:%d ev:%d to:%d tr:%d}", g_tr[0].from, g_tr[0].event,
-          g_tr[0].to, g_tr[0].transitioned);
+    CHECK(RecIs(0, S_ERR, E_STOP, S_ERR, 0), "记录 0 = {from:%d ev:%d to:%d tr:%d}", g_tr[0].from, g_tr[0].event, g_tr[0].to, g_tr[0].transitioned);
 
     /* 内部转移：from == to == 当前状态 */
     InitFsm(&fsm, &ctx, internal_tbl, 1u, s_actions, S_COUNT, S_RUN);
     fsm.trace_fn = TraceHook;
     TraceLogReset();
     CHECK(LibFsmTableDispatch(&fsm, E_TICK, NULL) == true, "内部转移应报告发生了转移");
-    CHECK(RecIs(0, S_RUN, E_TICK, S_RUN, 1), "记录 0 = {from:%d ev:%d to:%d tr:%d}", g_tr[0].from, g_tr[0].event,
-          g_tr[0].to, g_tr[0].transitioned);
+    CHECK(RecIs(0, S_RUN, E_TICK, S_RUN, 1), "记录 0 = {from:%d ev:%d to:%d tr:%d}", g_tr[0].from, g_tr[0].event, g_tr[0].to, g_tr[0].transitioned);
 
     /* ctx 原样回传：钩子每次都数到（上面共派发 4 次） */
     CHECK(ctx.trace_calls == 4, "钩子调用次数 = %d，期望 4", ctx.trace_calls);

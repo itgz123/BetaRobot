@@ -222,17 +222,13 @@ typedef struct IST8310Instance
  * @example
  *   IST8310_INSTANCE_DEF(ist8310);
  */
-#define IST8310_INSTANCE_DEF(name)                                                                                     \
-    I2C_INSTANCE_DEF(name##_i2c, IST8310_BUFF_SIZE);                                                                   \
-    static uint8_t name##_req_buff[1] DMA_RAM = {0};                                                                   \
-    GPIO_INSTANCE_DEF(name##_drdy);                                                                                    \
-    GPIO_INSTANCE_DEF(name##_rstn);                                                                                    \
-    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
-    static IST8310Instance name = {.i2c_inst = &name##_i2c,                                                            \
-                                   .req_buff = name##_req_buff,                                                        \
-                                   .drdy = &name##_drdy,                                                               \
-                                   .rstn = &name##_rstn,                                                               \
-                                   .daemon = &name##_daemon}
+#define IST8310_INSTANCE_DEF(name)                                                                                                                             \
+    I2C_INSTANCE_DEF(name##_i2c, IST8310_BUFF_SIZE);                                                                                                           \
+    static uint8_t name##_req_buff[1] DMA_RAM = {0};                                                                                                           \
+    GPIO_INSTANCE_DEF(name##_drdy);                                                                                                                            \
+    GPIO_INSTANCE_DEF(name##_rstn);                                                                                                                            \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                                                        \
+    static IST8310Instance name = {.i2c_inst = &name##_i2c, .req_buff = name##_req_buff, .drdy = &name##_drdy, .rstn = &name##_rstn, .daemon = &name##_daemon}
 
 /*============================ 公开接口声明 ============================*/
 

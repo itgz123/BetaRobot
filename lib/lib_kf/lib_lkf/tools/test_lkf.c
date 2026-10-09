@@ -252,11 +252,11 @@ static void check(int cond, const char *fmt, double a, double b)
 }
 
 /* 把双精度矩阵拷成 float（C 数组） */
-#define TO_FLOAT(dst, src, cnt)                                                                                        \
-    float dst[cnt];                                                                                                    \
-    for (int i = 0; i < (cnt); i++)                                                                                    \
-    {                                                                                                                  \
-        dst[i] = (float)(src)[i];                                                                                      \
+#define TO_FLOAT(dst, src, cnt)                                                                                                                                \
+    float dst[cnt];                                                                                                                                            \
+    for (int i = 0; i < (cnt); i++)                                                                                                                            \
+    {                                                                                                                                                          \
+        dst[i] = (float)(src)[i];                                                                                                                              \
     }
 
 static double max_rel_diff(const float *a, const double *b, int cnt)
@@ -277,9 +277,8 @@ static double max_rel_diff(const float *a, const double *b, int cnt)
  * @brief 通用跑测：同一初值/模型下逐步跑 lib_lkf 与参考，返回 x/P 最大相对偏差
  * @param multi_rate 非 0 时每步改用两次标量 LkfUpdateM（H_scalar/R_scalar 各一维）
  */
-static double run_case(LkfInstance *kf, const double *F, const double *Q, const double *H, const double *R,
-                       const double *P0, const double *x0, int n, int m, uint8_t opt, int steps, const double *H2,
-                       const double *R2, int multi_rate, double *out_p)
+static double run_case(LkfInstance *kf, const double *F, const double *Q, const double *H, const double *R, const double *P0, const double *x0, int n, int m,
+                       uint8_t opt, int steps, const double *H2, const double *R2, int multi_rate, double *out_p)
 {
     RefKf ref;
     ref.n = n;
@@ -464,8 +463,7 @@ static void case_update_equiv(void)
     TO_FLOAT(P0f, P0, 4)
     TO_FLOAT(x0f, x0, 2)
 
-    Lkf_Init_Config_s cfg = {
-        .n = n, .m = m, .l = 0, .opt = 0, .x0 = x0f, .P0 = P0f, .F = Ff, .Q = Qf, .H = Hf, .R = Rf};
+    Lkf_Init_Config_s cfg = {.n = n, .m = m, .l = 0, .opt = 0, .x0 = x0f, .P0 = P0f, .F = Ff, .Q = Qf, .H = Hf, .R = Rf};
     LkfInit(&kf_a, &cfg);
     LkfInit(&kf_b, &cfg);
 
@@ -478,8 +476,7 @@ static void case_update_equiv(void)
         LkfPredict(&kf_b, NULL);
         LkfUpdate(&kf_a, z);
         LkfUpdateM(&kf_b, (uint8_t)m, z, kf_b.H, kf_b.R);
-        if (memcmp(kf_a.x, kf_b.x, sizeof(float) * (size_t)n) != 0 ||
-            memcmp(kf_a.P, kf_b.P, sizeof(float) * (size_t)(n * n)) != 0)
+        if (memcmp(kf_a.x, kf_b.x, sizeof(float) * (size_t)n) != 0 || memcmp(kf_a.P, kf_b.P, sizeof(float) * (size_t)(n * n)) != 0)
         {
             diff++;
         }
@@ -554,8 +551,7 @@ static void case_param_check(void)
     Lkf_Init_Config_s ok = {.n = 2, .m = 1, .l = 0, .x0 = P0, .P0 = P0, .F = F, .Q = Q, .H = H, .R = R};
     LkfInit(&kf_s, &ok);
     LkfReset(&kf_s);
-    const int rst = (kf_s.x[0] == 0.0f && kf_s.x[1] == 0.0f && kf_s.P[0] == 1.0f && kf_s.P[3] == 1.0f &&
-                     kf_s.P[1] == 0.0f && kf_s.P[2] == 0.0f);
+    const int rst = (kf_s.x[0] == 0.0f && kf_s.x[1] == 0.0f && kf_s.P[0] == 1.0f && kf_s.P[3] == 1.0f && kf_s.P[1] == 0.0f && kf_s.P[2] == 0.0f);
     printf("  用例6b Reset(x=0,P=I): %d\n", rst);
     check(rst != 0, "    Reset 结果不符\n", 0.0, 0.0);
 }

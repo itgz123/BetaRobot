@@ -168,12 +168,11 @@ static inline void Lib_KfCore_Predict(float *P, const float *F, const float *Q, 
  * @param wD    2·m·m 工作区（增广 [S|I] 求逆）
  * @return 0 成功；-1 表示 S 奇异（本次更新跳过，x/P 未改动）
  */
-static inline int Lib_KfCore_Update(float *x, float *P, int n, int m, const float *H, const float *R,
-                                    const float *innov, uint8_t opt, float *wA, float *wB, float *wC, float *wG,
-                                    float *wD)
+static inline int Lib_KfCore_Update(float *x, float *P, int n, int m, const float *H, const float *R, const float *innov, uint8_t opt, float *wA, float *wB,
+                                    float *wC, float *wG, float *wD)
 {
-    if (x == NULL || P == NULL || H == NULL || R == NULL || innov == NULL || wA == NULL || wB == NULL || wC == NULL ||
-        wG == NULL || wD == NULL || n < 1 || m < 1)
+    if (x == NULL || P == NULL || H == NULL || R == NULL || innov == NULL || wA == NULL || wB == NULL || wC == NULL || wG == NULL || wD == NULL || n < 1 ||
+        m < 1)
     {
         return -1;
     }

@@ -96,16 +96,15 @@ typedef struct
  * @example
  *   COMM_PROTO_EXT_DEF(proto_cmd, uart_comm, 13);
  */
-#define COMM_PROTO_EXT_DEF(name, media_, payload_sz)                                                                   \
-    _Static_assert((payload_sz) >= 1u && (uint32_t)(payload_sz) <= 0xFFFFu,                                            \
-                   "PROTO_EXT: payload 长度须在 1..65535 字节");                                                       \
-    LIB_HAMMING_EXT_CHECK_M(PROTO_EXT_M);                                                                              \
-    LIB_HAMMING_CHECK_CFG(PROTO_EXT_M, PROTO_EXT_BLK_BYTES(payload_sz) * 8u);                                          \
-    static uint8_t name##_rx_buff[(payload_sz)];                                                                       \
-    static uint8_t name##_reenc_buff[(PROTO_EXT_BYTES(payload_sz)) + 1u];                                              \
-    static CommProtoExt name = {.base.payload_size = (payload_sz),                                                     \
-                                .base.media = (void *)&media_,                                                         \
-                                .rx_buff = name##_rx_buff,                                                             \
+#define COMM_PROTO_EXT_DEF(name, media_, payload_sz)                                                                                                           \
+    _Static_assert((payload_sz) >= 1u && (uint32_t)(payload_sz) <= 0xFFFFu, "PROTO_EXT: payload 长度须在 1..65535 字节");                                      \
+    LIB_HAMMING_EXT_CHECK_M(PROTO_EXT_M);                                                                                                                      \
+    LIB_HAMMING_CHECK_CFG(PROTO_EXT_M, PROTO_EXT_BLK_BYTES(payload_sz) * 8u);                                                                                  \
+    static uint8_t name##_rx_buff[(payload_sz)];                                                                                                               \
+    static uint8_t name##_reenc_buff[(PROTO_EXT_BYTES(payload_sz)) + 1u];                                                                                      \
+    static CommProtoExt name = {.base.payload_size = (payload_sz),                                                                                             \
+                                .base.media = (void *)&media_,                                                                                                 \
+                                .rx_buff = name##_rx_buff,                                                                                                     \
                                 .reenc_buff = name##_reenc_buff} /* 尾部无分号，调用处加 */
 
 /**

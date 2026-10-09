@@ -480,8 +480,7 @@ static void TerminalLiteErrHandler(USARTInstance *instance, USART_ErrReason_e re
 
     /* TX_ABORT：bsp 已强止发送并把 gState 复位；HW：错误位都在接收侧，
      * gState 非 READY 说明发送仍在途，不能归还 DMA 正在读的缓冲 */
-    if (reason == USART_ERR_TX_ABORT ||
-        (instance != NULL && instance->handle != NULL && instance->handle->gState == HAL_UART_STATE_READY))
+    if (reason == USART_ERR_TX_ABORT || (instance != NULL && instance->handle != NULL && instance->handle->gState == HAL_UART_STATE_READY))
     {
         s_tx_now->state = TL_TX_FREE;
         s_tx_now = NULL;
@@ -601,8 +600,7 @@ uint8_t TerminalLiteExecute(uint8_t max)
         if (ret == 0)
         {
             uint32_t sc = c->scale ? c->scale : 1u;
-            TerminalLiteSend("%s = %d\r\n", c->token ? c->token : "?",
-                             (int32_t)(val * (float)sc + (val >= 0 ? 0.5f : -0.5f)));
+            TerminalLiteSend("%s = %d\r\n", c->token ? c->token : "?", (int32_t)(val * (float)sc + (val >= 0 ? 0.5f : -0.5f)));
         }
         else
         {

@@ -130,27 +130,21 @@ static float MotorApplyCascade(DrvlibMotorInstance *inst, float ref, float dt)
             break;
         }
 
-        float ff = (cfg->angle_feedforward_src == DRVLIB_MOTOR_FF_EXTERNAL && cfg->angle_feedforward_ptr)
-                       ? *cfg->angle_feedforward_ptr
-                       : 0.0f;
+        float ff = (cfg->angle_feedforward_src == DRVLIB_MOTOR_FF_EXTERNAL && cfg->angle_feedforward_ptr) ? *cfg->angle_feedforward_ptr : 0.0f;
         s = LibPIDCalculate(&inst->pid[DRVLIB_MOTOR_STAGE_ANGLE], s, (float)d->position, ff, dt);
     }
 
     /* 速度环（中间） */
     if (cfg->loop_type & DRVLIB_MOTOR_LOOP_SPEED)
     {
-        float ff = (cfg->speed_feedforward_src == DRVLIB_MOTOR_FF_EXTERNAL && cfg->speed_feedforward_ptr)
-                       ? *cfg->speed_feedforward_ptr
-                       : 0.0f;
+        float ff = (cfg->speed_feedforward_src == DRVLIB_MOTOR_FF_EXTERNAL && cfg->speed_feedforward_ptr) ? *cfg->speed_feedforward_ptr : 0.0f;
         s = LibPIDCalculate(&inst->pid[DRVLIB_MOTOR_STAGE_SPEED], s, d->speed, ff, dt);
     }
 
     /* 电流环（最内） */
     if (cfg->loop_type & DRVLIB_MOTOR_LOOP_CURRENT)
     {
-        float ff = (cfg->current_feedforward_src == DRVLIB_MOTOR_FF_EXTERNAL && cfg->current_feedforward_ptr)
-                       ? *cfg->current_feedforward_ptr
-                       : 0.0f;
+        float ff = (cfg->current_feedforward_src == DRVLIB_MOTOR_FF_EXTERNAL && cfg->current_feedforward_ptr) ? *cfg->current_feedforward_ptr : 0.0f;
         s = LibPIDCalculate(&inst->pid[DRVLIB_MOTOR_STAGE_CURRENT], s, d->current, ff, dt);
     }
 
@@ -208,8 +202,7 @@ int8_t DrvlibMotorConfig(DrvlibMotorInstance *inst, const DrvlibMotor_Config_s *
         inst->cfg.pid[DRVLIB_MOTOR_STAGE_ANGLE].config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL;
         if (inst->cfg.position_mode == DRVLIB_MOTOR_POS_WRAP)
         {
-            inst->cfg.pid[DRVLIB_MOTOR_STAGE_ANGLE].error_normalize_range =
-                inst->cfg.angle_limit_max - inst->cfg.angle_limit_min;
+            inst->cfg.pid[DRVLIB_MOTOR_STAGE_ANGLE].error_normalize_range = inst->cfg.angle_limit_max - inst->cfg.angle_limit_min;
             inst->cfg.pid[DRVLIB_MOTOR_STAGE_ANGLE].config_mask |= PID_ENABLE_ERROR_NORMALIZE;
         }
         LibPIDInit(&inst->pid[DRVLIB_MOTOR_STAGE_ANGLE], &inst->cfg.pid[DRVLIB_MOTOR_STAGE_ANGLE]);
@@ -234,8 +227,8 @@ int8_t DrvlibMotorConfig(DrvlibMotorInstance *inst, const DrvlibMotor_Config_s *
     inst->has_last = 0;
     memset(&inst->data, 0, sizeof(inst->data));
 
-    BSPLOG(&g_drvlib_motor_log, LOG_LEVEL_INFO, "Config: loop=0x%02X pos_mode=%u span=%d mrad", inst->cfg.loop_type,
-           inst->cfg.position_mode, (int)(inst->cfg.position_span * 1000.0f));
+    BSPLOG(&g_drvlib_motor_log, LOG_LEVEL_INFO, "Config: loop=0x%02X pos_mode=%u span=%d mrad", inst->cfg.loop_type, inst->cfg.position_mode,
+           (int)(inst->cfg.position_span * 1000.0f));
     return 0;
 }
 

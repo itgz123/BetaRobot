@@ -75,29 +75,29 @@ void APP_TaskDelayReport(const char *name, uint64_t dt_us);
  * @note 任务实例仍由 TASK_INSTANCE_DEF 声明、TaskRegister 注册。
  * @example APP_TASK_DEF(Chassis, CHASSIS_FREQ_MS, AppChassisRun);
  */
-#define APP_TASK_DEF(name_, freq_ms_, run_)                                                                            \
-    ITCM_RAM static __attribute__((noreturn)) void Start##name_##Task(void *argument)                                  \
-    {                                                                                                                  \
-        uint64_t start;                                                                                                \
-        uint64_t now;                                                                                                  \
-        uint64_t exec_us;                                                                                              \
-        uint64_t last = DWT_GetTimeUs();                    /* 上次唤醒时刻(us)，用于算周期 dt */                      \
-        TickType_t xLastWakeTime = xTaskGetTickCount();     /* 周期锚点(绝对唤醒时刻) */                               \
-        const TickType_t xPeriod = pdMS_TO_TICKS(freq_ms_); /* 任务周期(tick) */                                       \
-        APP_TaskStartLog(#name_);                                                                                      \
-        for (;;)                                                                                                       \
-        {                                                                                                              \
-            vTaskDelayUntil(&xLastWakeTime, xPeriod); /* 固定周期唤醒，避免周期漂移 */                                 \
-            now = DWT_GetTimeUs();                                                                                     \
-            start = now;                                                                                               \
-            run_((float)(now - last) * 0.001f, now / 1000ULL); /* dt(ms) + 时间戳(ms) */                               \
-            last = now;                                                                                                \
-            exec_us = DWT_GetTimeUs() - start;                                                                         \
-            if (exec_us > 1000UL * (freq_ms_))                                                                         \
-            {                                                                                                          \
-                APP_TaskDelayReport(#name_, exec_us);                                                                  \
-            }                                                                                                          \
-        }                                                                                                              \
+#define APP_TASK_DEF(name_, freq_ms_, run_)                                                                                                                    \
+    ITCM_RAM static __attribute__((noreturn)) void Start##name_##Task(void *argument)                                                                          \
+    {                                                                                                                                                          \
+        uint64_t start;                                                                                                                                        \
+        uint64_t now;                                                                                                                                          \
+        uint64_t exec_us;                                                                                                                                      \
+        uint64_t last = DWT_GetTimeUs();                    /* 上次唤醒时刻(us)，用于算周期 dt */                                                              \
+        TickType_t xLastWakeTime = xTaskGetTickCount();     /* 周期锚点(绝对唤醒时刻) */                                                                       \
+        const TickType_t xPeriod = pdMS_TO_TICKS(freq_ms_); /* 任务周期(tick) */                                                                               \
+        APP_TaskStartLog(#name_);                                                                                                                              \
+        for (;;)                                                                                                                                               \
+        {                                                                                                                                                      \
+            vTaskDelayUntil(&xLastWakeTime, xPeriod); /* 固定周期唤醒，避免周期漂移 */                                                                         \
+            now = DWT_GetTimeUs();                                                                                                                             \
+            start = now;                                                                                                                                       \
+            run_((float)(now - last) * 0.001f, now / 1000ULL); /* dt(ms) + 时间戳(ms) */                                                                       \
+            last = now;                                                                                                                                        \
+            exec_us = DWT_GetTimeUs() - start;                                                                                                                 \
+            if (exec_us > 1000UL * (freq_ms_))                                                                                                                 \
+            {                                                                                                                                                  \
+                APP_TaskDelayReport(#name_, exec_us);                                                                                                          \
+            }                                                                                                                                                  \
+        }                                                                                                                                                      \
     }
 
 #endif /* __BSP_APP_H */

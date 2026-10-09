@@ -110,8 +110,7 @@ typedef void (*LibFsmTableStateAction_fn)(void *ctx);
  * @note 用于定位"为什么没转移"：PC 上直接打日志，固件上可以塞环形缓冲或计数器；
  *       传 NULL 表示不跟踪（默认）。
  */
-typedef void (*LibFsmTableTrace_fn)(void *ctx, LibFsmTableState_t from, LibFsmTableEvent_t event, LibFsmTableState_t to,
-                                    bool transitioned);
+typedef void (*LibFsmTableTrace_fn)(void *ctx, LibFsmTableState_t from, LibFsmTableEvent_t event, LibFsmTableState_t to, bool transitioned);
 
 /**
  * @brief 转移类型（与 UML 的"外部转移/内部转移"同义）
@@ -190,9 +189,9 @@ typedef struct
  * @param tbl 转移表数组本体（不是指针）
  * @note 用在文件作用域或函数内均可；C11 的 _Static_assert，失败即编译报错
  */
-#define LIB_FSM_TABLE_CHECK_TABLE(tbl)                                                                                 \
-    _Static_assert(sizeof(tbl) / sizeof((tbl)[0]) > 0u, "转移表不能为空");                                             \
-    _Static_assert(sizeof((tbl)[0]) == sizeof(LibFsmTableTransition_s), "转移表元素类型必须是 "                        \
+#define LIB_FSM_TABLE_CHECK_TABLE(tbl)                                                                                                                         \
+    _Static_assert(sizeof(tbl) / sizeof((tbl)[0]) > 0u, "转移表不能为空");                                                                                     \
+    _Static_assert(sizeof((tbl)[0]) == sizeof(LibFsmTableTransition_s), "转移表元素类型必须是 "                                                                \
                                                                         "LibFsmTableTransition_s")
 
 /**
@@ -201,7 +200,7 @@ typedef struct
  * @param state_count 与 LibFsmTableConfig_s.state_count 同值
  * @note 专门拦"枚举加了状态、动作表忘了加一项"这类错位：长度对不上直接编译报错
  */
-#define LIB_FSM_TABLE_CHECK_ACTIONS(tbl, state_count)                                                                  \
+#define LIB_FSM_TABLE_CHECK_ACTIONS(tbl, state_count)                                                                                                          \
     _Static_assert(sizeof(tbl) / sizeof((tbl)[0]) == (state_count), "进入/退出动作表长度与 state_count 不一致")
 
 /*============================================

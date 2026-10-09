@@ -233,12 +233,12 @@ typedef struct
 /*============================================
  *              单电机实例 / 广播组定义宏
  *============================================*/
-#define DRVS_LKMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                      \
-    CAN_INSTANCE_DEF(name##_can);                                                                                      \
-    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                \
-    static DrvsLKMotorBroadcast_s name = {                                                                             \
-        .can = &name##_can,                                                                                            \
-        .daemon = &name##_daemon,                                                                                      \
+#define DRVS_LKMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                                                              \
+    CAN_INSTANCE_DEF(name##_can);                                                                                                                              \
+    DAEMON_INSTANCE_DEF(name##_daemon);                                                                                                                        \
+    static DrvsLKMotorBroadcast_s name = {                                                                                                                     \
+        .can = &name##_can,                                                                                                                                    \
+        .daemon = &name##_daemon,                                                                                                                              \
     }
 
 /**

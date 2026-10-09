@@ -148,14 +148,12 @@ int main(void)
 
     printf("comm_proto_ext 单帧耗时（%u 轮均值）\n", ROUNDS);
     printf("⚠ PC 的 ns 别按主频折算到目标板：x86 4 发射 + 全 1 周期 load，比 Cortex-M4\n");
-    printf("   快 4~5 倍。目标板估计走「每块 %u/%u 周期 × 位 + 每块 %u/%u 周期 × 位」\n", CY_ENC_BIT_AVG, CY_ENC_PAR,
-           CY_DEC_CODEBIT, CY_DEC_OUTBIT);
+    printf("   快 4~5 倍。目标板估计走「每块 %u/%u 周期 × 位 + 每块 %u/%u 周期 × 位」\n", CY_ENC_BIT_AVG, CY_ENC_PAR, CY_DEC_CODEBIT, CY_DEC_OUTBIT);
     printf("   这条逐条数反汇编的解析路径（数值出处见文件头注释）。\n");
     printf("   Debug 列为 Release 值 × %.1f（两者同为调用式，仅作量级参考）。\n\n", (double)OG_SCALE);
-    printf("%-5s %-4s %-4s %-4s %-6s %-9s %-9s %-9s %-24s %s\n", "pyld", "帧长", "包", "块", "k_s", "pack(ns)",
-           "rx(ns)", "rx+纠(ns)", "F407@168MHz Release(us)", "Debug(us)");
-    printf("%-5s %-4s %-4s %-4s %-6s %-9s %-9s %-9s %-24s %s\n\n", "", "B", "CAN", "", "", "", "", "",
-           "pack / rx / rx+纠", "(µs)");
+    printf("%-5s %-4s %-4s %-4s %-6s %-9s %-9s %-9s %-24s %s\n", "pyld", "帧长", "包", "块", "k_s", "pack(ns)", "rx(ns)", "rx+纠(ns)",
+           "F407@168MHz Release(us)", "Debug(us)");
+    printf("%-5s %-4s %-4s %-4s %-6s %-9s %-9s %-9s %-24s %s\n\n", "", "B", "CAN", "", "", "", "", "", "pack / rx / rx+纠", "(µs)");
 
     for (k = 0; k < sizeof(s_cases) / sizeof(s_cases[0]); k++)
     {
@@ -204,9 +202,8 @@ int main(void)
         cyc_rx = (double)blks * blk_dec;
         cyc_fix = cyc_pack + cyc_rx;
 
-        printf("%-5s %-4u %-4u %-4u %-6u %-9.1f %-9.1f %-9.1f %7.0f /%6.0f /%6.0f   %7.0f /%6.0f /%6.0f\n",
-               s_cases[k].name, frame, (frame + 7u) / 8u, blks, ks, tp, to, tf, cyc_pack / F407_MHZ, cyc_rx / F407_MHZ,
-               cyc_fix / F407_MHZ, cyc_pack * OG_SCALE / F407_MHZ, cyc_rx * OG_SCALE / F407_MHZ,
+        printf("%-5s %-4u %-4u %-4u %-6u %-9.1f %-9.1f %-9.1f %7.0f /%6.0f /%6.0f   %7.0f /%6.0f /%6.0f\n", s_cases[k].name, frame, (frame + 7u) / 8u, blks, ks,
+               tp, to, tf, cyc_pack / F407_MHZ, cyc_rx / F407_MHZ, cyc_fix / F407_MHZ, cyc_pack * OG_SCALE / F407_MHZ, cyc_rx * OG_SCALE / F407_MHZ,
                cyc_fix * OG_SCALE / F407_MHZ);
     }
 

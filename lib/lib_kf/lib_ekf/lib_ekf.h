@@ -226,39 +226,39 @@ typedef struct EkfInstance
  *       （n=6、m=3、l=0 时 285 floats ≈ 1.14 KB）
  * @note 例：EKF_INSTANCE_DEF(ekf_radar, 4, 2, 0);
  */
-#define EKF_INSTANCE_DEF(name, N, M, L)                                                                                \
-    static float name##_x[N];                                                                                          \
-    static float name##_P[(N) * (N)];                                                                                  \
-    static float name##_F[(N) * (N)];                                                                                  \
-    static float name##_Q[(N) * (N)];                                                                                  \
-    static float name##_H[(M) ? (M) * (N) : 1];                                                                        \
-    static float name##_R[(M) ? (M) * (M) : 1];                                                                        \
-    static float name##_B[(L) ? (N) * (L) : 1];                                                                        \
-    static float name##_wA[(N) * (N)];                                                                                 \
-    static float name##_wB[(N) * (N)];                                                                                 \
-    static float name##_wC[(M) ? (N) * (M) : 1];                                                                       \
-    static float name##_wG[(M) ? (N) * (M) : 1];                                                                       \
-    static float name##_wD[(M) ? 2 * (M) * (M) : 1];                                                                   \
-    static float name##_wE[N];                                                                                         \
-    static float name##_wF[(M) ? (M) : 1];                                                                             \
-    static float name##_wR[(M) ? (M) * (M) : 1];                                                                       \
-    static EkfInstance name = {.n_max = (N),                                                                           \
-                               .m_max = (M),                                                                           \
-                               .l_max = (L),                                                                           \
-                               .x = name##_x,                                                                          \
-                               .P = name##_P,                                                                          \
-                               .F = name##_F,                                                                          \
-                               .Q = name##_Q,                                                                          \
-                               .H = name##_H,                                                                          \
-                               .R = name##_R,                                                                          \
-                               .B = name##_B,                                                                          \
-                               .wA = name##_wA,                                                                        \
-                               .wB = name##_wB,                                                                        \
-                               .wC = name##_wC,                                                                        \
-                               .wG = name##_wG,                                                                        \
-                               .wD = name##_wD,                                                                        \
-                               .wE = name##_wE,                                                                        \
-                               .wF = name##_wF,                                                                        \
+#define EKF_INSTANCE_DEF(name, N, M, L)                                                                                                                        \
+    static float name##_x[N];                                                                                                                                  \
+    static float name##_P[(N) * (N)];                                                                                                                          \
+    static float name##_F[(N) * (N)];                                                                                                                          \
+    static float name##_Q[(N) * (N)];                                                                                                                          \
+    static float name##_H[(M) ? (M) * (N) : 1];                                                                                                                \
+    static float name##_R[(M) ? (M) * (M) : 1];                                                                                                                \
+    static float name##_B[(L) ? (N) * (L) : 1];                                                                                                                \
+    static float name##_wA[(N) * (N)];                                                                                                                         \
+    static float name##_wB[(N) * (N)];                                                                                                                         \
+    static float name##_wC[(M) ? (N) * (M) : 1];                                                                                                               \
+    static float name##_wG[(M) ? (N) * (M) : 1];                                                                                                               \
+    static float name##_wD[(M) ? 2 * (M) * (M) : 1];                                                                                                           \
+    static float name##_wE[N];                                                                                                                                 \
+    static float name##_wF[(M) ? (M) : 1];                                                                                                                     \
+    static float name##_wR[(M) ? (M) * (M) : 1];                                                                                                               \
+    static EkfInstance name = {.n_max = (N),                                                                                                                   \
+                               .m_max = (M),                                                                                                                   \
+                               .l_max = (L),                                                                                                                   \
+                               .x = name##_x,                                                                                                                  \
+                               .P = name##_P,                                                                                                                  \
+                               .F = name##_F,                                                                                                                  \
+                               .Q = name##_Q,                                                                                                                  \
+                               .H = name##_H,                                                                                                                  \
+                               .R = name##_R,                                                                                                                  \
+                               .B = name##_B,                                                                                                                  \
+                               .wA = name##_wA,                                                                                                                \
+                               .wB = name##_wB,                                                                                                                \
+                               .wC = name##_wC,                                                                                                                \
+                               .wG = name##_wG,                                                                                                                \
+                               .wD = name##_wD,                                                                                                                \
+                               .wE = name##_wE,                                                                                                                \
+                               .wF = name##_wF,                                                                                                                \
                                .wR = name##_wR}
 
 /*============================ 矩阵元素索引宏 ============================*/
