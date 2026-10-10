@@ -1,0 +1,3 @@
+[submodule "Middlewares/Third_Party/TinyMPC"]
+	path = Middlewares/Third_Party/TinyMPC
+	url = git@github.com:TinyMPC/TinyMPC.git
