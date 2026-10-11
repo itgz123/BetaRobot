@@ -124,7 +124,17 @@ void DaemonTask(void)
         /* 距上次喂狗（DaemonReload / DaemonConfig 都记时间戳）的实耗时间。
          * 两个量都在 µs 域比较（差值不会因转毫秒丢精度），除法只在剩余量换算时做，
          * 被除数 < timeout_us ≤ 65535ms，结果的量级不会撑破 uint16_t（不会溢出） */
-        uint64_t elapsed_us = now_us - dins->last_reload_us;
+        /* 喂狗时间戳可能"晚于"本拍的 now_us：now_us 只在本函数开头取一次，而喂狗
+         * （DaemonReload）会在**任意高优先级上下文**里插进来——SBUS/DBUS/comm 的喂狗都在
+         * UART/CAN 接收 ISR 内，而 ISR 无条件抢占本任务（优先级 0 = 最低）。若某次喂狗正好
+         * 落在"取完 now_us"与"读 last_reload_us"之间，last_reload_us 就比 now_us 更晚，
+         * 无符号相减**下溢**成 ≈2^64 → 被当成"远超超时"→ 凭空置 is_online=0、打离线日志、
+         * 每拍触发故障动作/离线回调；直到下一帧喂狗（DaemonReload）把它置回 1 才结束。
+         * 表现是按链路帧周期（SBUS ~8ms）周期性假离线，而链路诊断量（帧计数/丢帧标志）全正常。
+         * 这里把"喂狗晚于快照"判为"刚喂过"（实耗记 0，其余算法不变）：真实离线要求
+         * last_reload_us 确实落后 ≥timeout_us，故此判据只堵下溢，不会漏报。 */
+        uint64_t last_reload_us = dins->last_reload_us;
+        uint64_t elapsed_us = (last_reload_us > now_us) ? 0u : (now_us - last_reload_us);
         uint64_t timeout_us = (uint64_t)dins->reload_count * 1000u;
 
         if (elapsed_us < timeout_us)
