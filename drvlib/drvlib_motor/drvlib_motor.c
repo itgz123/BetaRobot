@@ -41,7 +41,8 @@ static void MotorProcessFeedback(DrvlibMotorInstance *inst, const DrvlibMotorFee
 {
     const DrvlibMotor_Config_s *cfg = &inst->cfg;
     float span = cfg->position_span;
-    float raw = fb->position;
+    float raw = fb->position;                            /* 协议原始量：回绕检测与 LPF 状态都基于未修正值 */
+    const float fb_dir = (float)cfg->feedback_direction; /* Config 已归一化为 ±1 */
 
     int32_t wraps = 0;
     if (span > 0.0f && inst->has_last)
@@ -65,6 +66,7 @@ static void MotorProcessFeedback(DrvlibMotorInstance *inst, const DrvlibMotorFee
 
     /* 累加 → 偏置 → 归一化 */
     double pos = (double)inst->position_cnt * (double)span + (double)raw + (double)cfg->position_offset;
+    pos *= (double)fb_dir; /* 方向：累加-偏置后、归一化前（照搬旧 drv_motor 顺序） */
     if (cfg->position_mode == DRVLIB_MOTOR_POS_WRAP)
     {
         pos = (double)Lib_Math_WrapAngle((float)pos, cfg->angle_limit_min, cfg->angle_limit_max);
@@ -89,11 +91,11 @@ static void MotorProcessFeedback(DrvlibMotorInstance *inst, const DrvlibMotorFee
     }
 
     DrvlibMotor_Data_t *d = &inst->data;
-    d->position = pos;
+    d->position = pos; /* 已含 feedback_direction */
     d->position_single = raw;
     d->position_cnt = inst->position_cnt;
-    d->speed = speed;
-    d->current = current;
+    d->speed = speed * fb_dir;     /* LPF 状态存未修正值，方向只作用在输出 */
+    d->current = current * fb_dir; /* 同上 */
     d->timestamp_us = fb->timestamp_us;
 
     inst->position_single_last = raw;
@@ -148,7 +150,8 @@ static float MotorApplyCascade(DrvlibMotorInstance *inst, float ref, float dt)
         s = LibPIDCalculate(&inst->pid[DRVLIB_MOTOR_STAGE_CURRENT], s, d->current, ff, dt);
     }
 
-    return s;
+    /* 输出方向：修正电机安装方向。反馈侧已由 feedback_direction 修正，故闭环仍是负反馈 */
+    return s * (float)cfg->motor_direction;
 }
 
 /**
@@ -193,6 +196,17 @@ int8_t DrvlibMotorConfig(DrvlibMotorInstance *inst, const DrvlibMotor_Config_s *
 
     /* 整份拷贝（含 app 传入的指针，生命周期由 app 保证） */
     inst->cfg = *cfg;
+
+    /* 方向归一化：只认 REVERSE(-1)，其余（含未初始化的 0）一律 NORMAL(+1)。
+     * 存量配置不写方向字段时保持"正向"原行为，也免去每拍再判一次。 */
+    if (inst->cfg.motor_direction != DRVLIB_MOTOR_DIRECTION_REVERSE)
+    {
+        inst->cfg.motor_direction = DRVLIB_MOTOR_DIRECTION_NORMAL;
+    }
+    if (inst->cfg.feedback_direction != DRVLIB_MOTOR_DIRECTION_REVERSE)
+    {
+        inst->cfg.feedback_direction = DRVLIB_MOTOR_DIRECTION_NORMAL;
+    }
 
     /* PID 初始化：只初始化参与环路的 stage。
      * 复刻旧 drv_motor：位置/速度环自动补梯形积分；WRAP 时位置环自动启用误差归一化。
