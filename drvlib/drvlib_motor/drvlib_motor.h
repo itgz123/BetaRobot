@@ -24,11 +24,14 @@
  *   位全为 0  ：开环，ref 直接作输出
  * 最内环语义是**电流环**（measure = 反馈电流 A）。要"力矩"语义时由 app 自己在
  * 传入 ref 前 ÷Kt、在拿到返回值后 ×Kt —— 本模块不掺和单位换算。
- * 方向同理：要取反就在 app 侧给 ref / 反馈量加符号，再给返回值加符号。
+ * 方向：由 cfg.motor_direction（输出端）/ cfg.feedback_direction（反馈端）统一声明，app 不必
+ * 再手写负号（复刻旧 drv_motor 的 MotorDirection_e 手法）。两者须**成对**设置 —— 只反一个
+ * 会变成正反馈（见 app_shoot 的方向说明）。
  *
  * ═══════════════════ 反馈后处理（drvs 明确上交的策略） ═══════════════════
- *   位置：多圈累加 → 偏置 → 归一化(WRAP)，顺序固定不可换
- *   速度：一阶低通；  电流：一阶低通（共用同一 RC）
+ *   位置：多圈累加 → 偏置 → 方向(feedback_direction) → 归一化(WRAP)，顺序照搬旧 drv_motor
+ *   速度/电流：一阶低通（共用同一 RC）后乘 feedback_direction（LPF 状态存未修正值）
+ *   输出：级联结果乘 motor_direction
  *   位置模式：LIMITED(限幅) / WRAP(归一化) / CONTINUOUS(不限幅)
  * 减速比不在这里（设计文档明确归 axis/chassis，电机侧是纯电机量）。
  *
@@ -115,6 +118,22 @@ typedef enum : uint8_t
     DRVLIB_MOTOR_LPF_ENABLE = 1,  /* 速度/电流一阶低通，RC 见 cfg.lpf_rc */
 } DrvlibMotorLpf_e;
 
+/**
+ * @brief 电机方向：+1 正向 / -1 反向（可直接与物理量相乘）
+ * @note motor_direction 修正**安装方向**（作用在 SetRef 返回值上）；
+ *       feedback_direction 修正**反馈极性**（作用在 position/speed/current 上）。
+ *       两者须成对设置 —— 只反一个会变成正反馈（这是本模块用配置项取代 app 手写负号的
+ *       全部意义所在）。与旧 drv_motor 的 MotorDirection_e 同义；本模块自有命名，避免与
+ *       旧头符号撞名。
+ * @note Config 会把非 REVERSE 的值（含未初始化的 0）一律归一为 NORMAL —— 存量配置不写
+ *       这两项即保持"正向"原行为。
+ */
+typedef enum : int8_t
+{
+    DRVLIB_MOTOR_DIRECTION_NORMAL = 1,   /* 正向 */
+    DRVLIB_MOTOR_DIRECTION_REVERSE = -1, /* 反向 */
+} DrvlibMotorDirection_e;
+
 /*============================ 反馈输入 ============================*/
 
 /**
@@ -123,7 +142,7 @@ typedef enum : uint8_t
  * @note position 的语义随后端：DJI/LK 单圈 [0,2π)；DM/RS [-p_max, p_max]（跨边界回绕），
  *       后者须把 cfg.position_span 设为 2*p_max 才能正确累加。
  * @note timestamp_us == 0 视为"尚无数据"，本帧不闭环（返回 0）。
- * @note 要取反方向就在**填这里之前**给相应字段加符号（本模块不做方向）。
+ * @note 方向取反由 cfg.feedback_direction 统一处理：这里一律填**协议原始量**，不要自己加符号。
  */
 typedef struct
 {
@@ -143,6 +162,10 @@ typedef struct
 {
     /* ---- 控制模式 ---- */
     DrvlibMotorLoop_e loop_type; /* 环路位掩码，见 DrvlibMotorLoop_e */
+
+    /* ---- 方向（不写或为 0 时按 NORMAL 处理，见 DrvlibMotorDirection_e） ---- */
+    DrvlibMotorDirection_e motor_direction;    /* 输出方向：SetRef 返回值 × 本值 */
+    DrvlibMotorDirection_e feedback_direction; /* 反馈方向：position/speed/current × 本值 */
 
     /* ---- 位置模式 ---- */
     DrvlibMotorPositionMode_e position_mode;
@@ -179,7 +202,7 @@ typedef struct
 typedef struct
 {
     double position;       /* 处理后多圈位置 (rad)：累加 + 偏置(+WRAP 归一化) */
-    float position_single; /* 原始单范围位置 (rad) */
+    float position_single; /* 原始单范围位置 (rad)，未乘 feedback_direction */
     int64_t position_cnt;  /* 回绕计数 */
     float speed;           /* 处理后速度 (rad/s)：低通 */
     float current;         /* 处理后电流 (A)：低通 */
