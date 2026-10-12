@@ -55,3 +55,9 @@ set(MODULE_INCLUDE_DIRS
     lib_traj
     lib_traj/lib_traj_jerk
 )
+
+# lib_tflm 是唯一"自带源清单"的模块（TFLM 的 .cc 按上游 sources.inc 挑选，
+# 且三级目录带同名替换规则，没法在这里静态列全），所以单独 include 一份：
+# 它在本作用域内继续往 MODULE_SOURCES / MODULE_INCLUDE_DIRS 里追加，并可读取
+# ${app_dir} 做逐 app 的 LIB_TFLM_USED 门控（未定义时立即 return，见该文件）。
+include("${CMAKE_CURRENT_LIST_DIR}/lib_tflm/CMakeLists.txt")
