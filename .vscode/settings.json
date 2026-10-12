@@ -8,7 +8,9 @@
     "*.h": "c",
     "*.c": "c",
     "*.hpp": "cpp",
-    "*.cpp": "cpp"
+    "*.cpp": "cpp",
+    "*.cxx": "cpp",
+    "*.cc": "cpp"
   },
   "C_Cpp.autoAddFileAssociations": false // 防止 C/C++ 插件自动修改文件关联
 }
