@@ -1,3 +1,6 @@
 [submodule "Middlewares/Third_Party/TinyMPC"]
 	path = Middlewares/Third_Party/TinyMPC
 	url = git@github.com:TinyMPC/TinyMPC.git
+[submodule "Middlewares/Third_Party/tflite-micro"]
+	path = Middlewares/Third_Party/tflite-micro
+	url = git@github.com:tensorflow/tflite-micro.git
