@@ -18,17 +18,17 @@
 用法
 ----
     # 1) 单板（默认按 TIME_STAMP_STYLE==1，即微秒）
-    python3 scripts/daemon-offline-report.py build/Debug/half_rudder_chassis.elf chassis.log
+    python3 scripts/daemon-offline-report/daemon-offline-report.py build/Debug/half_rudder_chassis.elf chassis.log
 
     # 2) 多板合并统计（分别给各自的 elf）
-    python3 scripts/daemon-offline-report.py --pair build/Debug/half_rudder_chassis.elf chassis.log \
-                                                    build/Debug/half_rudder_gimbal.elf  gimbal.log
+    python3 scripts/daemon-offline-report/daemon-offline-report.py --pair build/Debug/half_rudder_chassis.elf chassis.log \
+                                                                         build/Debug/half_rudder_gimbal.elf  gimbal.log
 
     # 3) 没有 arm-none-eabi-nm 时，自己先导出 nm 再喂进来
-    python3 scripts/daemon-offline-report.py --nm nm.txt chassis.log
+    python3 scripts/daemon-offline-report/daemon-offline-report.py --nm nm.txt chassis.log
 
     # 4) 某个 app 的 app_cfg.h 里把 TIME_STAMP_STYLE 改成了 2
-    python3 scripts/daemon-offline-report.py --unit ms <elf> <log>
+    python3 scripts/daemon-offline-report/daemon-offline-report.py --unit ms <elf> <log>
 
 自检
 ----

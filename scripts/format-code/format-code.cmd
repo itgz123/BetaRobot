@@ -9,12 +9,12 @@ rem   - cubemx/ (CubeMX-generated HAL code) is excluded explicitly.
 rem Style lives in .clang-format at the repo root, shared with the
 rem VS Code C/C++ extension.
 rem
-rem Usage: scripts\format-code.cmd
+rem Usage: scripts\format-code\format-code.cmd
 rem
 rem Keep this file ASCII-only: cmd reads it with the console codepage.
 setlocal
 
-cd /d "%~dp0.." || (
+cd /d "%~dp0..\.." || (
     echo ERROR: Cannot find the repository root
     exit /b 1
 )
