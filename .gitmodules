@@ -13,3 +13,6 @@
 [submodule "Middlewares/Third_Party/CMSIS-NN"]
 	path = Middlewares/Third_Party/CMSIS-NN
 	url = git@github.com:ARM-software/CMSIS-NN.git
+[submodule "Middlewares/Third_Party/nnom"]
+	path = Middlewares/Third_Party/nnom
+	url = git@github.com:majianjia/nnom.git

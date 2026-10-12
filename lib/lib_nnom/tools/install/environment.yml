@@ -1,0 +1,27 @@
+# nnom —— PC 侧 Python 环境
+#
+# 创建： conda env create -f environment.yml
+# 激活： conda activate nnom
+# 更新： conda env update -f environment.yml --prune
+#
+# 这个环境只负责 PC 侧的 训练 / 量化 / 生成 weights.h；
+# MCU 上的推理由 Middlewares/Third_Party/nnom（纯 C 库）完成，与本环境无关。
+#
+# 为什么不复用 lib_tflm 的 tflm 环境：nnom 要求 TF<=2.14 / Keras<3，
+# 而 tflm 环境是 TF>=2.16 / Keras>=3，两者互斥，只能分环境。
+
+name: nnom
+
+channels:
+  - conda-forge
+  - nodefaults   # 只用 conda-forge：本机到 repo.anaconda.com 不通，留着会反复重试
+
+dependencies:
+  - python=3.11          # nnom 上游：TF 2.14 支持到 Python 3.11，3.12 不支持
+  - pip
+  # 构建工具（与仓库根 CMakeLists 的构建链一致）
+  - cmake>=3.20
+  - ninja
+  # Python 依赖走 pip，清单集中在 requirements.txt
+  - pip:
+      - -r requirements.txt

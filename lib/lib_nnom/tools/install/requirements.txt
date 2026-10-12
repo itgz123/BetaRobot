@@ -1,0 +1,24 @@
+# nnom（NNoM, Neural Network on Microcontroller）—— PC 侧 pip 依赖
+#
+# 版本策略：上游把 TF 锁在 <=2.14 / Keras<3，见 nnom README「Installing」。
+# 这些约束与 lib_tflm 的环境（TF>=2.16 / Keras>=3）**互斥**，所以本仓库给 nnom
+# 单独建一个 conda 环境（见 environment.yml 的 name: nnom），不要和 tflm 混用。
+# 若要可复现，请在创建好环境后用下面任一命令把精确版本回填并入库：
+#   pip freeze > requirements.lock.txt
+#   conda env export --from-history > environment.lock.yml
+
+# —— 训练 / 转换（nnom 官方支持路径：TF 2.x + tf.keras）——
+tensorflow-cpu==2.14.1        # nnom 上游 README 钉死的版本（含 tf.keras 2.14）
+keras>=2.14,<3.0.0            # nnom.py 结构化接口用 Keras 2 API；Keras 3 会破坏它
+numpy<2                       # TF 2.14 不兼容 NumPy 2.x，且 nnom.py 直接 import numpy
+scipy                         # nnom.py / gen_config.py 用 scipy.stats 做 KLD 量化
+
+# —— 评估 / 数据处理 ——
+scikit-learn<2.0.0            # nnom 包硬依赖；nnom.py 用 sklearn.metrics 评估模型
+matplotlib                    # 上游 requirements.dev.txt；nnom_utils.py 绘图用
+
+# —— 模型查看（可选）——
+netron                        # 可视化模型结构
+
+# —— 交互开发（可选）——
+jupyterlab
