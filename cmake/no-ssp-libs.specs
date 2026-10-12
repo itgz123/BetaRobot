@@ -1,0 +1,21 @@
+##########################################################################################
+# GCC specs 覆盖：屏蔽 -fstack-protector-* 自动追加的 -lssp / -lssp_nonshared
+#
+# 背景：arm-none-eabi 工具链不带 libssp（`arm-none-eabi-gcc -print-file-name=libssp.a`
+#       原样吐回文件名 = 不存在），而 GCC 驱动只要看到 -fstack-protector-* 就会在链接
+#       命令行追加 `-lssp_nonshared -lssp`，于是链接必失败：cannot find -lssp。
+#
+# 做法：把驱动内建的 *link_ssp: 段覆盖成空。运行期的两个符号
+#       （__stack_chk_guard / __stack_chk_fail）由 bsp/bsp_stack_guard/ 自己提供，
+#       所以这里把库链接整个去掉是安全的。
+#
+# 由顶层 CMakeLists.txt 的 target_link_options 以 -specs=<本文件> 传入，
+# 仅当 JSF_AV_STACK_PROTECTOR 打开时生效。
+#
+# 为什么不用同样的办法处理 UBSan：-lubsan 焊死在巨大的 *link_command: 段里
+# （见 `arm-none-eabi-gcc -dumpspecs`），要整段重写、非常脆弱，所以 UBSan 那边
+# 走的是"空 stub 静态库"的路子。详见根目录 MyCMakeLists.md。
+##########################################################################################
+
+*link_ssp:
+%{fstack-protector|fstack-protector-all|fstack-protector-strong|fstack-protector-explicit:}

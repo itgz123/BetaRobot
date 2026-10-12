@@ -29,13 +29,15 @@ static inline float Lib_Math_AngleDiff(float from, float to)
     float diff = to - from;
     if (diff > M_PI)
     {
+        /* n 是 int32_t、M_2PI 是 float：写成 (float)n 表明这里要的就是 float 乘法，
+           免得 -Wconversion 为 int32_t→float 的隐式收窄报警 */
         int32_t n = (int32_t)((diff + M_PI) / M_2PI);
-        diff -= n * M_2PI;
+        diff -= (float)n * M_2PI;
     }
     else if (diff <= -M_PI)
     {
         int32_t n = (int32_t)((-diff + M_PI) / M_2PI);
-        diff += n * M_2PI;
+        diff += (float)n * M_2PI;
     }
     return diff;
 }

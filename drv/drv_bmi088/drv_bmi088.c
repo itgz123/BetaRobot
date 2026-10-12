@@ -657,8 +657,8 @@ static uint8_t BMI088_FindBracket(const uint64_t *t_buf, uint16_t newest, uint16
 {
     for (uint16_t s = 0; s < n - 1; s++)
     {
-        uint16_t idx_newer = (newest + n - s) % n;
-        uint16_t idx_older = (newest + n - 1 - s) % n;
+        uint16_t idx_newer = (uint16_t)((newest + n - s) % n);
+        uint16_t idx_older = (uint16_t)((newest + n - 1 - s) % n);
         if (t_buf[idx_older] <= target && target <= t_buf[idx_newer])
         {
             *out_older = idx_older;
@@ -1223,8 +1223,8 @@ static BMI088_Data_t BMI088_ReadInterp(BMI088Instance *inst)
     uint16_t gyro_n = (inst->gyro_cnt < BMI088_GYRO_BUF_SIZE) ? (uint16_t)inst->gyro_cnt : BMI088_GYRO_BUF_SIZE;
 
     /* 最新帧索引 */
-    uint16_t a_newest = (acc_wr + BMI088_ACC_BUF_SIZE - 1) % BMI088_ACC_BUF_SIZE;
-    uint16_t g_newest = (gyro_wr + BMI088_GYRO_BUF_SIZE - 1) % BMI088_GYRO_BUF_SIZE;
+    uint16_t a_newest = (uint16_t)((acc_wr + BMI088_ACC_BUF_SIZE - 1) % BMI088_ACC_BUF_SIZE);
+    uint16_t g_newest = (uint16_t)((gyro_wr + BMI088_GYRO_BUF_SIZE - 1) % BMI088_GYRO_BUF_SIZE);
 
     uint64_t t_acc_newest = inst->t_acc[a_newest];
     uint64_t t_gyro_newest = inst->t_gyro[g_newest];
@@ -1291,8 +1291,8 @@ static BMI088_Data_t BMI088_ReadLatest(BMI088Instance *inst)
         return data;
 
     /* 快照最新帧索引 */
-    uint16_t a_idx = ((inst->acc_wr_idx + BMI088_ACC_BUF_SIZE - 1) % BMI088_ACC_BUF_SIZE);
-    uint16_t g_idx = ((inst->gyro_wr_idx + BMI088_GYRO_BUF_SIZE - 1) % BMI088_GYRO_BUF_SIZE);
+    uint16_t a_idx = (uint16_t)((inst->acc_wr_idx + BMI088_ACC_BUF_SIZE - 1) % BMI088_ACC_BUF_SIZE);
+    uint16_t g_idx = (uint16_t)((inst->gyro_wr_idx + BMI088_GYRO_BUF_SIZE - 1) % BMI088_GYRO_BUF_SIZE);
 
     uint64_t ts_a = inst->t_acc[a_idx];
     uint64_t ts_g = inst->t_gyro[g_idx];

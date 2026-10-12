@@ -777,7 +777,7 @@ BSP_Status_e CANRecover(CANInstance *instance)
     s_bxcan_status[can_idx].error_warning = esr & 0x1;
     s_bxcan_status[can_idx].lec = (esr >> 4) & 0x7;
     s_bxcan_status[can_idx].tec = (esr >> 16) & 0xFF;
-    s_bxcan_status[can_idx].rec = (esr >> 24) & 0xFF;
+    s_bxcan_status[can_idx].rec = (uint8_t)((esr >> 24) & 0xFF);
     s_bxcan_status[can_idx].tx_free = (uint8_t)tx_free;
 
     // 仍在 bus-off：总线物理层没恢复（线没接回 / 终端电阻 / 对端没上电），只能等下次再试；
@@ -931,7 +931,7 @@ static void CAN_ReceiveHandler(CAN_HandleTypeDef *hcan, uint32_t fifo)
 
     // HAL 报文头 -> CAN_Pack_s
     pack.id = (rx_header.IDE == CAN_ID_EXT) ? rx_header.ExtId : rx_header.StdId;
-    pack.len = rx_header.DLC;
+    pack.len = (uint8_t)rx_header.DLC; // 经典 CAN DLC ≤ 8，显式收窄
     for (i = 0; i < pack.len; i++)
         pack.data[i] = rx_data[i];
     if (rx_header.RTR == CAN_RTR_REMOTE)
@@ -1060,7 +1060,7 @@ void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
         uint32_t esr = hcan->Instance->ESR;
         uint8_t can_idx = CAN_HcanToIndex(hcan);
         uint8_t tec = (esr >> 16) & 0xFF;
-        uint8_t rec = (esr >> 24) & 0xFF; // REC 硬件为 8 位（bit24-31），旧代码误用 0x7F 少记最高位
+        uint8_t rec = (uint8_t)((esr >> 24) & 0xFF); // REC 硬件为 8 位（bit24-31），旧代码误用 0x7F 少记最高位
         uint8_t tx_fail = 0;
         uint8_t protocol =
             ((error & (HAL_CAN_ERROR_STF | HAL_CAN_ERROR_FOR | HAL_CAN_ERROR_ACK | HAL_CAN_ERROR_BR | HAL_CAN_ERROR_BD | HAL_CAN_ERROR_CRC)) != 0U) ? 1U : 0U;

@@ -213,7 +213,7 @@ static uint8_t USART_RecoverTx(USARTInstance *instance)
     if (idx < UART_NUM_MAX)
     {
         s_usart_status[idx].tx_recover++;
-        s_usart_status[idx].g_state = instance->handle->gState;
+        s_usart_status[idx].g_state = (uint8_t)instance->handle->gState;
     }
 
     if (instance->err_callback != NULL)
@@ -254,7 +254,7 @@ static uint8_t USART_RecoverRx(USARTInstance *instance)
     if (idx < UART_NUM_MAX)
     {
         s_usart_status[idx].rx_recover++;
-        s_usart_status[idx].rx_state = instance->handle->RxState;
+        s_usart_status[idx].rx_state = (uint8_t)instance->handle->RxState;
     }
 
     return 1;
@@ -368,7 +368,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 
     /* 状态统计与快照：即使实例路由缺失，事件也不漏计 */
     s_usart_status[idx].rx_ok++;
-    s_usart_status[idx].rx_state = huart->RxState;
+    s_usart_status[idx].rx_state = (uint8_t)huart->RxState;
     s_usart_status[idx].rx_len = Size;
 
     instance = s_usart_inst_by_uart[idx];
@@ -430,8 +430,8 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 
     /* 状态快照 */
     s_usart_status[idx].error_code = error_code;
-    s_usart_status[idx].g_state = huart->gState;
-    s_usart_status[idx].rx_state = huart->RxState;
+    s_usart_status[idx].g_state = (uint8_t)huart->gState;
+    s_usart_status[idx].rx_state = (uint8_t)huart->RxState;
     s_usart_status[idx].err_time_us = DWT_GetTimeUs();
 
     /* ② 纠正错误 */
@@ -467,7 +467,7 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
         return;
 
     s_usart_status[idx].tx_ok++;
-    s_usart_status[idx].g_state = huart->gState;
+    s_usart_status[idx].g_state = (uint8_t)huart->gState;
 
     instance = s_usart_inst_by_uart[idx];
     if (instance != NULL && instance->tx_callback != NULL)
@@ -668,7 +668,7 @@ BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_
     {
         s_usart_status[idx].tx_mode = (uint8_t)mode;
         s_usart_status[idx].tx_len = len;
-        s_usart_status[idx].g_state = instance->handle->gState;
+        s_usart_status[idx].g_state = (uint8_t)instance->handle->gState;
         if (mode == BSP_BLOCK_MODE)
             s_usart_status[idx].tx_ok++; /* BLOCK 返回即发完 */
     }
@@ -721,7 +721,7 @@ BSP_Status_e USARTReceive(USARTInstance *instance, uint16_t len, BSP_Transfer_Mo
             s_usart_status[idx].rx_mode = (uint8_t)mode; /* 状态快照 = 最近一次调用的模式 */
             s_usart_status[idx].rx_ok++;
             s_usart_status[idx].rx_len = len;
-            s_usart_status[idx].rx_state = instance->handle->RxState;
+            s_usart_status[idx].rx_state = (uint8_t)instance->handle->RxState;
         }
         return BSP_OK;
     }
@@ -774,7 +774,7 @@ BSP_Status_e USARTReceive(USARTInstance *instance, uint16_t len, BSP_Transfer_Mo
     {
         s_usart_status[idx].rx_mode = (uint8_t)mode;
         s_usart_status[idx].rx_armed = 1;
-        s_usart_status[idx].rx_state = instance->handle->RxState;
+        s_usart_status[idx].rx_state = (uint8_t)instance->handle->RxState;
         s_usart_status[idx].rx_start++;
     }
     return BSP_OK;
