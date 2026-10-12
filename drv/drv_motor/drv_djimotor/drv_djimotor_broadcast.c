@@ -122,7 +122,7 @@ void DJIMotorBroadcast_SetRef(void *inst, float ref);
 void DJIMotorBroadcast_Send(void *inst);
 MotorData_s DJIMotorBroadcast_GetData(void *inst);
 
-const static MotorVTable_s s_dji_motor_broadcast_vtable = {
+static const MotorVTable_s s_dji_motor_broadcast_vtable = {
     .enable = DJIMotorBroadcast_Enable,
     .disable = DJIMotorBroadcast_Disable,
     .set_ref = DJIMotorBroadcast_SetRef,
@@ -262,7 +262,7 @@ MotorData_s DJIMotorBroadcast_GetData(void *inst)
     // 归一化
     if (setting->position_mode == MOTOR_POSITION_WRAP) // ④ 归一化
     {
-        angle = Lib_Math_WrapAngle(angle, setting->angle_limit_min, setting->angle_limit_max);
+        angle = Lib_Math_WrapAngle((float)angle, setting->angle_limit_min, setting->angle_limit_max);
     }
 
     result.position = angle;
@@ -371,8 +371,8 @@ int8_t DJIMotorBroadcastConfig(DJIMotorBroadcastInstance *inst, DJIMotorBroadcas
     // 计算发送ID、接收ID和分组索引
     uint16_t tx_id = can_tx_id[cfg->model][(cfg->motor_id - 1) / 4];
     uint16_t rx_id = can_rx_id_base[cfg->model] + cfg->motor_id;
-    uint8_t group_idx = (rx_id - 0x201) / 4;
-    uint8_t motor_idx_in_group = (rx_id - 0x201) % 4;
+    uint8_t group_idx = (uint8_t)((rx_id - 0x201) / 4);
+    uint8_t motor_idx_in_group = (uint8_t)((rx_id - 0x201) % 4);
     BoardCAN_e can_e = cfg->can_e;
 
     // 检查发送分组是否已初始化
@@ -521,7 +521,7 @@ static void DJIMotorBroadcast_Calculate(DJIMotorBroadcastInstance *inst)
         {
             position_feedforward = *setting->position_feedforward_ptr;
         }
-        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr) ? *setting->angle_external_ptr : md.position;
+        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr) ? *setting->angle_external_ptr : (float)md.position;
         setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, position_feedforward);
     }
 

@@ -90,7 +90,9 @@ extern const UART_InitTypeDef referee2026_uart_init[REFEREE2026_LINK_TYPE_COUNT]
  */
 static inline uint8_t Referee2026LinkHasUart(Referee2026LinkType_e link)
 {
-    return (link == REFEREE2026_LINK_TYPE_RADAR) ? 0u : 1u;
+    /* 三元表达式的结果类型是 unsigned int（0u/1u 的公共类型），而函数返回 uint8_t：
+       显式收窄，免得 -Wconversion 报 "conversion from 'unsigned int' to 'uint8_t'" */
+    return (uint8_t)((link == REFEREE2026_LINK_TYPE_RADAR) ? 0u : 1u);
 }
 
 #endif /* HAL_UART_MODULE_ENABLED */

@@ -109,7 +109,7 @@ void PWMSetDutyRatio(PWMInstance *instance, float dutyratio)
         dutyratio = 1.0f;
 
     instance->dutyratio = dutyratio;
-    uint32_t ccr = (uint32_t)(dutyratio * instance->map.htim->Instance->ARR);
+    uint32_t ccr = (uint32_t)(dutyratio * (float)instance->map.htim->Instance->ARR);
     __HAL_TIM_SET_COMPARE(instance->map.htim, instance->map.channel, ccr);
 }
 
@@ -133,7 +133,16 @@ int8_t EncoderRegister(EncoderInstance *instance)
 {
 
     BSP_RETURN_IF_TRUE_LOG(instance == NULL, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "Encoder instance is NULL!"));
+#if ENCODER_INSTANCE_NUM > 0
     BSP_RETURN_IF_TRUE_LOG(s_encoder_idx >= ENCODER_INSTANCE_NUM, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "Encoder exceeded max instance count!"));
+#else
+    /* 本板没有编码器槽位（ENCODER_INSTANCE_NUM == 0）：s_encoder_instance 是空指针，
+       必须在这里拒绝，否则下面 s_encoder_instance[...] 会写空指针。
+       不能写成 s_encoder_idx >= ENCODER_INSTANCE_NUM —— ENCODER_INSTANCE_NUM==0 时
+       那是恒真比较（-Wtype-limits）。 */
+    BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "Encoder exceeded max instance count!");
+    return -1;
+#endif
 
     // 防重复注册检查
     for (uint8_t i = 0; i < s_encoder_idx; i++)

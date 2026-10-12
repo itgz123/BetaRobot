@@ -28,11 +28,16 @@ cmake_minimum_required(VERSION 3.23)
 project(BetaRobot VERSION 1.0.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-set(CMAKE_C_STANDARD 11)
+# C：C23。JSF AV Rule 8 要求"符合 ISO 标准"，所以不要 GNU 扩展。选 C23 而不是
+#    C11 的原因：项目既定的 `typedef enum : uintN_t` 写法与 0b 二进制字面量在 C23
+#    都是标准的一部分，于是 -Wpedantic 下不再有 1000+ 条
+#    "ISO C does not support specifying ... before C23" 的告警（实测 1058 → 6）。
+set(CMAKE_C_STANDARD 23)
 set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_C_EXTENSIONS ON)
+set(CMAKE_C_EXTENSIONS OFF)
 
-# C++：TFLM 要求 C++17
+# C++：TFLM 要求 C++17。JSF 草案里写的 -std=c++14 在这里用不了 ——
+#      lib/lib_tflm/lib_tflm_port.cc 会 include TFLM 的 C++17 头。
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -92,6 +97,57 @@ function(import_module module_dir result_sources result_includes)
     set(${result_sources} ${${result_sources}} PARENT_SCOPE)
     set(${result_includes} ${${result_includes}} PARENT_SCOPE)
 endfunction()
+
+######################################
+# JSF AV C++ 严格编译配置
+######################################
+# 依据：Joint Strike Fighter Air Vehicle C++ Coding Standards
+#       (2RDU00001 Rev C, 2005)。与编译器开关相关的条款及对应关系：
+#
+#   AV Rule 208  "C++ exceptions shall not be used."   → -fno-exceptions（见 target_compile_options）
+#   AV Rule 178  限制向下转型                            → -fno-rtti
+#   AV Rule 218  "Compiler warning levels will be set in
+#                 compliance with project policies."     → 等级由本项目定，见 JSF_AV_STRICT_WARNINGS
+#   AV Rule 8    "All code shall conform to ISO/IEC 14882:2002(E)"
+#                → 只要求"符合 ISO 标准"、不指定具体版本；本项目 C 用 C23、C++ 用 C++17
+#   AV Rule 119  "Functions shall not call themselves (直接或间接递归)"
+#                → 无对应编译器开关，需要 -fstack-usage + 调用图工具人工审
+#   AV Rule 206  "Allocation/deallocation from/to the free store shall not occur
+#                 after initialization."
+#                → 无对应开关，用链接后 nm 断言，见 cmake/check_no_heap.cmake
+#   AV Rule 15   运行时防御性检查 → -fstack-protector-strong（见下）
+#                （注：-fsanitize=undefined 在本工具链不可用，原因见 MyCMakeLists.md）
+#
+# **与标准的偏离逐条记在根目录 MyCMakeLists.md**，改这里时请同步那份文档。
+######################################
+
+# 一方代码（app / lib / bsp / drv / drvlib + hal 模块）的严格警告集。
+# 作用范围说明：cubemx/ 下的 HAL / CMSIS / FreeRTOS / USB 与 TFLM 是第三方。
+# JSF 的前提之一就是不改第三方代码，且实测这些文件会产生 86 条无法就地修的告警
+# （-Wconversion / -Wunused-parameter 为主），加 -Werror 会被它们直接挡死构建。
+set(JSF_AV_STRICT_WARNINGS
+    -Wall
+    -Wextra
+    -Wpedantic
+    -Wconversion
+    -Wsign-conversion
+    -Wshadow
+)
+
+# 把一方代码的告警当错误（AV Rule 218 的"由项目策略定"落成最严一档）。
+# 关掉它（-DJSF_AV_WERROR=OFF）只是降级为"照常告警"，其余严格度不受影响。
+option(JSF_AV_WERROR          "一方代码的 JSF 告警当错误（-Werror）"          ON)
+# GCC 栈保护。工具链没有 libssp，运行期两个符号由 bsp/bsp_stack_guard/ 自备，
+# 链接期用 cmake/no-ssp-libs.specs 去掉 -lssp。
+option(JSF_AV_STACK_PROTECTOR "开启 -fstack-protector-strong（含自备运行期）" ON)
+# 每个编译单元生成 .su 栈用量文件，供 AV Rule 119（禁递归）/ 任务栈尺寸核对使用。
+option(JSF_AV_STACK_USAGE     "开启 -fstack-usage 生成 .su 栈用量"            ON)
+# 链接后断言固件不引用堆（AV Rule 206）。
+option(JSF_AV_NO_HEAP         "链接后断言固件不引用 malloc/free/_sbrk"        ON)
+
+if(JSF_AV_WERROR)
+    list(APPEND JSF_AV_STRICT_WARNINGS -Werror)
+endif()
 
 ######################################
 # 开发板配置表（数据驱动）
@@ -216,6 +272,9 @@ function(build_app app_name)
         ${HAL_DEFINES}
         DEVELOPMENT_BOARD=${app_board}
         ${MODULE_COMPILE_DEFINITIONS}
+        # 让 bsp/bsp_stack_guard/bsp_stack_guard.c 与 -fstack-protector-strong
+        # 同生共死：开了保护才有运行期符号，关了就不占那 4 字节 .data。
+        $<$<BOOL:${JSF_AV_STACK_PROTECTOR}>:JSF_AV_STACK_PROTECTOR>
     )
 
     target_include_directories(${app_name} PRIVATE
@@ -226,9 +285,18 @@ function(build_app app_name)
         ${BSP_INCLUDE_PATHS}
         ${DRV_INCLUDE_PATHS}
         ${DRVLIB_INCLUDE_PATHS}
-        ${HAL_INCLUDE_PATHS}
         # bsp_map 路径（各模块通过 #include "bsp_map.h" 引用）
         "${CMAKE_SOURCE_DIR}/bsp/bsp_map/${app_board}"
+    )
+
+    # 第三方头文件（CubeMX 的 HAL / CMSIS / FreeRTOS / USB）走 -isystem。
+    # 这是 D2「第三方豁免」的实现补丁：只豁免第三方的**编译单元**是不够的——
+    # 第三方的**头文件**会被一方 .c 拉进来，照样吃 -Wconversion / -Wsign-conversion。
+    # 实测 DJI_C(F4) 的 core_cm4.h 干净所以没暴露，DM_MC02(H7) 的 core_cm7.h
+    # 在严格开关下产出 1600+ 条，且我们改不了（CubeMX 重新生成会覆盖）。
+    # -isystem 让 GCC 不从这里报诊断（等价于把第三方头当系统头）。
+    target_include_directories(${app_name} SYSTEM PRIVATE
+        ${HAL_INCLUDE_PATHS}
     )
 
     target_compile_options(${app_name} PRIVATE
@@ -254,12 +322,42 @@ function(build_app app_name)
         $<$<COMPILE_LANGUAGE:CXX>:-fno-asynchronous-unwind-tables>
         $<$<COMPILE_LANGUAGE:CXX>:-Wnon-virtual-dtor>
         $<$<COMPILE_LANGUAGE:CXX>:-fno-use-cxa-atexit>
+        # ---- JSF AV ----
+        # 栈保护对全 target 生效（含 cubemx/ 的 HAL：USB 那堆栈缓冲同样值得护）。
+        # 它只增加检查代码、不引入编译期严格性问题，所以不受"只加一方代码"的限制。
+        # 运行期符号见 bsp/bsp_stack_guard/，链接期见 cmake/no-ssp-libs.specs。
+        $<$<BOOL:${JSF_AV_STACK_PROTECTOR}>:-fstack-protector-strong>
+        # 栈用量是"测量"不是"规则"，同样全 target 生成（HAL / FreeRTOS 的栈用量
+        # 对定任务栈尺寸、审 AV Rule 119 的深调用链都直接有用）。
+        $<$<BOOL:${JSF_AV_STACK_USAGE}>:-fstack-usage>
         $<$<COMPILE_LANGUAGE:ASM>:-x assembler-with-cpp>
     )
+
+    # ---- JSF AV：严格警告只加在**一方源文件**上 ----
+    # 用源文件级 COMPILE_OPTIONS 而不是 target_compile_options，是因为本工程的
+    # 第三方（cubemx/ 的 HAL/CMSIS/FreeRTOS/USB、TFLM）与一方代码在同一个 target 里，
+    # 分不开。源文件级属性会追加在 target 级选项之后，只影响列出来的这些文件。
+    #
+    # 这些开关与语言无关（C / C++ 都适用），所以不需要 genex。
+    set(jsf_av_first_party_sources
+        ${APP_SOURCE_FILES}
+        ${LIB_SOURCE_FILES}
+        ${BSP_SOURCE_FILES}
+        ${DRV_SOURCE_FILES}
+        ${DRVLIB_SOURCE_FILES}
+        ${HAL_MODULE_SOURCES}
+        # bsp_map.c 是直接以绝对路径加进来的（见上方 add_executable），单独列出
+        "${CMAKE_SOURCE_DIR}/bsp/bsp_map/${app_board}/bsp_map.c"
+    )
+    set_source_files_properties(${jsf_av_first_party_sources}
+        PROPERTIES COMPILE_OPTIONS "${JSF_AV_STRICT_WARNINGS}")
 
     target_link_options(${app_name} PRIVATE
         ${MCU_FLAGS}
         -specs=nano.specs
+        # 去掉 -fstack-protector-* 自动追加的 -lssp / -lssp_nonshared（工具链没有
+        # libssp），运行期两个符号由 bsp/bsp_stack_guard/ 提供。文件内有详细说明。
+        $<$<BOOL:${JSF_AV_STACK_PROTECTOR}>:-specs=${CMAKE_SOURCE_DIR}/cmake/no-ssp-libs.specs>
         -T${LINKER_SCRIPT}
         "-Wl,-Map=${CMAKE_BINARY_DIR}/$<CONFIG>/${app_name}.map,--cref"
         -Wl,--gc-sections
@@ -277,6 +375,20 @@ function(build_app app_name)
                 "${CMAKE_BINARY_DIR}/$<CONFIG>/${app_name}.bin"
         VERBATIM
     )
+
+    # ---- JSF AV Rule 206：链接后断言固件不引用堆 ----
+    # 放在产物生成之后：这时 --gc-sections 已经跑完，nm 扫到的就是真实引用，
+    # 而不是"源码里出现过"。脚本本身的说明见 cmake/check_no_heap.cmake。
+    if(JSF_AV_NO_HEAP)
+        add_custom_command(TARGET ${app_name} POST_BUILD
+            COMMAND ${CMAKE_COMMAND}
+                    "-DNM=${CMAKE_NM}"
+                    "-DELF=$<TARGET_FILE:${app_name}>"
+                    -P "${CMAKE_SOURCE_DIR}/cmake/check_no_heap.cmake"
+            COMMENT "Checking JSF AV Rule 206 (no heap allocation)..."
+            VERBATIM
+        )
+    endif()
 
     # ---- 反汇编（GENERATE_DISASSEMBLY）----
     if(app_disas)

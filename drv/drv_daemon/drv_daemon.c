@@ -205,6 +205,7 @@ ITCM_RAM static void DaemonTaskFunc(void *argument)
     static uint64_t dt;
     TickType_t xLastWakeTime = xTaskGetTickCount();           // 周期锚点(绝对唤醒时刻)
     const TickType_t xPeriod = pdMS_TO_TICKS(DAEMON_FREQ_MS); // 任务周期(tick)
+    (void)argument;
     BSPLOG(&g_daemon_log, LOG_LEVEL_INFO, "DAEMON Task Start");
     for (;;)
     {

@@ -35,7 +35,7 @@ void DMMotor_SetRef(void *inst, float ref);
 void DMMotor_Send(void *inst);
 MotorData_s DMMotor_GetData(void *inst);
 
-const static MotorVTable_s s_dm_motor_vtable = {
+static const MotorVTable_s s_dm_motor_vtable = {
     .enable = DMMotor_Enable,
     .disable = DMMotor_Disable,
     .set_ref = DMMotor_SetRef,
@@ -248,7 +248,7 @@ MotorData_s DMMotor_GetData(void *inst)
     // 归一化
     if (setting->position_mode == MOTOR_POSITION_WRAP) // ④ 归一化
     {
-        angle = Lib_Math_WrapAngle(angle, setting->angle_limit_min, setting->angle_limit_max);
+        angle = Lib_Math_WrapAngle((float)angle, setting->angle_limit_min, setting->angle_limit_max);
     }
 
     result.position = angle;
@@ -517,7 +517,7 @@ static void DMMotor_Calculate(DMMotorInstance *inst)
         {
             position_feedforward = *setting->position_feedforward_ptr;
         }
-        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr) ? *setting->angle_external_ptr : md.position;
+        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr) ? *setting->angle_external_ptr : (float)md.position;
         setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, position_feedforward);
     }
 

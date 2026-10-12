@@ -15,6 +15,10 @@ set(MODULE_SOURCES
     bsp_freertos/bsp_freertos.c
     bsp_freertos_status/bsp_freertos_status.c
     bsp_usb/bsp_usb.c
+    # 栈保护运行期（__stack_chk_guard / __stack_chk_fail）。不受 app_cfg.h 的
+    # BSP_*_USED 门控：它必须与编译期的 -fstack-protector-strong 同生共死，
+    # 由顶层 CMakeLists.txt 的 JSF_AV_STACK_PROTECTOR 决定编译内容。
+    bsp_stack_guard/bsp_stack_guard.c
 )
 
 # bsp 层头文件路径
@@ -36,4 +40,5 @@ set(MODULE_INCLUDE_DIRS
     bsp_freertos
     bsp_freertos_status
     bsp_usb
+    bsp_stack_guard
 )

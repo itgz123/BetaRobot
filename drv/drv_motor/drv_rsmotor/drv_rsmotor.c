@@ -43,7 +43,7 @@ void RSMotor_SetRef(void *inst, float ref);
 void RSMotor_Send(void *inst);
 MotorData_s RSMotor_GetData(void *inst);
 
-const static MotorVTable_s s_rs_motor_vtable = {
+static const MotorVTable_s s_rs_motor_vtable = {
     .enable = RSMotor_Enable,
     .disable = RSMotor_Disable,
     .set_ref = RSMotor_SetRef,
@@ -303,7 +303,7 @@ MotorData_s RSMotor_GetData(void *inst)
     // 归一化
     if (setting->position_mode == MOTOR_POSITION_WRAP) // ④ 归一化
     {
-        angle = Lib_Math_WrapAngle(angle, setting->angle_limit_min, setting->angle_limit_max);
+        angle = Lib_Math_WrapAngle((float)angle, setting->angle_limit_min, setting->angle_limit_max);
     }
 
     result.position = angle;
@@ -577,7 +577,7 @@ static void RSMotor_Calculate(RSMotorInstance *inst)
         {
             position_feedforward = *setting->position_feedforward_ptr;
         }
-        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr) ? *setting->angle_external_ptr : md.position;
+        measure = (setting->angle_src == MOTOR_FEEDBACK_EXTERNAL && setting->angle_external_ptr) ? *setting->angle_external_ptr : (float)md.position;
         setpoint = PIDCalculate(&ctrl->pid_angle, setpoint, measure, position_feedforward);
     }
 

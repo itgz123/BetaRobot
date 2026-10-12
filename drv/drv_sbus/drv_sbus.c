@@ -218,9 +218,9 @@ static SBUS_Data_t SBUSDecodeFrame(const SBUSInstance *inst, const uint8_t *data
     for (uint8_t i = 0; i < SBUS_CHANNEL_COUNT; i++)
     {
         // 从 SBUS 原始帧提取第 i 个通道的 11 位原始值 (0-2047)
-        uint16_t bit_off = (uint16_t)i * 11; // 从 ch_data 起始的位偏移
-        uint8_t byte_off = bit_off / 8;      // 从 raw[1] 起的字节偏移
-        uint8_t bit_rem = bit_off % 8;       // 字节内位偏移
+        uint16_t bit_off = (uint16_t)i * 11;            // 从 ch_data 起始的位偏移
+        uint8_t byte_off = (uint8_t)(bit_off / 8);      // 从 raw[1] 起的字节偏移
+        uint8_t bit_rem = bit_off % 8;                  // 字节内位偏移
         // 从 raw[1 + byte_off] 读取最多 3 字节，超出的位被 0x07FF 清除
         uint16_t raw = (uint16_t)(((uint32_t)frame->raw[1 + byte_off] >> bit_rem) | ((uint32_t)frame->raw[1 + byte_off + 1] << (8 - bit_rem)) |
                                   ((uint32_t)frame->raw[1 + byte_off + 2] << (16 - bit_rem))) &
@@ -343,6 +343,21 @@ static void SBUSUARTDaemonCallback(void *owner)
  * @brief BSP 层 UART 接收回调
  * @param usart_inst USART 实例指针
  * @note 通过 parent 字段获取 SBUSInstance，调用 APP 回调
+ *
+ * @note 数据可用性策略 ——「保持上一帧 + 失联窗口」：
+ *       一帧只有在长度/帧头/帧尾都合法、且接收机未自报丢帧或失控时才算**可用**。
+ *       不可用的帧（长度错、头/尾校验不过、flags 的 frame_lost/failsafe 置位）
+ *       **不改写** `sbus_data`，只推进失联窗口。原实现是把 `SBUSDecodeFrame` 的返回值
+ *       无条件赋给 `sbus_data`，而它在校验失败时返回全 0 —— 于是每来一个坏帧所有通道
+ *       都清 0（开火掉、总开关掉，全车回中，而 daemon 全程显示"在线"）。
+ *       窗口内沿用最后一帧可用值（单帧噪声＝不发散的一拍延迟）；连续不可用超过
+ *       `lost_timeout_us` 则锁存 `signal_lost` 并把通道**整帧清零** —— 全通道 0 即
+ *       "摇杆回中、开关断开"，app 侧据此进 stop/失能。宁可停住，也不无限期沿用
+ *       过期指令导致失控。窗口内收到任一可用帧即整体解除。
+ *
+ * @note 喂狗（DaemonReload）只表示"链路上还有帧在流"，与数据是否可用无关：坏帧照样喂。
+ *       daemon 负责"完全没有数据流"（接收停摆，见 err 回调 / daemon 回调），
+ *       数据层的失联由本窗口负责 —— 二者互补，各自独立生效。
  */
 static void SBUSUARTRxCallback(USARTInstance *usart_inst)
 {
@@ -352,43 +367,54 @@ static void SBUSUARTRxCallback(USARTInstance *usart_inst)
         return;
     }
 
-    // 检查帧长度
-    if (usart_inst->rx_len != SBUS_FRAME_SIZE)
+    // 通过 parent 字段获取 SBUSInstance 指针
+    SBUSInstance *sbus_inst = (SBUSInstance *)usart_inst->parent;
+    if (sbus_inst == NULL)
     {
-        BSPLOG(&g_sbus_log, LOG_LEVEL_WARNING, "Frame length error: %d (expected %d)", usart_inst->rx_len, SBUS_FRAME_SIZE);
         return;
     }
 
-    // 通过 parent 字段获取 SBUSInstance 指针
-    SBUSInstance *sbus_inst = (SBUSInstance *)usart_inst->parent;
-
-    // 调用 APP 层回调（传递解析后的数据）
-    if (sbus_inst != NULL)
+    // ---- 1. 解码本帧，判断是否可用 ----
+    uint8_t usable = 0;
+    if (usart_inst->rx_len != SBUS_FRAME_SIZE)
+    {
+        BSPLOG(&g_sbus_log, LOG_LEVEL_WARNING, "Frame length error: %d (expected %d)", usart_inst->rx_len, SBUS_FRAME_SIZE);
+    }
+    else
     {
         // 在中断上下文中解析原始数据为通道数据
-        sbus_inst->sbus_data = SBUSDecodeFrame(sbus_inst, usart_inst->rx_buff, usart_inst->rx_len);
-        DaemonReload(sbus_inst->daemon);
-
-        // ---- 信号丢失超时检测 ----
-        if (sbus_inst->sbus_data.frame_lost || sbus_inst->sbus_data.failsafe)
+        SBUS_Data_t frame = SBUSDecodeFrame(sbus_inst, usart_inst->rx_buff, usart_inst->rx_len);
+        if (!frame.frame_lost && !frame.failsafe)
         {
-            // 丢帧/失控状态：如果尚未计时则记录时间戳
-            if (sbus_inst->lost_start_time_us == 0)
-            {
-                sbus_inst->lost_start_time_us = DWT_GetTimeUs();
-            }
-
-            // 检查是否超过超时时间
-            if ((DWT_GetTimeUs() - sbus_inst->lost_start_time_us) >= sbus_inst->lost_timeout_us)
-            {
-                sbus_inst->signal_lost = 1;
-            }
+            sbus_inst->sbus_data = frame; // 仅可用帧写回：坏帧不动数据，避免指令突变
+            usable = 1;
         }
-        else
+        // 有帧在流就喂狗（坏帧也算）：链路是活的，数据可用性由下面的窗口判定
+        DaemonReload(sbus_inst->daemon);
+    }
+
+    // ---- 2. 失联窗口：不可用帧起/续计时，超窗整帧清零 ----
+    uint64_t now_us = DWT_GetTimeUs();
+    if (usable)
+    {
+        // 信号恢复正常：清除计时和丢失标志
+        sbus_inst->lost_start_time_us = 0;
+        sbus_inst->signal_lost = 0;
+    }
+    else
+    {
+        // 不可用：如果尚未计时则记录时间戳（lost_timeout_us==0 即"立即标志"，
+        // 故下面用两个独立的 if 而不是 else if）
+        if (sbus_inst->lost_start_time_us == 0)
         {
-            // 信号恢复正常：清除计时和丢失标志
-            sbus_inst->lost_start_time_us = 0;
-            sbus_inst->signal_lost = 0;
+            sbus_inst->lost_start_time_us = now_us;
+        }
+
+        // 检查是否超过超时时间；超窗即清空全部通道（回中/断开关＝安全侧）
+        if ((now_us - sbus_inst->lost_start_time_us) >= sbus_inst->lost_timeout_us)
+        {
+            sbus_inst->signal_lost = 1;
+            sbus_inst->sbus_data = (SBUS_Data_t){0};
         }
     }
 }
