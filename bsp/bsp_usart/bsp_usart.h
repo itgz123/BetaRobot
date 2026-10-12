@@ -164,6 +164,23 @@ BSP_Status_e USARTConfig(USARTInstance *instance, const USART_Config_s *config);
 BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
 
 /**
+ * @brief 发送内核：与 USARTTransmit 同参数、同返回值，但不打任何日志
+ * @param 同 USARTTransmit
+ * @retval 同 USARTTransmit（失败时 USARTTransmit 会据此补日志，本函数不打）
+ *
+ * @note **只给 bsp_log 用**。日志链路的传输层一旦失败再调 USARTTransmit 打日志，
+ *       就会经由 bsp_log -> USARTTransmit -> BSPLogV 形成调用环，违反 JSF AV C++
+ *       AV Rule 119（函数不得直接或间接调用自身）。运行期的重入保护挡不住静态调用图
+ *       里的这条边，只能从结构上断开：日志链路走这个无日志入口。
+ * @note 参数校验（instance/handle/data/len/mode）由调用方保证 —— bsp_log 传的是
+ *       模块内的静态实例与已知非空缓冲。**DMA 能力校验仍在本函数内**：HAL 的
+ *       HAL_UART_Transmit_DMA 不判 hdmatx 为空，直接解引用，绕过即写空指针。
+ * @note 失败语义与 USARTTransmit 完全一致（含"忙就顺手判一次卡死并复位"），
+ *       区别仅在无日志、无参数校验。
+ */
+BSP_Status_e USARTTransmitCore(USARTInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms);
+
+/**
  * @brief 启动接收（模式每次调用传参）
  * @param instance   USART实例
  * @param len        本次接收长度（1 ~ rx_buff_size）
@@ -231,6 +248,17 @@ BSP_Status_e USARTRecoverRxIfStalled(USARTInstance *instance, uint32_t period_ms
  *       由本入口与 USARTTransmit 的就绪路径共同刷新，上层不必自存时间戳。
  */
 BSP_Status_e USARTRecoverTxIfStuck(USARTInstance *instance, uint32_t stuck_ms);
+
+/**
+ * @brief 同上，但不打日志：**仅供 bsp_log 与 USARTTransmitCore 用**
+ * @param 同 USARTRecoverTxIfStuck
+ * @retval 同 USARTRecoverTxIfStuck
+ *
+ * @note 拆出无日志版的原因同 USARTTransmitCore：bsp_log 每帧都会调本入口自检，
+ *       若走带日志的版本，就会经 USARTRecoverTxIfStuck -> BSPLogV 成环（AV Rule 119）。
+ * @note 复位过的证据看 s_usart_status[].tx_recover 计数与 err_callback 通知。
+ */
+BSP_Status_e USARTRecoverTxIfStuckCore(USARTInstance *instance, uint32_t stuck_ms);
 
 #endif // HAL_UART_MODULE_ENABLED
 

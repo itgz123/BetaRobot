@@ -86,9 +86,24 @@ static int16_t Referee2026CoreFindId(const Referee2026Core_t *core, uint16_t cmd
  *   二、RX：重组状态机
  *============================================*/
 
-/* 两个函数互相调用（rewind 把残留字节回喂给 byte），故先声明。 */
-static void Referee2026CoreRxByte(Referee2026Core_t *core, uint8_t b);
-static void Referee2026CoreRxRewind(Referee2026Core_t *core);
+/* 回退重扫的显式工作区。
+ *
+ * 早先这里是**相互递归**：`RxRewind` 把残留字节直接回喂 `RxByte`，`RxByte` 帧头 CRC8
+ * 再不过又调 `RxRewind`。深度虽有界（回退只在帧头攒满时发生，每次产出 `asm_len-1 ≤ 4`
+ * 字节，而喂满帧头要 5 字节，故最多嵌一层），但**违反 JSF AV Rule 119**（禁递归），
+ * 且在 ISR 里递归意味着栈用量取决于数据 —— 噪声大的链路上难以给出静态上界。
+ *
+ * 现在改成：`RxRewind` 只把残留拷进本工作区并复位核心，由最外层 `Referee2026RxIsr`
+ * 的循环消费。语义与递归版完全一致（残留字节仍在"当前字节之后、下一个字节之前"被处理），
+ * 只是把调用栈上的隐式工作区挪到了显式结构里。 */
+typedef struct
+{
+    uint8_t  buf[REFEREE2026_HEADER_SIZE]; /* 待重扫的残留字节 */
+    uint16_t n;                            /* 待重扫字节数（0 = 无） */
+} Referee2026RxReplay_t;
+
+static void Referee2026CoreRxByte(Referee2026Core_t *core, uint8_t b, Referee2026RxReplay_t *rp);
+static void Referee2026CoreRxRewind(Referee2026Core_t *core, Referee2026RxReplay_t *rp);
 
 /**
  * @brief 复位重组状态：丢掉半帧，回到找起点
@@ -189,28 +204,25 @@ static void Referee2026CoreRxDispatch(Referee2026Core_t *core)
 }
 
 /**
- * @brief 帧头 CRC8 不过：把已收的 [1..asm_len) 挪到最前，回喂给状态机重扫
+ * @brief 帧头 CRC8 不过：把已收的 [1..asm_len) 寄存到工作区，交给外层循环重扫
  *
  * 这一帧的 0xA5 不是真起点，真起点很可能就在这 5B 之内（比如线上一帧被打断，下一个 0xA5
- * 紧跟在旧帧的残留里）。参考工程在 ISR 里用尾递归处理多帧，本函数**递归深度有界**：
- * 每次回退至少前进 1 字节，而此刻 `asm_len == HEADER_SIZE == 5`，故最多嵌 4 层。
+ * 紧跟在旧帧的残留里）。这里**不直接回喂**（那会与 RxByte 构成递归，见 Referee2026RxReplay_t），
+ * 只把残留转存到 `rp` 并复位核心；真正的重扫由 `Referee2026RxIsr` 的循环完成。
+ *
+ * @note 此刻恒有 `asm_len == HEADER_SIZE`（只有帧头攒满才校验 CRC8），故 `rp->n` 恒为 4。
  */
-static void Referee2026CoreRxRewind(Referee2026Core_t *core)
+static void Referee2026CoreRxRewind(Referee2026Core_t *core, Referee2026RxReplay_t *rp)
 {
-    uint8_t tail[REFEREE2026_HEADER_SIZE];
     const uint16_t n = core->asm_len;
 
+    rp->n = (uint16_t)(n - 1u);
     for (uint16_t i = 1; i < n; i++)
     {
-        tail[i - 1] = core->asm_buf[i];
+        rp->buf[i - 1] = core->asm_buf[i];
     }
 
     Referee2026CoreRxReset(core);
-
-    for (uint16_t i = 1; i < n; i++)
-    {
-        Referee2026CoreRxByte(core, tail[i - 1]);
-    }
 }
 
 /**
@@ -218,7 +230,7 @@ static void Referee2026CoreRxRewind(Referee2026Core_t *core)
  * @note 三个状态各自 return，不 fall through；每次进 BODY 攒满即派发并复位，
  *       故一个事件里连着几帧也能逐个处理（921600 的图传链路上是常态）。
  */
-static void Referee2026CoreRxByte(Referee2026Core_t *core, uint8_t b)
+static void Referee2026CoreRxByte(Referee2026Core_t *core, uint8_t b, Referee2026RxReplay_t *rp)
 {
     switch (core->asm_state)
     {
@@ -251,7 +263,7 @@ static void Referee2026CoreRxByte(Referee2026Core_t *core, uint8_t b)
         if (crc8_calc != core->asm_buf[REFEREE2026_OFF_CRC8])
         {
             core->rx_crc_err++;
-            Referee2026CoreRxRewind(core);
+            Referee2026CoreRxRewind(core, rp);
             return;
         }
 
@@ -294,14 +306,37 @@ static void Referee2026CoreRxByte(Referee2026Core_t *core, uint8_t b)
 
 void Referee2026RxIsr(Referee2026Core_t *core, const uint8_t *buf, uint16_t len)
 {
+    Referee2026RxReplay_t rp;
+
     if (core == NULL || buf == NULL)
     {
         return;
     }
 
+    rp.n = 0u;
+
     for (uint16_t i = 0; i < len; i++)
     {
-        Referee2026CoreRxByte(core, buf[i]);
+        Referee2026CoreRxByte(core, buf[i], &rp);
+
+        /* 回退重扫：残留字节必须在下一个输入字节**之前**喂完，顺序才与直接回喂等价。
+         * 先拷到局部数组再喂 —— 喂的过程可能再次产生回退、把 rp.buf 覆盖掉。
+         * 循环必然终止：回退只在帧头攒满时发生（要连喂 5 字节），而重扫一次最多 4 字节。 */
+        while (rp.n > 0u)
+        {
+            uint8_t pend[REFEREE2026_HEADER_SIZE];
+            const uint16_t k = rp.n;
+
+            rp.n = 0u;
+            for (uint16_t j = 0; j < k; j++)
+            {
+                pend[j] = rp.buf[j];
+            }
+            for (uint16_t j = 0; j < k; j++)
+            {
+                Referee2026CoreRxByte(core, pend[j], &rp);
+            }
+        }
     }
 }
 

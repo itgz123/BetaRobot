@@ -111,7 +111,8 @@ endfunction()
 #   AV Rule 8    "All code shall conform to ISO/IEC 14882:2002(E)"
 #                → 只要求"符合 ISO 标准"、不指定具体版本；本项目 C 用 C23、C++ 用 C++17
 #   AV Rule 119  "Functions shall not call themselves (直接或间接递归)"
-#                → 无对应编译器开关，需要 -fstack-usage + 调用图工具人工审
+#                → 无对应编译器开关；用 -fstack-usage 的 .su + 调用图脚本判环，
+#                  见 scripts/jsf-av/check_recursion.py（经函数指针的间接调用是盲区）
 #   AV Rule 206  "Allocation/deallocation from/to the free store shall not occur
 #                 after initialization."
 #                → 无对应开关，用链接后 nm 断言，见 cmake/check_no_heap.cmake

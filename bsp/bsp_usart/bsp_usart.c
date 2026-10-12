@@ -572,26 +572,18 @@ BSP_Status_e USARTConfig(USARTInstance *instance, const USART_Config_s *config)
     return BSP_OK;
 }
 
-BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
+BSP_Status_e USARTTransmitCore(USARTInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
 {
-    uint8_t idx;
+    uint8_t idx = USART_HuartToIndex(instance->handle);
 
-    BSP_RETURN_IF_TRUE_LOG(instance == NULL, USART_TxFailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
-    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, USART_TxFailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Handle is NULL, call USARTConfig first!"));
-    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, USART_TxFailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
-    BSP_RETURN_IF_TRUE_LOG(data == NULL || len == 0, USART_TxFailThenRet(instance, BSP_PARAM_ERR),
-                           BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "Invalid transmit parameters!"));
-
-    idx = USART_HuartToIndex(instance->handle);
-
-    /* DMA 能力校验：该口没配 TX DMA 就明确拒绝，而不是让 HAL 静默失败 */
+    /* DMA 能力校验：该口没配 TX DMA 就明确拒绝，而不是让 HAL 静默失败。
+     * **这条判据必须留在内核里**（不能只放在 USARTTransmit 的外壳中）：HAL 的
+     * HAL_UART_Transmit_DMA 不判 hdmatx 为空，直接写 `huart->hdmatx->XferCpltCallback`，
+     * 放过去就是往地址 0 附近写。 */
     if (mode == BSP_DMA_MODE && instance->handle->hdmatx == NULL)
     {
         if (idx < UART_NUM_MAX)
             s_usart_status[idx].err_no_dma++;
-        BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "TX DMA not available (uart_e=%d)!", (int)instance->uart_e);
         return USART_TxFailThenRet(instance, BSP_PARAM_ERR);
     }
 
@@ -609,9 +601,11 @@ BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_
              * 复位一次让后续发送能恢复 —— 与对外暴露的 USARTRecoverTxIfStuck 是同一份
              * 判定与动作（这里只是"顺手再判一次"，因为调用方此刻确实摸到了 USARTTransmit）。
              * @note 发送链一旦卡住就再也不会走到这里（各链的就绪判据会让新帧排队而不是重发，
-             *       见 USARTRecoverTxIfStuck 注释），所以这条路只是兜底，主力是上层在自己的
-             *       发送入口调那个入口。 */
-            (void)USARTRecoverTxIfStuck(instance, 0);
+             *       见 USARTRecoverTxIfStuckCore 注释），所以这条路只是兜底，主力是上层在自己的
+             *       发送入口调那个入口。
+             * @note 调 Core 版（不打日志）：本函数在 bsp_log 的调用图上，这里打日志会成环。
+             *       复位过的证据是 s_usart_status[].tx_recover 计数 + err_callback。 */
+            (void)USARTRecoverTxIfStuckCore(instance, 0);
             return USART_TxFailThenRet(instance, BSP_BUSY);
         }
         else
@@ -624,11 +618,10 @@ BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_
                 if (BSP_TimeoutExpired(&t))
                 {
                     /* 上层愿意等却等不到 = 发送卡死，能复位就复位（任务上下文）；
-                     * 上下文不允许 Abort 时如实报出"没复位"，不静默 */
-                    if (USART_RecoverTx(instance))
-                        BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "UART TX ready timeout, state reset (uart_e=%d)!", (int)instance->uart_e);
-                    else
-                        BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "UART TX ready timeout, reset skipped (ISR/critical) (uart_e=%d)!", (int)instance->uart_e);
+                     * 上下文不允许 Abort 就如实返回 TIMEOUT。复位做没做看
+                     * s_usart_status[].tx_recover 计数 + err_callback（内核不打日志，
+                     * 见 USARTTransmitCore 说明）。 */
+                    (void)USART_RecoverTx(instance);
                     return USART_TxFailThenRet(instance, BSP_TIMEOUT);
                 }
             }
@@ -642,21 +635,18 @@ BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_
     case BSP_BLOCK_MODE:
         if (HAL_UART_Transmit(instance->handle, data, len, timeout_ms) != HAL_OK)
         {
-            BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "HAL_UART_Transmit failed (uart_e=%d)!", (int)instance->uart_e);
             return USART_TxFailThenRet(instance, BSP_HW_ERR);
         }
         break;
     case BSP_IT_MODE:
         if (HAL_UART_Transmit_IT(instance->handle, data, len) != HAL_OK)
         {
-            BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "HAL_UART_Transmit_IT failed (uart_e=%d)!", (int)instance->uart_e);
             return USART_TxFailThenRet(instance, BSP_HW_ERR);
         }
         break;
     case BSP_DMA_MODE:
         if (HAL_UART_Transmit_DMA(instance->handle, data, len) != HAL_OK)
         {
-            BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "HAL_UART_Transmit_DMA failed (uart_e=%d)!", (int)instance->uart_e);
             return USART_TxFailThenRet(instance, BSP_HW_ERR);
         }
         break;
@@ -674,6 +664,42 @@ BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_
     }
 
     return BSP_OK;
+}
+
+BSP_Status_e USARTTransmit(USARTInstance *instance, const uint8_t *data, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
+{
+    BSP_Status_e ret;
+
+    BSP_RETURN_IF_TRUE_LOG(instance == NULL, USART_TxFailThenRet(instance, BSP_PARAM_ERR), BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Instance is NULL!"));
+    BSP_RETURN_IF_TRUE_LOG(instance->handle == NULL, USART_TxFailThenRet(instance, BSP_PARAM_ERR),
+                           BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Handle is NULL, call USARTConfig first!"));
+    BSP_RETURN_IF_TRUE_LOG(mode > BSP_DMA_MODE, USART_TxFailThenRet(instance, BSP_PARAM_ERR),
+                           BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "Invalid mode=%d!", (int)mode));
+    BSP_RETURN_IF_TRUE_LOG(data == NULL || len == 0, USART_TxFailThenRet(instance, BSP_PARAM_ERR),
+                           BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "Invalid transmit parameters!"));
+
+    /* DMA 能力只在这里**报告**，判据与计数在内核里（只有内核能挡住 HAL 写空指针）。
+     * 日志链路直呼内核、绕开本函数，于是"日志链路自己没配 TX DMA"不会被日志报告 ——
+     * 那正是拆分的目的，见 USARTTransmitCore 的说明。 */
+    if (mode == BSP_DMA_MODE && instance->handle->hdmatx == NULL)
+    {
+        BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "TX DMA not available (uart_e=%d)!", (int)instance->uart_e);
+    }
+
+    ret = USARTTransmitCore(instance, data, len, mode, timeout_ms);
+
+    /* 内核不打日志（它会进日志链路的调用图，见 USARTTransmitCore 说明），
+     * 失败的**报告**统一在这里按返回码补。上面已把 mode 判过，内核的 default 走不到。 */
+    if (ret == BSP_TIMEOUT)
+    {
+        BSPLOG(&g_usart_log, LOG_LEVEL_ERROR, "UART TX ready timeout (uart_e=%d)!", (int)instance->uart_e);
+    }
+    else if (ret == BSP_HW_ERR)
+    {
+        BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "HAL UART TX start failed (uart_e=%d)!", (int)instance->uart_e);
+    }
+
+    return ret;
 }
 
 BSP_Status_e USARTReceive(USARTInstance *instance, uint16_t len, BSP_Transfer_Mode_e mode, uint32_t timeout_ms)
@@ -849,13 +875,13 @@ BSP_Status_e USARTRecoverRxIfStalled(USARTInstance *instance, uint32_t period_ms
 }
 
 /**
- * @brief 发送卡死自恢复的统一入口（**任务上下文**，各发送链在自己的发送入口调用）
- * @param instance 待检查的 USART 实例
- * @param stuck_ms 判定阈值（ms），0 = 用 USART_TX_STUCK_TIMEOUT_MS
- * @retval BSP_OK        本次刚复位了一次卡死的发送（err_callback 已通知过，上层缓冲已归还）
- * @retval BSP_BUSY      未动作：发送空闲 / 未到阈值 / 上下文不允许 Abort / 该句柄未登记
- * @retval BSP_PARAM_ERR 实例或句柄为空
+ * @brief 发送卡死自恢复的判定+动作本体：与 USARTRecoverTxIfStuck 同参数、同返回值，但不打日志
+ * @param 同 USARTRecoverTxIfStuck
+ * @retval 同 USARTRecoverTxIfStuck
  *
+ * @note **给两类调用方用**：bsp_log（日志链路，见 USARTTransmitCore 的说明）和
+ *       USARTTransmitCore 的"忙就顺手判一次"分支（调用上下文与 USARTRecoverTxIfStuck
+ *       完全相同，差别只是不能在那里打日志 —— 该分支会进 bsp_log 的调用图）。
  * @note 与 USARTRecoverRxIfStalled 对称：上层只提供"什么时候看一眼"，判据（卡死多久）、
  *       计时基准（s_tx_ready_us）、纠正动作（USART_RecoverTx）与计数（tx_recover）都在 bsp 内。
  *
@@ -868,7 +894,7 @@ BSP_Status_e USARTRecoverRxIfStalled(USARTInstance *instance, uint32_t period_ms
  *       空闲期可能很长；不刷新的话，基准会停在很久以前，下一次正常发送一开始就被判成卡死
  *       （假的 tx_recover + 一次无谓的 Abort 中止掉刚启动的发送）。
  */
-BSP_Status_e USARTRecoverTxIfStuck(USARTInstance *instance, uint32_t stuck_ms)
+BSP_Status_e USARTRecoverTxIfStuckCore(USARTInstance *instance, uint32_t stuck_ms)
 {
     uint8_t idx;
     uint64_t now_us;
@@ -909,8 +935,35 @@ BSP_Status_e USARTRecoverTxIfStuck(USARTInstance *instance, uint32_t stuck_ms)
     (void)USART_RecoverTx(instance);
 
     s_tx_ready_us[idx] = DWT_GetTimeUs(); /* 刚复位，重新计时 */
-    BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "UART TX stuck >%dms, state reset (uart_e=%d)!", (int)stuck_ms, (int)instance->uart_e);
-    return BSP_OK;
+    return BSP_OK;                        /* = 本次把卡死的发送复位了（调用方据此打日志） */
+}
+
+/**
+ * @brief 发送卡死自恢复的统一入口（**任务上下文**，各发送链在自己的发送入口调用）
+ * @param instance 待检查的 USART 实例
+ * @param stuck_ms 判定阈值（ms），0 = 用 USART_TX_STUCK_TIMEOUT_MS
+ * @retval BSP_OK        本次刚复位了一次卡死的发送（err_callback 已通知过，上层缓冲已归还）
+ * @retval BSP_BUSY      未动作：发送空闲 / 未到阈值 / 上下文不允许 Abort / 该句柄未登记
+ * @retval BSP_PARAM_ERR 实例或句柄为空
+ *
+ * @note 判据、动作、计数全在同名 Core 里，本函数只在真复位之后补一条 WARNING 日志。
+ *       bsp_log 与 USARTTransmitCore 走 Core（它们打日志会成调用环，AV Rule 119）：
+ *       那两条路径上的复位因此是"静默"的，证据看 s_usart_status[].tx_recover 计数
+ *       —— 与 bsp_log 里同因沉默的 g_log_orphan_cnt 是同一套做法。
+ */
+BSP_Status_e USARTRecoverTxIfStuck(USARTInstance *instance, uint32_t stuck_ms)
+{
+    BSP_Status_e ret = USARTRecoverTxIfStuckCore(instance, stuck_ms);
+
+    /* 真复位了才报（内核只在动作过之后返回 BSP_OK）。stuck_ms 的 0 → 默认值归一化
+     * 放在内核里做，这里为拼同一条消息再算一遍 —— 消息里历来给的是归一化后的值。 */
+    if (ret == BSP_OK)
+    {
+        BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "UART TX stuck >%dms, state reset (uart_e=%d)!",
+               (int)((stuck_ms == 0) ? USART_TX_STUCK_TIMEOUT_MS : stuck_ms), (int)instance->uart_e);
+    }
+
+    return ret;
 }
 
 #endif /* UART_INSTANCE_NUM > 0 */
