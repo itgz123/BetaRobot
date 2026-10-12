@@ -1,0 +1,25 @@
+# STM32 神经网络部署 —— PC 侧 Python 环境
+#
+# 创建： conda env create -f environment.yml
+# 激活： conda activate tflm
+# 更新： conda env update -f environment.yml --prune
+#
+# 这个环境只负责 PC 侧的 训练 / 转换 / 量化 / 生成 C 数组；
+# MCU 上的推理由 Middlewares/Third_Party/tflite-micro + CMSIS-NN 完成，
+# 与本环境无关。
+
+name: tflm
+
+channels:
+  - conda-forge
+  - nodefaults   # 只用 conda-forge：本机到 repo.anaconda.com 不通，留着会反复重试
+
+dependencies:
+  - python=3.11          # TFLM python 包提供 3.10~3.14 的 requirements，3.11 为稳妥档
+  - pip
+  # 构建工具（与仓库根 CMakeLists 的构建链一致）
+  - cmake>=3.20
+  - ninja
+  # Python 依赖走 pip，清单集中在 requirements.txt
+  - pip:
+      - -r requirements.txt

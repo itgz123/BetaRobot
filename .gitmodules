@@ -4,3 +4,12 @@
 [submodule "Middlewares/Third_Party/tflite-micro"]
 	path = Middlewares/Third_Party/tflite-micro
 	url = git@github.com:tensorflow/tflite-micro.git
+[submodule "Middlewares/Third_Party/flatbuffers"]
+	path = Middlewares/Third_Party/flatbuffers
+	url = git@github.com:google/flatbuffers.git
+[submodule "Middlewares/Third_Party/CMSIS_6"]
+	path = Middlewares/Third_Party/CMSIS_6
+	url = git@github.com:ARM-software/CMSIS_6.git
+[submodule "Middlewares/Third_Party/CMSIS-NN"]
+	path = Middlewares/Third_Party/CMSIS-NN
+	url = git@github.com:ARM-software/CMSIS-NN.git
