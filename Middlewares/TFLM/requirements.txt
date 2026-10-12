@@ -1,0 +1,33 @@
+# STM32 神经网络部署 —— PC 侧 pip 依赖
+#
+# 版本策略：这里只给"下限"，不锁死具体版本。
+# 若要可复现，请在创建好环境后用下面任一命令把精确版本回填并入库：
+#   pip freeze > requirements.lock.txt
+#   conda env export --from-history > environment.lock.yml
+
+# —— 训练 / 转换（TFLite 官方路径）——
+tensorflow>=2.16              # 含 tf.lite.TFLiteConverter（浮点 / int8 PTQ）
+keras>=3.0
+tensorflow-model-optimization>=0.8   # 量化感知训练 (QAT)
+ai-edge-litert>=1.0           # 主机侧 TFLite 运行时（TFLM python 包依赖）
+
+# —— 数据处理 / 预处理 ——
+numpy
+scipy
+pandas
+matplotlib
+scikit-learn
+pillow                        # 图像类模型预处理
+pyyaml                        # TFLM python 配置
+
+# —— 模型序列化 / 查看 ——
+flatbuffers                   # .tflite 即 FlatBuffer
+netron                        # 可视化算子 / 张量 / 量化参数
+
+# —— 交互开发（可选）——
+jupyterlab
+
+# —— 可选：PyTorch 路径（确实用 PyTorch 训练时再解开）——
+# torch
+# ai-edge-torch               # PyTorch → TFLite
+# onnx                        # 需要经 ONNX 中转时
