@@ -57,17 +57,79 @@
 
 ---
 
-## D3 · AV Rule 119（禁递归）未做自动强制 —— `放宽`
+## D3 · AV Rule 119（禁递归）：直接调用链已自动检查，函数指针是盲区 —— `放宽`
 
 | | |
 |---|---|
 | 标准 | **AV Rule 119**：*"Functions shall not call themselves, either directly or indirectly (i.e. recursion shall not be allowed)."* |
-| 本工程 | **没有自动检查**。只提供 `-fstack-usage` 生成的 `.su` 静态栈用量，供人工核对深调用链 |
-| 类型 | 放宽 |
+| 本工程 | `scripts/jsf-av/check_recursion.py`：用 `-fcallgraph-info=su,da` 生成调用图 `.ci`，合并全程序图后求强连通分量，有环即判递归。**直接调用链全覆盖、当前 3 个 app 全部 0 环**；**经函数指针的间接调用查不到目标**（见下），另给 `-fstack-usage` 的 `.su` 供人工核深调用链 |
+| 类型 | 放宽（间接调用是盲区，未做到全自动） |
 
-**理由**：没有任何 GCC 开关能表达"禁递归"，需要调用图分析工具（如 `-fcallgraph-info` + 图算法，或商业静态分析器）。当前只做到"给证据"，没做到"自动拦"。
+**实现**：脚本从 `build/compile_commands.json` 重放编译（与 `audit_jsf_warnings.py` 同一套路），给每条命令追加 `-w -Wno-error -fcallgraph-info=su,da`，把 `.ci` 收进临时目录解析。**不改 CMake、不进构建**，所以无需新增开关。
 
-**可补的方向**：`-fcallgraph-info=su` 生成调用图 `.ci`，配一个脚本检测环。未做。
+**四点实测约束**（都验证过，改脚本前先看）：
+
+1. **只能在 Debug(-Og) 上分析**。`-O1` 就能把 `ping⇄pong` 的双向边整个吃掉（内联 + 尾调用优化），`-O2/-O3` 更甚。实测 `-Og` 边集完整。脚本只重放 Debug 那条命令，且发现优化级别高于 `-Og` 会直接报错退出。
+2. **函数指针是盲区**。GCC 只给一个占位节点 `__indirect_call`（"Indirect Call Placeholder"），不展开可能的被调函数。本仓大量用函数表派发（`inst->vtable->xxx(inst)`、`Task_Init_Config_s.func`、daemon 的 offline 钩子），**经函数表形成的环看不见**。脚本会把每个间接调用点逐条列出（本轮：gimbal 47 处 / chassis 55 处 / example 13 处），那是需要人工核的部分。
+3. **同名静态函数不会误判**。GCC 对静态函数自动加文件名限定（`bsp_log.c:BSPLogV`，CMake 传绝对路径时是全路径前缀），所以跨 TU 同名不会错误合并成假环。
+4. **保守近似：只多报不漏报**。一条边只代表"存在调用点"，不代表运行时一定执行（`-Og` 不消除死分支）。对"函数不得调用自己"这种静态性质，方向是对的。
+
+**首轮结果（2026-10-12，3 个 app 各按自己的 `app_cfg.h`）与修复**：
+
+| APP_NAME | 首轮环 | 位置 | 处理 |
+|---|---|---|---|
+| `half_rudder_gimbal` | 1 处 | `Referee2026CoreRxRewind` ⇄ `Referee2026CoreRxByte`（`drv_referee2026.c`，帧头 CRC8 不过时把残留回喂状态机的回退重扫） | 已改：回退只写"待重扫缓冲区"（`Referee2026RxReplay_t`），由 `Referee2026RxIsr` 用显式 worklist 喂完 —— 递归变循环 |
+| `half_rudder_chassis` | 1 处 | `USARTTransmit` ⇄ `BSPLogV`（`bsp_usart.c` ⇄ `bsp_log.c`） | 已改：拆出无日志内核，见下 |
+| `example` | 1 处 | 同上 | 同上 |
+| （全部三个 app 复测） | **0 处** | — | `check_recursion.py` exit 0 |
+
+**改法：结构拆分，不是加运行时重入闸**。重入闸（"已经在日志里就不再打"）**不会**从静态调用图上删掉那条边，AV Rule 119 查的正是图上的环，所以只能结构上断开：让日志链路的发送路径上的函数体里**一个 `BSPLOG` 都没有**。bsp 里因此多了两个"内核"入口，都只在头文件里注明"仅供 bsp_log / 内核使用"：
+
+- `USARTTransmitCore()`：`USARTTransmit()` 去掉 4 条参数校验日志与 3 条失败日志后的本体，参数与返回值完全一致。`bsp_log.c` 的 `BSPLogV` 直发路径与 `LogUartTxCplt` 都改调它；`USARTTransmit()` 变成"参数校验（带日志）→ 转调内核 → 按返回码补日志"。**DMA 能力校验（`hdmatx == NULL`）必须留在内核里** —— HAL 的 `HAL_UART_Transmit_DMA` 不判空、直接解引用 `huart->hdmatx->XferCpltCallback`，绕过即写空指针。
+- `USARTRecoverTxIfStuckCore()`：同上，供 `bsp_log.c` 每帧的自检和 `USARTTransmitCore` 的"忙就顺手判一次"分支使用；`USARTRecoverTxIfStuck()` 只在真复位后补一条 WARNING。
+
+**代价（有意的）**：日志链路自己发不出去 / 被复位时不再打日志 —— 那正是成环的原因。证据改为计数：`s_usart_status[].tx_recover`、`err_callback`（`LogUartErrHandler` 本就刻意不打日志），与同因沉默的 `g_log_orphan_cnt` 是同一套做法。
+
+**其余调用方一律仍走带日志的公开入口**（`drv_vofa` / `drv_terminal_lite` / `drv_referee2026` / `comm_media_usart`），语意不变；只有"忙且 timeout_ms==0 时那次兜底卡死复位"由内核代劳，故那条 WARNING 少了一句（计数仍在）。
+
+**修复前的危害（留档）**：日志走 USART 发送、而发送函数失败时会打日志。`BSPLogV` 开头有 `s_log_uart.handle == NULL` 的早退闸，所以常规路径不会自己咬自己；但若选了一个**没配 TX DMA 的 `LOG_UART`**，`USARTTransmit` 里那条 "TX DMA not available" 的错误日志会立刻再进 `BSPLogV` → 再进 `USARTTransmit`，把"配错 UART"的后果从"一条清晰报错"变成"错误路径里栈溢出"。同理 `BSPLogV` 每帧调 `USARTRecoverTxIfStuck`、而它在真复位时要打 WARNING，也是一条 2 层自环。
+
+**配置相关性（与 D7 同理）**：环是跟着 `app_cfg.h` 走的。gimbal 的板子是 `DJI_C`、该分支下 `LOG_UART` 被注释掉，日志整段 `#if` 掉，所以 **gimbal 没有日志环**；chassis/example 开了日志、没开裁判系统，所以反过来。
+
+**工具自身的两个坑（都会报错而不是给错答案）**：
+- `build/compile_commands.json` 是 CMake 配置期产物。改了 `user_cfg.h` 的 `APP_NAME` 却忘了重跑 `cmake --preset default`，就会拿**上一个 app 的图**当结论——脚本比对 db 里的 `-I.../app/<name>/` 与 `user_cfg.h`，不一致直接报错。
+- `startup_*.s` 是汇编，`-fcallgraph-info` 不适用，单独归类为"汇编跳过"，不计入失败。
+
+**为什么不用现成工具（2026-10-12 在本机实测，不是查文档抄的）**：结论是**没有一个现成工具能替掉这个脚本**，差别在两点：①能不能看见**跨 TU** 的环，②判的是"任意递归"（AV Rule 119 语义）还是只判"无界递归"。
+
+| 工具 | 支持 C | "任意递归" | 跨 TU | 函数指针 | 结论 |
+|---|---|---|---|---|---|
+| clang-tidy `misc-no-recursion` | ✅ | ✅（连有界递归也报） | ❌ **只在本 TU 的 AST 上建图** | ❌ 官方文档明说不处理 | 最近的一个，但**看见不到本仓的两个真环**（都是跨 TU 的） |
+| GCC `-Wanalyzer-infinite-recursion`（`-fanalyzer`） | ✅ | ❌ 只报**无界**递归（CWE-674） | — | ❌ | 语义不符：有界递归它放行，而 AV Rule 119 一律禁 |
+| GCC `-Winfinite-recursion` | ✅ | ❌ 同上，且更弱 | ❌ | ❌ | 只报同 TU 里最直白的自调用 |
+| cppcheck | ✅ | ❌ **没有递归检查** | （有 CTU，但无此检查） | — | 不适用 |
+| CodeQL | ✅ | 需**自己写 QL**（`edges+(a,b)` 传递闭包），无内置"禁递归"查询 | ✅ 有全程序调用图 | 部分/尽力而为 | 要建库、要为 4 套板级配置各建一次，对私人仓还要 GHAS |
+| semgrep / cflow / Frama-C / Infer | — | — | — | — | 要么是**语法**级（semgrep 写不出跨函数闭包）、要么只出文本调用图仍需自己判环、要么侧重内存安全 |
+
+实测记录（跑在 `arm-none-eabi-gcc 15.2` 与 `clang-tidy 22.1.8` 上，样本含"直接无界/直接有界/相互无界/相互有界/经函数指针/同参自调用"六例）：
+
+- clang-tidy 报出前 5 例里的 4 例（**含两例有界**），唯独**漏了函数指针**；把 `u1_enter ⇄ u2_enter` 拆成两个 `.c` 后**两边都不报** —— 这就是"跨 TU 不可见"的直接证据。
+- GCC 两个开关只报"无界"的 3 例，有界的两例**放行**，函数指针同样漏。
+
+本仓约 560 个节点 / 1000+ 条边里 47~55 处是经函数表的间接调用，所以**函数指针盲区是共同短板**，谁也躲不掉 —— 脚本把间接调用点列成清单交人工核，这部分工作量换任何工具都在。
+
+**换不换的判据是"命中几处真环"**：clang-tidy 在本仓实测（87 个第一方文件，`-p build` 零额外参数跑通，3.55 s / 90 MB，本机版本不支持 `-j`）**确实抓到 referee 那一对**——因为那对函数在**同一个 `.c` 里**。但本轮三条真环的另外两条（`USARTTransmit` ⇄ `BSPLogV`、`BSPLogV` ⇄ `USARTRecoverTxIfStuck`）**跨 TU**，clang-tidy 全漏 ⇒ **命中 1/3**。它还有个易踩的细节：豁免只有 `NOLINT` 没有 attribute，且**互递归的一对要各自标一处**（只标一个，另一个照报）。
+
+所以结论是**保留本脚本**（同算法且全程序，3/3），不引入 clang-tidy；将来若要一个"官方维护"的补充，代价是接受它只能替掉同文件内那部分。
+
+参考版本：clang-tidy `misc-no-recursion` = LLVM **11.0.0**（2020-02，commit `49bffa5`）；GCC `-Wanalyzer-infinite-recursion` = **GCC 14**，前端 `-Winfinite-recursion` = **GCC 12**；cppcheck 的递归检查维护者明确未做（ticket **#14539**）。
+
+**复测**：
+```bash
+cmake --preset default && cmake --build --preset Debug
+python3 scripts/jsf-av/check_recursion.py --scope first-party   # exit 1 = 有环
+python3 scripts/jsf-av/check_recursion.py --scope cubemx        # 第三方（顺手看：0 环）
+```
 
 ---
 

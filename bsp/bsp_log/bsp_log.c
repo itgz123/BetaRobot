@@ -138,7 +138,7 @@ static void LogUartTxCplt(USARTInstance *instance)
         {
             /* 与 BSPLogV 同款：先置 SEND、启动成功才认领（s_tx_buf 此刻必为 NULL） */
             s_log_buf[i].buf_state = LOG_BUF_SEND;
-            if (USARTTransmit(&s_log_uart, (const uint8_t *)s_log_buf[i].buf_pool, s_log_buf[i].buf_len, BSP_DMA_MODE, 0) != BSP_OK)
+            if (USARTTransmitCore(&s_log_uart, (const uint8_t *)s_log_buf[i].buf_pool, s_log_buf[i].buf_len, BSP_DMA_MODE, 0) != BSP_OK)
             {
                 /* 启动失败：立即归还本槽（后续 WAIT_SEND 由下一次发送完成回调接续） */
                 s_log_buf[i].buf_state = LOG_BUF_FREE;
@@ -416,8 +416,12 @@ void BSPLogV(LOGInstance *inst, LOG_LEVEL level, const char *fmt, ...)
      *   ② LogReclaimOrphanSend：治①够不到的另一种残留 —— 发起方以为在途、UART 却已空闲
      *      （gState == READY），那次传输其实死了、只剩槽被占着，详见该函数注释。
      * ISR 里调用都是安全的：两者都自带上下文/状态守卫，不满足就什么都不做。
-     * 空闲时各自只做一次状态读，开销可忽略。 */
-    (void)USARTRecoverTxIfStuck(&s_log_uart, 0);
+     * 空闲时各自只做一次状态读，开销可忽略。
+     *
+     * ① 走 Core 版（不打日志）：它真复位时原本会打一条 WARNING，而那条日志又回到本函数
+     * —— 调用环，违反 AV Rule 119。日志链路自己发不出去/刚被复位这件事只能安静地记账
+     * （tx_recover 计数，对照②同因沉默的 g_log_orphan_cnt）。 */
+    (void)USARTRecoverTxIfStuckCore(&s_log_uart, 0);
     (void)LogReclaimOrphanSend(&s_log_uart);
 
     if (!BSPLogCheckLimit(inst))
@@ -513,7 +517,7 @@ void BSPLogV(LOGInstance *inst, LOG_LEVEL level, const char *fmt, ...)
              *   - 置 SEND 在前：中断里再进来的 BSPLOG 看到"有槽在发"即排队，不会与本帧
              *     抢着启动 DMA；
              *   - 认领在后：本帧尚未交给 DMA 时 s_tx_buf 仍为 NULL，这期间到来的
-             *     err_callback（发送卡死自恢复可能就在 USARTTransmit 调用栈内触发）
+             *     err_callback（发送卡死自恢复可能就在 USARTTransmitCore 调用栈内触发）
              *     会直接返回，不会把本帧当成"被中止的那次"释放掉。若提前认领，一个挂起
              *     已久、此刻才被响应的错误中断会把本槽置 FREE 交给别的日志，而外层照旧
              *     把 DMA 启动起来了（边发边被改写）；
@@ -525,10 +529,14 @@ void BSPLogV(LOGInstance *inst, LOG_LEVEL level, const char *fmt, ...)
              * 反过来的话，抢占夹在这两条语句之间时，抢进来的那次回收会把这笔尚未启动的
              * 槽当残留收走（随即被别的日志借走改写），而本函数返回后照旧启动 DMA。
              * 同理，若这段时间里真来了一次把发送收尾的中断，槽会停在 SEND 而无人认领
-             * —— 或者外层把 s_tx_buf 认领下来 —— 那就是残留态，留给下一次 BSPLogV 开头回收。 */
+             * —— 或者外层把 s_tx_buf 认领下来 —— 那就是残留态，留给下一次 BSPLogV 开头回收。
+             *
+             * 走 USARTTransmitCore 而不是 USARTTransmit：后者失败会经 BSPLOG 打日志，
+             * 而那条日志最终又回到本函数 —— 调用环，违反 AV Rule 119。日志链路自己
+             * 发不出去时只能安静地失败（返回值照样有，由上面几条判据分流）。 */
             LogStartingEnter();
             lb->buf_state = LOG_BUF_SEND;
-            ret = USARTTransmit(&s_log_uart, (const uint8_t *)buf, (uint16_t)len, BSP_DMA_MODE, 0);
+            ret = USARTTransmitCore(&s_log_uart, (const uint8_t *)buf, (uint16_t)len, BSP_DMA_MODE, 0);
             if (ret != BSP_OK)
             {
                 /* 忙：排队等完成回调；其它失败（参数/硬件）：丢弃本条、立即归还槽 */
