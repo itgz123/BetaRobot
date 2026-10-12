@@ -7,8 +7,8 @@
 #       主仓库 clone 后 app/ 为空，本脚本把"从零搭起一个工作区"这几步串起来。
 #
 # 用法：
-#   bash scripts/setup_project.sh                       # 交互输入
-#   bash scripts/setup_project.sh <主仓库目录> <app 名>   # 也可直接带参数
+#   bash scripts/setup_project/setup_project.sh                       # 交互输入
+#   bash scripts/setup_project/setup_project.sh <主仓库目录> <app 名>   # 也可直接带参数
 #
 # 克隆通道：两个仓库都是公开的，按下面顺序尝试，成功即停：
 #   1. SSH      git@github.com:...                （需要已注册 SSH 公钥）
@@ -16,7 +16,7 @@
 #   3. HTTPS    https://github.com/...            （免密钥）
 #   4. 镜像      $BETAROBOT_GIT_MIRROR 前缀 + HTTPS 地址
 # github.com 完全不通时，用镜像前缀再跑一次，例如：
-#   BETAROBOT_GIT_MIRROR=https://ghfast.top/ bash scripts/setup_project.sh
+#   BETAROBOT_GIT_MIRROR=https://ghfast.top/ bash scripts/setup_project/setup_project.sh
 set -u
 
 OWNER="itgz123"

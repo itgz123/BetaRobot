@@ -7,20 +7,20 @@
 `Linux` / `macOS`：
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/itgz123/BetaRobot/main/scripts/setup_project.sh && bash setup_project.sh
+curl -fsSLO https://raw.githubusercontent.com/itgz123/BetaRobot/main/scripts/setup_project/setup_project.sh && bash setup_project.sh
 ```
 
 `Windows`（`PowerShell`，Win10/11 默认）：
 
 ```powershell
-curl.exe -fsSLO https://raw.githubusercontent.com/itgz123/BetaRobot/main/scripts/setup_project.bat
+curl.exe -fsSLO https://raw.githubusercontent.com/itgz123/BetaRobot/main/scripts/setup_project/setup_project.bat
 .\setup_project.bat
 ```
 
 `Windows`（`cmd`）：
 
 ```bat
-curl.exe -fsSLO https://raw.githubusercontent.com/itgz123/BetaRobot/main/scripts/setup_project.bat && setup_project.bat
+curl.exe -fsSLO https://raw.githubusercontent.com/itgz123/BetaRobot/main/scripts/setup_project/setup_project.bat && setup_project.bat
 ```
 
 > 两个终端有三点差别，混用会报错：`PowerShell` 里 `curl` 是 `Invoke-WebRequest` 的别名（必须写 `curl.exe`）、`&&` 不是合法语句分隔符（得分两行）、当前目录的脚本要加 `.\` 前缀。`cmd` 才可以一行写完。

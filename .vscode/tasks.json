@@ -51,13 +51,13 @@
       "label": "format",
       "type": "shell",
       "windows": {
-        "command": "scripts/format-code.cmd"
+        "command": "scripts/format-code/format-code.cmd"
       },
       "linux": {
-        "command": "bash scripts/format-code.sh"
+        "command": "bash scripts/format-code/format-code.sh"
       },
       "osx": {
-        "command": "bash scripts/format-code.sh"
+        "command": "bash scripts/format-code/format-code.sh"
       },
       "options": {
         "cwd": "${workspaceFolder}"

@@ -8,11 +8,11 @@
 #   - 再显式排除 cubemx/（CubeMX 生成的 HAL 代码）。
 # 风格见仓库根目录的 .clang-format（与 VS Code C/C++ 插件共用同一份）。
 #
-# 用法：bash scripts/format-code.sh
+# 用法：bash scripts/format-code/format-code.sh
 #
 set -euo pipefail
 
-cd "$(dirname "$0")/.." || {
+cd "$(dirname "$0")/../.." || {
     echo "ERROR: Cannot find the repository root" >&2
     exit 1
 }
