@@ -23,12 +23,19 @@
 
 cmake_minimum_required(VERSION 3.23)
 
-project(BetaRobot VERSION 1.0.0 LANGUAGES C ASM)
+# CXX：目前只有 lib_tflm（TFLM 是 C++ 库）用得到。启用它不影响其它 app ——
+# 没有 .cc 源的目标链接语言仍是 C，编译选项也按语言分别加（见下方 CXX 段落）。
+project(BetaRobot VERSION 1.0.0 LANGUAGES C CXX ASM)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
+
+# C++：TFLM 要求 C++17
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 ######################################
 # 辅助函数
@@ -157,6 +164,10 @@ function(build_app app_name)
 
     # ---- 导入 app/hal/lib/bsp/drv/drvlib 模块 ----
     # 注意：hal 模块变量名不能用 HAL_INCLUDE_PATHS / HAL_C_SOURCES（已被 CubeMX 变量占用）
+    # MODULE_COMPILE_DEFINITIONS：模块自报的编译宏（如 lib_tflm 需要 -DCMSIS_NN）。
+    # 模块用 set(... PARENT_SCOPE) 写进来 —— 它被 import_module() include，父作用域
+    # 正是本函数，于是不必动 import_module() 的签名。
+    set(MODULE_COMPILE_DEFINITIONS)
     import_module("${app_dir}"               APP_SOURCE_FILES   APP_INCLUDE_PATHS)
     import_module("${CMAKE_SOURCE_DIR}/lib"  LIB_SOURCE_FILES   LIB_INCLUDE_PATHS)
     import_module("${CMAKE_SOURCE_DIR}/hal"  HAL_MODULE_SOURCES HAL_MODULE_INCLUDE_PATHS)
@@ -204,6 +215,7 @@ function(build_app app_name)
     target_compile_definitions(${app_name} PRIVATE
         ${HAL_DEFINES}
         DEVELOPMENT_BOARD=${app_board}
+        ${MODULE_COMPILE_DEFINITIONS}
     )
 
     target_include_directories(${app_name} PRIVATE
@@ -232,6 +244,16 @@ function(build_app app_name)
         $<$<CONFIG:Debug>:-g>
         $<$<CONFIG:Debug>:-gdwarf-2>
         $<$<CONFIG:Release>:-Os>
+        # C++ 源（lib_tflm 的 TFLM）：嵌入式下关掉 RTTI / 异常 / 线程安全静态量，
+        # 与上游 tools/make/Makefile 的 CXXFLAGS 一致 —— 不关会引入 libstdc++ 的
+        # __cxa_* 与 typeinfo，白白撑大固件
+        $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+        $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
+        $<$<COMPILE_LANGUAGE:CXX>:-fno-threadsafe-statics>
+        $<$<COMPILE_LANGUAGE:CXX>:-fno-unwind-tables>
+        $<$<COMPILE_LANGUAGE:CXX>:-fno-asynchronous-unwind-tables>
+        $<$<COMPILE_LANGUAGE:CXX>:-Wnon-virtual-dtor>
+        $<$<COMPILE_LANGUAGE:CXX>:-fno-use-cxa-atexit>
         $<$<COMPILE_LANGUAGE:ASM>:-x assembler-with-cpp>
     )
 

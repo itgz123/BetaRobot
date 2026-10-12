@@ -1,10 +1,14 @@
 # STM32 神经网络部署工具链（TFLM）
 
-本目录是 **TensorFlow Lite for Microcontrollers (TFLM)** 在本仓库的集成层：
+本目录（`lib/lib_tflm/tools/`）是 **TensorFlow Lite for Microcontrollers (TFLM)** 的
+**PC 侧工具链文档与依赖清单**：
 
 - 工具链文档（本文件）
 - conda 环境与 Python 依赖清单（`environment.yml` / `requirements.txt`）
-- 上游源码一律按「第三方仓库 = `Middlewares/Third_Party/` 下的 git 子模块（SSH 拉取）」管理，**不 vendor 进主仓库**
+- 源清单生成脚本（`gen_sources.py`）
+
+上游源码一律按「第三方仓库 = `Middlewares/Third_Party/` 下的 git 子模块（SSH 拉取）」管理，
+**不 vendor 进主仓库**。构建集成本身在上一层：`lib/lib_tflm/CMakeLists.txt`（见第三节）。
 
 目标硬件（见 `cubemx/*/*.ioc`）：
 
@@ -23,7 +27,7 @@
 
 | 分类 | 工具 | 用途 | 本仓库落点 |
 | --- | --- | --- | --- |
-| 环境隔离 | Miniconda / conda | 隔离 Python 工具链 | `Middlewares/TFLM/environment.yml` |
+| 环境隔离 | Miniconda / conda | 隔离 Python 工具链 | `lib/lib_tflm/tools/environment.yml` |
 | 训练框架 | TensorFlow + Keras | 训练 / 微调模型（TFLite 官方路径） | conda 环境 `tflm` |
 | 训练框架（可选） | PyTorch + `ai-edge-torch` | 已有 PyTorch 模型时导出为 TFLite | 可选依赖 |
 | 转换 | TFLite Converter（`tf.lite.TFLiteConverter`，随 TF 提供） | `.keras`/SavedModel/`.h5` → `.tflite` | conda 环境 |
@@ -54,18 +58,62 @@
 | --- | --- | --- | --- |
 | 推理引擎 | **TFLM**（tflite-micro） | 解释器 + 算子内核，加载 `.tflite` 字节数组推理 | 子模块 `Middlewares/Third_Party/tflite-micro` |
 | 加速内核 | **CMSIS-NN** | int8 卷积/全连接/池化等的 Cortex-M4/M7 优化实现（`OPTIMIZED_KERNEL_DIR=cmsis_nn`） | 子模块 `Middlewares/Third_Party/CMSIS-NN` |
-| 内核头 / 启动 | **CMSIS_6**（Core） | `core_cm4.h`/`core_cm7.h`、编译器抽象等 | 子模块 `Middlewares/Third_Party/CMSIS_6`（或复用 CubeMX 自带 `cubemx/*/Drivers/CMSIS`） |
+| 内核头 | **CMSIS_6**（Core） | 供 CMSIS-NN 的 float/f16 路径用；**int8 路径不需要它**，故当前不加入 include 路径（详见第四节末） | 子模块 `Middlewares/Third_Party/CMSIS_6`；CubeMX 另自带一套 CMSIS 5 给 HAL |
 | 序列化运行时 | **FlatBuffers** | `.tflite` schema 的读取代码 | 子模块 `Middlewares/Third_Party/flatbuffers` |
 | 交叉编译器 | `arm-none-eabi-gcc` | 编译上述 C/C++ 源码 | 主机侧工具链 |
-| 可选：DSP | CMSIS-DSP | 仅当启用 CMSIS-NN 的 float/f16 内核（`ARM_NN_ENABLE_F32/F16=1`）或模型含 DSP 算子 | 未默认拉取，见第七节 |
-| 可选：FFT | KissFFT (v130) | 模型含 FFT 算子时 | 未默认拉取，见第七节 |
-| 可选：调试打印 | eyalroz/printf | TFLM 的 debug log 回调输出 | 未默认拉取，见第七节 |
+| 可选：DSP | CMSIS-DSP | 仅当启用 CMSIS-NN 的 float/f16 内核（`ARM_NN_ENABLE_F32/F16=1`）或模型含 DSP 算子 | 未默认拉取，见第八节 |
+| 可选：FFT | KissFFT (v130) | 模型含 FFT 算子时 | 未默认拉取，见第八节 |
+| 可选：调试打印 | eyalroz/printf | TFLM 的 debug log 回调输出 | 未默认拉取，见第八节 |
 
 **不适用**（本仓库 MCU 无 NPU）：Ethos-U 驱动、Ethos-U 平台、Vela 编译器、Corstone 平台。
 
 ---
 
-## 三、依赖来源与固定版本
+## 三、接入方式（lib_tflm）
+
+构建集成写在 `lib/lib_tflm/CMakeLists.txt`，由 `lib/CMakeLists.txt` include 进来。
+门控沿用本仓库的 `LIB_XXX_USED` 惯例，**只影响定义它的那个 app**：
+
+```c
+// app/<app>/app_cfg.h
+#define LIB_TFLM_USED
+```
+
+- **不定义**（默认）：`lib_tflm/CMakeLists.txt` 立刻 `return()`，**完全不触碰第三方路径**。
+  不用 TFLM、也没拉子模块的人照样能 configure/build，**不会报错**。
+- **定义**：把 TFLM + CMSIS-NN 的源码纳入该 app 的 target；此时才检查子模块是否存在，
+  缺了直接 `FATAL_ERROR` 并提示 `git submodule update --init --recursive`。
+
+源清单**不是 GLOB**，而是由 `tools/gen_sources.py` 从上游 `sources.inc` 逐条翻译
+（含 `kernels/*.cc → kernels/cmsis_nn/*.cc`、`micro/*.cc → cortex_m_generic/*.cc`
+两级同名替换，以及测试/基准过滤；GLOB 会带上测试且拿不到替换规则，导致重复符号）。
+TFLM 升级后重跑：
+
+```bash
+python3 lib/lib_tflm/tools/gen_sources.py \
+  --tflm-root Middlewares/Third_Party/tflite-micro \
+  --cmsisnn-root Middlewares/Third_Party/CMSIS-NN
+```
+
+CMake 侧另外三处（在 CMakeLists 与顶层 `CMakeLists.txt` 里都有注释）：
+
+| 项 | 内容 | 为什么 |
+| --- | --- | --- |
+| 编译宏 | `CMSIS_NN`、`TF_LITE_MCU_DEBUG_LOG` | TFLM 的 `kernels/*.h` 按 `CMSIS_NN` 切换「声明加速注册函数」还是「给 inline 回落版」——**app 侧 include `lib_tflm.h` 后会读到同一批头，两边必须一致**，否则注册的符号对不上。宏由模块自己 `set(... PARENT_SCOPE)` 报给 `build_app()` |
+| C++ | 顶层打开 `CXX` + `C++17` + `-fno-rtti -fno-exceptions -fno-threadsafe-statics -fno-unwind-tables -fno-use-cxa-atexit` | TFLM 是 C++ 库；不关这些会把 libstdc++ 的异常/RTTI 支持拖进固件 |
+| 平台钩子 | `lib_tflm_port.cc` 提供 `micro_time`（接 `bsp_dwt`） | 上游 cortex_m_generic 版要走 DWT + 器件头宏（随开发板变化），这里换成本工程的 bsp_dwt；不做 profiling 时该文件可删（见文件头注释） |
+
+**实测占用**（DM_MC02，Debug，CMSIS-NN 已生效）：只注册 Conv2D + FullyConnected +
+Softmax + Reshape 四个算子时，解释器 + 内核 + 注册表约 **+68 KB Flash / +0.7 KB RAM**
+（75 808 B → 144 232 B Flash、21 568 B → 22 304 B DTCM）。不引用 TFLM 符号时
+`--gc-sections` 会把它整体丢掉，**占 0**。张量 arena 是 app 自己开的静态数组，不含在上面。
+
+**app 侧怎么用**：头注释见 `lib/lib_tflm/lib_tflm.h`（本模块不封装，暴露 TFLM 原生
+C++ 接口，故 app 相关文件用 `.cpp`）。
+
+---
+
+## 四、依赖来源与固定版本
 
 子模块 revision 对齐 **TFLM 官方 `tools/make/ext_libs/*_download.sh`** 钉死的版本，便于日后与上游比对：
 
@@ -90,29 +138,39 @@ git submodule update --init --recursive
 
 ---
 
-## 四、目录结构
+## 五、目录结构
 
 ```
-Middlewares/
-├── TFLM/                          # 本集成层：文档 + conda 环境 + 依赖清单
-│   ├── README.md
-│   ├── environment.yml            # conda 环境定义
-│   └── requirements.txt           # pip 依赖
-└── Third_Party/                   # 全部第三方仓库（git 子模块，SSH）
-    ├── tflite-micro/              # TFLM 上游
-    ├── flatbuffers/               # .tflite schema / 运行时
-    ├── CMSIS_6/                   # CMSIS Core 头（CMSIS/Core/Include）
-    └── CMSIS-NN/                  # int8 优化内核（Include / Source）
+lib/lib_tflm/                      # 集成层（被 lib/CMakeLists.txt include）
+├── CMakeLists.txt                 # 门控 + include 路径 + 编译宏 + 源清单
+├── lib_tflm.h                     # 对外接口（TFLM 原生 C++ 头 + 用法说明）
+├── lib_tflm_port.cc               # 平台钩子：micro_time ← bsp_dwt
+└── tools/                         # PC 侧
+    ├── README.md                  # 本文件
+    ├── environment.yml            # conda 环境定义
+    ├── requirements.txt           # pip 依赖
+    └── gen_sources.py             # 从上游 sources.inc 生成源清单
+
+Middlewares/Third_Party/           # 全部第三方仓库（git 子模块，SSH）
+├── tflite-micro/                  # TFLM 上游
+├── flatbuffers/                   # .tflite schema / 运行时
+├── CMSIS-NN/                      # int8 优化内核（Include / Source）
+└── CMSIS_6/                       # CMSIS Core 头（当前不加入 include 路径，见下）
 ```
 
-> `CMSIS_6` 与 CubeMX 生成的 `cubemx/*/Drivers/CMSIS` 内容重叠。CMake 里**只保留一份** `CMSIS/Core/Include` 到 include 路径，避免头文件重定义。
+> **CMSIS_6 当前不进 include 路径**：CMSIS-NN 的整数路径（本项目编进来的就是这些，
+> f16/f32 已排除）自带 `arm_nn_math_types.h`，全仓不 include 任何 CMSIS Core 头。
+> 而上游 Makefile 加它，是为了 float 路径的 `arm_math.h` 与 Cortex_DFP 器件头。
+> 更要紧的是：本工程 CubeMX 自带一套 CMSIS 5，而 lib 的 `-I` 排在 HAL 之前，
+> 全局加 CMSIS 6 会让所有 HAL/FreeRTOS 源改用 CMSIS 6 的头 —— 不必要地动摇 HAL。
+> 将来要开 float 内核再加，并用 `set_source_files_properties` 限定到本模块的源。
 
 ---
 
-## 五、conda 环境
+## 六、conda 环境
 
 ```bash
-# 创建（在 Middlewares/TFLM 下执行）
+# 创建（在 lib/lib_tflm/tools 下执行）
 conda env create -f environment.yml
 
 # 激活
@@ -131,7 +189,7 @@ pip install -r requirements.txt
 
 ---
 
-## 六、从模型到 MCU 的流程
+## 七、从模型到 MCU 的流程
 
 ```
         PC (conda env: tflm)                                STM32
@@ -141,7 +199,7 @@ pip install -r requirements.txt
 │    · PTQ: 代表性数据集 → int8   │                │   + CMSIS-NN 内核        │
 │    · QAT: TF-MOT 包装后重训     │                │                          │
 │ 3. xxd -i / 脚本 → model_data.cc│                │  MicroInterpreter        │
-│ 4. 放进 app/ 源码并 add_subdirectory │  ──────►  │  .Invoke() 跑推理        │
+│ 4. 放进 app/ 并开 LIB_TFLM_USED      │  ──────►  │  .Invoke() 跑推理        │
 └────────────────────────────────┘   arm-none-eabi │                          │
                                      交叉编译+烧录  └──────────────────────────┘
 ```
@@ -155,7 +213,7 @@ pip install -r requirements.txt
 
 ---
 
-## 七、可选第三方库（未默认拉取）
+## 八、可选第三方库（未默认拉取）
 
 按需再以子模块方式加入，**都用 SSH**，并沿用 TFLM 官方钉死的 revision：
 
