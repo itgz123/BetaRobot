@@ -168,7 +168,7 @@ int8_t LibChassisInit(LibChassisInstance_s *inst, const LibChassisConfig_s *cfg)
     return 0;
 }
 
-void LibChassisInverse(LibChassisInstance_s *inst, const LibChassisState_s *st, vector3_t twist, LibChassisRef_s *out)
+void LibChassisInverse(const LibChassisInstance_s *inst, vector3_t twist, LibChassisRef_s *out)
 {
     if (inst == NULL || out == NULL)
         return;
@@ -179,8 +179,7 @@ void LibChassisInverse(LibChassisInstance_s *inst, const LibChassisState_s *st, 
         out->wheel_speed[i] = 0.0f;
     }
 
-    /* 舵轮取 state 舵角；无舵轮时 st 可为 NULL。逐轮直接解，不求 JᵀJ
-     * （逆解不需要，且退化时仍应给出分量）。 */
+    /* 逐轮直接解，不求 JᵀJ（逆解不需要，且退化时仍应给出分量）。 */
     const LibChassisConfig_s *cfg = &inst->cfg;
 
     for (uint8_t i = 0; i < cfg->num; i++)
@@ -194,20 +193,22 @@ void LibChassisInverse(LibChassisInstance_s *inst, const LibChassisState_s *st, 
         if (w->kind == LIB_CHASSIS_WHEEL_RUDDER)
         {
             float speed = Lib_Math_Sqrt(vix * vix + viy * viy);
-            float phi_cur = (st != NULL) ? st->steer_angle[i] : 0.0f;
 
             if (speed < LIB_CHASSIS_STEER_SPEED_EPS)
             {
-                /* 静止：不改朝向，驱动停转 */
-                out->steer_target[i] = phi_cur;
+                /* 静止：不用转向也不用驱动。steer_target 无意义（本层不保存"上次朝向"，
+                 * 保持与否是 app 的事），一并置 0；app 按 wheel_speed == 0 识别此拍。 */
+                out->steer_target[i] = 0.0f;
                 out->wheel_speed[i] = 0.0f;
                 continue;
             }
 
-            int8_t reverse = 0;
-            float phi_des = Lib_Math_Atan2(viy, vix);
-            out->steer_target[i] = LibChassisSteerNearest180(phi_des, phi_cur, &reverse);
-            out->wheel_speed[i] = (reverse ? -speed : speed) / w->radius;
+            /* 期望轮向 = 接触点速度方向（车体系）。**不做 ±180° 等价解选择**：
+             * 那是离散决策（判据 |角差| 是否超 90°），在 |角差| ≈ 90° 附近会在噪声/指令
+             * 抖动下逐拍翻转、目标舵角每拍跳 ±180°，必须带迟滞才稳——迟滞要跨帧记忆，
+             * 归 app（本层保持纯函数）。这里连轮速也只给大小，符号由 app 按它选的解定。 */
+            out->steer_target[i] = Lib_Math_Atan2(viy, vix);
+            out->wheel_speed[i] = speed / w->radius;
         }
         else
         {
