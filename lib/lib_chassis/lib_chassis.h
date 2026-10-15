@@ -44,7 +44,7 @@
  *       其中 J⁺ = (JᵀJ)⁻¹Jᵀ。**逆解与力分配不是同一套分配逻辑**（差别不是舍入误差）：
  *       - 逆解是 `s = J·ξ`：ξ 是 3 个未知量，m 个约束行各自独立给出 m 个值，逐轮直解即可，
  *         不需要任何矩阵求逆。固定轮算的 `g_i·v_i` 恰好等于"驱动行 · ξ"；舵轮更省一步——
- *         由 v_i 的方向定目标舵角（atan2 + 最近 180°）、由模长定轮速，完全不经过 J。
+ *         由 v_i 的方向定期望轮向（atan2）、由模长定轮速大小，完全不经过 J。
  *       - 力分配是 `f = (J⁺)ᵀ·W = J(JᵀJ)⁻¹·W`：输入只有 3 个分量而输出 m 个行力，m>3 时
  *         欠定（有无穷多组 f 满足 Jᵀf = W），必须补"最小力范数"才唯一，多出来的 (JᵀJ)⁻¹
  *         就是这个约束的代价：先解 3×3 方程组 q = (JᵀJ)⁻¹·W，再逐行点乘 q。
@@ -54,8 +54,15 @@
  *
  * @note 退化（回转中心重合/共线，使 JᵀJ 奇异）时正解与力分配返回 -1；
  *       逆解不做矩阵求逆，退化时仍可给出各轮分量。
- * @note 舵轮逆解输出"离当前舵角最近的等价方向"（|角差| ≤ 90°，需要时驱动反转），
- *       舵向位置环（含积分）与换向执行由 app 负责，本层不闭环。
+ * @note 舵轮逆解输出**期望轮向**（接触点速度方向，不做 ±180° 等价解的选择）与轮速**大小**；
+ *       "选哪个等价解、驱动要不要反转、静止时要不要保持上次朝向"全部由 app 定，
+ *       舵向位置环（含积分）与换向执行也在 app，本层不闭环。
+ * @note 为什么这道选择不在本层：它是**离散决策**（判据 |角差| 是否超过 90°），而在
+ *       |角差| ≈ 90° 附近（轮面恰垂直于期望速度方向、被反推、舵角反馈噪声）取舍会在
+ *       噪声下逐拍翻转——目标舵角每拍跳 ±180°、驱动符号跟着翻，位置环被反复踢。
+ *       要稳就必须加迟滞，迟滞需要跨帧记忆；而本层是纯几何、不存跨帧状态。
+ *       故：几何量（速度方向/大小）留在本层，记忆与控制取舍归 app。
+ *       LibChassisSteerNearest180 是本层提供的无状态选择工具，供 app 做迟滞时取用其判据。
  */
 
 #ifndef __LIB_CHASSIS_H
@@ -73,7 +80,8 @@
 /* 约束行数上限：舵轮每轮 2 行（驱动 + 侧向），其余 1 行，故最多 2·MAX_WHEEL */
 #define LIB_CHASSIS_MAX_ROW (LIB_CHASSIS_MAX_WHEEL * 2)
 
-/* 回转中心速度低于此值 [m/s] 视为"不需转向"：舵轮保持当前朝向、驱动置 0 */
+/* 舵轮回转中心速度低于此值 [m/s] 视为"不需转向"：steer_target 无意义（置 0）、wheel_speed 置 0；
+ * app 按 wheel_speed == 0 识别这一拍，自己决定保持哪个朝向（见 LibChassisInverse） */
 #define LIB_CHASSIS_STEER_SPEED_EPS 1e-4f
 
 /*============================================
@@ -128,8 +136,12 @@ typedef struct
 
 /**
  * @brief 逆解输出
- * @note steer_target：舵轮目标舵角（车体系连续角，"离当前最近"的等价解）；固定轮写安装角。
- * @note wheel_speed：目标轮缘角速度 [rad/s]（带符号，负=反转）。
+ * @note steer_target：舵轮写**期望轮向**（车体系 rad，接触点速度方向的 atan2 结果，
+ *       可能与当前舵角差超过 90°，也可能落在任意区间）；固定轮写安装角。
+ *       舵轮回转中心速度 < LIB_CHASSIS_STEER_SPEED_EPS 时该值无意义（置 0）。
+ * @note wheel_speed：**固定轮**写目标轮缘角速度 [rad/s]（带符号，负=反转）；
+ *       **舵轮**只写速度**大小**（恒 ≥ 0，0 表示"不需转向"），符号由 app 按它选的
+ *       等价解（正转 or 反转）自己补——见 LibChassisInverse 与文件头"期望轮向"。
  */
 typedef struct
 {
@@ -191,18 +203,19 @@ typedef struct
 int8_t LibChassisInit(LibChassisInstance_s *inst, const LibChassisConfig_s *cfg);
 
 /**
- * @brief 逆解（位控）：底盘速度 → 各轮 {目标舵角, 目标轮速}
- * @param inst  实例指针
- * @param st    反馈状态（舵轮取 steer_angle 做"最近解"选择）
+ * @brief 逆解（位控）：底盘速度 → 各轮 {期望轮向, 目标轮速大小}
+ * @param inst  实例指针（const：本函数不改实例）
  * @param twist 底盘速度 ξ = (vx [m/s], vy [m/s], w [rad/s])
  * @param out   解算结果
+ * @note **纯函数**：不读反馈、不写 inst，同一 twist 恒得同一 out（故不含"选哪个 ±180°
+ *       等价解"这道离散决策——它需要跨帧记忆，归 app；见文件头注释）。
  * @note 固定轮：wheel_speed = (J_i·ξ)/R_i，steer_target = 安装角
- * @note 舵轮：接触点速度方向即目标舵角（取最近等价解），wheel_speed = (±|v|)/R_i；
- *       回转中心速度 < LIB_CHASSIS_STEER_SPEED_EPS 时保持当前舵角、轮速置 0
+ * @note 舵轮：steer_target = atan2(v_iy, v_ix)，wheel_speed = |v_i|/R_i（**无符号**）；
+ *       回转中心速度 < LIB_CHASSIS_STEER_SPEED_EPS 时两者都置 0
  * @note 不依赖 JᵀJ，也不组装 J：逐轮几何直解，退化（2 轮全向等欠约束）时仍照常输出分量。
  *       与 LibChassisAllocateTorque 不是同一套分配逻辑，见文件头注释。
  */
-void LibChassisInverse(LibChassisInstance_s *inst, const LibChassisState_s *st, vector3_t twist, LibChassisRef_s *out);
+void LibChassisInverse(const LibChassisInstance_s *inst, vector3_t twist, LibChassisRef_s *out);
 
 /**
  * @brief 正解（里程计）：各轮当前轮速 → 底盘速度（最小二乘）
@@ -231,11 +244,16 @@ int8_t LibChassisAllocateTorque(LibChassisInstance_s *inst, const LibChassisStat
 
 /**
  * @brief 在 φ 与 φ+180° 两个等价轮向中，选离当前舵角最近的解
- * @param phi_des 期望轮向 [rad]（任意值，通常是 atan2 结果）
+ * @param phi_des 期望轮向 [rad]（任意值，通常是 LibChassisInverse 给的 steer_target）
  * @param phi_cur 当前轮向 [rad]（连续值）
  * @param reverse 输出：1=选了反向解，驱动轮需反转；0=不反转。可为 NULL
  * @return 目标轮向 [rad] = phi_cur + 最近角差，|角差| ≤ 90°
- * @note 只做几何选择，不产生控制量（不闭环）
+ * @note 只做几何选择，不产生控制量（不闭环），也不存状态。
+ * @note **本函数无迟滞**：判据是"|角差| 是否超过 90°"，而 |角差| 恰在 90° 附近时
+ *       取舍会在噪声下逐拍翻转（目标每拍跳 ±180°、驱动符号跟着翻）。因此它只适合
+ *       单次调用/离线计算；实时控制里的换向决策请**带上迟滞**——把"上一拍是否反向"
+ *       作为状态由调用方保存，并用它把阈值分两档（未反向用 90°+h、已反向用 90°−h），
+ *       中间 2h 的带宽里保持原状态。迟滞状态归 app，本层不持有。
  */
 float LibChassisSteerNearest180(float phi_des, float phi_cur, int8_t *reverse);
 
