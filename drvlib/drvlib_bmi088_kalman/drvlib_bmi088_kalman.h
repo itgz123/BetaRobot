@@ -141,6 +141,24 @@
 #define BMI088_KALMAN_ACC_REJECT 3.0f
 #endif // !BMI088_KALMAN_ACC_REJECT
 
+/* R 随 |acc| 偏离 1g 的程度连续放大的最大倍数（实际放大 1+该值 倍）：
+ * 越不像"只剩重力"就越不信它。用连续放大而不是硬性切断 —— 硬切断会让
+ * 大机动期间倾角完全靠陀螺积分布漂。
+ * ⚠ 它与 Config 的 r_tilt 是一对（放大律的基数在 Config 里），整定 R 时两者要一起看 */
+#ifndef BMI088_KALMAN_R_INFLATE_MAX
+#define BMI088_KALMAN_R_INFLATE_MAX 10.0f
+#endif // !BMI088_KALMAN_R_INFLATE_MAX
+
+/* KF 状态初值不确定度（P0 对角元）：倾角按 ±5.7°、零偏残差按 ±0.01 rad/s 给。
+ * ⚠ 与 Config 的 q_tilt / q_bias 同族 —— 同属"这个滤波器信多少"的整定量，
+ *   调 Q/R 时别忘了 P0 这个杠杆（只影响上电收敛的前若干秒） */
+#ifndef BMI088_KALMAN_P0_TILT
+#define BMI088_KALMAN_P0_TILT 0.01f
+#endif // !BMI088_KALMAN_P0_TILT
+#ifndef BMI088_KALMAN_P0_BIAS
+#define BMI088_KALMAN_P0_BIAS 1e-4f
+#endif // !BMI088_KALMAN_P0_BIAS
+
 /*============================ 标定结构体 ============================*/
 
 /* 标定参数结构体（BMI088_AxisCalib_s / BMI088_Calib_s）与修正函数
