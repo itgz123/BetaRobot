@@ -24,30 +24,16 @@ LOG_INSTANCE_DEF(g_bmi088_kalman_log, "bmi088_kalman", DRVLIB_BMI088_KALMAN_LOG_
 
 /*============================ 内部常量 ============================*/
 
-/* 本模块所有可调参数都是 #ifndef 可覆盖的：在 app_cfg.h（或任何先于本文件包含的
- * 头文件、编译选项 -D）里定义同名宏即可覆盖，不必改驱动源码。
- * 覆盖点只需早于本文件包含 —— 本 .c 首行就是 drvlib_bmi088_kalman.h，
- * 而它包含 app_cfg.h，所以写在 app_cfg.h 里一定生效。 */
+/* 这里只放 .c 私有的常量：**面向调参的缺省值一律在 .h 的常量块**（那里的宏与
+ * COS_TILT_MIN 等并列，整定 KF 时一眼能看到全部杠杆）。
+ * 本文件这三个宏同样 #ifndef 可覆盖：在 app_cfg.h（或任何先于本文件包含的头文件、
+ * 编译选项 -D）里定义同名宏即可覆盖。覆盖点只需早于本文件包含 —— 本 .c 首行就是
+ * drvlib_bmi088_kalman.h，而它包含 app_cfg.h，所以写在 app_cfg.h 里一定生效。 */
 
 /* 标准重力加速度 (m/s²)：倾角反算与 |acc| 判据都按它算 */
 #ifndef BMI088_KALMAN_G
 #define BMI088_KALMAN_G 9.80665f
 #endif // !BMI088_KALMAN_G
-
-/* KF 状态初值不确定度：倾角按 ±5.7°、零偏残差按 ±0.01 rad/s 给 */
-#ifndef BMI088_KALMAN_P0_TILT
-#define BMI088_KALMAN_P0_TILT (0.01f)
-#endif // !BMI088_KALMAN_P0_TILT
-#ifndef BMI088_KALMAN_P0_BIAS
-#define BMI088_KALMAN_P0_BIAS (1e-4f)
-#endif // !BMI088_KALMAN_P0_BIAS
-
-/* R 随 |acc| 偏离 1g 的程度连续放大的最大倍数（实际放大 1+该值 倍）：
- * 越不像"只剩重力"就越不信它。用连续放大而不是硬性切断 —— 硬切断会让
- * 大机动期间倾角完全靠陀螺积分布漂 */
-#ifndef BMI088_KALMAN_R_INFLATE_MAX
-#define BMI088_KALMAN_R_INFLATE_MAX (10.0f)
-#endif // !BMI088_KALMAN_R_INFLATE_MAX
 
 /* Config 字段为 0（未填）时的回填值。
  * ⚠ 只回填 q_bias 之外的那些：q_bias=0 是合法取值，不能被当成漏填
