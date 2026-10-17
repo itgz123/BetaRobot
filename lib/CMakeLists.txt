@@ -24,6 +24,7 @@ set(MODULE_SOURCES
     lib_math/lib_math_trig_lut.c
     lib_mit/lib_mit.c
     lib_pid/lib_pid.c
+    lib_rls/lib_rls.c
     lib_traj/lib_traj.c
     lib_traj/lib_traj_jerk/lib_traj_jerk.c
 )
@@ -52,6 +53,7 @@ set(MODULE_INCLUDE_DIRS
     lib_math
     lib_mit
     lib_pid
+    lib_rls
     lib_traj
     lib_traj/lib_traj_jerk
 )
