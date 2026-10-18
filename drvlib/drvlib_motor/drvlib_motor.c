@@ -28,6 +28,7 @@ LOG_INSTANCE_DEF(g_drvlib_motor_log, "drvlib_motor", DRVLIB_MOTOR_LOG_LIMIT);
 static void MotorProcessFeedback(DrvlibMotorInstance *inst, const DrvlibMotorFeedback_s *fb, float dt);
 static float MotorApplyCascade(DrvlibMotorInstance *inst, float ref, float dt);
 static void MotorVofaOutput(const DrvlibMotorInstance *inst);
+static void MotorSeedStage(DrvlibMotorInstance *inst, DrvlibMotorStage_e stage, float setpoint, float measure);
 
 /*============================ 内部函数实现 ============================*/
 
@@ -64,9 +65,11 @@ static void MotorProcessFeedback(DrvlibMotorInstance *inst, const DrvlibMotorFee
     }
     inst->position_cnt += wraps;
 
-    /* 累加 → 偏置 → 归一化 */
+    /* 累加 → 偏置 → 方向 →（WRAP 才归一化） */
     double pos = (double)inst->position_cnt * (double)span + (double)raw + (double)cfg->position_offset;
     pos *= (double)fb_dir; /* 方向：累加-偏置后、归一化前（照搬旧 drv_motor 顺序） */
+    /* 连续值：角度环微分用（跨窗口边界不跳变），对外不暴露 */
+    inst->position_continuous = pos;
     if (cfg->position_mode == DRVLIB_MOTOR_POS_WRAP)
     {
         pos = (double)Lib_Math_WrapAngle((float)pos, cfg->angle_limit_min, cfg->angle_limit_max);
@@ -103,6 +106,22 @@ static void MotorProcessFeedback(DrvlibMotorInstance *inst, const DrvlibMotorFee
 }
 
 /**
+ * @brief 首次进入某个环时播种 PID 的 last_measure / last_error
+ * @note Config/Disable 会把 PID 清零（last_measure = 0）。若当前测量非 0，
+ *       第一拍"微分先行"会按 (0 − measure)/dt 打出一个尖峰；在第一次计算前
+ *       把 last_measure 对齐到当前测量值即可。每个环只播种一次（pid_seeded）。
+ */
+static void MotorSeedStage(DrvlibMotorInstance *inst, DrvlibMotorStage_e stage, float setpoint, float measure)
+{
+    PIDInstance *pid = &inst->pid[stage];
+
+    pid->measure = measure;
+    pid->last_measure = measure;
+    pid->last_error = setpoint - measure;
+    inst->pid_seeded[stage] = 1u;
+}
+
+/**
  * @brief 三级级联：由外向内，每个参与的环把输出作为下一环的 setpoint
  * @return 最终输出（电流 A）
  */
@@ -116,6 +135,9 @@ static float MotorApplyCascade(DrvlibMotorInstance *inst, float ref, float dt)
     /* 位置环（最外） */
     if (cfg->loop_type & DRVLIB_MOTOR_LOOP_ANGLE)
     {
+        /* 测量值：WRAP 模式用连续的 position_continuous（见头文件注释）。 */
+        float measure = (float)d->position;
+
         switch (cfg->position_mode)
         {
         case DRVLIB_MOTOR_POS_LIMITED:
@@ -125,20 +147,45 @@ static float MotorApplyCascade(DrvlibMotorInstance *inst, float ref, float dt)
             }
             break;
         case DRVLIB_MOTOR_POS_WRAP:
-            s = Lib_Math_WrapAngle(s, cfg->angle_limit_min, cfg->angle_limit_max);
+        {
+            const float range = cfg->angle_limit_max - cfg->angle_limit_min;
+            if (range > 0.0f)
+            {
+                /* 参考值取离连续位置最近的等价代表：误差仍是"最短角差"，
+                 * 但 measure 不跨窗跳变，微分先行不会打出整周期尖峰。 */
+                const float cont = (float)inst->position_continuous;
+                const float half = range * 0.5f;
+                s = cont + Lib_Math_WrapAngle(s - cont, -half, half);
+                measure = cont;
+            }
+            else
+            {
+                s = Lib_Math_WrapAngle(s, cfg->angle_limit_min, cfg->angle_limit_max);
+            }
             break;
+        }
         case DRVLIB_MOTOR_POS_CONTINUOUS:
         default:
             break;
         }
 
+        if (inst->pid_seeded[DRVLIB_MOTOR_STAGE_ANGLE] == 0u)
+        {
+            MotorSeedStage(inst, DRVLIB_MOTOR_STAGE_ANGLE, s, measure);
+        }
+
         float ff = (cfg->angle_feedforward_src == DRVLIB_MOTOR_FF_EXTERNAL && cfg->angle_feedforward_ptr) ? *cfg->angle_feedforward_ptr : 0.0f;
-        s = LibPIDCalculate(&inst->pid[DRVLIB_MOTOR_STAGE_ANGLE], s, (float)d->position, ff, dt);
+        s = LibPIDCalculate(&inst->pid[DRVLIB_MOTOR_STAGE_ANGLE], s, measure, ff, dt);
     }
 
     /* 速度环（中间） */
     if (cfg->loop_type & DRVLIB_MOTOR_LOOP_SPEED)
     {
+        if (inst->pid_seeded[DRVLIB_MOTOR_STAGE_SPEED] == 0u)
+        {
+            MotorSeedStage(inst, DRVLIB_MOTOR_STAGE_SPEED, s, d->speed);
+        }
+
         float ff = (cfg->speed_feedforward_src == DRVLIB_MOTOR_FF_EXTERNAL && cfg->speed_feedforward_ptr) ? *cfg->speed_feedforward_ptr : 0.0f;
         s = LibPIDCalculate(&inst->pid[DRVLIB_MOTOR_STAGE_SPEED], s, d->speed, ff, dt);
     }
@@ -146,6 +193,11 @@ static float MotorApplyCascade(DrvlibMotorInstance *inst, float ref, float dt)
     /* 电流环（最内） */
     if (cfg->loop_type & DRVLIB_MOTOR_LOOP_CURRENT)
     {
+        if (inst->pid_seeded[DRVLIB_MOTOR_STAGE_CURRENT] == 0u)
+        {
+            MotorSeedStage(inst, DRVLIB_MOTOR_STAGE_CURRENT, s, d->current);
+        }
+
         float ff = (cfg->current_feedforward_src == DRVLIB_MOTOR_FF_EXTERNAL && cfg->current_feedforward_ptr) ? *cfg->current_feedforward_ptr : 0.0f;
         s = LibPIDCalculate(&inst->pid[DRVLIB_MOTOR_STAGE_CURRENT], s, d->current, ff, dt);
     }
@@ -236,9 +288,11 @@ int8_t DrvlibMotorConfig(DrvlibMotorInstance *inst, const DrvlibMotor_Config_s *
     /* 状态清零（不动 enable：使能须显式调 DrvlibMotorEnable） */
     inst->position_single_last = 0.0f;
     inst->position_cnt = 0;
+    inst->position_continuous = 0.0;
     inst->speed_lpf_state = 0.0f;
     inst->current_lpf_state = 0.0f;
     inst->has_last = 0;
+    memset(inst->pid_seeded, 0, sizeof(inst->pid_seeded));
     memset(&inst->data, 0, sizeof(inst->data));
 
     BSPLOG(&g_drvlib_motor_log, LOG_LEVEL_INFO, "Config: loop=0x%02X pos_mode=%u span=%d mrad", inst->cfg.loop_type, inst->cfg.position_mode,
@@ -325,6 +379,8 @@ void DrvlibMotorReset(DrvlibMotorInstance *inst)
     {
         LibPIDReset(&inst->pid[i]);
     }
+    /* 下次某环第一次计算时重新播种 last_measure（见 MotorSeedStage） */
+    memset(inst->pid_seeded, 0, sizeof(inst->pid_seeded));
     inst->speed_lpf_state = 0.0f;
     inst->current_lpf_state = 0.0f;
 }
