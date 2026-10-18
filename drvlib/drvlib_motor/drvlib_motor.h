@@ -33,6 +33,13 @@
  *   速度/电流：一阶低通（共用同一 RC）后乘 feedback_direction（LPF 状态存未修正值）
  *   输出：级联结果乘 motor_direction
  *   位置模式：LIMITED(限幅) / WRAP(归一化) / CONTINUOUS(不限幅)
+ * @note WRAP 模式下的角度环测量值：对外 `data.position` 仍是归一化值，但环内改用
+ *       **未归一化**的连续位置（position_continuous）。误差归一化只保住 P/I；
+ *       "微分先行"算的是 last_measure−measure，若两边都用归一化值，跨窗口边界时
+ *       两者会差一个整周期，打出一个巨大的 D 冲击。参考值则取离连续位置最近的
+ *       等价代表，误差仍是"最短角差"。
+ * @note 每个环第一次计算时会把 last_measure 播种为当前测量值（pid_seeded），
+ *       避免 Config/Disable 后第一拍按 (0−measure)/dt 打一下。
  * 减速比不在这里（设计文档明确归 axis/chassis，电机侧是纯电机量）。
  *
  * ═══════════════════ dt ═══════════════════
@@ -219,9 +226,11 @@ typedef struct DrvlibMotorInstance
     /* 反馈后处理状态 */
     float position_single_last; /* 上次原始位置，用于回绕检测 */
     int64_t position_cnt;       /* 回绕累加计数 */
+    double position_continuous; /* 连续多圈位置 (rad)：累加+偏置+方向后**不归一化**，供角度环微分 */
     float speed_lpf_state;      /* 速度低通状态 */
     float current_lpf_state;    /* 电流低通状态 */
     uint8_t has_last;           /* 是否已收到过一帧 */
+    uint8_t pid_seeded[DRVLIB_MOTOR_STAGE_NUM]; /* 各环首次计算是否已播种 last_measure */
 
     uint8_t enable;
     uint8_t registered;
