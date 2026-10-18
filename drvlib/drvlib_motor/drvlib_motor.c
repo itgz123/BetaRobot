@@ -265,6 +265,13 @@ float DrvlibMotorSetRef(DrvlibMotorInstance *inst, float ref, const DrvlibMotorF
 
     if (!inst->enable)
     {
+        /* 失能仍处理反馈：多圈累加/低通必须持续跑。
+         * 否则失能期间手动转动电机后，position_cnt 与真实位置脱节，
+         * 再使能的第一拍位置会跳（尤其跨过编码器回绕点后）。输出仍恒为 0。 */
+        if (fb && fb->timestamp_us != 0)
+        {
+            MotorProcessFeedback(inst, fb, dt);
+        }
         MotorVofaOutput(inst);
         return 0.0f;
     }

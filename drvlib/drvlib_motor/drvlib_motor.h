@@ -267,6 +267,9 @@ int8_t DrvlibMotorConfig(DrvlibMotorInstance *inst, const DrvlibMotor_Config_s *
  * @param dt   本帧步长 (s)，由 app 传入（APP_TASK_DEF 的 dt 是 ms，须 ×0.001f）
  * @return 下发量（电流 A）；未使能 / 无数据时返回 0
  * @note 本函数同时承担「设参考值」与「算一帧」两职；处理方法后的反馈见 inst->data。
+ * @note ⚠ **未使能时仍处理反馈**（多圈累加/方向/偏置/低通都照常更新），只是输出恒 0。
+ *       失能期间也必须每拍喂 fb —— 这样手动转动电机后再使能，位置是连续的；
+ *       若失能期间停喂反馈，再使能的第一拍 `data.position` 会跳（跨编码器回绕时更明显）。
  */
 float DrvlibMotorSetRef(DrvlibMotorInstance *inst, float ref, const DrvlibMotorFeedback_s *fb, float dt);
 
