@@ -107,7 +107,17 @@ def allan_report(gy, fs):
         print(f"    {Trec:>4d}s → {np.rad2deg(se) * 3600:6.2f} °/h")
 
 
-def layout_problems(ac, eu, bias_col, yaw_rate_meas, resid_z, se_z, sl):
+def up_vector(ac, sl):
+    """静止段的重力方向（机体系单位向量 = 世界"上"在机体系里的方向）。
+
+    用它把陀螺残差投影成 yaw 漂移率：无论 IMU 正装（u≈+z）还是倒装（u≈−z），
+    dot(gyro, u) 都是同一条物理量。"""
+    u = ac[sl].mean(axis=0)
+    n = np.linalg.norm(u)
+    return u / n if n > 0 else np.array([0.0, 0.0, 1.0])
+
+
+def layout_problems(ac, eu, bias_col, yaw_rate_meas, expected_yaw_rate, se_z, sl):
     """通道表自检。
 
     老固件（2026-09-19 改 VOFA 之前）的录法通道号完全不同，那时 CSV 里的
@@ -118,15 +128,17 @@ def layout_problems(ac, eu, bias_col, yaw_rate_meas, resid_z, se_z, sl):
     acc_n = np.linalg.norm(ac[sl], axis=1).mean()
     if not 9.0 < acc_n < 10.6:
         p.append(f"|acc| 均值 {acc_n:.2f} m/s² 不像 1g → CH7-9 可能不是加速度")
-    if max(np.abs(eu[sl, 0]).max(), np.abs(eu[sl, 1]).max()) > 1.6:
-        p.append("CH1-3 超出 ±90° 量级 → 可能不是 euler")
+    # 只要求是 ±π 内的欧拉角：倒装时 roll 会收敛到 ≈π，不能按 ±90° 判
+    if np.abs(eu[sl]).max() > np.pi + 0.05:
+        p.append(f"CH1-3 超出 ±π 量级（max={np.abs(eu[sl]).max():.2f}）→ 可能不是 euler")
     if bias_col is not None:
         sd = bias_col[sl].std(axis=0).max()
         if sd > 1e-5:
             p.append(f"CH13-15 录制中在变（σ={sd:.1e}）→ 不是'生效零偏'列（老固件布局？）")
-    # yaw 漂移率应当≈残差 z（yaw 是校正后角速率的纯积分）——通道表不对时这条必然对不上
-    if abs(yaw_rate_meas - resid_z) > max(0.3 * abs(resid_z), 5 * se_z):
-        p.append(f"yaw 漂移率 {yaw_rate_meas:+.2e} 与残差 z {resid_z:+.2e} rad/s 对不上"
+    # yaw 漂移率应当≈残差在重力方向上的投影（yaw 是校正后角速率的纯积分）。
+    # 正装时投影=残差 z，倒装时=-残差 z；通道表不对时这条必然对不上。
+    if abs(yaw_rate_meas - expected_yaw_rate) > max(0.3 * abs(expected_yaw_rate), 5 * se_z):
+        p.append(f"yaw 漂移率 {yaw_rate_meas:+.2e} 与残差投影 {expected_yaw_rate:+.2e} rad/s 对不上"
                  f" → CH4-6/CH1-3 对不上号，或录的不是静止段")
     return p
 
@@ -197,18 +209,27 @@ def main():
 
     # ---- 静止判定：姿态/加速度不动才谈得上零偏 ----
     acc_n = np.linalg.norm(ac[sl], axis=1)
+    u_rest = up_vector(ac, sl)  # 世界"上"在机体系的方向：正装≈+z，倒装≈−z
     print("\n── 静止判定 ──")
     print(f"  euler roll/pitch σ: {eu[sl, 0].std() * 1e3:.2f} / {eu[sl, 1].std() * 1e3:.2f} mrad"
           f"  yaw 变化 {(eu[i1 - 1, 2] - eu[i0, 2]) * 180 / np.pi:+.4f}°")
+    if u_rest[2] < -0.9:
+        print("  安装: IMU 倒装（静止 acc z≈−g，世界向上 = 机体系 −z）；"
+              "roll 在 ≈π 附近、噪声大，不作静止判据")
+    else:
+        print(f"  安装: 正装（世界向上 ≈ 机体系 {u_rest.round(3)}）")
     print(f"  |acc| {acc_n.mean():.4f} m/s²  (范围 {acc_n.min():.4f}~{acc_n.max():.4f}，"
           f"σ={acc_n.std():.4f})  理论 9.80665")
     for k, name in enumerate("xyz"):
         g = gy[sl, k]
         print(f"  gyro {name}: 中位 {np.median(g): .6f}  σ {g.std():.6f}  "
               f"峰峰 {(g.max() - g.min()):.4f} rad/s ({np.rad2deg(g.max() - g.min()):.2f} °/s)")
-    moved = acc_n.std() > 0.05 or eu[sl, 0].std() > 0.005 or eu[sl, 1].std() > 0.005
+    # 倒装或近万向锁时 roll 的 KF 输出噪声很大，不能拿它判"有没有动"；
+    # 用加速度计模长 + pitch + 陀螺噪声判静止（地面轻微不平按 0 处理，不影响零偏）。
+    moved = (acc_n.std() > 0.05 or eu[sl, 1].std() > 0.01
+             or np.max(gy[sl].std(axis=0)) > 0.05)
     print("  判定: " + ("⚠ 有动作/晃动，均值不可信 —— 重录一段真正静止的" if moved
-                        else "OK，静止"))
+                        else "OK，静止（轻微倾斜不影响陀螺零偏）"))
 
     # ---- 温度：本次能不能标温漂 ----
     if tp is not None and not np.all(np.isnan(tp[sl])):
@@ -258,13 +279,15 @@ def main():
     yaw_unw = np.unwrap(eu[sl, 2])  # yaw wrap 到 (-π,π]，展开后再算漂移
     yaw_drift = yaw_unw[-1] - yaw_unw[0]
     yaw_rate_meas = yaw_drift / sec
+    expected_yaw_rate = float(resid @ u_rest)  # 正装 = resid_z，倒装 = −resid_z
     print(f"  yaw 实测漂移 {yaw_drift * 180 / np.pi:+.4f}° / {sec:.0f}s = "
-          f"{np.rad2deg(yaw_rate_meas):+.4f} °/s（应≈残差 z = {np.rad2deg(resid[2]):+.4f} °/s）")
+          f"{np.rad2deg(yaw_rate_meas):+.4f} °/s"
+          f"（应≈残差×重力方向 = {np.rad2deg(expected_yaw_rate):+.4f} °/s）")
     print(f"  标定后预期: 残余 yaw 漂移 ≈ {np.rad2deg(se[2]) * 3600:.1f} °/h（零偏估计误差，"
           "受 bias 重复性与温漂限制，不再受本次这块数据的白噪声限制）")
 
     # ---- 通道表自检：对不上就拒绝出标定值 ----
-    probs = layout_problems(ac, eu, bias_col, yaw_rate_meas, resid[2], se[2], sl)
+    probs = layout_problems(ac, eu, bias_col, yaw_rate_meas, expected_yaw_rate, se[2], sl)
     if probs:
         print("\n⚠ 通道布局自检没通过 —— 拒绝输出标定值（粘进去就是错的）：")
         for x in probs:
