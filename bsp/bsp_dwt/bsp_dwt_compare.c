@@ -15,10 +15,10 @@
 #define DWT_LAR_UNLOCK_KEY 0xC5ACCE55u
 
 /* ARMv7-M FUNCTION[3:0] 编码（DATAVMATCH=0、CYCMATCH=0） */
-#define DWT_FUNCTION_PC_MATCH  0x4u
-#define DWT_FUNCTION_DATA_R    0x5u
-#define DWT_FUNCTION_DATA_W    0x6u
-#define DWT_FUNCTION_DATA_RW   0x7u
+#define DWT_FUNCTION_PC_MATCH 0x4u
+#define DWT_FUNCTION_DATA_R 0x5u
+#define DWT_FUNCTION_DATA_W 0x6u
+#define DWT_FUNCTION_DATA_RW 0x7u
 
 /*------------- 私有变量 --------------*/
 
@@ -40,9 +40,7 @@ static uint8_t DWT_CompareChannelValid(DWT_CompareChannel_e channel)
  */
 static volatile uint32_t *DWT_CompareReg(DWT_CompareChannel_e channel, uint32_t index)
 {
-    return (volatile uint32_t *)((uintptr_t)&DWT->COMP0
-                                 + ((uintptr_t)channel * 0x10u)
-                                 + ((uintptr_t)index * 0x04u));
+    return (volatile uint32_t *)((uintptr_t)&DWT->COMP0 + ((uintptr_t)channel * 0x10u) + ((uintptr_t)index * 0x04u));
 }
 
 static uint32_t DWT_CompareModeToFunction(DWT_CompareMode_e mode)
@@ -95,8 +93,7 @@ uint8_t DWT_CompareInit(void)
     return 1u;
 }
 
-uint8_t DWT_CompareConfigure(DWT_CompareChannel_e channel,
-                             const DWT_CompareConfig_s *config)
+uint8_t DWT_CompareConfigure(DWT_CompareChannel_e channel, const DWT_CompareConfig_s *config)
 {
     if ((DWT_CompareChannelValid(channel) == 0u) || (config == NULL))
     {

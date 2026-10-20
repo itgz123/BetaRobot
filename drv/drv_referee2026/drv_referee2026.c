@@ -98,8 +98,8 @@ static int16_t Referee2026CoreFindId(const Referee2026Core_t *core, uint16_t cmd
  * 只是把调用栈上的隐式工作区挪到了显式结构里。 */
 typedef struct
 {
-    uint8_t  buf[REFEREE2026_HEADER_SIZE]; /* 待重扫的残留字节 */
-    uint16_t n;                            /* 待重扫字节数（0 = 无） */
+    uint8_t buf[REFEREE2026_HEADER_SIZE]; /* 待重扫的残留字节 */
+    uint16_t n;                           /* 待重扫字节数（0 = 无） */
 } Referee2026RxReplay_t;
 
 static void Referee2026CoreRxByte(Referee2026Core_t *core, uint8_t b, Referee2026RxReplay_t *rp);

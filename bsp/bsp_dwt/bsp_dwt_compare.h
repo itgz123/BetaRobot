@@ -63,8 +63,7 @@ uint8_t DWT_CompareInit(void);
  * @param config  比较模式、比较值与地址掩码
  * @return 1=成功，0=参数非法或通道不支持该模式
  */
-uint8_t DWT_CompareConfigure(DWT_CompareChannel_e channel,
-                             const DWT_CompareConfig_s *config);
+uint8_t DWT_CompareConfigure(DWT_CompareChannel_e channel, const DWT_CompareConfig_s *config);
 
 /**
  * @brief 使能已配置的比较器通道，并清除历史匹配状态
