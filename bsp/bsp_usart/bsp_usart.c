@@ -959,8 +959,8 @@ BSP_Status_e USARTRecoverTxIfStuck(USARTInstance *instance, uint32_t stuck_ms)
      * 放在内核里做，这里为拼同一条消息再算一遍 —— 消息里历来给的是归一化后的值。 */
     if (ret == BSP_OK)
     {
-        BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "UART TX stuck >%dms, state reset (uart_e=%d)!",
-               (int)((stuck_ms == 0) ? USART_TX_STUCK_TIMEOUT_MS : stuck_ms), (int)instance->uart_e);
+        BSPLOG(&g_usart_log, LOG_LEVEL_WARNING, "UART TX stuck >%dms, state reset (uart_e=%d)!", (int)((stuck_ms == 0) ? USART_TX_STUCK_TIMEOUT_MS : stuck_ms),
+               (int)instance->uart_e);
     }
 
     return ret;

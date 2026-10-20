@@ -38,11 +38,7 @@ uint8_t DWT_PerfInit(void)
     DWT->LSUCNT = 0u;
     DWT->FOLDCNT = 0u;
 
-    DWT->CTRL |= DWT_CTRL_CPIEVTENA_Msk |
-                 DWT_CTRL_EXCEVTENA_Msk |
-                 DWT_CTRL_SLEEPEVTENA_Msk |
-                 DWT_CTRL_LSUEVTENA_Msk |
-                 DWT_CTRL_FOLDEVTENA_Msk;
+    DWT->CTRL |= DWT_CTRL_CPIEVTENA_Msk | DWT_CTRL_EXCEVTENA_Msk | DWT_CTRL_SLEEPEVTENA_Msk | DWT_CTRL_LSUEVTENA_Msk | DWT_CTRL_FOLDEVTENA_Msk;
 
     return 1u;
 }

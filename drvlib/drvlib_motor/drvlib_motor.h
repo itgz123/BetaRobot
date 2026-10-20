@@ -224,12 +224,12 @@ typedef struct DrvlibMotorInstance
     DrvlibMotor_Config_s cfg;                /* 配置快照（含 app 传入的指针） */
 
     /* 反馈后处理状态 */
-    float position_single_last; /* 上次原始位置，用于回绕检测 */
-    int64_t position_cnt;       /* 回绕累加计数 */
-    double position_continuous; /* 连续多圈位置 (rad)：累加+偏置+方向后**不归一化**，供角度环微分 */
-    float speed_lpf_state;      /* 速度低通状态 */
-    float current_lpf_state;    /* 电流低通状态 */
-    uint8_t has_last;           /* 是否已收到过一帧 */
+    float position_single_last;                 /* 上次原始位置，用于回绕检测 */
+    int64_t position_cnt;                       /* 回绕累加计数 */
+    double position_continuous;                 /* 连续多圈位置 (rad)：累加+偏置+方向后**不归一化**，供角度环微分 */
+    float speed_lpf_state;                      /* 速度低通状态 */
+    float current_lpf_state;                    /* 电流低通状态 */
+    uint8_t has_last;                           /* 是否已收到过一帧 */
     uint8_t pid_seeded[DRVLIB_MOTOR_STAGE_NUM]; /* 各环首次计算是否已播种 last_measure */
 
     uint8_t enable;

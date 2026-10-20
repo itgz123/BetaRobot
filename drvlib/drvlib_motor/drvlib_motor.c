@@ -146,8 +146,7 @@ static float MotorApplyCascade(DrvlibMotorInstance *inst, float ref, float dt)
                 s = Lib_Math_Clamp(s, cfg->angle_limit_min, cfg->angle_limit_max);
             }
             break;
-        case DRVLIB_MOTOR_POS_WRAP:
-        {
+        case DRVLIB_MOTOR_POS_WRAP: {
             const float range = cfg->angle_limit_max - cfg->angle_limit_min;
             if (range > 0.0f)
             {

@@ -84,7 +84,7 @@ void APP_TaskDelayReport(const char *name, uint64_t dt_us);
         uint64_t last = DWT_GetTimeUs();                    /* 上次唤醒时刻(us)，用于算周期 dt */                                                              \
         TickType_t xLastWakeTime = xTaskGetTickCount();     /* 周期锚点(绝对唤醒时刻) */                                                                       \
         const TickType_t xPeriod = pdMS_TO_TICKS(freq_ms_); /* 任务周期(tick) */                                                                               \
-        (void)argument; /* 任务体不用入参，显式消费掉（-Wunused-parameter） */                                                                                                \
+        (void)argument;                                     /* 任务体不用入参，显式消费掉（-Wunused-parameter） */                                             \
         APP_TaskStartLog(#name_);                                                                                                                              \
         for (;;)                                                                                                                                               \
         {                                                                                                                                                      \

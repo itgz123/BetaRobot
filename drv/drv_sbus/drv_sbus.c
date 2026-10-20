@@ -218,9 +218,9 @@ static SBUS_Data_t SBUSDecodeFrame(const SBUSInstance *inst, const uint8_t *data
     for (uint8_t i = 0; i < SBUS_CHANNEL_COUNT; i++)
     {
         // 从 SBUS 原始帧提取第 i 个通道的 11 位原始值 (0-2047)
-        uint16_t bit_off = (uint16_t)i * 11;            // 从 ch_data 起始的位偏移
-        uint8_t byte_off = (uint8_t)(bit_off / 8);      // 从 raw[1] 起的字节偏移
-        uint8_t bit_rem = bit_off % 8;                  // 字节内位偏移
+        uint16_t bit_off = (uint16_t)i * 11;       // 从 ch_data 起始的位偏移
+        uint8_t byte_off = (uint8_t)(bit_off / 8); // 从 raw[1] 起的字节偏移
+        uint8_t bit_rem = bit_off % 8;             // 字节内位偏移
         // 从 raw[1 + byte_off] 读取最多 3 字节，超出的位被 0x07FF 清除
         uint16_t raw = (uint16_t)(((uint32_t)frame->raw[1 + byte_off] >> bit_rem) | ((uint32_t)frame->raw[1 + byte_off + 1] << (8 - bit_rem)) |
                                   ((uint32_t)frame->raw[1 + byte_off + 2] << (16 - bit_rem))) &
