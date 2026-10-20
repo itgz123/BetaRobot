@@ -16,7 +16,7 @@
  *          硬件无关）。若不需要 profiling，可删掉它并撤销 gen_sources.py 里的
  *          排除项，改回上游 micro/micro_time.cc 的参考实现（恒返回 0）。
  *
- * @warning 依赖 DWT_Init() 已完成（BSP_DWT_USED 由 bsp 初始化，早于任何推理）。
+ * @warning 依赖 DWT_Init() 已完成（BSP_DWT_CYCCNT_USED 由 bsp 初始化，早于任何推理）。
  *          未初始化时 DWT_GetTimeUs 读到的计数器恒 0，只影响耗时统计。
  */
 

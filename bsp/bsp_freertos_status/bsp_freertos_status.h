@@ -90,7 +90,7 @@
  *       省下来的是快照数组那段 RAM。
  *
  * @note tasks[].run_time_us 的计数源：configGENERATE_RUN_TIME_STATS == 1 且定义
- *       BSP_DWT_USED 时，本模块提供 getRunTimeCounterValue() /
+ *       BSP_DWT_CYCCNT_USED 时，本模块提供 getRunTimeCounterValue() /
  *       configureTimerForRunTimeStats() 强符号（覆盖 CubeMX 生成的返回 0 的
  *       __weak 版本），计数源为 DWT 微秒计数——否则 run_time_us / pct 会全是 0。
  *

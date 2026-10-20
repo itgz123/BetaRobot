@@ -24,7 +24,7 @@
 #include <string.h>
 
 /* 运行时间统计的计数源（DWT 微秒计数）：仅统计功能真正可用时才需要 */
-#if (configGENERATE_RUN_TIME_STATS == 1) && defined(BSP_DWT_USED)
+#if (configGENERATE_RUN_TIME_STATS == 1) && defined(BSP_DWT_CYCCNT_USED)
 #include "bsp_dwt.h"
 #endif
 
@@ -308,7 +308,7 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
  *        运行时间统计时基（可选强符号）
  *============================================*/
 
-#if (configGENERATE_RUN_TIME_STATS == 1) && defined(BSP_DWT_USED)
+#if (configGENERATE_RUN_TIME_STATS == 1) && defined(BSP_DWT_CYCCNT_USED)
 /**
  * @brief 运行时间统计时基初始化（portCONFIGURE_TIMER_FOR_RUN_TIME_STATS）
  * @note DWT 已由启动流程 DWT_Init() 初始化（app 初始化先于 vTaskStartScheduler），
@@ -328,6 +328,6 @@ unsigned long getRunTimeCounterValue(void)
 {
     return (unsigned long)DWT_GetTimeUs();
 }
-#endif /* configGENERATE_RUN_TIME_STATS == 1 && BSP_DWT_USED */
+#endif /* configGENERATE_RUN_TIME_STATS == 1 && BSP_DWT_CYCCNT_USED */
 
 #endif /* BSP_FREERTOS_STATUS_USED */

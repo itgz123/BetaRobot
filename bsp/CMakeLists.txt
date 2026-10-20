@@ -2,7 +2,10 @@
 set(MODULE_SOURCES
     bsp_app/bsp_app.c
     bsp_sys_status/bsp_sys_status.c
-    bsp_dwt/bsp_dwt.c
+    bsp_dwt/bsp_dwt_cyccnt.c
+    bsp_dwt/bsp_dwt_perf.c
+    bsp_dwt/bsp_dwt_compare.c
+    bsp_dwt/bsp_dwt_pcsample.c
     bsp_gpio/bsp_gpio.c
     bsp_log/bsp_log.c
     bsp_spi/bsp_spi.c

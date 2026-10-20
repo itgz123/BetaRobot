@@ -1,14 +1,14 @@
 /**
- * @file bsp_dwt.c
- * @brief DWT高精度定时器封装实现
+ * @file bsp_dwt_cyccnt.c
+ * @brief DWT CYCCNT 计时封装实现
  * @author Wang Hongxi
  * @author modified by Neo with annotation
  */
 
-#include "bsp_dwt.h"
+#include "bsp_dwt_cyccnt.h"
 #include "app_cfg.h"
 
-#ifdef BSP_DWT_USED
+#ifdef BSP_DWT_CYCCNT_USED
 
 /*------------- 私有变量 --------------*/
 static uint32_t s_cyccnt_round_count;
@@ -154,4 +154,4 @@ void DWT_Delay(float delay)
         ;
 }
 
-#endif /* BSP_DWT_USED */
+#endif /* BSP_DWT_CYCCNT_USED */
