@@ -1,33 +1,17 @@
 /**
  * @file bsp_dwt.h
- * @brief DWT高精度定时器封装，提供不受中断影响的延时和时间轴功能
- * @author Wang Hongxi
- * @author modified by NeoZng
+ * @brief DWT 功能族伞形聚合头（CYCCNT 计时 / 性能计数 / 比较器 / PC 采样）
+ * @note DWT_Init() 是整个功能族的唯一初始化入口，位于 bsp_dwt_cyccnt。
+ * @note 各子模块实现由 app_cfg.h 的 BSP_DWT_<SUB>_USED 单独门控；本头无条件
+ *       聚合声明，关闭的模块被调用时会在链接期暴露未定义符号。
  */
 
 #ifndef __BSP_DWT_H
 #define __BSP_DWT_H
 
-#include "main.h"
-#include "bsp_map.h"
-#include "stdint.h"
-
-/*------------- 外部接口声明 --------------*/
-
-void DWT_Init(void);
-
-/**
- * @brief 获取当前系统时间（微秒）
- * @return 自 DWT_Init 以来的累计时间，单位：微秒
- */
-uint64_t DWT_GetTimeUs(void);
-
-/**
- * @brief DWT延时函数
- * @attention 该函数不受中断是否开启的影响，可以在临界区和关闭中断时使用
- * @note 禁止在 __disable_irq() 和 __enable_irq() 之间使用 HAL_Delay()，应使用本函数
- * @param delay 延时时间，单位：秒
- */
-void DWT_Delay(float delay);
+#include "bsp_dwt_cyccnt.h"
+#include "bsp_dwt_perf.h"
+#include "bsp_dwt_compare.h"
+#include "bsp_dwt_pcsample.h"
 
 #endif /* __BSP_DWT_H */
