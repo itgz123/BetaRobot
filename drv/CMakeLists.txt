@@ -17,6 +17,7 @@ set(MODULE_SOURCES
     drvs_motor/drvs_djimotor_broadcast/drvs_djimotor_broadcast.c
     drvs_motor/drvs_lkmotor_broadcast/drvs_lkmotor_broadcast.c
     drv_axis_lite/drv_axis_mit_lite.c
+    drv_super_cap_yq2027/drv_super_cap_yq2027.c
     drv_referee2026/public/referee2026_proto.c
     # referee2026：模块根放暴露接口（四条链路共用的 Register/Config/Send + 收发内核），
     # public 放协议层公共件，link_* 各放本链路的元信息表（只有类型与表，无函数）
@@ -62,6 +63,7 @@ set(MODULE_INCLUDE_DIRS
     drvs_motor/drvs_djimotor_broadcast
     drvs_motor/drvs_lkmotor_broadcast
     drv_axis_lite
+    drv_super_cap_yq2027
     # referee2026：模块根放公开接口头 + public 放协议层公共件，link_* 各自放本链路的公开头（用哪条 include 哪个）
     drv_referee2026
     drv_referee2026/public
