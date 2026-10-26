@@ -1,0 +1,158 @@
+== lib_imu_transform tests ==
+
+[1] ident config
+ok   : init ok
+ok   : update ok
+ok   : gyro passthrough.x
+ok   : gyro passthrough.y
+ok   : gyro passthrough.z
+ok   : acc passthrough.x
+ok   : acc passthrough.y
+ok   : acc passthrough.z
+ok   : alpha seeded 0.x
+ok   : alpha seeded 0.y
+ok   : alpha seeded 0.z
+ok   : alpha_valid first tick
+ok   : fresh first tick
+ok   : valid first tick
+ok   : update 2 ok
+ok   : alpha diff.x
+ok   : alpha diff.y
+ok   : alpha diff.z
+ok   : alpha_valid second tick
+
+[2] pure rotation
+ok   : init actual mount
+ok   : update actual mount
+ok   : actual mount gyro.x
+ok   : actual mount gyro.y
+ok   : actual mount gyro.z
+ok   : actual mount acc.x
+ok   : actual mount acc.y
+ok   : actual mount acc.z
+ok   : init Rz90
+ok   : update Rz90
+ok   : Rz90 gyro.x
+ok   : Rz90 gyro.y
+ok   : Rz90 gyro.z
+ok   : Rz90 acc.x
+ok   : Rz90 acc.y
+ok   : Rz90 acc.z
+
+[3] centripetal sign
+ok   : init
+ok   : tick 1
+ok   : tick 2
+ok   : centripetal compensation.x
+ok   : centripetal compensation.y
+ok   : centripetal compensation.z
+
+[4] tangential sign
+ok   : init
+ok   : seed
+ok   : tick 2
+ok   : alpha raw.x
+ok   : alpha raw.y
+ok   : alpha raw.z
+ok   : tangential compensation.x
+ok   : tangential compensation.y
+ok   : tangential compensation.z
+
+[5] alpha LPF
+ok   : init rc=0.02
+ok   : seed
+ok   : tick raw=300
+ok   : LPF first step = 100
+ok   : tick raw=0
+ok   : LPF second step = 66.667
+
+[6/7] clamp + dt==0
+ok   : init limit=100
+ok   : seed
+ok   : clamped tick
+ok   : per-axis clamp.x
+ok   : per-axis clamp.y
+ok   : per-axis clamp.z
+ok   : dt=0 tick
+ok   : alpha held on dt=0.x
+ok   : alpha held on dt=0.y
+ok   : alpha held on dt=0.z
+ok   : dt=0 still transforms.x
+ok   : dt=0 still transforms.y
+ok   : dt=0 still transforms.z
+ok   : dt=0 fresh=0
+ok   : dt=0 valid from input
+
+[8] reset
+ok   : init
+ok   : seed
+ok   : build alpha
+ok   : alpha before reset
+ok   : post-reset seed
+ok   : alpha zero after reset.x
+ok   : alpha zero after reset.y
+ok   : alpha zero after reset.z
+ok   : alpha_valid 0 after reset
+ok   : post-reset diff
+ok   : alpha resumes after reset
+
+[9] rotate-before-diff ordering
+ok   : init
+ok   : seed
+ok   : diff
+ok   : alpha_T = R*alpha_I.x
+ok   : alpha_T = R*alpha_I.y
+ok   : alpha_T = R*alpha_I.z
+ok   : init limited
+ok   : seed limited
+ok   : limited diff
+ok   : clamp in target frame.x
+ok   : clamp in target frame.y
+ok   : clamp in target frame.z
+
+[10] config / runtime errors
+ok   : init NULL
+ok   : init cfg NULL
+ok   : all-zero axes = identity
+ok   : update zero cfg
+ok   : zero cfg passthrough.x
+ok   : zero cfg passthrough.y
+ok   : zero cfg passthrough.z
+ok   : non-orthogonal rejected
+ok   : reflection rejected
+ok   : scaled axes normalized
+ok   : update scaled
+ok   : scaled axes = identity.x
+ok   : scaled axes = identity.y
+ok   : scaled axes = identity.z
+ok   : negative rc rejected
+ok   : negative limit rejected
+ok   : NaN config rejected
+ok   : not init rejected
+ok   : not init zeroes out.x
+ok   : not init zeroes out.y
+ok   : not init zeroes out.z
+ok   : init for runtime errors
+ok   : seed
+ok   : NaN input rejected
+ok   : error zeroes out.x
+ok   : error zeroes out.y
+ok   : error zeroes out.z
+ok   : recover after NaN
+ok   : NaN did not pollute gyro_prev
+ok   : negative dt rejected
+ok   : NULL out rejected
+
+[11] multiple instances
+ok   : init A
+ok   : init B
+ok   : A update
+ok   : B update
+ok   : A gyro.x
+ok   : A gyro.y
+ok   : A gyro.z
+ok   : B gyro.x
+ok   : B gyro.y
+ok   : B gyro.z
+
+ALL PASS (0 failures)

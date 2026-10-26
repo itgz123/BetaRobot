@@ -16,6 +16,7 @@ set(MODULE_SOURCES
     lib_fsm_table/lib_fsm_table.c
     lib_hamming/lib_hamming.c
     lib_hamming/lib_hamming_ext.c
+    lib_imu_transform/lib_imu_transform.c
     lib_kf/lib_ekf/lib_ekf.c
     lib_kf/lib_eskf/lib_eskf.c
     lib_kf/lib_lkf/lib_lkf.c
@@ -45,6 +46,7 @@ set(MODULE_INCLUDE_DIRS
     lib_fsm_state
     lib_fsm_table
     lib_hamming
+    lib_imu_transform
     lib_kf
     lib_kf/lib_ekf
     lib_kf/lib_eskf
