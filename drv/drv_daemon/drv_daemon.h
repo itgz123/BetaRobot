@@ -4,20 +4,13 @@
 #include <stdint.h>
 #include "app_cfg.h"
 
+/* app 侧 daemon 任务的建议调用周期（ms）。本模块不创建任务，由 app 决定实际周期 */
 #ifndef DAEMON_FREQ_MS
 #define DAEMON_FREQ_MS 1
 #endif
 
-#ifndef DAEMON_STACK_SIZE
-#define DAEMON_STACK_SIZE 512
-#endif
-
 #ifndef DAEMON_MX_CNT
 #define DAEMON_MX_CNT 64
-#endif
-
-#ifndef DAEMON_TASK_PRIORITY
-#define DAEMON_TASK_PRIORITY 0
 #endif
 
 /* 离线故障动作枚举（8种, 占uint8_t） */
@@ -89,7 +82,21 @@ void DaemonReload(DaemonInstance *instance);
  *       "查询说离线、故障动作还没触发"的错位。
  */
 uint8_t DaemonIsOnline(DaemonInstance *instance);
+
+/**
+ * @brief daemon 周期主体：遍历所有实例判离线、触发故障动作/回调
+ * @note 本模块不创建任务（drv 层不依赖 FreeRTOS）。由 app 自己的周期任务调用，
+ *       建议周期 DAEMON_FREQ_MS（1ms）。
+ * @note 判离线用的是"距上次喂狗的实耗时间"，与调用次数无关：app 任务偶尔落后
+ *       一两拍不会连带把刚喂过狗的实例误判离线，只是最坏检测时延随周期增大。
+ */
 void DaemonTask(void);
+
+/**
+ * @brief 初始化 daemon 的板级资源（蜂鸣器 PWM）
+ * @note 只做硬件初始化，**不创建任何任务**；在 app 初始化流程里、调度器启动前调用。
+ *       周期调用 DaemonTask() 由 app 自行注册任务完成。
+ */
 void DaemonInit(void);
 
 #endif // !__DRV_DAEMON_H
