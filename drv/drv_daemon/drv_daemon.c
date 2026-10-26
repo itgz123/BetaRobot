@@ -3,7 +3,6 @@
 #ifdef DAEMON_USED
 
 #include "bsp_log.h"
-#include "bsp_freertos.h"
 #include "bsp_dwt.h"
 #include "bsp_tim.h"
 
@@ -24,9 +23,6 @@ static uint8_t buzzer_flag = 0; // TODO:这个之后用位域实现
 static uint8_t all_daemon_is_online = 1;
 
 PWM_INSTANCE_DEF(buzzer_pwm);
-
-// Daemon 任务实例
-TASK_INSTANCE_DEF(daemon_task, DAEMON_STACK_SIZE);
 
 void DaemonConfig(DaemonInstance *inst, const Daemon_Config_s *config)
 {
@@ -106,12 +102,11 @@ void DaemonTask(void)
     buzzer_flag = 0; // 刷新，避免上一轮循环影响
     uint8_t all_daemon_is_online_temp = 1;
     /* 本拍统一取一次时刻：下面按"距上次喂狗的实耗毫秒数"判离线，而不是按本函数被调用的次数。
-     * 原因：本工程 FreeRTOS 较老，vTaskDelayUntil 落后时不会跳到当前时刻，而是背靠背补拍
-     * （见 DaemonTaskFunc 的 "is being DELAY!" 日志），加上离线回调本身可能耗时（如 USART
-     * 残留态的 Abort 要自旋等 tick），一次跨周期就会让所有实例的计数被连扣若干拍 —— 刚刚
-     * 喂过狗的 CAN 云台链路（reload=10）、BMI088（reload=20）会被瞬时误判离线，
-     * 后果是无中生有的停车/失能。按实耗时间扣拍后，补拍期间 elapsed≈0，不产生任何扣减，
-     * `reload_count` 也回归它文档里的本义：毫秒。 */
+     * 原因：调用方是 app 的周期任务，旧版 FreeRTOS 的 vTaskDelayUntil 落后时不会跳到当前时刻，
+     * 而是背靠背补拍；加上离线回调本身可能耗时（如 USART 残留态的 Abort 要自旋等 tick），
+     * 一次跨周期就会让所有实例的计数被连扣若干拍 —— 刚刚喂过狗的 CAN 云台链路（reload=10）、
+     * BMI088（reload=20）会被瞬时误判离线，后果是无中生有的停车/失能。按实耗时间判离线后，
+     * 补拍期间 elapsed≈0，不产生任何误判，`reload_count` 也回归它文档里的本义：毫秒。 */
     uint64_t now_us = DWT_GetTimeUs();
 
     for (size_t i = 0; i < s_idx; ++i)
@@ -197,36 +192,11 @@ void DaemonTask(void)
     PWMSetDutyRatio(&buzzer_pwm, (buzzer_flag / 2.0f));
 }
 
-/*==================== RTOS 任务 ====================*/
-
-ITCM_RAM static void DaemonTaskFunc(void *argument)
-{
-    static uint64_t start;
-    static uint64_t dt;
-    TickType_t xLastWakeTime = xTaskGetTickCount();           // 周期锚点(绝对唤醒时刻)
-    const TickType_t xPeriod = pdMS_TO_TICKS(DAEMON_FREQ_MS); // 任务周期(tick)
-    (void)argument;
-    BSPLOG(&g_daemon_log, LOG_LEVEL_INFO, "DAEMON Task Start");
-    for (;;)
-    {
-        vTaskDelayUntil(&xLastWakeTime, xPeriod); // 固定周期唤醒，避免 vTaskDelay 的周期漂移
-        start = DWT_GetTimeUs();
-        DaemonTask();
-        dt = DWT_GetTimeUs() - start;
-        if (dt > 1000 * DAEMON_FREQ_MS)
-            BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "DAEMON Task is being DELAY! dt = %llu(us)", dt);
-    }
-}
+/*==================== 初始化 ====================*/
 
 void DaemonInit(void)
 {
-
-    Task_Init_Config_s task_cfg = {
-        .func = DaemonTaskFunc,
-        .priority = DAEMON_TASK_PRIORITY,
-    };
-    TaskRegister(&daemon_task, &task_cfg);
-
+    /* 本模块不创建任务：周期调用 DaemonTask() 的任务由 app 注册（drv 层不依赖 FreeRTOS） */
 #if (DEVELOPMENT_BOARD == DM_MC02) || (DEVELOPMENT_BOARD == DJI_C) || (DEVELOPMENT_BOARD == DJI_A)
     PWMRegister(&buzzer_pwm);
     PWM_Config_s pwm_cfg = {.tim_e = TIM_BUZZER};

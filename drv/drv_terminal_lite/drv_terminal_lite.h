@@ -8,11 +8,11 @@
  *       - 与 log 分离：命令/回显走 TERMINAL_LITE_UART，日志仍走 LOG_UART。
  *       - 无行编辑：本版本只把收到的字节按 \r / \n 组行并解析成标准命令。
  *
- * @note 数据流：
- *       RX ISR 只把串口字节拷入内部环形缓冲并唤醒小任务；
- *       模块小任务 收→组行→解析 tlget/tlset→匹配 token→压入待执行队列（不执行）；
- *       app 在自己的任务里周期调 TerminalLiteExecute() 取走并执行命令
- *       （exec 后由模块按该命令的 scale 定点化回显，业务跑在 app 任务上下文）。
+ * @note 数据流（无模块任务）：
+ *       RX ISR 只把串口字节拷入内部环形缓冲；
+ *       app 在自己的任务里周期调 TerminalLiteExecute()：从环形缓冲组行 → 解析
+ *       tlget/tlset → 匹配 token → 就地执行 exec → 按该命令的 scale 定点化回显。
+ *       手动调参的发送周期一般 5~10s，轮询处理完全够用，故本模块不创建任务/队列。
  *
  * @note 命令格式：
  *       tlget <token>         读：exec(type=CMD_GET, value=0, &pval)
@@ -40,7 +40,7 @@
 #define TERMINAL_LITE_MAX_LINE 32 // 单行最大字符数(不含'\0')，同时用作 bsp_usart RX DMA 段大小（一行须能整段收齐）
 #endif
 #ifndef TERMINAL_LITE_RING_SIZE
-#define TERMINAL_LITE_RING_SIZE 128 // ISR→任务 环形缓冲大小（必须为 2 的幂）
+#define TERMINAL_LITE_RING_SIZE 128 // ISR→Execute 环形缓冲大小（必须为 2 的幂）
 #endif
 #ifndef TERMINAL_LITE_TX_BUF
 #define TERMINAL_LITE_TX_BUF 32 // 单条回显/发送最大字节数（超长截断）
@@ -48,20 +48,11 @@
 #ifndef TERMINAL_LITE_TX_QUEUE_LEN
 #define TERMINAL_LITE_TX_QUEUE_LEN 8 // 发送队列深度（按每帧 execute 条数配；满则丢弃并记日志）
 #endif
-#ifndef TERMINAL_LITE_EXEC_QUEUE_LEN
-#define TERMINAL_LITE_EXEC_QUEUE_LEN 4 // 待执行命令队列长度
-#endif
-#ifndef TERMINAL_LITE_TASK_STACK
-#define TERMINAL_LITE_TASK_STACK 512 // 小任务栈（字）
-#endif
-#ifndef TERMINAL_LITE_TASK_PRIORITY
-#define TERMINAL_LITE_TASK_PRIORITY 1 // 小任务优先级（低于控制任务 2）
-#endif
 #ifndef TERMINAL_LITE_LOG_LIMIT
 #define TERMINAL_LITE_LOG_LIMIT 10 // 模块日志限频（条/秒）
 #endif
 #ifndef TERMINAL_LITE_RX_RESTART_PERIOD_MS
-#define TERMINAL_LITE_RX_RESTART_PERIOD_MS 100 // 接收停摆后的自检/重启周期（ms）；同时是小任务的空闲唤醒周期
+#define TERMINAL_LITE_RX_RESTART_PERIOD_MS 100 // 接收停摆自检的限频周期（ms），在 TerminalLiteExecute 里检查
 #endif
 
 /*============================================
@@ -103,20 +94,21 @@ typedef struct
  *============================================*/
 
 /**
- * @brief 初始化终端（注册串口 + 建模块小任务 + 收命令表）
+ * @brief 初始化终端（注册/配置串口 + 启动接收 + 收命令表）
  * @param table 命令表数组指针（须静态存储，模块只保存指针）
  * @param cnt   命令条数
- * @note 在 app 初始化流程里、调度器启动前调用（与 DaemonInit 一致）
+ * @note 不创建任务或队列；在 app 初始化流程里、调度器启动前调用（与 DaemonInit 一致）
  */
 void TerminalLiteInit(const TerminalLiteCmd_s *table, uint8_t cnt);
 
 /**
- * @brief 取出并执行收到的命令（业务入口）
+ * @brief 处理接收缓冲并执行命令（业务入口）
  * @param max 本帧最多执行的命令条数
  * @return 实际处理的条数
- * @note 由 app 在自己的任务里周期调用（空队列时几乎零开销）。
- *       tlset 的语法/数值/越限(min/max)都在小任务解析阶段一并校验，越界只入错误事件；
- *       本接口只执行已通过校验的命令，并按该命令 scale 定点化默认回显；解析错回 err。
+ * @note 由 app 在自己的任务里周期调用（缓冲空时几乎零开销）。本函数从环形缓冲
+ *       组行 → 解析 tlget/tlset → 校验语法/数值/越限(min/max) → 执行 exec →
+ *       按该命令 scale 定点化回显，全在同一上下文完成；解析错直接回 err。
+ *       每次调用还会做一次接收停摆自检（bsp 内部按 TERMINAL_LITE_RX_RESTART_PERIOD_MS 限频）。
  */
 uint8_t TerminalLiteExecute(uint8_t max);
 
