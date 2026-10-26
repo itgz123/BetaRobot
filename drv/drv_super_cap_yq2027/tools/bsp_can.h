@@ -120,7 +120,6 @@ extern TestCanState g_can;
 
 BSP_Status_e CANRegister(CANInstance *instance);
 BSP_Status_e CANConfig(CANInstance *instance, const CAN_Config_s *config);
-BSP_Status_e CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeout_ms,
-                         uint32_t *tx_mailbox, uint8_t *tx_free_level);
+BSP_Status_e CANTransmit(CANInstance *instance, const CAN_Pack_s *pack, uint32_t timeout_ms, uint32_t *tx_mailbox, uint8_t *tx_free_level);
 
 #endif /* __TEST_BSP_CAN_H */

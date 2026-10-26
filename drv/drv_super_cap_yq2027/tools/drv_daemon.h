@@ -42,8 +42,7 @@ typedef struct
     void *owner_id;
 } Daemon_Config_s;
 
-#define DAEMON_INSTANCE_DEF(name) \
-    static DaemonInstance name = { .reload_count = 0, .fault_action = DAEMON_FAULT_NONE, .is_online = 1 }
+#define DAEMON_INSTANCE_DEF(name) static DaemonInstance name = {.reload_count = 0, .fault_action = DAEMON_FAULT_NONE, .is_online = 1}
 
 /* 测试记录 */
 typedef struct
