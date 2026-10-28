@@ -445,9 +445,9 @@ typedef enum : uint8_t
    - `CANTransmit(` 在 `drv/` 里的裸调用都是**合法**的：`comm_media_can_pkt0.c` /
      `comm_media_can_idseq.c` 各一处（media 后端不是电机，没有电机实例可挂 `tx_fail`），
      `drvs_motor/*` 各驱动自己的发送点（各自判 `!= BSP_OK` 后累加本实例/本组的 `tx_fail`）。
-     它们都不经过 `MotorCanTransmit` —— 那个 helper 只服务**待删除**的旧 `drv_motor/`，
+     它们都不经过 `MotorCanTransmit` —— 那个 helper 只服务旧的 `drv_motor/`（已删除），
      `drvs_motor` 已全部改用 `CANTransmit` 直呼（见 `drvs_*.c` 的发送点注释）。
-     等 `drv_motor/` 连同 `drv_motor_can.h` 一起删掉后，`drv/` 里就只剩这 9 个直呼点；
+     现在 `drv/` 里的直呼点只剩 comm media、超级电容与 `drvs_motor` 各自的发送处；
    - `CAN_TX_MAILBOX_FREE_BASE`（定义后从未使用的死物）→ 零匹配。
 3. **符号级要查 `.o`，不要查 `.elf`**：本工程开了 `-ffunction-sections` + `-Wl,--gc-sections`
    （`CMakeLists.txt:226,243`），**零调用者的函数会被链接器丢掉**。所以零调用者的函数

@@ -18,8 +18,8 @@
  *       模块不替 app 决定"该不该使能"，故 Send 也无失能早退（协议层由电机自己拒绝）。
  *
  * @note 无基类、无虚函数表：每个品牌自包含（自己的实例结构体 + 自己的函数），
- *       app 当胶水。命名带 Drvs 前缀是为了重构期间与旧 drv_motor 同树共存
- *       （避免符号冲突）；等 app 全部切到 drvs 后删掉旧 drv，再去掉前缀。
+ *       app 当胶水。命名保留 Drvs 前缀，与 drvlib_ 的算法层区分
+ *       （旧 drv_motor 已删除，app 已全部切到 drvs + drvlib）。
  *
  * @note 协议：CAN MIT 模式，标准帧 11 位 ID，1Mbps，8 字节帧，12 位跨字节位域，
  *       无符号整数线性映射。**控制帧与 DM 逐字节相同**，故 DrvsRSMotorControlFrame_u

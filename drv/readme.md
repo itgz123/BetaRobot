@@ -29,8 +29,8 @@
 ---
 
 以上复制来自docs  
-当前drv很多不符合这个架构，慢慢修改（drv_axis_lite,drv_motor）  
-先用drvs前缀，避免重名，等app全部依赖drvs/drvlib之后，删除原来的drv，改drvs为drv
+当前drv很多不符合这个架构，慢慢修改（drv_axis_lite）  
+电机协议层统一为 drvs_motor（纯协议）+ drvlib_motor（闭环/反馈后处理）；旧的 drv_motor 已删除
 
 ---
 

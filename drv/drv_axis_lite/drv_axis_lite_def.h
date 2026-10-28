@@ -6,8 +6,8 @@
  *
  * @note 考虑：重力(实际位置)；惯量(参考加速度)；双向库伦摩擦(实际速度)；双向粘性摩擦(实际速度)。
  *
- * @note axis lite 模块统一约定：只做控制律计算，不持有电机、不调用 Motor* 接口。
- *       反馈由 app 层读好后填进 AxisLiteState_s 传入，输出 setref 由 app 层自行 MotorSetRef 下发。
+ * @note axis lite 模块统一约定：只做控制律计算，不持有电机、不直接收发 CAN。
+ *       反馈由 app 层读好后填进 AxisLiteState_s 传入，输出 setref 由 app 层交给 DrvsXxxSetRef 下发。
  */
 #ifndef DRV_AXIS_LITE_DEF_H
 #define DRV_AXIS_LITE_DEF_H

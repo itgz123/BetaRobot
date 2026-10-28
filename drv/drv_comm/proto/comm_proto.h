@@ -55,7 +55,7 @@ typedef struct CommProto CommProto;
  *          bsp 清空并重启接收——必须同步消费（解析/拷贝），不可保存指针异步用。 */
 typedef void (*ProtoFrameCallback)(const uint8_t *payload);
 
-/* 虚函数表（派生结构体首成员为 vtable，drv_motor_base 约定） */
+/* 虚函数表（派生结构体首成员为 vtable） */
 typedef struct
 {
     int8_t (*pack)(CommProto *self, const uint8_t *payload, uint8_t *out_buff); /* 打包 payload → out_buff */

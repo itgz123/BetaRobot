@@ -35,7 +35,7 @@ typedef enum : uint8_t
 
 typedef struct CommMedia CommMedia;
 
-/* 虚函数表（派生结构体首成员为 vtable，drv_motor_base 约定） */
+/* 虚函数表（派生结构体首成员为 vtable） */
 typedef struct
 {
     int8_t (*send)(CommMedia *self, const uint8_t *data); /* 发送任意长度数据单元 */
