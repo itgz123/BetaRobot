@@ -265,6 +265,8 @@ function(build_app app_name)
         ${DRV_SOURCE_FILES}
         ${DRVLIB_SOURCE_FILES}
         "${CMAKE_SOURCE_DIR}/bsp/bsp_map/${app_board}/bsp_map.c"
+        # 强制版本检查：即使 app_cfg.h 忘了 include BetaRobot_version.h 也绕不开
+        "${CMAKE_SOURCE_DIR}/BetaRobot_version_check.c"
         ${STARTUP_FILE}
     )
     set_target_properties(${app_name} PROPERTIES SUFFIX ".elf")
@@ -349,6 +351,8 @@ function(build_app app_name)
         ${HAL_MODULE_SOURCES}
         # bsp_map.c 是直接以绝对路径加进来的（见上方 add_executable），单独列出
         "${CMAKE_SOURCE_DIR}/bsp/bsp_map/${app_board}/bsp_map.c"
+        # 版本检查单元同理
+        "${CMAKE_SOURCE_DIR}/BetaRobot_version_check.c"
     )
     set_source_files_properties(${jsf_av_first_party_sources}
         PROPERTIES COMPILE_OPTIONS "${JSF_AV_STRICT_WARNINGS}")

@@ -1,0 +1,18 @@
+#!/bin/sh
+# BetaRobot 版本钩子入口：更新并暂存 BetaRobot_version.h。
+# 由 scripts/setup_hooks.py 设置 core.hooksPath=.githooks 后由 Git 直接调用。
+
+root=$(git rev-parse --show-toplevel) || exit 1
+
+if command -v python3 >/dev/null 2>&1; then
+    exec python3 "$root/.githooks/pre_commit.py"
+elif command -v python >/dev/null 2>&1; then
+    exec python "$root/.githooks/pre_commit.py"
+elif command -v py >/dev/null 2>&1; then
+    # Git for Windows：py 启动器
+    exec py -3 "$root/.githooks/pre_commit.py"
+fi
+
+echo "pre-commit: 未找到 Python，未更新 BetaRobot_version.h" >&2
+echo "pre-commit: 请安装 Python 3，或确认 scripts/setup_hooks.py 所在环境可用" >&2
+exit 1
