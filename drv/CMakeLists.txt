@@ -6,11 +6,11 @@ set(MODULE_SOURCES
     drv_ist8310/drv_ist8310.c
     drv_daemon/drv_daemon.c
     drv_vofa/drv_vofa.c
-    drvs_motor/drvs_dmmotor/drvs_dmmotor.c
-    drvs_motor/drvs_rsmotor/drvs_rsmotor.c
-    drvs_motor/drvs_lkmotor/drvs_lkmotor.c
-    drvs_motor/drvs_djimotor_broadcast/drvs_djimotor_broadcast.c
-    drvs_motor/drvs_lkmotor_broadcast/drvs_lkmotor_broadcast.c
+    drv_motor/drv_dmmotor/drv_dmmotor.c
+    drv_motor/drv_rsmotor/drv_rsmotor.c
+    drv_motor/drv_lkmotor/drv_lkmotor.c
+    drv_motor/drv_djimotor_broadcast/drv_djimotor_broadcast.c
+    drv_motor/drv_lkmotor_broadcast/drv_lkmotor_broadcast.c
     drv_axis_lite/drv_axis_mit_lite.c
     drv_super_cap_yq2027/drv_super_cap_yq2027.c
     drv_referee2026/public/referee2026_proto.c
@@ -47,11 +47,11 @@ set(MODULE_INCLUDE_DIRS
     drv_dbus
     drv_daemon
     drv_vofa
-    drvs_motor/drvs_dmmotor
-    drvs_motor/drvs_rsmotor
-    drvs_motor/drvs_lkmotor
-    drvs_motor/drvs_djimotor_broadcast
-    drvs_motor/drvs_lkmotor_broadcast
+    drv_motor/drv_dmmotor
+    drv_motor/drv_rsmotor
+    drv_motor/drv_lkmotor
+    drv_motor/drv_djimotor_broadcast
+    drv_motor/drv_lkmotor_broadcast
     drv_axis_lite
     drv_super_cap_yq2027
     # referee2026：模块根放公开接口头 + public 放协议层公共件，link_* 各自放本链路的公开头（用哪条 include 哪个）

@@ -1,18 +1,18 @@
 /**
- * @file drvs_dmmotor.c
+ * @file drv_dmmotor.c
  * @brief DM 电机（4310 / 4310P）纯协议驱动实现
  * @author TRW
  * @date 2026-09-21
  *
  * @note 协议：CAN MIT 模式，8 字节帧，12 位跨字节位域
  * @note 映射：无符号整数线性映射（不是有符号补码）
- * @note 职责边界见 drvs_dmmotor.h：只做字节 ↔ 物理量，不做闭环/滤波/方向/累加/零点
+ * @note 职责边界见 drv_dmmotor.h：只做字节 ↔ 物理量，不做闭环/滤波/方向/累加/零点
  */
 
-#include "drvs_dmmotor.h"
+#include "drv_dmmotor.h"
 #include "app_cfg.h"
 
-#ifdef DRVS_DMMOTOR_USED
+#ifdef DRV_DMMOTOR_USED
 
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
@@ -21,10 +21,10 @@
 #include <math.h>
 #include <string.h>
 
-#ifndef DRVS_DMMOTOR_LOG_LIMIT
-#define DRVS_DMMOTOR_LOG_LIMIT 10
-#endif // !DRVS_DMMOTOR_LOG_LIMIT
-LOG_INSTANCE_DEF(g_drvs_dmmotor_log, "drvs_dmmotor", DRVS_DMMOTOR_LOG_LIMIT);
+#ifndef DRV_DMMOTOR_LOG_LIMIT
+#define DRV_DMMOTOR_LOG_LIMIT 10
+#endif // !DRV_DMMOTOR_LOG_LIMIT
+LOG_INSTANCE_DEF(g_drv_dmmotor_log, "drv_dmmotor", DRV_DMMOTOR_LOG_LIMIT);
 
 /*============================================
  *              内部辅助函数（热路径优化）
@@ -69,16 +69,16 @@ static inline uint16_t dm_float_to_uint(float float_val, float inv_scale, float 
 /**
  * @brief DM 反馈帧回调（ISR 上下文）
  *
- * 反馈帧格式（8 字节）见 drvs_dmmotor.h
+ * 反馈帧格式（8 字节）见 drv_dmmotor.h
  */
-static void DrvsDMMotorRxCallback(CANInstance *can, const CAN_Pack_s *pack)
+static void DrvDMMotorRxCallback(CANInstance *can, const CAN_Pack_s *pack)
 {
     if (!can || !can->parent)
         return;
 
-    DrvsDMMotor_s *inst = (DrvsDMMotor_s *)can->parent;
-    const DrvsDMMotorFeedbackFrame_u *fb = (const DrvsDMMotorFeedbackFrame_u *)pack->data;
-    const DrvsDMMotorProtocolMap_s *map = &inst->proto_map;
+    DrvDMMotor_s *inst = (DrvDMMotor_s *)can->parent;
+    const DrvDMMotorFeedbackFrame_u *fb = (const DrvDMMotorFeedbackFrame_u *)pack->data;
+    const DrvDMMotorProtocolMap_s *map = &inst->proto_map;
 
     /* 位域展开（位置是大端 16 位；速度/扭矩各 12 位跨字节） */
     uint16_t raw_position = ((uint16_t)fb->parts.position_be >> 8) | ((uint16_t)fb->parts.position_be << 8);
@@ -86,7 +86,7 @@ static void DrvsDMMotorRxCallback(CANInstance *can, const CAN_Pack_s *pack)
     uint16_t raw_torque = ((uint16_t)(fb->parts.vel_lo_and_torque_hi & 0x0F) << 8) | fb->parts.torque_lo;
 
     /* 写入当前 ISR 缓冲区 */
-    DrvsDMMotorData_s *out = &inst->data[inst->data_idx];
+    DrvDMMotorData_s *out = &inst->data[inst->data_idx];
 
     /* 定点 → 物理量 */
     out->position = dm_uint_to_float(raw_position, map->pos_to_float_scale, -map->p_max);
@@ -121,34 +121,34 @@ static void DrvsDMMotorRxCallback(CANInstance *can, const CAN_Pack_s *pack)
  * 本层不做策略性动作：控制帧是周期性的，丢一帧下一周期自然补上；重试只会拖乱控制周期。
  *============================================*/
 
-static void DrvsDMMotorErrHook(CANInstance *can, CAN_ErrReason_e reason)
+static void DrvDMMotorErrHook(CANInstance *can, CAN_ErrReason_e reason)
 {
     (void)can; /* 广播：错误归整条总线，不属于某个实例；分类计数在 bsp 的 s_*_status[] 里 */
 
     /* 限频靠 LOG_INSTANCE_DEF 的 times_per_second（CAN_ERR_PROTOCOL 在总线异常时可每帧一次，
      * 没有这个上限会刷屏），细分原因/错误计数器见 bsp/bsp_can.md 的状态变量表 */
-    BSPLOG(&g_drvs_dmmotor_log, (reason == CAN_ERR_BUS_OFF) ? LOG_LEVEL_ERROR : LOG_LEVEL_WARNING, "CAN bus error, reason=%u", (unsigned)reason);
+    BSPLOG(&g_drv_dmmotor_log, (reason == CAN_ERR_BUS_OFF) ? LOG_LEVEL_ERROR : LOG_LEVEL_WARNING, "CAN bus error, reason=%u", (unsigned)reason);
 }
 
-static void DrvsDMMotorTxHook(CANInstance *can, uint32_t tx_mailbox, BSP_Status_e result)
+static void DrvDMMotorTxHook(CANInstance *can, uint32_t tx_mailbox, BSP_Status_e result)
 {
     /* 本模块一个实例一条 CAN（Config 里 .parent = inst），失败归属由 can->parent 唯一确定，
      * 无需按 tx_mailbox 区分帧来源 */
-    DrvsDMMotor_s *inst = (can != NULL) ? (DrvsDMMotor_s *)can->parent : NULL;
+    DrvDMMotor_s *inst = (can != NULL) ? (DrvDMMotor_s *)can->parent : NULL;
 
     (void)tx_mailbox;
     if (inst == NULL || result == BSP_OK)
         return;
 
     inst->tx_fail++; /* 逐帧失败，与发送点记的"入队失败"同一个计数器（只增不清，调试用） */
-    BSPLOG(&g_drvs_dmmotor_log, LOG_LEVEL_WARNING, "frame not sent (result=%d)", (int)result);
+    BSPLOG(&g_drv_dmmotor_log, LOG_LEVEL_WARNING, "frame not sent (result=%d)", (int)result);
 }
 
 /*============================================
  *              模式命令发送
  *============================================*/
 
-void DrvsDMMotorSendCmd(DrvsDMMotor_s *inst, uint8_t cmd)
+void DrvDMMotorSendCmd(DrvDMMotor_s *inst, uint8_t cmd)
 {
     if (!inst || !inst->can)
         return;
@@ -169,9 +169,9 @@ void DrvsDMMotorSendCmd(DrvsDMMotor_s *inst, uint8_t cmd)
 
 /**
  * @brief 注册 DM 电机实例（仅调用一次）
- * @note 只注册 CAN/Daemon 实例，不配置量程等参数（由 DrvsDMMotorConfig 负责）
+ * @note 只注册 CAN/Daemon 实例，不配置量程等参数（由 DrvDMMotorConfig 负责）
  */
-int8_t DrvsDMMotorRegister(DrvsDMMotor_s *inst)
+int8_t DrvDMMotorRegister(DrvDMMotor_s *inst)
 {
     if (!inst)
         return -1;
@@ -195,9 +195,9 @@ int8_t DrvsDMMotorRegister(DrvsDMMotor_s *inst)
 
 /**
  * @brief 配置 DM 电机实例（可重复调用）
- * @note 要求在 DrvsDMMotorRegister 之后调用
+ * @note 要求在 DrvDMMotorRegister 之后调用
  */
-int8_t DrvsDMMotorConfig(DrvsDMMotor_s *inst, const DrvsDMMotorConfig_s *cfg)
+int8_t DrvDMMotorConfig(DrvDMMotor_s *inst, const DrvDMMotorConfig_s *cfg)
 {
     if (!inst || !cfg)
         return -1;
@@ -209,7 +209,7 @@ int8_t DrvsDMMotorConfig(DrvsDMMotor_s *inst, const DrvsDMMotorConfig_s *cfg)
         inst->can_filter.id0 = cfg->master_id;
         inst->can_filter.id1 = CAN_ID_UNUSED;
         inst->can_filter.frame_type = CAN_STANDARD_DATA_FRAME;
-        inst->can_filter.callback = DrvsDMMotorRxCallback;
+        inst->can_filter.callback = DrvDMMotorRxCallback;
 
         CAN_Config_s can_cfg = {
             .can_e = cfg->can_e,
@@ -217,15 +217,15 @@ int8_t DrvsDMMotorConfig(DrvsDMMotor_s *inst, const DrvsDMMotorConfig_s *cfg)
             .parent = inst, /* 必须：CANConfig 会覆盖 parent，不设则回调取 can->parent 失效 */
             .filters = &inst->can_filter,
             .filter_num = 1,
-            .tx_complete_callback = DrvsDMMotorTxHook, /* 逐帧结果：这一帧到底发出去没有 */
-            .err_callback = DrvsDMMotorErrHook,        /* 总线/硬件级事件（ISR 广播） */
+            .tx_complete_callback = DrvDMMotorTxHook, /* 逐帧结果：这一帧到底发出去没有 */
+            .err_callback = DrvDMMotorErrHook,        /* 总线/硬件级事件（ISR 广播） */
         };
         if (CANConfig(inst->can, &can_cfg) != BSP_OK)
             return -1;
     }
 
     /* 协议映射：量程 → 预计算 scale */
-    DrvsDMMotorProtocolMap_s *map = &inst->proto_map;
+    DrvDMMotorProtocolMap_s *map = &inst->proto_map;
 
     map->p_max = cfg->pos_max;
     map->v_range = cfg->vel_range;
@@ -278,26 +278,26 @@ int8_t DrvsDMMotorConfig(DrvsDMMotor_s *inst, const DrvsDMMotorConfig_s *cfg)
  *              扭矩设定 / 发送
  *============================================*/
 
-void DrvsDMMotorSetRef(DrvsDMMotor_s *inst, float torque)
+void DrvDMMotorSetRef(DrvDMMotor_s *inst, float torque)
 {
     if (!inst)
         return;
     inst->ref_torque = torque;
 }
 
-void DrvsDMMotorSend(DrvsDMMotor_s *inst)
+void DrvDMMotorSend(DrvDMMotor_s *inst)
 {
     if (!inst || !inst->can)
         return;
 
-    const DrvsDMMotorProtocolMap_s *map = &inst->proto_map;
+    const DrvDMMotorProtocolMap_s *map = &inst->proto_map;
 
     /* 扭矩限幅（dm_float_to_uint 内部也会按 t_range 夹一次） */
     uint16_t t_ff = dm_float_to_uint(inst->ref_torque, map->t_to_uint_scale, map->t_range);
 
     /* 打包：板载 PD 不用，p_des/v_des/Kp/Kd 恒为 0，只有 t_ff 有效 */
     CAN_Pack_s pack = {.id = inst->can_id, .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
-    DrvsDMMotorControlFrame_u *cf = (DrvsDMMotorControlFrame_u *)pack.data;
+    DrvDMMotorControlFrame_u *cf = (DrvDMMotorControlFrame_u *)pack.data;
     cf->parts.p_des_be = 0;
     cf->parts.v_des_hi = 0;
     cf->parts.v_des_lo_and_kp_hi = 0;
@@ -315,9 +315,9 @@ void DrvsDMMotorSend(DrvsDMMotor_s *inst)
  *              反馈获取
  *============================================*/
 
-DrvsDMMotorData_s DrvsDMMotorGetData(const DrvsDMMotor_s *inst)
+DrvDMMotorData_s DrvDMMotorGetData(const DrvDMMotor_s *inst)
 {
-    DrvsDMMotorData_s zero = {0};
+    DrvDMMotorData_s zero = {0};
     if (!inst)
         return zero;
 
@@ -329,4 +329,4 @@ DrvsDMMotorData_s DrvsDMMotorGetData(const DrvsDMMotor_s *inst)
 
 #endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */
 
-#endif /* DRVS_DMMOTOR_USED */
+#endif /* DRV_DMMOTOR_USED */

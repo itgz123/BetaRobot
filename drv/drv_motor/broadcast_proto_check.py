@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""drvs 广播驱动协议自检（DJI 一拖四 / LK 一拖四）。
+"""drv 广播驱动协议自检（DJI 一拖四 / LK 一拖四）。
 
 本机没有 CAN 硬件，这是广播模块的主要正确性防线。
 
@@ -8,9 +8,9 @@
        一致的概率远低于单独出错，因此两边都过才算数。
 
 用法：
-    python3 drv/drvs_motor/broadcast_proto_check.py              # 跑全部检查
-    python3 drv/drvs_motor/broadcast_proto_check.py -v           # 打印每条断言的细节
-    python3 drv/drvs_motor/broadcast_proto_check.py -k dji_lk    # 只跑名字含该子串的检查
+    python3 drv/drv_motor/broadcast_proto_check.py              # 跑全部检查
+    python3 drv/drv_motor/broadcast_proto_check.py -v           # 打印每条断言的细节
+    python3 drv/drv_motor/broadcast_proto_check.py -k dji_lk    # 只跑名字含该子串的检查
 
 退出码：0 = 全部通过；1 = 有断言失败。
 """
@@ -120,7 +120,7 @@ def dji_tx_frame(entries):
 
 
 def dji_group_send(group) -> dict:
-    """返回 {tx_id: frame_bytes}，模拟 DrvsDJIMotorBroadcastGroupSend。"""
+    """返回 {tx_id: frame_bytes}，模拟 DrvDJIMotorBroadcastGroupSend。"""
     tx_ids = []
     for inst in group.slots:
         if inst is not None and inst.tx not in tx_ids:
@@ -525,7 +525,7 @@ def math_no_nan_or_overflow():
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="drvs 广播驱动协议自检")
+    ap = argparse.ArgumentParser(description="drv 广播驱动协议自检")
     ap.add_argument("-v", "--verbose", action="store_true", help="打印每条断言的细节")
     ap.add_argument("-k", "--filter", default="", help="只跑名字含该子串的检查")
     args = ap.parse_args()

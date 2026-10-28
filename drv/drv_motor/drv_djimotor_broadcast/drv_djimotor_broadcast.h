@@ -1,5 +1,5 @@
 /**
- * @file drvs_djimotor_broadcast.h
+ * @file drv_djimotor_broadcast.h
  * @brief DJI 电机（M3508 / M2006 / GM6020）纯协议广播驱动（一拖四组帧）
  * @author TRW
  * @date 2026-09-21
@@ -12,8 +12,8 @@
  *       不是协议，由 app 或算法层自己管。
  *
  * @note 无基类、无虚函数表：每个品牌自包含（自己的实例结构体 + 自己的函数），
- *       app 当胶水。命名保留 Drvs 前缀，与 drvlib_ 的算法层区分
- *       （旧 drv_motor 已删除，app 已全部切到 drvs + drvlib）。
+ *       app 当胶水。命名沿用 Drv 前缀，与 drvlib_ 的算法层区分
+ *       （本层由带基类的旧 drv_motor 重写为纯协议版，app 已全部切到 drv + drvlib）。
  *
  * @note 协议：CAN 标准帧 11 位 ID，8 字节帧，**大端**（MSB first）。
  *       控制帧一帧携带 4 个电机的 int16 电流原始值；反馈帧每电机各自回复。
@@ -29,8 +29,8 @@
  *       Config 会把 ref_torque 清零，重新绑定/换槽后必须重新 SetRef 才会再输出扭矩。
  */
 
-#ifndef DRVS_DJIMOTOR_BROADCAST_H
-#define DRVS_DJIMOTOR_BROADCAST_H
+#ifndef DRV_DJIMOTOR_BROADCAST_H
+#define DRV_DJIMOTOR_BROADCAST_H
 
 #include <stdint.h>
 
@@ -43,11 +43,11 @@
 /*============================================
  *              前向声明
  *============================================*/
-typedef struct DrvsDJIMotorBroadcast DrvsDJIMotorBroadcast_s;
-typedef struct DrvsDJIMotorBroadcastGroup DrvsDJIMotorBroadcastGroup_s;
+typedef struct DrvDJIMotorBroadcast DrvDJIMotorBroadcast_s;
+typedef struct DrvDJIMotorBroadcastGroup DrvDJIMotorBroadcastGroup_s;
 
 /* 0x200/0x204 系一帧 CAN 固定携带 4 个电机 */
-#define DRVS_DJI_BC_SLOTS 4u
+#define DRV_DJI_BC_SLOTS 4u
 
 /*============================================
  *              型号枚举（模块自有）
@@ -58,11 +58,11 @@ typedef struct DrvsDJIMotorBroadcastGroup DrvsDJIMotorBroadcastGroup_s;
  *============================================*/
 typedef enum : uint8_t
 {
-    DRVS_DJI_MODEL_M3508 = 0, // C620 电调，±16384 raw = ±20 A
-    DRVS_DJI_MODEL_M2006,     // C610 电调，±10000 raw = ±10 A
-    DRVS_DJI_MODEL_GM6020,    // 内置电调，±16384 raw = ±3 A
-    DRVS_DJI_MODEL_NUM,
-} DrvsDJIModel_e;
+    DRV_DJI_MODEL_M3508 = 0, // C620 电调，±16384 raw = ±20 A
+    DRV_DJI_MODEL_M2006,     // C610 电调，±10000 raw = ±10 A
+    DRV_DJI_MODEL_GM6020,    // 内置电调，±16384 raw = ±3 A
+    DRV_DJI_MODEL_NUM,
+} DrvDJIModel_e;
 
 /*============================================
  *              CAN 帧联合体定义
@@ -91,16 +91,16 @@ typedef struct
     uint8_t current_l;  // [5]   电流低字节
     int8_t temperature; // [6]   温度 (℃)
     uint8_t error_code; // [7]   错误码
-} DrvsDJIBroadcastRxFrameParts_s;
+} DrvDJIBroadcastRxFrameParts_s;
 #pragma pack(pop)
 
 typedef union
 {
     uint8_t raw[8];
-    DrvsDJIBroadcastRxFrameParts_s parts;
-} DrvsDJIBroadcastRxFrame_u;
+    DrvDJIBroadcastRxFrameParts_s parts;
+} DrvDJIBroadcastRxFrame_u;
 
-_Static_assert(sizeof(DrvsDJIBroadcastRxFrameParts_s) == 8, "DJI 反馈帧必须是 8 字节");
+_Static_assert(sizeof(DrvDJIBroadcastRxFrameParts_s) == 8, "DJI 反馈帧必须是 8 字节");
 
 /**
  * @brief DJI 控制帧（8 字节，大端）
@@ -123,19 +123,19 @@ typedef struct
     uint8_t ch3_l; // [5]
     uint8_t ch4_h; // [6]
     uint8_t ch4_l; // [7]
-} DrvsDJIBroadcastTxFrameParts_s;
+} DrvDJIBroadcastTxFrameParts_s;
 #pragma pack(pop)
 
 typedef union
 {
     uint8_t raw[8];
-    DrvsDJIBroadcastTxFrameParts_s parts;
-} DrvsDJIBroadcastTxFrame_u;
+    DrvDJIBroadcastTxFrameParts_s parts;
+} DrvDJIBroadcastTxFrame_u;
 
-_Static_assert(sizeof(DrvsDJIBroadcastTxFrameParts_s) == 8, "DJI 控制帧必须是 8 字节");
+_Static_assert(sizeof(DrvDJIBroadcastTxFrameParts_s) == 8, "DJI 控制帧必须是 8 字节");
 
 /* 槽位公式不变量：槽位 == 帧内通道序号（取两端钉死，防止改 group 基址时漏改公式） */
-_Static_assert(((0x201u - 0x201u) % DRVS_DJI_BC_SLOTS) == 0u && ((0x208u - 0x201u) % DRVS_DJI_BC_SLOTS) == (DRVS_DJI_BC_SLOTS - 1u),
+_Static_assert(((0x201u - 0x201u) % DRV_DJI_BC_SLOTS) == 0u && ((0x208u - 0x201u) % DRV_DJI_BC_SLOTS) == (DRV_DJI_BC_SLOTS - 1u),
                "DJI 槽位公式不变量被破坏");
 
 /*============================================
@@ -156,7 +156,7 @@ typedef struct
 
     float encoder_to_rad; // = 2π / 8192，编码器原始值 → rad
     float rpm_to_radps;   // = 2π / 60，转速 rpm → rad/s
-} DrvsDJIMotorBroadcastProtocolMap_s;
+} DrvDJIMotorBroadcastProtocolMap_s;
 
 /*============================================
  *              反馈数据结构体
@@ -176,12 +176,12 @@ typedef struct
     int8_t temperature;    // 温度 (℃)
     uint8_t error;         // 错误码（0=正常）
     uint64_t timestamp_us; // CAN 帧到达时间戳 (us)
-} DrvsDJIMotorBroadcastData_s;
+} DrvDJIMotorBroadcastData_s;
 
 /*============================================
  *              DJI 广播电机实例结构体
  *============================================*/
-struct DrvsDJIMotorBroadcast
+struct DrvDJIMotorBroadcast
 {
     /* 通信 */
     CANInstance *can;        // CAN 实例指针
@@ -191,23 +191,23 @@ struct DrvsDJIMotorBroadcast
     /* 无 tx_fail：单电机实例没有发送口（发送挂在组上），失败计数只在 Group 的 tx_fail 里 */
 
     /* 标识 */
-    DrvsDJIModel_e model; // 型号（决定电流量程与 ID 基址）
+    DrvDJIModel_e model; // 型号（决定电流量程与 ID 基址）
     uint8_t motor_id;     // 电机 ID（M3508/M2006: 1~8；GM6020: 1~7）
     uint16_t rx_id;       // = rx_id_base + motor_id，反馈帧 ID
     uint16_t tx_id;       // 控制帧 ID（同族 id1-4 与 id5-8 不同）
 
     /* 协议映射 */
-    DrvsDJIMotorBroadcastProtocolMap_s proto_map;
+    DrvDJIMotorBroadcastProtocolMap_s proto_map;
 
     /* 控制量（纯扭矩，无使能开关） */
     float ref_torque; // 设定扭矩 (Nm)，由 SetRef 写入，GroupSend 打包下发
 
     /* 组链接 */
-    DrvsDJIMotorBroadcastGroup_s *group; // 所属组（Config 绑定，NULL=未绑定）
+    DrvDJIMotorBroadcastGroup_s *group; // 所属组（Config 绑定，NULL=未绑定）
     uint8_t slot;                        // 帧内槽位 = (rx_id - 0x201) % 4
 
     /* 接收双缓冲：ISR 解析写一个，GetData 读另一个，读者永远拿到完整的一帧 */
-    DrvsDJIMotorBroadcastData_s data[2]; // data[data_idx] = ISR 正在写的
+    DrvDJIMotorBroadcastData_s data[2]; // data[data_idx] = ISR 正在写的
     volatile uint8_t data_idx;           // 当前 ISR 写入的缓冲区索引 (0/1)
 };
 
@@ -216,12 +216,12 @@ struct DrvsDJIMotorBroadcast
  *
  * @note 组是 **app 自己的变量**（static 定义后传给 Config）：
  *       一条 CAN 总线一组，组内最多 4 个电机共用一帧控制报文。
- *       发送挂在组上（DrvsDJIMotorBroadcastGroupSend），单电机实例没有 Send，
+ *       发送挂在组上（DrvDJIMotorBroadcastGroupSend），单电机实例没有 Send，
  *       这样"一组只调一次"由函数名表达，也避免了"调用了某个成员却发了整组"的错觉。
  *============================================*/
-struct DrvsDJIMotorBroadcastGroup
+struct DrvDJIMotorBroadcastGroup
 {
-    DrvsDJIMotorBroadcast_s *slots[DRVS_DJI_BC_SLOTS]; // 槽位占用表，NULL=空槽
+    DrvDJIMotorBroadcast_s *slots[DRV_DJI_BC_SLOTS]; // 槽位占用表，NULL=空槽
     uint8_t member_count;                              // 已占用槽位数，0 表示尚未绑定总线
     BoardCAN_e can_e;                                  // 首个成员确定，后续成员必须一致
     uint32_t tx_fail;                                  // 组播帧发送失败累计：CANTransmit 入队失败（返回非 BSP_OK）
@@ -240,11 +240,11 @@ struct DrvsDJIMotorBroadcastGroup
  */
 typedef struct
 {
-    DrvsDJIMotorBroadcastGroup_s *group; // 广播组（app 持有的变量，一条总线一个）
+    DrvDJIMotorBroadcastGroup_s *group; // 广播组（app 持有的变量，一条总线一个）
 
     BoardCAN_e can_e; // 板载 CAN 枚举（用于查找硬件映射）
 
-    DrvsDJIModel_e model; // 型号
+    DrvDJIModel_e model; // 型号
     uint8_t motor_id;     // 电机 ID（M3508/M2006: 1~8；GM6020: 1~7）
 
     float torque_constant; // 转矩常数 (Nm/A)，必须 > 0
@@ -254,15 +254,15 @@ typedef struct
     DaemonFaultAction_e fault_action; // 离线故障动作
 
     uint32_t timeout_ms; // CAN 发送超时 (ms)
-} DrvsDJIMotorBroadcastConfig_s;
+} DrvDJIMotorBroadcastConfig_s;
 
 /*============================================
  *              单电机实例 / 广播组定义宏
  *============================================*/
-#define DRVS_DJIMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                                                             \
+#define DRV_DJIMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                                                             \
     CAN_INSTANCE_DEF(name##_can);                                                                                                                              \
     DAEMON_INSTANCE_DEF(name##_daemon);                                                                                                                        \
-    static DrvsDJIMotorBroadcast_s name = {                                                                                                                    \
+    static DrvDJIMotorBroadcast_s name = {                                                                                                                    \
         .can = &name##_can,                                                                                                                                    \
         .daemon = &name##_daemon,                                                                                                                              \
     }
@@ -272,12 +272,12 @@ typedef struct
  * @note  先定义再传给 `cfg.group`。
  *        定义出来即全零：四个槽位皆空、成员数为 0，can_e 由第一个成员的 Config 落定。
  */
-#define DRVS_DJIMOTOR_BROADCAST_GROUP_DEF(name) static DrvsDJIMotorBroadcastGroup_s name = {0}
+#define DRV_DJIMOTOR_BROADCAST_GROUP_DEF(name) static DrvDJIMotorBroadcastGroup_s name = {0}
 
 /*============================================
  *              公共接口
  *============================================*/
-int8_t DrvsDJIMotorBroadcastRegister(DrvsDJIMotorBroadcast_s *inst);
+int8_t DrvDJIMotorBroadcastRegister(DrvDJIMotorBroadcast_s *inst);
 
 /**
  * @brief 配置电机并挂到广播组（可重复调用）
@@ -288,14 +288,14 @@ int8_t DrvsDJIMotorBroadcastRegister(DrvsDJIMotorBroadcast_s *inst);
  * @note  换组/换槽会先释放旧槽位（旧组该槽位改为空 → 该槽位后续下发 0 扭矩）
  * @note  任何失败路径都不会改动组成员关系
  */
-int8_t DrvsDJIMotorBroadcastConfig(DrvsDJIMotorBroadcast_s *inst, const DrvsDJIMotorBroadcastConfig_s *cfg);
+int8_t DrvDJIMotorBroadcastConfig(DrvDJIMotorBroadcast_s *inst, const DrvDJIMotorBroadcastConfig_s *cfg);
 
 /**
  * @brief 设置扭矩设定值 (Nm)
- * @note  仅记录，不下发；需再调一次 DrvsDJIMotorBroadcastGroupSend()
+ * @note  仅记录，不下发；需再调一次 DrvDJIMotorBroadcastGroupSend()
  * @note  方向取反（安装镜像）由调用方自己做，本模块不做 motor_direction
  */
-void DrvsDJIMotorBroadcastSetRef(DrvsDJIMotorBroadcast_s *inst, float torque);
+void DrvDJIMotorBroadcastSetRef(DrvDJIMotorBroadcast_s *inst, float torque);
 
 /**
  * @brief 发送一组控制帧（每个控制周期对该组调用一次）
@@ -304,7 +304,7 @@ void DrvsDJIMotorBroadcastSetRef(DrvsDJIMotorBroadcast_s *inst, float torque);
  * @note  重复调用 = 重复占总线，一个控制周期只调一次。
  * @note  组内成员数为 0 时直接返回。
  */
-void DrvsDJIMotorBroadcastGroupSend(DrvsDJIMotorBroadcastGroup_s *group);
+void DrvDJIMotorBroadcastGroupSend(DrvDJIMotorBroadcastGroup_s *group);
 
 /**
  * @brief 取最新一帧反馈（在任务上下文调用）
@@ -312,8 +312,8 @@ void DrvsDJIMotorBroadcastGroupSend(DrvsDJIMotorBroadcastGroup_s *group);
  *        不解析、不推断、不滤波，也不会阻塞 ISR。
  * @note  收到第一帧之前返回全 0；要判"是否收到过"看 timestamp_us == 0
  */
-DrvsDJIMotorBroadcastData_s DrvsDJIMotorBroadcastGetData(const DrvsDJIMotorBroadcast_s *inst);
+DrvDJIMotorBroadcastData_s DrvDJIMotorBroadcastGetData(const DrvDJIMotorBroadcast_s *inst);
 
 #endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */
 
-#endif // DRVS_DJIMOTOR_BROADCAST_H
+#endif // DRV_DJIMOTOR_BROADCAST_H

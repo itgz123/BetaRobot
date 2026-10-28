@@ -1,18 +1,18 @@
 /**
- * @file drvs_lkmotor_broadcast.c
+ * @file drv_lkmotor_broadcast.c
  * @brief LK（瓴控/翎控）MF 系列纯协议广播驱动实现（一拖四组帧）
  * @author TRW
  * @date 2026-09-21
  *
- * @note 职责边界见 drvs_lkmotor_broadcast.h：只做字节 ↔ 物理量，不做闭环/滤波/方向/累加/零点
+ * @note 职责边界见 drv_lkmotor_broadcast.h：只做字节 ↔ 物理量，不做闭环/滤波/方向/累加/零点
  *
  * @note 广播模式一拖四必须由 LK 上位机（motor tool）开启并保存重启，总线 ≥ 500Kbps。
  */
 
-#include "drvs_lkmotor_broadcast.h"
+#include "drv_lkmotor_broadcast.h"
 #include "app_cfg.h"
 
-#ifdef DRVS_LKMOTOR_BROADCAST_USED
+#ifdef DRV_LKMOTOR_BROADCAST_USED
 
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
@@ -21,32 +21,32 @@
 #include <math.h>
 #include <string.h>
 
-#ifndef DRVS_LKMOTOR_BC_LOG_LIMIT
-#define DRVS_LKMOTOR_BC_LOG_LIMIT 10
-#endif // !DRVS_LKMOTOR_BC_LOG_LIMIT
-LOG_INSTANCE_DEF(g_drvs_lkmotor_bc_log, "drvs_lkmotor_bc", DRVS_LKMOTOR_BC_LOG_LIMIT);
+#ifndef DRV_LKMOTOR_BC_LOG_LIMIT
+#define DRV_LKMOTOR_BC_LOG_LIMIT 10
+#endif // !DRV_LKMOTOR_BC_LOG_LIMIT
+LOG_INSTANCE_DEF(g_drv_lkmotor_bc_log, "drv_lkmotor_bc", DRV_LKMOTOR_BC_LOG_LIMIT);
 
 /*============================================
  *              协议常量
  *============================================*/
-#define DRVS_LK_BC_TORQUE_ID 0x280u     // 力矩广播发送 ID（固定）
-#define DRVS_LK_BC_REPLY_ID_BASE 0x140u // 回复 ID = 0x140 + motor_id
+#define DRV_LK_BC_TORQUE_ID 0x280u     // 力矩广播发送 ID（固定）
+#define DRV_LK_BC_REPLY_ID_BASE 0x140u // 回复 ID = 0x140 + motor_id
 
-#define DRVS_LK_BC_MOTOR_ID_MIN 1u // 一拖四：ID 1~4
-#define DRVS_LK_BC_MOTOR_ID_MAX 4u
+#define DRV_LK_BC_MOTOR_ID_MIN 1u // 一拖四：ID 1~4
+#define DRV_LK_BC_MOTOR_ID_MAX 4u
 
-#define DRVS_LK_BC_RAW_MAX 2000.0f // 0x280 iqControl 限幅（MF/MG ±2000，与一对一 ±2048 不同）
+#define DRV_LK_BC_RAW_MAX 2000.0f // 0x280 iqControl 限幅（MF/MG ±2000，与一对一 ±2048 不同）
 
 /* MF 固定：A = raw × 33/4096（MG 为 66/4096，本驱动不支持） */
-#define DRVS_LK_BC_A_PER_LSB (33.0f / 4096.0f)
+#define DRV_LK_BC_A_PER_LSB (33.0f / 4096.0f)
 
 /* 编码器：实测整圈 raw 覆盖 0~65535（转一圈恰好回绕一次），固定按 16bit 处理 */
-#define DRVS_LK_BC_ENCODER_TO_RAD (6.283185307179586f / 65536.0f) // 2π / 65536
-#define DRVS_LK_BC_DPS_TO_RADPS 0.017453292519943295f             // π / 180
+#define DRV_LK_BC_ENCODER_TO_RAD (6.283185307179586f / 65536.0f) // 2π / 65536
+#define DRV_LK_BC_DPS_TO_RADPS 0.017453292519943295f             // π / 180
 
 /* 状态2 帧的回显字节（只有 0xA0~0xA8 与 0x9C 的回复是该格式） */
-#define DRVS_LK_BC_ECHO_TORQUE 0xA1u
-#define DRVS_LK_BC_ECHO_READ_STATUS2 0x9Cu
+#define DRV_LK_BC_ECHO_TORQUE 0xA1u
+#define DRV_LK_BC_ECHO_READ_STATUS2 0x9Cu
 
 /*============================================
  *              内部辅助函数
@@ -56,9 +56,9 @@ LOG_INSTANCE_DEF(g_drvs_lkmotor_bc_log, "drvs_lkmotor_bc", DRVS_LKMOTOR_BC_LOG_L
  * @brief 判断回显字节是否为「状态2 格式」的回复
  * @note  广播模式只发 0x280（0xA1 语义）；其余回显或为全零回显、或为其他帧格式，必须排除。
  */
-static inline uint8_t DrvsLKBroadcastIsStatusEcho(uint8_t echo)
+static inline uint8_t DrvLKBroadcastIsStatusEcho(uint8_t echo)
 {
-    return (echo == DRVS_LK_BC_ECHO_TORQUE || echo == DRVS_LK_BC_ECHO_READ_STATUS2) ? 1u : 0u;
+    return (echo == DRV_LK_BC_ECHO_TORQUE || echo == DRV_LK_BC_ECHO_READ_STATUS2) ? 1u : 0u;
 }
 
 /*============================================
@@ -67,12 +67,12 @@ static inline uint8_t DrvsLKBroadcastIsStatusEcho(uint8_t echo)
  * 先校验回显，再就地解析写进双缓冲里"当前 ISR 正在写"的那一份，写完翻索引。
  * 读者读的是另一份，所以永远拿到完整的一帧，不会被半截数据打断。
  *============================================*/
-static void DrvsLKMotorBroadcastRxCallback(CANInstance *can, const CAN_Pack_s *pack)
+static void DrvLKMotorBroadcastRxCallback(CANInstance *can, const CAN_Pack_s *pack)
 {
     if (!can || !can->parent)
         return;
 
-    DrvsLKMotorBroadcast_s *inst = (DrvsLKMotorBroadcast_s *)can->parent;
+    DrvLKMotorBroadcast_s *inst = (DrvLKMotorBroadcast_s *)can->parent;
 
     /* 喂狗：只要能收到该 ID 的帧就说明通信在线（含全零回显帧），故放在回显过滤之前 */
     if (inst->daemon)
@@ -80,11 +80,11 @@ static void DrvsLKMotorBroadcastRxCallback(CANInstance *can, const CAN_Pack_s *p
 
     /* 回显校验（关键）：全零回显帧直接丢弃，不写双缓冲，
      * 否则会把位置/速度误解析为 0 造成跳变。丢弃后 GetData 仍返回上一帧。 */
-    if (!DrvsLKBroadcastIsStatusEcho(pack->data[0]))
+    if (!DrvLKBroadcastIsStatusEcho(pack->data[0]))
         return;
 
-    const DrvsLKBroadcastStatusFrame_u *fb = (const DrvsLKBroadcastStatusFrame_u *)pack->data;
-    const DrvsLKMotorBroadcastProtocolMap_s *map = &inst->proto_map;
+    const DrvLKBroadcastStatusFrame_u *fb = (const DrvLKBroadcastStatusFrame_u *)pack->data;
+    const DrvLKMotorBroadcastProtocolMap_s *map = &inst->proto_map;
 
     /* 整字节小端量直接取（无跨字节位域，与 DM/RS 的移位展开不同） */
     int8_t raw_temp = fb->parts.temperature;
@@ -93,7 +93,7 @@ static void DrvsLKMotorBroadcastRxCallback(CANInstance *can, const CAN_Pack_s *p
     uint16_t raw_encoder = fb->parts.encoder_le;
 
     /* 写入当前 ISR 缓冲区 */
-    DrvsLKMotorBroadcastData_s *out = &inst->data[inst->data_idx];
+    DrvLKMotorBroadcastData_s *out = &inst->data[inst->data_idx];
 
     out->position = (float)raw_encoder * map->encoder_to_rad; // 单圈 [0, 2π)
     out->speed = (float)raw_speed * map->dps_to_radps;
@@ -121,27 +121,27 @@ static void DrvsLKMotorBroadcastRxCallback(CANInstance *can, const CAN_Pack_s *p
  * 本层不做策略性动作：控制帧是周期性的，丢一帧下一周期自然补上；重试只会拖乱控制周期。
  *============================================*/
 
-static void DrvsLKMotorBroadcastErrHook(CANInstance *can, CAN_ErrReason_e reason)
+static void DrvLKMotorBroadcastErrHook(CANInstance *can, CAN_ErrReason_e reason)
 {
     (void)can; /* 广播：错误归整条总线，不属于某个实例；分类计数在 bsp 的 s_*_status[] 里 */
 
     /* 限频靠 LOG_INSTANCE_DEF 的 times_per_second（CAN_ERR_PROTOCOL 在总线异常时可每帧一次，
      * 没有这个上限会刷屏），细分原因/错误计数器见 bsp/bsp_can.md 的状态变量表 */
-    BSPLOG(&g_drvs_lkmotor_bc_log, (reason == CAN_ERR_BUS_OFF) ? LOG_LEVEL_ERROR : LOG_LEVEL_WARNING, "CAN bus error, reason=%u", (unsigned)reason);
+    BSPLOG(&g_drv_lkmotor_bc_log, (reason == CAN_ERR_BUS_OFF) ? LOG_LEVEL_ERROR : LOG_LEVEL_WARNING, "CAN bus error, reason=%u", (unsigned)reason);
 }
 
-static void DrvsLKMotorBroadcastTxHook(CANInstance *can, uint32_t tx_mailbox, BSP_Status_e result)
+static void DrvLKMotorBroadcastTxHook(CANInstance *can, uint32_t tx_mailbox, BSP_Status_e result)
 {
     /* 组播帧经组内某个成员的 CAN 实例发出（GroupSend 的 tx_can），故 can->parent
      * 必然落回组内某个成员，再由它取回组 */
-    DrvsLKMotorBroadcast_s *inst = (can != NULL) ? (DrvsLKMotorBroadcast_s *)can->parent : NULL;
+    DrvLKMotorBroadcast_s *inst = (can != NULL) ? (DrvLKMotorBroadcast_s *)can->parent : NULL;
 
     (void)tx_mailbox; /* 一帧带 4 个槽位，失败不摊到具体电机，也不需要区分帧来源 */
     if (inst == NULL || inst->group == NULL || result == BSP_OK)
         return;
 
     inst->group->tx_fail++; /* 与 GroupSend 记的"入队失败"共用组计数器（只增不清，调试用） */
-    BSPLOG(&g_drvs_lkmotor_bc_log, LOG_LEVEL_WARNING, "group frame not sent (result=%d)", (int)result);
+    BSPLOG(&g_drv_lkmotor_bc_log, LOG_LEVEL_WARNING, "group frame not sent (result=%d)", (int)result);
 }
 
 /*============================================
@@ -151,7 +151,7 @@ static void DrvsLKMotorBroadcastTxHook(CANInstance *can, uint32_t tx_mailbox, BS
  * @brief 注册 LK 广播电机实例（仅调用一次）
  * @note 只注册 CAN/Daemon 实例，不配置电机参数（由 Config 负责）
  */
-int8_t DrvsLKMotorBroadcastRegister(DrvsLKMotorBroadcast_s *inst)
+int8_t DrvLKMotorBroadcastRegister(DrvLKMotorBroadcast_s *inst)
 {
     if (!inst)
         return -1;
@@ -180,22 +180,22 @@ int8_t DrvsLKMotorBroadcastRegister(DrvsLKMotorBroadcast_s *inst)
  * @brief 配置 LK 广播电机并挂到组（可重复调用）
  * @note 要求先 Register。失败路径不动组成员关系。
  */
-int8_t DrvsLKMotorBroadcastConfig(DrvsLKMotorBroadcast_s *inst, const DrvsLKMotorBroadcastConfig_s *cfg)
+int8_t DrvLKMotorBroadcastConfig(DrvLKMotorBroadcast_s *inst, const DrvLKMotorBroadcastConfig_s *cfg)
 {
     if (!inst || !cfg || !cfg->group)
         return -1;
 
-    DrvsLKMotorBroadcastGroup_s *group = cfg->group;
+    DrvLKMotorBroadcastGroup_s *group = cfg->group;
 
     /* 组表按 can_e 索引，索引发生在 CANConfig 之前，必须显式边界检查 */
     if (cfg->can_e >= CAN_NUM_MAX)
         return -1;
-    if (cfg->motor_id < DRVS_LK_BC_MOTOR_ID_MIN || cfg->motor_id > DRVS_LK_BC_MOTOR_ID_MAX)
+    if (cfg->motor_id < DRV_LK_BC_MOTOR_ID_MIN || cfg->motor_id > DRV_LK_BC_MOTOR_ID_MAX)
         return -1;
     if (cfg->torque_constant <= 0.0f)
         return -1;
 
-    uint16_t rx_id = (uint16_t)(DRVS_LK_BC_REPLY_ID_BASE + cfg->motor_id);
+    uint16_t rx_id = (uint16_t)(DRV_LK_BC_REPLY_ID_BASE + cfg->motor_id);
     uint8_t slot = (uint8_t)(cfg->motor_id - 1u);
 
     /* 组归属：一条总线一组，成员必须同 can_e */
@@ -215,7 +215,7 @@ int8_t DrvsLKMotorBroadcastConfig(DrvsLKMotorBroadcast_s *inst, const DrvsLKMoto
         inst->can_filter.id0 = rx_id;
         inst->can_filter.id1 = CAN_ID_UNUSED;
         inst->can_filter.frame_type = CAN_STANDARD_DATA_FRAME;
-        inst->can_filter.callback = DrvsLKMotorBroadcastRxCallback;
+        inst->can_filter.callback = DrvLKMotorBroadcastRxCallback;
 
         CAN_Config_s can_cfg = {
             .can_e = cfg->can_e,
@@ -223,22 +223,22 @@ int8_t DrvsLKMotorBroadcastConfig(DrvsLKMotorBroadcast_s *inst, const DrvsLKMoto
             .parent = inst, /* 必须：CANConfig 会覆盖 parent，不设则回调取 can->parent 失效 */
             .filters = &inst->can_filter,
             .filter_num = 1,
-            .tx_complete_callback = DrvsLKMotorBroadcastTxHook, /* 逐帧结果：这一帧到底发出去没有 */
-            .err_callback = DrvsLKMotorBroadcastErrHook,        /* 总线/硬件级事件（ISR 广播） */
+            .tx_complete_callback = DrvLKMotorBroadcastTxHook, /* 逐帧结果：这一帧到底发出去没有 */
+            .err_callback = DrvLKMotorBroadcastErrHook,        /* 总线/硬件级事件（ISR 广播） */
         };
         if (CANConfig(inst->can, &can_cfg) != BSP_OK)
             return -1;
     }
 
     /* 协议映射：预计算 raw ↔ Nm / rad 的换算因子 */
-    DrvsLKMotorBroadcastProtocolMap_s *map = &inst->proto_map;
+    DrvLKMotorBroadcastProtocolMap_s *map = &inst->proto_map;
 
     map->torque_constant = cfg->torque_constant;
-    map->a_per_lsb = DRVS_LK_BC_A_PER_LSB;
-    map->nm_per_lsb = cfg->torque_constant * DRVS_LK_BC_A_PER_LSB;
+    map->a_per_lsb = DRV_LK_BC_A_PER_LSB;
+    map->nm_per_lsb = cfg->torque_constant * DRV_LK_BC_A_PER_LSB;
     map->inv_nm_per_lsb = 1.0f / map->nm_per_lsb;
-    map->encoder_to_rad = DRVS_LK_BC_ENCODER_TO_RAD;
-    map->dps_to_radps = DRVS_LK_BC_DPS_TO_RADPS;
+    map->encoder_to_rad = DRV_LK_BC_ENCODER_TO_RAD;
+    map->dps_to_radps = DRV_LK_BC_DPS_TO_RADPS;
 
     /* 标识与超时 */
     inst->motor_id = cfg->motor_id;
@@ -290,7 +290,7 @@ int8_t DrvsLKMotorBroadcastConfig(DrvsLKMotorBroadcast_s *inst, const DrvsLKMoto
 /*============================================
  *              扭矩设定
  *============================================*/
-void DrvsLKMotorBroadcastSetRef(DrvsLKMotorBroadcast_s *inst, float torque)
+void DrvLKMotorBroadcastSetRef(DrvLKMotorBroadcast_s *inst, float torque)
 {
     if (!inst)
         return;
@@ -306,34 +306,34 @@ void DrvsLKMotorBroadcastSetRef(DrvsLKMotorBroadcast_s *inst, float torque)
  *
  * @note 一条总线只有一帧：槽位 = motor_id - 1，未占用槽位填 0（零扭矩）。
  */
-void DrvsLKMotorBroadcastGroupSend(DrvsLKMotorBroadcastGroup_s *group)
+void DrvLKMotorBroadcastGroupSend(DrvLKMotorBroadcastGroup_s *group)
 {
     if (!group || group->member_count == 0u)
         return;
 
-    CAN_Pack_s pack = {.id = DRVS_LK_BC_TORQUE_ID, .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
+    CAN_Pack_s pack = {.id = DRV_LK_BC_TORQUE_ID, .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
 
     CANInstance *tx_can = NULL;
     uint32_t tx_timeout = 0;
 
-    for (uint8_t i = 0; i < DRVS_LK_BC_SLOTS; i++)
+    for (uint8_t i = 0; i < DRV_LK_BC_SLOTS; i++)
     {
         int16_t raw = 0;
-        DrvsLKMotorBroadcast_s *inst = group->slots[i];
+        DrvLKMotorBroadcast_s *inst = group->slots[i];
 
         if (inst && inst->can)
         {
-            const DrvsLKMotorBroadcastProtocolMap_s *map = &inst->proto_map;
+            const DrvLKMotorBroadcastProtocolMap_s *map = &inst->proto_map;
 
             /* Nm → iq raw，先钳位再四舍五入（保证钳位后的值不会溢出 int16）
              * 限到协议 ±2000（= 满量程 33/4096×2000 ≈ 16.1A），无需再单独按 Nm 限扭矩 */
             float raw_f = inst->ref_torque * map->inv_nm_per_lsb;
             if (!isfinite(raw_f))
                 raw_f = 0.0f;
-            if (raw_f < -DRVS_LK_BC_RAW_MAX)
-                raw_f = -DRVS_LK_BC_RAW_MAX;
-            else if (raw_f > DRVS_LK_BC_RAW_MAX)
-                raw_f = DRVS_LK_BC_RAW_MAX;
+            if (raw_f < -DRV_LK_BC_RAW_MAX)
+                raw_f = -DRV_LK_BC_RAW_MAX;
+            else if (raw_f > DRV_LK_BC_RAW_MAX)
+                raw_f = DRV_LK_BC_RAW_MAX;
 
             raw = (int16_t)(raw_f >= 0.0f ? raw_f + 0.5f : raw_f - 0.5f);
 
@@ -361,9 +361,9 @@ void DrvsLKMotorBroadcastGroupSend(DrvsLKMotorBroadcastGroup_s *group)
 /*============================================
  *              反馈获取
  *============================================*/
-DrvsLKMotorBroadcastData_s DrvsLKMotorBroadcastGetData(const DrvsLKMotorBroadcast_s *inst)
+DrvLKMotorBroadcastData_s DrvLKMotorBroadcastGetData(const DrvLKMotorBroadcast_s *inst)
 {
-    DrvsLKMotorBroadcastData_s zero = {0};
+    DrvLKMotorBroadcastData_s zero = {0};
     if (!inst)
         return zero;
 
@@ -375,4 +375,4 @@ DrvsLKMotorBroadcastData_s DrvsLKMotorBroadcastGetData(const DrvsLKMotorBroadcas
 
 #endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */
 
-#endif /* DRVS_LKMOTOR_BROADCAST_USED */
+#endif /* DRV_LKMOTOR_BROADCAST_USED */

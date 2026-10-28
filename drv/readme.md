@@ -30,7 +30,7 @@
 
 以上复制来自docs  
 当前drv很多不符合这个架构，慢慢修改（drv_axis_lite）  
-电机协议层统一为 drvs_motor（纯协议）+ drvlib_motor（闭环/反馈后处理）；旧的 drv_motor 已删除
+电机协议层统一为 drv_motor（纯协议）+ drvlib_motor（闭环/反馈后处理）；旧版带基类/虚表的 drv_motor 实现已删除，由 `drv/drv_motor/` 的纯协议版取代
 
 ---
 
