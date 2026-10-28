@@ -1,5 +1,5 @@
 /**
- * @file drvs_lkmotor.h
+ * @file drv_lkmotor.h
  * @brief LK（瓴控/翎控）MF 系列一体化直驱电机纯协议驱动（一对一 / 单电机点对点）
  * @author TRW
  * @date 2026-09-21
@@ -7,19 +7,19 @@
  * @note **纯协议**：本模块只负责"字节 ↔ 物理量"的映射和收发。
  *       - 发：把扭矩换算成 iq，按 0xA1 转矩闭环帧下发
  *       - 收：把状态2 帧解成位置/速度/电流/温度
- *       - 模式命令：开启 / 关闭 / 停止 / 清错 / 读状态（SendCmd，见 DrvsLKMotorModeCmd_e）
+ *       - 模式命令：开启 / 关闭 / 停止 / 清错 / 读状态（SendCmd，见 DrvLKMotorModeCmd_e）
  *       不做闭环（PID 在 lib_axis 等算法层，app 负责把算法输出接到 SetRef）；
  *       不做滤波、不做方向取反、不做多圈累加、不做零点偏置——这些是"跨帧推断/策略"，
  *       不是协议，由 app 或算法层自己管。
  *
  * @note **本模块不持有使能状态**：没有 Enable()/Disable()，也不记 enable 标志。
- *       想让电机转 = app 自己调 `SendCmd(inst, DRVS_LK_CMD_ENABLE)`（发 0x88）；
- *       想停 = `SetRef(inst, 0)` 并调 `SendCmd(inst, DRVS_LK_CMD_DISABLE)`（发 0x80）。
+ *       想让电机转 = app 自己调 `SendCmd(inst, DRV_LK_CMD_ENABLE)`（发 0x88）；
+ *       想停 = `SetRef(inst, 0)` 并调 `SendCmd(inst, DRV_LK_CMD_DISABLE)`（发 0x80）。
  *       模块不替 app 决定"该不该使能"，故 Send 也无失能早退（协议层由电机自己拒绝）。
  *
  * @note 无基类、无虚函数表：每个品牌自包含（自己的实例结构体 + 自己的函数），
- *       app 当胶水。命名保留 Drvs 前缀，与 drvlib_ 的算法层区分
- *       （旧 drv_motor 已删除，app 已全部切到 drvs + drvlib）。
+ *       app 当胶水。命名沿用 Drv 前缀，与 drvlib_ 的算法层区分
+ *       （本层由带基类的旧 drv_motor 重写为纯协议版，app 已全部切到 drv + drvlib）。
  *
  * @note 协议：一对一 CAN 总线通讯协议 V2.36，标准帧 11 位 ID，默认 1Mbps，8 字节帧。
  *       CAN ID = 0x140 + 电机ID(1~32)，命令与回复同 ID，无应用层 CRC。
@@ -38,8 +38,8 @@
  * @note 广播（一拖四）是另一套帧格式，见旧驱动 drv_lkmotor_broadcast；本模块只做一对一。
  */
 
-#ifndef DRVS_LKMOTOR_H
-#define DRVS_LKMOTOR_H
+#ifndef DRV_LKMOTOR_H
+#define DRV_LKMOTOR_H
 
 #include <stdint.h>
 
@@ -52,7 +52,7 @@
 /*============================================
  *              前向声明
  *============================================*/
-typedef struct DrvsLKMotor DrvsLKMotor_s;
+typedef struct DrvLKMotor DrvLKMotor_s;
 
 /*============================================
  *              CAN 帧联合体定义
@@ -63,7 +63,7 @@ typedef struct DrvsLKMotor DrvsLKMotor_s;
  *
  *   D[0]    ：命令回显（0xA1 / 0x9C）
  *   D[1]    ：温度 int8（℃）
- *   D[2..3] ：iq int16 小端（A/LSB 见 DrvsLKMotorProtocolMap_s）
+ *   D[2..3] ：iq int16 小端（A/LSB 见 DrvLKMotorProtocolMap_s）
  *   D[4..5] ：转速 int16 小端（dps）
  *   D[6..7] ：编码器 uint16 小端（整圈 0~65535）
  *
@@ -78,16 +78,16 @@ typedef struct
     int16_t iq_le;        // [2-3] iq int16 小端
     int16_t speed_dps_le; // [4-5] 转速 int16 小端 (dps)
     uint16_t encoder_le;  // [6-7] 编码器 uint16 小端
-} DrvsLKMotorStatusFrameParts_s;
+} DrvLKMotorStatusFrameParts_s;
 #pragma pack(pop)
 
 typedef union
 {
     uint8_t raw[8];
-    DrvsLKMotorStatusFrameParts_s parts;
-} DrvsLKMotorStatusFrame_u;
+    DrvLKMotorStatusFrameParts_s parts;
+} DrvLKMotorStatusFrame_u;
 
-_Static_assert(sizeof(DrvsLKMotorStatusFrameParts_s) == 8, "LK 状态帧必须是 8 字节");
+_Static_assert(sizeof(DrvLKMotorStatusFrameParts_s) == 8, "LK 状态帧必须是 8 字节");
 
 /**
  * @brief LK 转矩闭环控制帧（0xA1，8 字节）
@@ -109,16 +109,16 @@ typedef struct
     int16_t iq_le;      // [4-5] iqControl int16 小端
     uint8_t _reserved3; // [6]
     uint8_t _reserved4; // [7]
-} DrvsLKMotorControlFrameParts_s;
+} DrvLKMotorControlFrameParts_s;
 #pragma pack(pop)
 
 typedef union
 {
     uint8_t raw[8];
-    DrvsLKMotorControlFrameParts_s parts;
-} DrvsLKMotorControlFrame_u;
+    DrvLKMotorControlFrameParts_s parts;
+} DrvLKMotorControlFrame_u;
 
-_Static_assert(sizeof(DrvsLKMotorControlFrameParts_s) == 8, "LK 控制帧必须是 8 字节");
+_Static_assert(sizeof(DrvLKMotorControlFrameParts_s) == 8, "LK 控制帧必须是 8 字节");
 
 /*============================================
  *              模式命令枚举
@@ -126,22 +126,22 @@ _Static_assert(sizeof(DrvsLKMotorControlFrameParts_s) == 8, "LK 控制帧必须�
  *============================================*/
 typedef enum : uint8_t
 {
-    DRVS_LK_CMD_DISABLE = 0x80,      // 关闭：开启→关闭，清除电机内部圈数及旧指令，仍回复但不动作
-    DRVS_LK_CMD_STOP = 0x81,         // 停止（不清除运行状态，可再次发控制指令）
-    DRVS_LK_CMD_ENABLE = 0x88,       // 开启：关闭→开启（上电默认为开启）
-    DRVS_LK_CMD_CLEAR_ERROR = 0x9B,  // 清除错误标志
-    DRVS_LK_CMD_READ_STATUS2 = 0x9C, // 读取电机状态2（温度/iq/转速/编码器）
-    DRVS_LK_CMD_TORQUE = 0xA1,       // 转矩闭环（仅 MF/MH/MG 实现），DATA[4..5]=iqControl
-} DrvsLKMotorModeCmd_e;
+    DRV_LK_CMD_DISABLE = 0x80,      // 关闭：开启→关闭，清除电机内部圈数及旧指令，仍回复但不动作
+    DRV_LK_CMD_STOP = 0x81,         // 停止（不清除运行状态，可再次发控制指令）
+    DRV_LK_CMD_ENABLE = 0x88,       // 开启：关闭→开启（上电默认为开启）
+    DRV_LK_CMD_CLEAR_ERROR = 0x9B,  // 清除错误标志
+    DRV_LK_CMD_READ_STATUS2 = 0x9C, // 读取电机状态2（温度/iq/转速/编码器）
+    DRV_LK_CMD_TORQUE = 0xA1,       // 转矩闭环（仅 MF/MH/MG 实现），DATA[4..5]=iqControl
+} DrvLKMotorModeCmd_e;
 
 /*============================================
  *              运行状态枚举（记录的已下达状态，非电机回读）
  *============================================*/
 typedef enum : uint8_t
 {
-    DRVS_LK_STATE_DISABLED = 0, // 已关闭（0x80 后）
-    DRVS_LK_STATE_ENABLED = 1,  // 已开启（0x88 后，上电默认为此）
-} DrvsLKMotorState_e;
+    DRV_LK_STATE_DISABLED = 0, // 已关闭（0x80 后）
+    DRV_LK_STATE_ENABLED = 1,  // 已开启（0x88 后，上电默认为此）
+} DrvLKMotorState_e;
 
 /*============================================
  *              协议映射结构体
@@ -158,7 +158,7 @@ typedef struct
     float inv_nm_per_lsb;  // = 1 / nm_per_lsb，Nm → raw
     float encoder_to_rad;  // = 2π / 65536，编码器 raw → rad
     float dps_to_radps;    // = π / 180，转速 dps → rad/s
-} DrvsLKMotorProtocolMap_s;
+} DrvLKMotorProtocolMap_s;
 
 /*============================================
  *              反馈数据结构体
@@ -178,12 +178,12 @@ typedef struct
     int8_t temperature;    // 温度 (℃)
     uint8_t echo;          // 回显命令字（0xA1 或 0x9C）
     uint64_t timestamp_us; // CAN 帧到达时间戳 (us)
-} DrvsLKMotorData_s;
+} DrvLKMotorData_s;
 
 /*============================================
  *              LK 电机实例结构体
  *============================================*/
-struct DrvsLKMotor
+struct DrvLKMotor
 {
     /* 通信 */
     CANInstance *can;        // CAN 实例指针
@@ -198,13 +198,13 @@ struct DrvsLKMotor
     uint16_t can_id;  // = 0x140 + motor_id，收发共用
 
     /* 协议映射 */
-    DrvsLKMotorProtocolMap_s proto_map;
+    DrvLKMotorProtocolMap_s proto_map;
 
     /* 控制量（纯扭矩） */
     float ref_torque; // 设定扭矩 (Nm)，由 SetRef 写入，Send 换算成 iq 下发
 
     /* 接收双缓冲：ISR 解析写一个，GetData 读另一个，读者永远拿到完整的一帧 */
-    DrvsLKMotorData_s data[2]; // data[data_idx] = ISR 正在写的
+    DrvLKMotorData_s data[2]; // data[data_idx] = ISR 正在写的
     volatile uint8_t data_idx; // 当前 ISR 写入的缓冲区索引 (0/1)
 };
 
@@ -230,15 +230,15 @@ typedef struct
     DaemonFaultAction_e fault_action; // 离线故障动作
 
     uint32_t timeout_ms; // CAN 发送超时 (ms)
-} DrvsLKMotorConfig_s;
+} DrvLKMotorConfig_s;
 
 /*============================================
  *              单电机实例定义宏
  *============================================*/
-#define DRVS_LKMOTOR_INSTANCE_DEF(name)                                                                                                                        \
+#define DRV_LKMOTOR_INSTANCE_DEF(name)                                                                                                                        \
     CAN_INSTANCE_DEF(name##_can);                                                                                                                              \
     DAEMON_INSTANCE_DEF(name##_daemon);                                                                                                                        \
-    static DrvsLKMotor_s name = {                                                                                                                              \
+    static DrvLKMotor_s name = {                                                                                                                              \
         .can = &name##_can,                                                                                                                                    \
         .daemon = &name##_daemon,                                                                                                                              \
     }
@@ -246,22 +246,22 @@ typedef struct
 /*============================================
  *              公共接口
  *============================================*/
-int8_t DrvsLKMotorRegister(DrvsLKMotor_s *inst);
-int8_t DrvsLKMotorConfig(DrvsLKMotor_s *inst, const DrvsLKMotorConfig_s *cfg);
+int8_t DrvLKMotorRegister(DrvLKMotor_s *inst);
+int8_t DrvLKMotorConfig(DrvLKMotor_s *inst, const DrvLKMotorConfig_s *cfg);
 
 /**
  * @brief 设置扭矩设定值 (Nm)
- * @note  仅记录，不发送；需再调 DrvsLKMotorSend()
+ * @note  仅记录，不发送；需再调 DrvLKMotorSend()
  * @note  方向取反（安装镜像）由调用方自己做，本模块不做 feedback/motor_direction
  */
-void DrvsLKMotorSetRef(DrvsLKMotor_s *inst, float torque);
+void DrvLKMotorSetRef(DrvLKMotor_s *inst, float torque);
 
 /**
  * @brief 打包并发送一帧 0xA1 转矩闭环帧
  * @note  iq_raw = clamp(ref_torque / (Kt × a_per_lsb), ±2048)
  * @note  只要没被 SendCmd 关闭过，电机自己会接受这帧（模块不做软件拦截）
  */
-void DrvsLKMotorSend(DrvsLKMotor_s *inst);
+void DrvLKMotorSend(DrvLKMotor_s *inst);
 
 /**
  * @brief 取最新一帧反馈（在任务上下文调用）
@@ -269,14 +269,14 @@ void DrvsLKMotorSend(DrvsLKMotor_s *inst);
  *        不解析、不推断、不滤波，也不会阻塞 ISR。
  * @note  收到第一帧有效状态2 之前返回全 0；要判"是否收到过"看 timestamp_us == 0
  */
-DrvsLKMotorData_s DrvsLKMotorGetData(const DrvsLKMotor_s *inst);
+DrvLKMotorData_s DrvLKMotorGetData(const DrvLKMotor_s *inst);
 
 /**
- * @brief 发送模式命令（开启/关闭/停止/清错/读状态），命令码见 DrvsLKMotorModeCmd_e
+ * @brief 发送模式命令（开启/关闭/停止/清错/读状态），命令码见 DrvLKMotorModeCmd_e
  * @note  帧格式：DATA[0]=命令码，其余字节 0x00
  */
-void DrvsLKMotorSendCmd(DrvsLKMotor_s *inst, uint8_t cmd);
+void DrvLKMotorSendCmd(DrvLKMotor_s *inst, uint8_t cmd);
 
 #endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */
 
-#endif // DRVS_LKMOTOR_H
+#endif // DRV_LKMOTOR_H

@@ -330,7 +330,7 @@ static HAL_StatusTypeDef CANAbortAllTx(CANInstance *instance)
  * @brief 向该 CAN 上所有注册了 err_callback 的实例广播一个错误原因
  * @note 错误是**外设级**的（同一 handle 上可以有多个实例共享同一条总线），无法归给某一个
  *       实例，故广播给该 handle 上的所有注册者。handler 契约要求幂等，重复收到同一原因无害；
- *       没配 err_callback 的实例直接跳过（本仓库的 drv 层都已接上，见各 drvs_* 的 ErrHook）。
+ *       没配 err_callback 的实例直接跳过（本仓库的 drv 层都已接上，见各 drv_* 的 ErrHook）。
  */
 static void CAN_NotifyError(const CAN_HandleTypeDef *hcan, CAN_ErrReason_e reason)
 {

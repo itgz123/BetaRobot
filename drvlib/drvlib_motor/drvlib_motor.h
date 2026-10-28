@@ -3,20 +3,20 @@
  * @brief 电机三级级联 PID 控制核：位置/速度/电流 + 反馈后处理（drvlib 层）
  *
  * ═══════════════════ 分层定位 ═══════════════════
- *   drvs_motor : 纯协议（字节 ↔ 物理量、收发），不做闭环/滤波/方向/多圈/偏置，
+ *   drv_motor : 纯协议（字节 ↔ 物理量、收发），不做闭环/滤波/方向/多圈/偏置，
  *                无虚表、无使能状态，把"跨帧推断与策略"全部留给上层
  *   本模块     : drvlib 层 —— 把 lib_pid 的三个 PID 与"电机反馈后处理策略"组合
  *                起来，对上给 app 一个可直接驱动的三环控制对象
- *   app        : 胶水 —— 从 DrvsXxxGetData 取一帧反馈填进 DrvlibMotorFeedback_s，
- *                调 DrvlibMotorSetRef 拿到下发量交给 DrvsXxxSetRef / GroupSend
+ *   app        : 胶水 —— 从 DrvXxxGetData 取一帧反馈填进 DrvlibMotorFeedback_s，
+ *                调 DrvlibMotorSetRef 拿到下发量交给 DrvXxxSetRef / GroupSend
  *
- * ═══════════════════ 为什么本模块不依赖任何 drvs 头 ═══════════════════
+ * ═══════════════════ 为什么本模块不依赖任何 drv 头 ═══════════════════
  * 它只认 DrvlibMotorFeedback_s（位置/速度/电流/时间戳），对后端完全无关 ——
  * DM/RS/LK/DJI 广播乃至非 CAN 电机都能喂进来。
  *
  * ═══════════════════ 三级级联 ═══════════════════
  *   ref(位置 rad) ─PID[ANGLE]→ setpoint(速度 rad/s) ─PID[SPEED]→
- *     setpoint(电流 A) ─PID[CURRENT]→ 输出电流(A) → drvs
+ *     setpoint(电流 A) ─PID[CURRENT]→ 输出电流(A) → drv
  * 由 loop_type 位掩码决定哪几环参与；未参与的环把输入原样透传给下一环。
  *   仅 SPEED  ：ref=速度 → PID → 电流    （旧 drv_motor 的常用通路）
  *   仅 ANGLE  ：ref=位置 → PID → 电流
@@ -28,7 +28,7 @@
  * 再手写负号（复刻旧 drv_motor 的 MotorDirection_e 手法）。两者须**成对**设置 —— 只反一个
  * 会变成正反馈（见 app_shoot 的方向说明）。
  *
- * ═══════════════════ 反馈后处理（drvs 明确上交的策略） ═══════════════════
+ * ═══════════════════ 反馈后处理（drv 明确上交的策略） ═══════════════════
  *   位置：多圈累加 → 偏置 → 方向(feedback_direction) → 归一化(WRAP)，顺序照搬旧 drv_motor
  *   速度/电流：各自一阶低通（速度用 cfg.lpf_rc，电流用 cfg.current_lpf_rc，<=0 透传）
  *              后乘 feedback_direction（LPF 状态存未修正值）
@@ -58,12 +58,12 @@
  *
  * ═══════════════════ 使用顺序 ═══════════════════
  * @code
- *     DRVS_DJIMOTOR_BROADCAST_INSTANCE_DEF(m);
- *     DRVS_DJIMOTOR_BROADCAST_GROUP_DEF(m_group);
+ *     DRV_DJIMOTOR_BROADCAST_INSTANCE_DEF(m);
+ *     DRV_DJIMOTOR_BROADCAST_GROUP_DEF(m_group);
  *     DRVLIB_MOTOR_INSTANCE_DEF(ctrl);
  *
- *     DrvsDJIMotorBroadcastRegister(&m);
- *     DrvsDJIMotorBroadcastConfig(&m, &(DrvsDJIMotorBroadcastConfig_s){ ... });
+ *     DrvDJIMotorBroadcastRegister(&m);
+ *     DrvDJIMotorBroadcastConfig(&m, &(DrvDJIMotorBroadcastConfig_s){ ... });
  *     DrvlibMotorConfig(&ctrl, &(DrvlibMotor_Config_s){
  *         .loop_type = DRVLIB_MOTOR_LOOP_SPEED,
  *         .position_span = 6.2831853f,
@@ -72,12 +72,12 @@
  *     DrvlibMotorEnable(&ctrl);
  *
  *     // 周期任务（dt 为秒）：
- *     DrvsDJIMotorBroadcastData_s d = DrvsDJIMotorBroadcastGetData(&m);
+ *     DrvDJIMotorBroadcastData_s d = DrvDJIMotorBroadcastGetData(&m);
  *     DrvlibMotorFeedback_s fb = { .position = d.position, .speed = d.speed,
  *                                  .current = d.current, .timestamp_us = d.timestamp_us };
  *     float out = DrvlibMotorSetRef(&ctrl, ref, &fb, dt_ms * 0.001f);
- *     DrvsDJIMotorBroadcastSetRef(&m, out);
- *     DrvsDJIMotorBroadcastGroupSend(&m_group);
+ *     DrvDJIMotorBroadcastSetRef(&m, out);
+ *     DrvDJIMotorBroadcastGroupSend(&m_group);
  * @endcode
  */
 
@@ -157,7 +157,7 @@ typedef enum : int8_t
 /*============================ 反馈输入 ============================*/
 
 /**
- * @brief app 从 DrvsXxxGetData 拷进来的一帧协议原始量
+ * @brief app 从 DrvXxxGetData 拷进来的一帧协议原始量
  * @note 都是**未处理**的：未累加、未偏置、未滤波。跨帧推断与策略由本模块做。
  * @note position 的语义随后端：DJI/LK 单圈 [0,2π)；DM/RS [-p_max, p_max]（跨边界回绕），
  *       后者须把 cfg.position_span 设为 2*p_max 才能正确累加。
@@ -304,7 +304,7 @@ int8_t DrvlibMotorConfig(DrvlibMotorInstance *inst, const DrvlibMotor_Config_s *
 float DrvlibMotorSetRef(DrvlibMotorInstance *inst, float ref, const DrvlibMotorFeedback_s *fb, float dt);
 
 /**
- * @brief 使能（仅置软件标志；协议层使能由 app 调 DrvsXxxSendCmd）
+ * @brief 使能（仅置软件标志；协议层使能由 app 调 DrvXxxSendCmd）
  */
 void DrvlibMotorEnable(DrvlibMotorInstance *inst);
 

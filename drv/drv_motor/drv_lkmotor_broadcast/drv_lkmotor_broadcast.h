@@ -1,5 +1,5 @@
 /**
- * @file drvs_lkmotor_broadcast.h
+ * @file drv_lkmotor_broadcast.h
  * @brief LK（瓴控/翎控）MF 系列纯协议广播驱动（一拖四组帧）
  * @author TRW
  * @date 2026-09-21
@@ -12,8 +12,8 @@
  *       不是协议，由 app 或算法层自己管。
  *
  * @note 无基类、无虚函数表：每个品牌自包含（自己的实例结构体 + 自己的函数），
- *       app 当胶水。命名保留 Drvs 前缀，与 drvlib_ 的算法层区分
- *       （旧 drv_motor 已删除，app 已全部切到 drvs + drvlib）。
+ *       app 当胶水。命名沿用 Drv 前缀，与 drvlib_ 的算法层区分
+ *       （本层由带基类的旧 drv_motor 重写为纯协议版，app 已全部切到 drv + drvlib）。
  *
  * @note 协议：广播模式一拖四，标准帧 11 位 ID，8 字节帧。
  *       - 发送：固定 ID 0x280，4 × int16 **小端** iqControl，第 id 号电机占 data[(id-1)*2 .. +1]
@@ -28,12 +28,12 @@
  *
  * @note MF 为直驱（无减速机），反馈与下发均为电机轴量，驱动内严禁乘减速比。
  *
- * @note 本文件与一对一驱动 drvs_lkmotor.{c,h} 完全独立（类型/常量自持），
+ * @note 本文件与一对一驱动 drv_lkmotor.{c,h} 完全独立（类型/常量自持），
  *       二者协议不兼容，切勿在同一电机上混用；两者可同时编进同一个 app。
  */
 
-#ifndef DRVS_LKMOTOR_BROADCAST_H
-#define DRVS_LKMOTOR_BROADCAST_H
+#ifndef DRV_LKMOTOR_BROADCAST_H
+#define DRV_LKMOTOR_BROADCAST_H
 
 #include <stdint.h>
 
@@ -46,11 +46,11 @@
 /*============================================
  *              前向声明
  *============================================*/
-typedef struct DrvsLKMotorBroadcast DrvsLKMotorBroadcast_s;
-typedef struct DrvsLKMotorBroadcastGroup DrvsLKMotorBroadcastGroup_s;
+typedef struct DrvLKMotorBroadcast DrvLKMotorBroadcast_s;
+typedef struct DrvLKMotorBroadcastGroup DrvLKMotorBroadcastGroup_s;
 
 /* 0x280 帧内的槽位数（一拖四） */
-#define DRVS_LK_BC_SLOTS 4u
+#define DRV_LK_BC_SLOTS 4u
 
 /*============================================
  *              CAN 帧联合体定义
@@ -61,7 +61,7 @@ typedef struct DrvsLKMotorBroadcastGroup DrvsLKMotorBroadcastGroup_s;
  *
  *   D[0]    ：命令回显（0xA1 / 0x9C）
  *   D[1]    ：温度 int8（℃）
- *   D[2..3] ：iq int16 小端（A/LSB 见 DrvsLKMotorBroadcastProtocolMap_s）
+ *   D[2..3] ：iq int16 小端（A/LSB 见 DrvLKMotorBroadcastProtocolMap_s）
  *   D[4..5] ：转速 int16 小端（dps）
  *   D[6..7] ：编码器 uint16 小端（整圈 0~65535）
  *
@@ -77,16 +77,16 @@ typedef struct
     int16_t iq_le;        // [2-3] iq int16 小端
     int16_t speed_dps_le; // [4-5] 转速 int16 小端 (dps)
     uint16_t encoder_le;  // [6-7] 编码器 uint16 小端
-} DrvsLKBroadcastStatusFrameParts_s;
+} DrvLKBroadcastStatusFrameParts_s;
 #pragma pack(pop)
 
 typedef union
 {
     uint8_t raw[8];
-    DrvsLKBroadcastStatusFrameParts_s parts;
-} DrvsLKBroadcastStatusFrame_u;
+    DrvLKBroadcastStatusFrameParts_s parts;
+} DrvLKBroadcastStatusFrame_u;
 
-_Static_assert(sizeof(DrvsLKBroadcastStatusFrameParts_s) == 8, "LK 状态帧必须是 8 字节");
+_Static_assert(sizeof(DrvLKBroadcastStatusFrameParts_s) == 8, "LK 状态帧必须是 8 字节");
 
 /**
  * @brief LK 0x280 力矩广播帧（8 字节，小端）
@@ -105,16 +105,16 @@ typedef struct
     int16_t torque_id2_le; // [2-3] 电机 2（槽位 1）
     int16_t torque_id3_le; // [4-5] 电机 3（槽位 2）
     int16_t torque_id4_le; // [6-7] 电机 4（槽位 3）
-} DrvsLKBroadcastTorqueFrameParts_s;
+} DrvLKBroadcastTorqueFrameParts_s;
 #pragma pack(pop)
 
 typedef union
 {
     uint8_t raw[8];
-    DrvsLKBroadcastTorqueFrameParts_s parts;
-} DrvsLKBroadcastTorqueFrame_u;
+    DrvLKBroadcastTorqueFrameParts_s parts;
+} DrvLKBroadcastTorqueFrame_u;
 
-_Static_assert(sizeof(DrvsLKBroadcastTorqueFrameParts_s) == 8, "LK 广播力矩帧必须是 8 字节");
+_Static_assert(sizeof(DrvLKBroadcastTorqueFrameParts_s) == 8, "LK 广播力矩帧必须是 8 字节");
 
 /*============================================
  *              协议映射结构体
@@ -131,7 +131,7 @@ typedef struct
     float inv_nm_per_lsb;  // = 1 / nm_per_lsb，Nm → raw
     float encoder_to_rad;  // = 2π / 65536，编码器 raw → rad
     float dps_to_radps;    // = π / 180，转速 dps → rad/s
-} DrvsLKMotorBroadcastProtocolMap_s;
+} DrvLKMotorBroadcastProtocolMap_s;
 
 /*============================================
  *              反馈数据结构体
@@ -151,12 +151,12 @@ typedef struct
     int8_t temperature;    // 温度 (℃)
     uint8_t echo;          // 回显命令字（0xA1 或 0x9C）
     uint64_t timestamp_us; // CAN 帧到达时间戳 (us)
-} DrvsLKMotorBroadcastData_s;
+} DrvLKMotorBroadcastData_s;
 
 /*============================================
  *              LK 广播电机实例结构体
  *============================================*/
-struct DrvsLKMotorBroadcast
+struct DrvLKMotorBroadcast
 {
     /* 通信 */
     CANInstance *can;        // CAN 实例指针
@@ -170,17 +170,17 @@ struct DrvsLKMotorBroadcast
     uint16_t rx_id;   // = 0x140 + motor_id，反馈帧 ID
 
     /* 协议映射 */
-    DrvsLKMotorBroadcastProtocolMap_s proto_map;
+    DrvLKMotorBroadcastProtocolMap_s proto_map;
 
     /* 控制量（纯扭矩，无使能开关） */
     float ref_torque; // 设定扭矩 (Nm)，由 SetRef 写入，GroupSend 打包下发
 
     /* 组链接 */
-    DrvsLKMotorBroadcastGroup_s *group; // 所属组（Config 绑定，NULL=未绑定）
+    DrvLKMotorBroadcastGroup_s *group; // 所属组（Config 绑定，NULL=未绑定）
     uint8_t slot;                       // = motor_id - 1，0x280 帧内槽位
 
     /* 接收双缓冲：ISR 解析写一个，GetData 读另一个，读者永远拿到完整的一帧 */
-    DrvsLKMotorBroadcastData_s data[2]; // data[data_idx] = ISR 正在写的
+    DrvLKMotorBroadcastData_s data[2]; // data[data_idx] = ISR 正在写的
     volatile uint8_t data_idx;          // 当前 ISR 写入的缓冲区索引 (0/1)
 };
 
@@ -189,12 +189,12 @@ struct DrvsLKMotorBroadcast
  *
  * @note 组是 **app 自己的变量**（static 定义后传给 Config）：
  *       一条 CAN 总线一组，组内最多 4 个电机共用那一帧 0x280。
- *       发送挂在组上（DrvsLKMotorBroadcastGroupSend），单电机实例没有 Send，
+ *       发送挂在组上（DrvLKMotorBroadcastGroupSend），单电机实例没有 Send，
  *       这样"一组只调一次"由函数名表达，也避免了"调用了某个成员却发了整组"的错觉。
  *============================================*/
-struct DrvsLKMotorBroadcastGroup
+struct DrvLKMotorBroadcastGroup
 {
-    DrvsLKMotorBroadcast_s *slots[DRVS_LK_BC_SLOTS]; // 槽位 = motor_id-1，NULL=空槽
+    DrvLKMotorBroadcast_s *slots[DRV_LK_BC_SLOTS]; // 槽位 = motor_id-1，NULL=空槽
     uint8_t member_count;                            // 已占用槽位数，0 表示尚未绑定总线
     BoardCAN_e can_e;                                // 首个成员确定，后续成员必须一致
     uint32_t tx_fail;                                // 组播帧发送失败累计：CANTransmit 入队失败（返回非 BSP_OK）
@@ -214,7 +214,7 @@ struct DrvsLKMotorBroadcastGroup
  */
 typedef struct
 {
-    DrvsLKMotorBroadcastGroup_s *group; // 广播组（app 持有的变量，一条总线一个）
+    DrvLKMotorBroadcastGroup_s *group; // 广播组（app 持有的变量，一条总线一个）
 
     BoardCAN_e can_e; // 板载 CAN 枚举（用于查找硬件映射）
 
@@ -228,15 +228,15 @@ typedef struct
     DaemonFaultAction_e fault_action; // 离线故障动作
 
     uint32_t timeout_ms; // CAN 发送超时 (ms)
-} DrvsLKMotorBroadcastConfig_s;
+} DrvLKMotorBroadcastConfig_s;
 
 /*============================================
  *              单电机实例 / 广播组定义宏
  *============================================*/
-#define DRVS_LKMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                                                              \
+#define DRV_LKMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                                                              \
     CAN_INSTANCE_DEF(name##_can);                                                                                                                              \
     DAEMON_INSTANCE_DEF(name##_daemon);                                                                                                                        \
-    static DrvsLKMotorBroadcast_s name = {                                                                                                                     \
+    static DrvLKMotorBroadcast_s name = {                                                                                                                     \
         .can = &name##_can,                                                                                                                                    \
         .daemon = &name##_daemon,                                                                                                                              \
     }
@@ -246,12 +246,12 @@ typedef struct
  * @note  先定义再传给 `cfg.group`。
  *        定义出来即全零：四个槽位皆空、成员数为 0，can_e 由第一个成员的 Config 落定。
  */
-#define DRVS_LKMOTOR_BROADCAST_GROUP_DEF(name) static DrvsLKMotorBroadcastGroup_s name = {0}
+#define DRV_LKMOTOR_BROADCAST_GROUP_DEF(name) static DrvLKMotorBroadcastGroup_s name = {0}
 
 /*============================================
  *              公共接口
  *============================================*/
-int8_t DrvsLKMotorBroadcastRegister(DrvsLKMotorBroadcast_s *inst);
+int8_t DrvLKMotorBroadcastRegister(DrvLKMotorBroadcast_s *inst);
 
 /**
  * @brief 配置电机并挂到广播组（可重复调用）
@@ -262,14 +262,14 @@ int8_t DrvsLKMotorBroadcastRegister(DrvsLKMotorBroadcast_s *inst);
  * @note  换组/换槽会先释放旧槽位（旧组该槽位改为空 → 该槽位后续下发 0 扭矩）
  * @note  任何失败路径都不会改动组成员关系
  */
-int8_t DrvsLKMotorBroadcastConfig(DrvsLKMotorBroadcast_s *inst, const DrvsLKMotorBroadcastConfig_s *cfg);
+int8_t DrvLKMotorBroadcastConfig(DrvLKMotorBroadcast_s *inst, const DrvLKMotorBroadcastConfig_s *cfg);
 
 /**
  * @brief 设置扭矩设定值 (Nm)
- * @note  仅记录，不下发；需再调一次 DrvsLKMotorBroadcastGroupSend()
+ * @note  仅记录，不下发；需再调一次 DrvLKMotorBroadcastGroupSend()
  * @note  方向取反（安装镜像）由调用方自己做，本模块不做 motor_direction
  */
-void DrvsLKMotorBroadcastSetRef(DrvsLKMotorBroadcast_s *inst, float torque);
+void DrvLKMotorBroadcastSetRef(DrvLKMotorBroadcast_s *inst, float torque);
 
 /**
  * @brief 发送一组 0x280 力矩广播帧（每个控制周期对该组调用一次）
@@ -277,7 +277,7 @@ void DrvsLKMotorBroadcastSetRef(DrvsLKMotorBroadcast_s *inst, float torque);
  * @note  重复调用 = 重复占总线，一个控制周期只调一次。
  * @note  组内成员数为 0 时直接返回。
  */
-void DrvsLKMotorBroadcastGroupSend(DrvsLKMotorBroadcastGroup_s *group);
+void DrvLKMotorBroadcastGroupSend(DrvLKMotorBroadcastGroup_s *group);
 
 /**
  * @brief 取最新一帧反馈（在任务上下文调用）
@@ -285,8 +285,8 @@ void DrvsLKMotorBroadcastGroupSend(DrvsLKMotorBroadcastGroup_s *group);
  *        不解析、不推断、不滤波，也不会阻塞 ISR。
  * @note  收到第一帧有效状态2 之前返回全 0；要判"是否收到过"看 timestamp_us == 0
  */
-DrvsLKMotorBroadcastData_s DrvsLKMotorBroadcastGetData(const DrvsLKMotorBroadcast_s *inst);
+DrvLKMotorBroadcastData_s DrvLKMotorBroadcastGetData(const DrvLKMotorBroadcast_s *inst);
 
 #endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */
 
-#endif // DRVS_LKMOTOR_BROADCAST_H
+#endif // DRV_LKMOTOR_BROADCAST_H

@@ -44,7 +44,7 @@ void (*tx_complete_callback)(CANInstance *instance, uint32_t tx_mailbox, BSP_Sta
 - 相对旧版的变更（**只有返回类型与回调元数**，`CANTransmit` 的参数表本轮未动）：
   三个接口的返回值 `int8_t`（0 / -1）→ `BSP_Status_e`；
   `tx_complete_callback` 由 2 参数变 3 参数（新增 `result`）。
-  上层（drvs_motor / drv_comm media）若仍按 `!= 0` 判返回值或写旧 2 参回调，需适配。
+  上层（drv_motor / drv_comm media）若仍按 `!= 0` 判返回值或写旧 2 参回调，需适配。
 
 ### 1.3 可选的 hal_can 重配置入口
 
@@ -444,10 +444,10 @@ typedef enum : uint8_t
    - `int8_t CANRegister|CANConfig|CANTransmit|CANRecover` → 零匹配；
    - `CANTransmit(` 在 `drv/` 里的裸调用都是**合法**的：`comm_media_can_pkt0.c` /
      `comm_media_can_idseq.c` 各一处（media 后端不是电机，没有电机实例可挂 `tx_fail`），
-     `drvs_motor/*` 各驱动自己的发送点（各自判 `!= BSP_OK` 后累加本实例/本组的 `tx_fail`）。
+     `drv_motor/*` 各驱动自己的发送点（各自判 `!= BSP_OK` 后累加本实例/本组的 `tx_fail`）。
      它们都不经过 `MotorCanTransmit` —— 那个 helper 只服务旧的 `drv_motor/`（已删除），
-     `drvs_motor` 已全部改用 `CANTransmit` 直呼（见 `drvs_*.c` 的发送点注释）。
-     现在 `drv/` 里的直呼点只剩 comm media、超级电容与 `drvs_motor` 各自的发送处；
+     `drv_motor` 已全部改用 `CANTransmit` 直呼（见 `drv_*.c` 的发送点注释）。
+     现在 `drv/` 里的直呼点只剩 comm media、超级电容与 `drv_motor` 各自的发送处；
    - `CAN_TX_MAILBOX_FREE_BASE`（定义后从未使用的死物）→ 零匹配。
 3. **符号级要查 `.o`，不要查 `.elf`**：本工程开了 `-ffunction-sections` + `-Wl,--gc-sections`
    （`CMakeLists.txt:226,243`），**零调用者的函数会被链接器丢掉**。所以零调用者的函数

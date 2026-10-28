@@ -1,5 +1,5 @@
 /**
- * @file drvs_lkmotor.c
+ * @file drv_lkmotor.c
  * @brief LK（瓴控/翎控）MF 系列一体化直驱电机纯协议驱动实现（一对一）
  * @author TRW
  * @date 2026-09-21
@@ -7,13 +7,13 @@
  * @note 协议：一对一 CAN 总线通讯协议 V2.36，标准帧 11 位 ID，默认 1Mbps，8 字节帧。
  *       CAN ID = 0x140 + 电机ID(1~32)，命令与回复同 ID，无应用层 CRC。
  * @note 控制：0xA1 转矩闭环下发 iq；电机对 0xA1 的回复就是「状态2」格式，无需轮询。
- * @note 职责边界见 drvs_lkmotor.h：只做字节 ↔ 物理量，不做闭环/滤波/方向/累加/零点
+ * @note 职责边界见 drv_lkmotor.h：只做字节 ↔ 物理量，不做闭环/滤波/方向/累加/零点
  */
 
-#include "drvs_lkmotor.h"
+#include "drv_lkmotor.h"
 #include "app_cfg.h"
 
-#ifdef DRVS_LKMOTOR_USED
+#ifdef DRV_LKMOTOR_USED
 
 #if defined(HAL_CAN_MODULE_ENABLED) || defined(HAL_FDCAN_MODULE_ENABLED)
 
@@ -22,10 +22,10 @@
 #include <math.h>
 #include <string.h>
 
-#ifndef DRVS_LKMOTOR_LOG_LIMIT
-#define DRVS_LKMOTOR_LOG_LIMIT 10
-#endif // !DRVS_LKMOTOR_LOG_LIMIT
-LOG_INSTANCE_DEF(g_drvs_lkmotor_log, "drvs_lkmotor", DRVS_LKMOTOR_LOG_LIMIT);
+#ifndef DRV_LKMOTOR_LOG_LIMIT
+#define DRV_LKMOTOR_LOG_LIMIT 10
+#endif // !DRV_LKMOTOR_LOG_LIMIT
+LOG_INSTANCE_DEF(g_drv_lkmotor_log, "drv_lkmotor", DRV_LKMOTOR_LOG_LIMIT);
 
 /*============================================
  *              协议常量
@@ -33,19 +33,19 @@ LOG_INSTANCE_DEF(g_drvs_lkmotor_log, "drvs_lkmotor", DRVS_LKMOTOR_LOG_LIMIT);
  * @note iq 分辨率与编码器量纲对全系列 MF 固定，直接常量化；
  *       只有随型号变的 Kt 走 cfg。
  *============================================*/
-#define DRVS_LK_CAN_ID_BASE 0x140u // CAN_ID = 0x140 + 电机ID
-#define DRVS_LK_MOTOR_ID_MIN 1u    // 电机 ID 下限
-#define DRVS_LK_MOTOR_ID_MAX 32u   // 电机 ID 上限
+#define DRV_LK_CAN_ID_BASE 0x140u // CAN_ID = 0x140 + 电机ID
+#define DRV_LK_MOTOR_ID_MIN 1u    // 电机 ID 下限
+#define DRV_LK_MOTOR_ID_MAX 32u   // 电机 ID 上限
 
 /* 0xA1 iqControl 限幅（一对一 ±2048，广播帧为 ±2000） */
-#define DRVS_LK_IQ_RAW_MAX 2048.0f
+#define DRV_LK_IQ_RAW_MAX 2048.0f
 
 /* MF 固定：A = raw × 33/4096（MG 为 66/4096，本驱动不支持） */
-#define DRVS_LK_IQ_A_PER_LSB (33.0f / 4096.0f)
+#define DRV_LK_IQ_A_PER_LSB (33.0f / 4096.0f)
 
 /* 编码器：整圈 raw 覆盖 0~65535（转一圈恰好回绕一次），固定按 16bit 处理 */
-#define DRVS_LK_ENCODER_TO_RAD (6.283185307179586f / 65536.0f) // 2π / 65536
-#define DRVS_LK_DPS_TO_RADPS 0.017453292519943295f             // π / 180
+#define DRV_LK_ENCODER_TO_RAD (6.283185307179586f / 65536.0f) // 2π / 65536
+#define DRV_LK_DPS_TO_RADPS 0.017453292519943295f             // π / 180
 
 /*============================================
  *              内部辅助函数
@@ -57,9 +57,9 @@ LOG_INSTANCE_DEF(g_drvs_lkmotor_log, "drvs_lkmotor", DRVS_LKMOTOR_LOG_LIMIT);
  *        本模块只发 0xA1，调试可发 0x9C；其余（0x80/0x88/0x81/0x9B 等）
  *        或为全零回显、或为其他帧格式，必须排除。
  */
-static inline uint8_t DrvsLKMotorIsStatusEcho(uint8_t echo)
+static inline uint8_t DrvLKMotorIsStatusEcho(uint8_t echo)
 {
-    return (echo == DRVS_LK_CMD_TORQUE || echo == DRVS_LK_CMD_READ_STATUS2) ? 1u : 0u;
+    return (echo == DRV_LK_CMD_TORQUE || echo == DRV_LK_CMD_READ_STATUS2) ? 1u : 0u;
 }
 
 /*============================================
@@ -72,14 +72,14 @@ static inline uint8_t DrvsLKMotorIsStatusEcho(uint8_t echo)
 /**
  * @brief LK 状态2 反馈帧回调（ISR 上下文）
  *
- * 帧格式（8 字节，小端）见 drvs_lkmotor.h
+ * 帧格式（8 字节，小端）见 drv_lkmotor.h
  */
-static void DrvsLKMotorRxCallback(CANInstance *can, const CAN_Pack_s *pack)
+static void DrvLKMotorRxCallback(CANInstance *can, const CAN_Pack_s *pack)
 {
     if (!can || !can->parent)
         return;
 
-    DrvsLKMotor_s *inst = (DrvsLKMotor_s *)can->parent;
+    DrvLKMotor_s *inst = (DrvLKMotor_s *)can->parent;
     const uint8_t echo = pack->data[0];
 
     /* 喂狗：只要能收到该 ID 的帧就说明通信在线（含全零回显帧） */
@@ -88,11 +88,11 @@ static void DrvsLKMotorRxCallback(CANInstance *can, const CAN_Pack_s *pack)
 
     /* 回显校验（关键）：全零回显帧直接丢弃，不写双缓冲，
      * 否则会把位置/速度误解析为 0 造成跳变。丢弃后 GetData 仍返回上一帧。 */
-    if (!DrvsLKMotorIsStatusEcho(echo))
+    if (!DrvLKMotorIsStatusEcho(echo))
         return;
 
-    const DrvsLKMotorStatusFrame_u *fb = (const DrvsLKMotorStatusFrame_u *)pack->data;
-    const DrvsLKMotorProtocolMap_s *map = &inst->proto_map;
+    const DrvLKMotorStatusFrame_u *fb = (const DrvLKMotorStatusFrame_u *)pack->data;
+    const DrvLKMotorProtocolMap_s *map = &inst->proto_map;
 
     /* 整字节小端量直接取（无跨字节位域，与 DM/RS 的移位展开不同） */
     int8_t raw_temp = fb->parts.temperature;
@@ -101,7 +101,7 @@ static void DrvsLKMotorRxCallback(CANInstance *can, const CAN_Pack_s *pack)
     uint16_t raw_encoder = fb->parts.encoder_le;
 
     /* 写入当前 ISR 缓冲区 */
-    DrvsLKMotorData_s *out = &inst->data[inst->data_idx];
+    DrvLKMotorData_s *out = &inst->data[inst->data_idx];
 
     /* 定点 → 物理量 */
     out->position = (float)raw_encoder * map->encoder_to_rad; // 单圈 [0, 2π)
@@ -130,34 +130,34 @@ static void DrvsLKMotorRxCallback(CANInstance *can, const CAN_Pack_s *pack)
  * 本层不做策略性动作：控制帧是周期性的，丢一帧下一周期自然补上；重试只会拖乱控制周期。
  *============================================*/
 
-static void DrvsLKMotorErrHook(CANInstance *can, CAN_ErrReason_e reason)
+static void DrvLKMotorErrHook(CANInstance *can, CAN_ErrReason_e reason)
 {
     (void)can; /* 广播：错误归整条总线，不属于某个实例；分类计数在 bsp 的 s_*_status[] 里 */
 
     /* 限频靠 LOG_INSTANCE_DEF 的 times_per_second（CAN_ERR_PROTOCOL 在总线异常时可每帧一次，
      * 没有这个上限会刷屏），细分原因/错误计数器见 bsp/bsp_can.md 的状态变量表 */
-    BSPLOG(&g_drvs_lkmotor_log, (reason == CAN_ERR_BUS_OFF) ? LOG_LEVEL_ERROR : LOG_LEVEL_WARNING, "CAN bus error, reason=%u", (unsigned)reason);
+    BSPLOG(&g_drv_lkmotor_log, (reason == CAN_ERR_BUS_OFF) ? LOG_LEVEL_ERROR : LOG_LEVEL_WARNING, "CAN bus error, reason=%u", (unsigned)reason);
 }
 
-static void DrvsLKMotorTxHook(CANInstance *can, uint32_t tx_mailbox, BSP_Status_e result)
+static void DrvLKMotorTxHook(CANInstance *can, uint32_t tx_mailbox, BSP_Status_e result)
 {
     /* 本模块一个实例一条 CAN（Config 里 .parent = inst），失败归属由 can->parent 唯一确定，
      * 无需按 tx_mailbox 区分帧来源 */
-    DrvsLKMotor_s *inst = (can != NULL) ? (DrvsLKMotor_s *)can->parent : NULL;
+    DrvLKMotor_s *inst = (can != NULL) ? (DrvLKMotor_s *)can->parent : NULL;
 
     (void)tx_mailbox;
     if (inst == NULL || result == BSP_OK)
         return;
 
     inst->tx_fail++; /* 逐帧失败，与发送点记的"入队失败"同一个计数器（只增不清，调试用） */
-    BSPLOG(&g_drvs_lkmotor_log, LOG_LEVEL_WARNING, "frame not sent (result=%d)", (int)result);
+    BSPLOG(&g_drv_lkmotor_log, LOG_LEVEL_WARNING, "frame not sent (result=%d)", (int)result);
 }
 
 /*============================================
  *              模式命令发送
  *============================================*/
 
-void DrvsLKMotorSendCmd(DrvsLKMotor_s *inst, uint8_t cmd)
+void DrvLKMotorSendCmd(DrvLKMotor_s *inst, uint8_t cmd)
 {
     if (!inst || !inst->can)
         return;
@@ -178,9 +178,9 @@ void DrvsLKMotorSendCmd(DrvsLKMotor_s *inst, uint8_t cmd)
 
 /**
  * @brief 注册 LK 电机实例（仅调用一次）
- * @note 只注册 CAN/Daemon 实例，不配置电机参数（由 DrvsLKMotorConfig 负责）
+ * @note 只注册 CAN/Daemon 实例，不配置电机参数（由 DrvLKMotorConfig 负责）
  */
-int8_t DrvsLKMotorRegister(DrvsLKMotor_s *inst)
+int8_t DrvLKMotorRegister(DrvLKMotor_s *inst)
 {
     if (!inst)
         return -1;
@@ -204,20 +204,20 @@ int8_t DrvsLKMotorRegister(DrvsLKMotor_s *inst)
 
 /**
  * @brief 配置 LK 电机实例（可重复调用）
- * @note 要求在 DrvsLKMotorRegister 之后调用
+ * @note 要求在 DrvLKMotorRegister 之后调用
  */
-int8_t DrvsLKMotorConfig(DrvsLKMotor_s *inst, const DrvsLKMotorConfig_s *cfg)
+int8_t DrvLKMotorConfig(DrvLKMotor_s *inst, const DrvLKMotorConfig_s *cfg)
 {
     if (!inst || !cfg)
         return -1;
 
     /* 参数校验 */
-    if (cfg->motor_id < DRVS_LK_MOTOR_ID_MIN || cfg->motor_id > DRVS_LK_MOTOR_ID_MAX)
+    if (cfg->motor_id < DRV_LK_MOTOR_ID_MIN || cfg->motor_id > DRV_LK_MOTOR_ID_MAX)
         return -1;
     if (cfg->torque_constant <= 0.0f)
         return -1;
 
-    uint16_t can_id = (uint16_t)(DRVS_LK_CAN_ID_BASE + cfg->motor_id);
+    uint16_t can_id = (uint16_t)(DRV_LK_CAN_ID_BASE + cfg->motor_id);
 
     /* CAN 滤波器：一对一，tx 与 rx 同为 0x140 + motor_id。经典帧 */
     if (inst->can)
@@ -226,7 +226,7 @@ int8_t DrvsLKMotorConfig(DrvsLKMotor_s *inst, const DrvsLKMotorConfig_s *cfg)
         inst->can_filter.id0 = can_id;
         inst->can_filter.id1 = CAN_ID_UNUSED;
         inst->can_filter.frame_type = CAN_STANDARD_DATA_FRAME;
-        inst->can_filter.callback = DrvsLKMotorRxCallback;
+        inst->can_filter.callback = DrvLKMotorRxCallback;
 
         CAN_Config_s can_cfg = {
             .can_e = cfg->can_e,
@@ -234,22 +234,22 @@ int8_t DrvsLKMotorConfig(DrvsLKMotor_s *inst, const DrvsLKMotorConfig_s *cfg)
             .parent = inst, /* 必须：CANConfig 会覆盖 parent，不设则回调取 can->parent 失效 */
             .filters = &inst->can_filter,
             .filter_num = 1,
-            .tx_complete_callback = DrvsLKMotorTxHook, /* 逐帧结果：这一帧到底发出去没有 */
-            .err_callback = DrvsLKMotorErrHook,        /* 总线/硬件级事件（ISR 广播） */
+            .tx_complete_callback = DrvLKMotorTxHook, /* 逐帧结果：这一帧到底发出去没有 */
+            .err_callback = DrvLKMotorErrHook,        /* 总线/硬件级事件（ISR 广播） */
         };
         if (CANConfig(inst->can, &can_cfg) != BSP_OK)
             return -1;
     }
 
     /* 协议映射：预计算 raw ↔ Nm / rad 的换算因子 */
-    DrvsLKMotorProtocolMap_s *map = &inst->proto_map;
+    DrvLKMotorProtocolMap_s *map = &inst->proto_map;
 
     map->torque_constant = cfg->torque_constant;
-    map->a_per_lsb = DRVS_LK_IQ_A_PER_LSB;
-    map->nm_per_lsb = cfg->torque_constant * DRVS_LK_IQ_A_PER_LSB;
+    map->a_per_lsb = DRV_LK_IQ_A_PER_LSB;
+    map->nm_per_lsb = cfg->torque_constant * DRV_LK_IQ_A_PER_LSB;
     map->inv_nm_per_lsb = 1.0f / map->nm_per_lsb;
-    map->encoder_to_rad = DRVS_LK_ENCODER_TO_RAD;
-    map->dps_to_radps = DRVS_LK_DPS_TO_RADPS;
+    map->encoder_to_rad = DRV_LK_ENCODER_TO_RAD;
+    map->dps_to_radps = DRV_LK_DPS_TO_RADPS;
 
     /* 标识与超时 */
     inst->motor_id = cfg->motor_id;
@@ -286,35 +286,35 @@ int8_t DrvsLKMotorConfig(DrvsLKMotor_s *inst, const DrvsLKMotorConfig_s *cfg)
  *              扭矩设定 / 发送
  *============================================*/
 
-void DrvsLKMotorSetRef(DrvsLKMotor_s *inst, float torque)
+void DrvLKMotorSetRef(DrvLKMotor_s *inst, float torque)
 {
     if (!inst)
         return;
     inst->ref_torque = torque;
 }
 
-void DrvsLKMotorSend(DrvsLKMotor_s *inst)
+void DrvLKMotorSend(DrvLKMotor_s *inst)
 {
     if (!inst || !inst->can)
         return;
 
-    const DrvsLKMotorProtocolMap_s *map = &inst->proto_map;
+    const DrvLKMotorProtocolMap_s *map = &inst->proto_map;
 
     /* Nm → iq raw，限到协议 ±2048（即满量程 33/4096×2048 = 16.5A，无需再单独按 Nm 限扭矩） */
     float iq_f = inst->ref_torque * map->inv_nm_per_lsb;
     if (!isfinite(iq_f))
         iq_f = 0.0f;
-    if (iq_f < -DRVS_LK_IQ_RAW_MAX)
-        iq_f = -DRVS_LK_IQ_RAW_MAX;
-    else if (iq_f > DRVS_LK_IQ_RAW_MAX)
-        iq_f = DRVS_LK_IQ_RAW_MAX;
+    if (iq_f < -DRV_LK_IQ_RAW_MAX)
+        iq_f = -DRV_LK_IQ_RAW_MAX;
+    else if (iq_f > DRV_LK_IQ_RAW_MAX)
+        iq_f = DRV_LK_IQ_RAW_MAX;
 
     int16_t iq_raw = (int16_t)(iq_f >= 0.0f ? iq_f + 0.5f : iq_f - 0.5f);
 
     /* 打包：只有 D[0] 命令字和 D[4..5] iq（小端）有效，其余为 0 */
     CAN_Pack_s pack = {.id = inst->can_id, .frame_type = CAN_STANDARD_DATA_FRAME, .len = 8};
-    DrvsLKMotorControlFrame_u *cf = (DrvsLKMotorControlFrame_u *)pack.data;
-    cf->parts.cmd = DRVS_LK_CMD_TORQUE;
+    DrvLKMotorControlFrame_u *cf = (DrvLKMotorControlFrame_u *)pack.data;
+    cf->parts.cmd = DRV_LK_CMD_TORQUE;
     cf->parts._reserved0 = 0;
     cf->parts._reserved1 = 0;
     cf->parts._reserved2 = 0;
@@ -331,9 +331,9 @@ void DrvsLKMotorSend(DrvsLKMotor_s *inst)
  *              反馈获取
  *============================================*/
 
-DrvsLKMotorData_s DrvsLKMotorGetData(const DrvsLKMotor_s *inst)
+DrvLKMotorData_s DrvLKMotorGetData(const DrvLKMotor_s *inst)
 {
-    DrvsLKMotorData_s zero = {0};
+    DrvLKMotorData_s zero = {0};
     if (!inst)
         return zero;
 
@@ -345,4 +345,4 @@ DrvsLKMotorData_s DrvsLKMotorGetData(const DrvsLKMotor_s *inst)
 
 #endif /* HAL_CAN_MODULE_ENABLED || HAL_FDCAN_MODULE_ENABLED */
 
-#endif /* DRVS_LKMOTOR_USED */
+#endif /* DRV_LKMOTOR_USED */
