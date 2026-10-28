@@ -225,7 +225,7 @@ python3 scripts/jsf-av/check_recursion.py --scope cubemx        # 第三方（�
 
 | 类别 | 条数 | 处理 |
 |---|---|---|
-| `-Wfloat-conversion` | 38 | double 字面量补 `f` 后缀；`MotorData_s.position` 是 **double**（多圈累加，有意为之），在消费侧显式 `(float)`，不动结构体 |
+| `-Wfloat-conversion` | 38 | double 字面量补 `f` 后缀；`DrvlibMotor_Data_t.position` 是 **double**（多圈累加，有意为之），在消费侧显式 `(float)`，不动结构体 |
 | `-Wconversion` | 22 | 显式窄化转换，值域逐条核对（`bmi088` 的 `% n` 必 < n；`sbus` 的 `bit_off/8` ≤ 13；`bxcan` 的 `(esr>>N)&0xFF`；`bsp_tim` 的 ARR→float；`bsp_usart` 的 `HAL_UART_StateTypeDef` 值域 ≤ 0xE0 → `uint8_t`；`drv_djimotor_broadcast` 的 `(rx_id-0x201)/4` 与 `%4`） |
 | `-Wpedantic` | 5 | 删掉 `APP_TASK_DEF(...)` 的尾分号——宏展开成**函数定义**，分号是多余的（3 个 app 各 1~3 处） |
 | `-Wold-style-declaration` | 5 | `const static MotorVTable_s` → `static const MotorVTable_s`（`drv_dmmotor` / `drv_rsmotor` / `drv_djimotor_broadcast` / `drv_lkmotor` / `drv_lkmotor_broadcast`） |

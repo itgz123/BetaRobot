@@ -12,8 +12,8 @@
  *       不是协议，由 app 或算法层自己管。
  *
  * @note 无基类、无虚函数表：每个品牌自包含（自己的实例结构体 + 自己的函数），
- *       app 当胶水。命名带 Drvs 前缀是为了重构期间与旧 drv_motor 同树共存
- *       （避免符号冲突）；等 app 全部切到 drvs 后删掉旧 drv，再去掉前缀。
+ *       app 当胶水。命名保留 Drvs 前缀，与 drvlib_ 的算法层区分
+ *       （旧 drv_motor 已删除，app 已全部切到 drvs + drvlib）。
  *
  * @note 协议：CAN 标准帧 11 位 ID，8 字节帧，**大端**（MSB first）。
  *       控制帧一帧携带 4 个电机的 int16 电流原始值；反馈帧每电机各自回复。
@@ -52,7 +52,7 @@ typedef struct DrvsDJIMotorBroadcastGroup DrvsDJIMotorBroadcastGroup_s;
 /*============================================
  *              型号枚举（模块自有）
  *
- * @note 不复用 drv_motor_base.h 的 DJIModel_e：那会拖进 MotorBase_s /
+ * @note 不复用旧电机基类的 DJIModel_e：那会拖进 MotorBase_s /
  *       虚函数表 / PID，破坏"无基类、纯协议"的约定。
  *       型号只决定"电调电流量程 + ID 基址 + tx_id"，是协议项。
  *============================================*/

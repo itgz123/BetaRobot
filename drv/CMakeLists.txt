@@ -6,11 +6,6 @@ set(MODULE_SOURCES
     drv_ist8310/drv_ist8310.c
     drv_daemon/drv_daemon.c
     drv_vofa/drv_vofa.c
-    drv_motor/drv_djimotor/drv_djimotor_broadcast.c
-    drv_motor/drv_dmmotor/drv_dmmotor.c
-    drv_motor/drv_rsmotor/drv_rsmotor.c
-    drv_motor/drv_lkmotor/drv_lkmotor.c
-    drv_motor/drv_lkmotor/drv_lkmotor_broadcast.c
     drvs_motor/drvs_dmmotor/drvs_dmmotor.c
     drvs_motor/drvs_rsmotor/drvs_rsmotor.c
     drvs_motor/drvs_lkmotor/drvs_lkmotor.c
@@ -52,11 +47,6 @@ set(MODULE_INCLUDE_DIRS
     drv_dbus
     drv_daemon
     drv_vofa
-    drv_motor
-    drv_motor/drv_djimotor
-    drv_motor/drv_dmmotor
-    drv_motor/drv_rsmotor
-    drv_motor/drv_lkmotor
     drvs_motor/drvs_dmmotor
     drvs_motor/drvs_rsmotor
     drvs_motor/drvs_lkmotor

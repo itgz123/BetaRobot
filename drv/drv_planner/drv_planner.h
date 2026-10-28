@@ -23,7 +23,7 @@
 
 /*============================================
  *              位置模式枚举
- *（与 drv_motor_base.h 的 MotorPositionMode_e 对应）
+ *（与 drvlib_motor.h 的 DrvlibMotorPositionMode_e 对应）
  *============================================*/
 typedef enum : uint8_t
 {
