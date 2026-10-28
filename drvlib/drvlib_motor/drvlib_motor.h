@@ -21,7 +21,7 @@
  *   仅 SPEED  ：ref=速度 → PID → 电流    （旧 drv_motor 的常用通路）
  *   仅 ANGLE  ：ref=位置 → PID → 电流
  *   仅 CURRENT：ref=电流 → PID(电流反馈) → 电流
- *   位全为 0  ：开环，ref 直接作输出
+ *   位全为 0  ：开环，ref × motor_direction 直接作输出（反馈仍照常后处理）
  * 最内环语义是**电流环**（measure = 反馈电流 A）。要"力矩"语义时由 app 自己在
  * 传入 ref 前 ÷Kt、在拿到返回值后 ×Kt —— 本模块不掺和单位换算。
  * 方向：由 cfg.motor_direction（输出端）/ cfg.feedback_direction（反馈端）统一声明，app 不必
@@ -30,9 +30,19 @@
  *
  * ═══════════════════ 反馈后处理（drvs 明确上交的策略） ═══════════════════
  *   位置：多圈累加 → 偏置 → 方向(feedback_direction) → 归一化(WRAP)，顺序照搬旧 drv_motor
- *   速度/电流：一阶低通（共用同一 RC）后乘 feedback_direction（LPF 状态存未修正值）
- *   输出：级联结果乘 motor_direction
+ *   速度/电流：各自一阶低通（速度用 cfg.lpf_rc，电流用 cfg.current_lpf_rc，<=0 透传）
+ *              后乘 feedback_direction（LPF 状态存未修正值）
+ *   输出：级联结果（开环时是 ref）乘 motor_direction
  *   位置模式：LIMITED(限幅) / WRAP(归一化) / CONTINUOUS(不限幅)
+ *
+ *   ⚠ 反馈后处理与"使能 / 开环"无关：只要传入有效帧就更新 inst->data。失能时保持位置连续，
+ *     开环时 inst->data 也能被 app 正常读取（旧 drv_motor 的开环同样会 GetData）。
+ *
+ * ═══════════════════ 反馈帧去重与中断恢复 ═══════════════════
+ *   同一 timestamp_us 的帧只后处理一次（控制频率可以高于 CAN 反馈帧率，app 会重复喂同一帧）；
+ *   位置回绕判据与低通用的 dt 取**帧时间差**而不是 app 传入的 dt，与调用频率解耦。
+ *   帧间隔超过 stale_gap（未配置时回退用 dt_max）视为通信中断：恢复的第一帧重新播种
+ *   各环微分状态与低通状态，避免拿断前的测量值求导打出 D 尖峰。
  * @note WRAP 模式下的角度环测量值：对外 `data.position` 仍是归一化值，但环内改用
  *       **未归一化**的连续位置（position_continuous）。误差归一化只保住 P/I；
  *       "微分先行"算的是 last_measure−measure，若两边都用归一化值，跨窗口边界时
@@ -106,6 +116,9 @@ typedef enum : uint8_t
     DRVLIB_MOTOR_LOOP_CURRENT = 1 << DRVLIB_MOTOR_STAGE_CURRENT, /* 最内环：measure = 电流 (A) */
 } DrvlibMotorLoop_e;
 
+/* 全部闭环环路位：用来区分"一位都没选 = 开环"与"选错了位" */
+#define DRVLIB_MOTOR_LOOP_ALL (DRVLIB_MOTOR_LOOP_ANGLE | DRVLIB_MOTOR_LOOP_SPEED | DRVLIB_MOTOR_LOOP_CURRENT)
+
 typedef enum : uint8_t
 {
     DRVLIB_MOTOR_POS_LIMITED = 0,    /* 限幅：setpoint 限到 [min,max] */
@@ -121,8 +134,8 @@ typedef enum : uint8_t
 
 typedef enum : uint8_t
 {
-    DRVLIB_MOTOR_LPF_DISABLE = 0, /* 速度/电流不滤波（透传） */
-    DRVLIB_MOTOR_LPF_ENABLE = 1,  /* 速度/电流一阶低通，RC 见 cfg.lpf_rc */
+    DRVLIB_MOTOR_LPF_DISABLE = 0, /* 速度不滤波（透传） */
+    DRVLIB_MOTOR_LPF_ENABLE = 1,  /* 速度一阶低通，RC 见 cfg.lpf_rc；电流另由 cfg.current_lpf_rc 控制 */
 } DrvlibMotorLpf_e;
 
 /**
@@ -182,8 +195,10 @@ typedef struct
     float position_offset; /* 位置偏置 (rad)：累加后叠加 */
 
     /* ---- 速度/电流低通 ---- */
-    DrvlibMotorLpf_e lpf_enable;
-    float lpf_rc; /* 时间常数 (s)，<=0 视为不用（透传） */
+    DrvlibMotorLpf_e lpf_enable; /* 速度低通开关（只管速度；电流见 current_lpf_rc） */
+    float lpf_rc;                /* 速度低通时间常数 (s)，<=0 视为不用（透传） */
+    float current_lpf_rc;        /* 电流低通时间常数 (s)，<=0 透传。最内环默认**不滤**：
+                                  * 电流环里塞一个大 RC 会直接吃掉相位裕度，需要时才显式给值 */
 
     /* ---- 前馈来源（三环各一，DISABLE 或指针为空则前馈 0） ---- */
     DrvlibMotorFeedforwardSrc_e angle_feedforward_src;
@@ -198,6 +213,9 @@ typedef struct
 
     /* ---- 其他 ---- */
     float dt_max;        /* 单帧 dt 上限 (s)，<=0 不钳位 */
+    float stale_gap;     /* 反馈中断判据 (s)：相邻帧时间差大于此值视为通信中断，恢复首帧重新播种
+                          * 各环微分状态与低通状态（防止 D 用断前的测量值求导打尖峰）。
+                          * <=0 时回退用 dt_max；两者都 <=0 则不检测 */
     uint8_t vofa_enable; /* 1 = 每帧写 VOFA CH1~CH3 并发送；默认 0 */
 } DrvlibMotor_Config_s;
 
@@ -211,8 +229,8 @@ typedef struct
     double position;       /* 处理后多圈位置 (rad)：累加 + 偏置(+WRAP 归一化) */
     float position_single; /* 原始单范围位置 (rad)，未乘 feedback_direction */
     int64_t position_cnt;  /* 回绕计数 */
-    float speed;           /* 处理后速度 (rad/s)：低通 */
-    float current;         /* 处理后电流 (A)：低通 */
+    float speed;           /* 处理后速度 (rad/s)：按 cfg.lpf_rc 低通，未开则透传 */
+    float current;         /* 处理后电流 (A)：按 cfg.current_lpf_rc 低通，<=0 透传 */
     uint64_t timestamp_us;
 } DrvlibMotor_Data_t;
 
@@ -229,6 +247,8 @@ typedef struct DrvlibMotorInstance
     double position_continuous;                 /* 连续多圈位置 (rad)：累加+偏置+方向后**不归一化**，供角度环微分 */
     float speed_lpf_state;                      /* 速度低通状态 */
     float current_lpf_state;                    /* 电流低通状态 */
+    uint64_t feedback_last_ts;                  /* 上一帧已处理反馈的 CAN 时间戳 (us)：同帧去重 + 帧间隔 dt */
+    uint8_t lpf_seeded;                         /* 低通状态是否已播种（Config/Reset/中断恢复后首帧用原始值播种） */
     uint8_t has_last;                           /* 是否已收到过一帧 */
     uint8_t pid_seeded[DRVLIB_MOTOR_STAGE_NUM]; /* 各环首次计算是否已播种 last_measure */
 
@@ -274,11 +294,12 @@ int8_t DrvlibMotorConfig(DrvlibMotorInstance *inst, const DrvlibMotor_Config_s *
  * @param ref  参考值（按 loop_type 解释：位置/速度/电流；开环时直接作输出）
  * @param fb   一帧反馈（协议原始量）；NULL 或 timestamp_us==0 视为无数据，返回 0
  * @param dt   本帧步长 (s)，由 app 传入（APP_TASK_DEF 的 dt 是 ms，须 ×0.001f）
- * @return 下发量（电流 A）；未使能 / 无数据时返回 0
+ * @return 下发量（电流 A）；未使能 / 无数据时返回 0；开环时为 ref × motor_direction
  * @note 本函数同时承担「设参考值」与「算一帧」两职；处理方法后的反馈见 inst->data。
- * @note ⚠ **未使能时仍处理反馈**（多圈累加/方向/偏置/低通都照常更新），只是输出恒 0。
- *       失能期间也必须每拍喂 fb —— 这样手动转动电机后再使能，位置是连续的；
- *       若失能期间停喂反馈，再使能的第一拍 `data.position` 会跳（跨编码器回绕时更明显）。
+ * @note ⚠ **反馈后处理与使能/开环无关**：只要 fb 有效就更新多圈累加/方向/偏置/低通，
+ *       失能时输出恒 0，开环时输出 = ref × motor_direction。失能期间也必须每拍喂 fb ——
+ *       这样手动转动电机后再使能，位置是连续的。
+ * @note 同一 fb（timestamp_us 相同）只会被后处理一次；闭环每拍仍会重算 PID（dt 用 app 传入值）。
  */
 float DrvlibMotorSetRef(DrvlibMotorInstance *inst, float ref, const DrvlibMotorFeedback_s *fb, float dt);
 
