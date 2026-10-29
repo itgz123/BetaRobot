@@ -135,8 +135,7 @@ typedef union
 _Static_assert(sizeof(DrvDJIBroadcastTxFrameParts_s) == 8, "DJI 控制帧必须是 8 字节");
 
 /* 槽位公式不变量：槽位 == 帧内通道序号（取两端钉死，防止改 group 基址时漏改公式） */
-_Static_assert(((0x201u - 0x201u) % DRV_DJI_BC_SLOTS) == 0u && ((0x208u - 0x201u) % DRV_DJI_BC_SLOTS) == (DRV_DJI_BC_SLOTS - 1u),
-               "DJI 槽位公式不变量被破坏");
+_Static_assert(((0x201u - 0x201u) % DRV_DJI_BC_SLOTS) == 0u && ((0x208u - 0x201u) % DRV_DJI_BC_SLOTS) == (DRV_DJI_BC_SLOTS - 1u), "DJI 槽位公式不变量被破坏");
 
 /*============================================
  *              协议映射结构体
@@ -192,9 +191,9 @@ struct DrvDJIMotorBroadcast
 
     /* 标识 */
     DrvDJIModel_e model; // 型号（决定电流量程与 ID 基址）
-    uint8_t motor_id;     // 电机 ID（M3508/M2006: 1~8；GM6020: 1~7）
-    uint16_t rx_id;       // = rx_id_base + motor_id，反馈帧 ID
-    uint16_t tx_id;       // 控制帧 ID（同族 id1-4 与 id5-8 不同）
+    uint8_t motor_id;    // 电机 ID（M3508/M2006: 1~8；GM6020: 1~7）
+    uint16_t rx_id;      // = rx_id_base + motor_id，反馈帧 ID
+    uint16_t tx_id;      // 控制帧 ID（同族 id1-4 与 id5-8 不同）
 
     /* 协议映射 */
     DrvDJIMotorBroadcastProtocolMap_s proto_map;
@@ -204,11 +203,11 @@ struct DrvDJIMotorBroadcast
 
     /* 组链接 */
     DrvDJIMotorBroadcastGroup_s *group; // 所属组（Config 绑定，NULL=未绑定）
-    uint8_t slot;                        // 帧内槽位 = (rx_id - 0x201) % 4
+    uint8_t slot;                       // 帧内槽位 = (rx_id - 0x201) % 4
 
     /* 接收双缓冲：ISR 解析写一个，GetData 读另一个，读者永远拿到完整的一帧 */
     DrvDJIMotorBroadcastData_s data[2]; // data[data_idx] = ISR 正在写的
-    volatile uint8_t data_idx;           // 当前 ISR 写入的缓冲区索引 (0/1)
+    volatile uint8_t data_idx;          // 当前 ISR 写入的缓冲区索引 (0/1)
 };
 
 /*============================================
@@ -222,10 +221,10 @@ struct DrvDJIMotorBroadcast
 struct DrvDJIMotorBroadcastGroup
 {
     DrvDJIMotorBroadcast_s *slots[DRV_DJI_BC_SLOTS]; // 槽位占用表，NULL=空槽
-    uint8_t member_count;                              // 已占用槽位数，0 表示尚未绑定总线
-    BoardCAN_e can_e;                                  // 首个成员确定，后续成员必须一致
-    uint32_t tx_fail;                                  // 组播帧发送失败累计：CANTransmit 入队失败（返回非 BSP_OK）
-                                                       // + 逐帧失败（tx_complete_callback 报 result != BSP_OK，
+    uint8_t member_count;                            // 已占用槽位数，0 表示尚未绑定总线
+    BoardCAN_e can_e;                                // 首个成员确定，后续成员必须一致
+    uint32_t tx_fail;                                // 组播帧发送失败累计：CANTransmit 入队失败（返回非 BSP_OK）
+                                                     // + 逐帧失败（tx_complete_callback 报 result != BSP_OK，
     // 见 .c 的 TxHook）。一帧带 4 个电机，失败只记在组上，不摊到各电机
 };
 
@@ -245,7 +244,7 @@ typedef struct
     BoardCAN_e can_e; // 板载 CAN 枚举（用于查找硬件映射）
 
     DrvDJIModel_e model; // 型号
-    uint8_t motor_id;     // 电机 ID（M3508/M2006: 1~8；GM6020: 1~7）
+    uint8_t motor_id;    // 电机 ID（M3508/M2006: 1~8；GM6020: 1~7）
 
     float torque_constant; // 转矩常数 (Nm/A)，必须 > 0
 
@@ -259,10 +258,10 @@ typedef struct
 /*============================================
  *              单电机实例 / 广播组定义宏
  *============================================*/
-#define DRV_DJIMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                                                             \
+#define DRV_DJIMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                                                              \
     CAN_INSTANCE_DEF(name##_can);                                                                                                                              \
     DAEMON_INSTANCE_DEF(name##_daemon);                                                                                                                        \
-    static DrvDJIMotorBroadcast_s name = {                                                                                                                    \
+    static DrvDJIMotorBroadcast_s name = {                                                                                                                     \
         .can = &name##_can,                                                                                                                                    \
         .daemon = &name##_daemon,                                                                                                                              \
     }

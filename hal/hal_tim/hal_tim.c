@@ -167,14 +167,12 @@ static uint8_t HalTimIsValidBase(const TIM_Base_InitTypeDef *base)
     {
         return 0;
     }
-    if ((base->CounterMode != TIM_COUNTERMODE_UP) && (base->CounterMode != TIM_COUNTERMODE_DOWN) &&
-        (base->CounterMode != TIM_COUNTERMODE_CENTERALIGNED1) && (base->CounterMode != TIM_COUNTERMODE_CENTERALIGNED2) &&
-        (base->CounterMode != TIM_COUNTERMODE_CENTERALIGNED3))
+    if ((base->CounterMode != TIM_COUNTERMODE_UP) && (base->CounterMode != TIM_COUNTERMODE_DOWN) && (base->CounterMode != TIM_COUNTERMODE_CENTERALIGNED1) &&
+        (base->CounterMode != TIM_COUNTERMODE_CENTERALIGNED2) && (base->CounterMode != TIM_COUNTERMODE_CENTERALIGNED3))
     {
         return 0;
     }
-    if ((base->ClockDivision != TIM_CLOCKDIVISION_DIV1) && (base->ClockDivision != TIM_CLOCKDIVISION_DIV2) &&
-        (base->ClockDivision != TIM_CLOCKDIVISION_DIV4))
+    if ((base->ClockDivision != TIM_CLOCKDIVISION_DIV1) && (base->ClockDivision != TIM_CLOCKDIVISION_DIV2) && (base->ClockDivision != TIM_CLOCKDIVISION_DIV4))
     {
         return 0;
     }
@@ -216,9 +214,7 @@ static uint8_t HalTimIsValidOc(const TIM_OC_InitTypeDef *oc)
 
 /*------------- 重配置实现 --------------*/
 
-HAL_StatusTypeDef HalTimReconfigurePwm(TIM_HandleTypeDef *htim, uint32_t channel,
-                                       const TIM_Base_InitTypeDef *base,
-                                       const TIM_OC_InitTypeDef *oc)
+HAL_StatusTypeDef HalTimReconfigurePwm(TIM_HandleTypeDef *htim, uint32_t channel, const TIM_Base_InitTypeDef *base, const TIM_OC_InitTypeDef *oc)
 {
     if ((htim == NULL) || (htim->Instance == NULL) || (base == NULL) || (oc == NULL))
     {

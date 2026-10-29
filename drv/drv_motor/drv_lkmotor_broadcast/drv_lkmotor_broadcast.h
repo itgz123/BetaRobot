@@ -177,11 +177,11 @@ struct DrvLKMotorBroadcast
 
     /* 组链接 */
     DrvLKMotorBroadcastGroup_s *group; // 所属组（Config 绑定，NULL=未绑定）
-    uint8_t slot;                       // = motor_id - 1，0x280 帧内槽位
+    uint8_t slot;                      // = motor_id - 1，0x280 帧内槽位
 
     /* 接收双缓冲：ISR 解析写一个，GetData 读另一个，读者永远拿到完整的一帧 */
     DrvLKMotorBroadcastData_s data[2]; // data[data_idx] = ISR 正在写的
-    volatile uint8_t data_idx;          // 当前 ISR 写入的缓冲区索引 (0/1)
+    volatile uint8_t data_idx;         // 当前 ISR 写入的缓冲区索引 (0/1)
 };
 
 /*============================================
@@ -195,11 +195,11 @@ struct DrvLKMotorBroadcast
 struct DrvLKMotorBroadcastGroup
 {
     DrvLKMotorBroadcast_s *slots[DRV_LK_BC_SLOTS]; // 槽位 = motor_id-1，NULL=空槽
-    uint8_t member_count;                            // 已占用槽位数，0 表示尚未绑定总线
-    BoardCAN_e can_e;                                // 首个成员确定，后续成员必须一致
-    uint32_t tx_fail;                                // 组播帧发送失败累计：CANTransmit 入队失败（返回非 BSP_OK）
-                                                     // + 逐帧失败（tx_complete_callback 报 result != BSP_OK，
-                                                     // 见 .c 的 TxHook）。一帧带 4 个槽位，失败只记在组上，不摊到各电机
+    uint8_t member_count;                          // 已占用槽位数，0 表示尚未绑定总线
+    BoardCAN_e can_e;                              // 首个成员确定，后续成员必须一致
+    uint32_t tx_fail;                              // 组播帧发送失败累计：CANTransmit 入队失败（返回非 BSP_OK）
+                                                   // + 逐帧失败（tx_complete_callback 报 result != BSP_OK，
+                                                   // 见 .c 的 TxHook）。一帧带 4 个槽位，失败只记在组上，不摊到各电机
 };
 
 /*============================================
@@ -233,10 +233,10 @@ typedef struct
 /*============================================
  *              单电机实例 / 广播组定义宏
  *============================================*/
-#define DRV_LKMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                                                              \
+#define DRV_LKMOTOR_BROADCAST_INSTANCE_DEF(name)                                                                                                               \
     CAN_INSTANCE_DEF(name##_can);                                                                                                                              \
     DAEMON_INSTANCE_DEF(name##_daemon);                                                                                                                        \
-    static DrvLKMotorBroadcast_s name = {                                                                                                                     \
+    static DrvLKMotorBroadcast_s name = {                                                                                                                      \
         .can = &name##_can,                                                                                                                                    \
         .daemon = &name##_daemon,                                                                                                                              \
     }
