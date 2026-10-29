@@ -82,8 +82,8 @@ const MusicPulse_t MUSIC_EFFECT_ERR_FATAL[] = {
 };
 
 const MusicPulse_t MUSIC_EFFECT_ERR_EMERGENCY[] = {
-    {MUSIC_NOTE_BUZZER, 120u, 100u}, {2000u, 120u, 100u}, {MUSIC_NOTE_BUZZER, 120u, 100u},
-    {2000u, 120u, 100u},             {MUSIC_NOTE_BUZZER, 120u, 100u}, {2000u, 120u, 100u},
+    {MUSIC_NOTE_BUZZER, 120u, 100u}, {2000u, 120u, 100u}, {MUSIC_NOTE_BUZZER, 120u, 100u}, {2000u, 120u, 100u},
+    {MUSIC_NOTE_BUZZER, 120u, 100u}, {2000u, 120u, 100u},
 };
 
 const MusicPulse_t MUSIC_DEMO_SCALE[] = {

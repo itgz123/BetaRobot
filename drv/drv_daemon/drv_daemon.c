@@ -26,8 +26,7 @@ void DaemonConfig(DaemonInstance *inst, const Daemon_Config_s *config)
 
     if (config->fault_action >= DAEMON_FAULT_NUM)
     {
-        BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "Invalid fault_action: %d, max: %d", (int)config->fault_action,
-               (int)DAEMON_FAULT_BUZZER_EMERGENCY);
+        BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "Invalid fault_action: %d, max: %d", (int)config->fault_action, (int)DAEMON_FAULT_BUZZER_EMERGENCY);
         return;
     }
 

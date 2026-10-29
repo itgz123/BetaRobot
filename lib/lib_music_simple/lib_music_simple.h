@@ -85,11 +85,11 @@ typedef struct
  *============================================*/
 /* 长度显式写在声明里：定义在 .c 中、声明在头里，若写成 []，
  * 别处的 MUSIC_PULSE_COUNT 会对不完整类型取 sizeof（编译错误） */
-extern const MusicPulse_t MUSIC_EFFECT_SHORT[2];    // 短叫：一声
-extern const MusicPulse_t MUSIC_EFFECT_LONG[2];     // 长叫：一声长音
-extern const MusicPulse_t MUSIC_EFFECT_ALARM[6];    // 断续报警：三短音
-extern const MusicPulse_t MUSIC_EFFECT_STARTUP[5];  // 开机音：上行琶音
-extern const MusicPulse_t MUSIC_DEMO_SCALE[9];      // 调试用：C5 音阶
+extern const MusicPulse_t MUSIC_EFFECT_SHORT[2];   // 短叫：一声
+extern const MusicPulse_t MUSIC_EFFECT_LONG[2];    // 长叫：一声长音
+extern const MusicPulse_t MUSIC_EFFECT_ALARM[6];   // 断续报警：三短音
+extern const MusicPulse_t MUSIC_EFFECT_STARTUP[5]; // 开机音：上行琶音
+extern const MusicPulse_t MUSIC_DEMO_SCALE[9];     // 调试用：C5 音阶
 
 /* 常用提示音（单次播放；拍与拍之间由 drv 自动插静音间隔） */
 extern const MusicPulse_t MUSIC_EFFECT_TICK[1];     // 按键/单次提示：一声短促
