@@ -15,6 +15,19 @@
 #include "main.h"
 #include "stdint.h"
 
+/*------------- 逻辑实例容量 --------------*/
+/* 注册表槽位数（不是板载定时器/PWM 数量）：三块板共用同一份源码，取各板最大值
+ * （DJI_A 22 / DJI_C 13 / DM_MC02 6）；多出的槽位只是 static 指针数组里多几个字节。
+ * 编码器槽位三块板都是 0（本板群没有编码器通道），必须保持 0：
+ * bsp_tim.c 按 `ENCODER_INSTANCE_NUM > 0` 决定是否编译编码器实现。
+ * 需要时可用编译选项（-D）覆盖；板级 bsp_map.h 先于本头文件包含，也可在那里按板覆盖。 */
+#ifndef PWM_INSTANCE_NUM
+#define PWM_INSTANCE_NUM 22
+#endif
+#ifndef ENCODER_INSTANCE_NUM
+#define ENCODER_INSTANCE_NUM 0
+#endif
+
 /*------------- 类型定义 --------------*/
 
 /**

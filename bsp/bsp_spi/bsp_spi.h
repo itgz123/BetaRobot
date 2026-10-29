@@ -30,6 +30,14 @@
 #include "main.h"
 #include "stdint.h"
 
+/*------------- 逻辑实例容量 --------------*/
+/* 注册表槽位数（不是板载 SPI 数量）：三块板共用同一份源码，取各板最大值
+ * （DJI_A 3 / DM_MC02·DJI_C 2）；多出的槽位只是 static 指针数组里多几个字节。
+ * 需要时可用编译选项（-D）覆盖；板级 bsp_map.h 先于本头文件包含，也可在那里按板覆盖。 */
+#ifndef SPI_INSTANCE_NUM
+#define SPI_INSTANCE_NUM 3
+#endif
+
 /*------------- 实例结构体 --------------*/
 
 /**
