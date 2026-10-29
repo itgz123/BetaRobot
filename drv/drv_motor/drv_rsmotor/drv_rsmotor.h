@@ -231,7 +231,7 @@ struct DrvRSMotor
     float ref_torque; // 设定扭矩 (Nm)，由 SetRef 写入，Send 打包下发
 
     /* 接收双缓冲：ISR 解析写一个，GetData 读另一个，读者永远拿到完整的一帧 */
-    DrvRSMotorData_s data[2]; // data[data_idx] = ISR 正在写的
+    DrvRSMotorData_s data[2];  // data[data_idx] = ISR 正在写的
     volatile uint8_t data_idx; // 当前 ISR 写入的缓冲区索引 (0/1)
 };
 
@@ -266,10 +266,10 @@ typedef struct
 /*============================================
  *              单电机实例定义宏
  *============================================*/
-#define DRV_RSMOTOR_INSTANCE_DEF(name)                                                                                                                        \
+#define DRV_RSMOTOR_INSTANCE_DEF(name)                                                                                                                         \
     CAN_INSTANCE_DEF(name##_can);                                                                                                                              \
     DAEMON_INSTANCE_DEF(name##_daemon);                                                                                                                        \
-    static DrvRSMotor_s name = {                                                                                                                              \
+    static DrvRSMotor_s name = {                                                                                                                               \
         .can = &name##_can,                                                                                                                                    \
         .daemon = &name##_daemon,                                                                                                                              \
     }

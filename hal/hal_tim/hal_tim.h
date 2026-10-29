@@ -69,9 +69,7 @@
  *       HAL_TIM_PWM_Start(&htimx, TIM_CHANNEL_1);
  *       @endcode
  */
-HAL_StatusTypeDef HalTimReconfigurePwm(TIM_HandleTypeDef *htim, uint32_t channel,
-                                       const TIM_Base_InitTypeDef *base,
-                                       const TIM_OC_InitTypeDef *oc);
+HAL_StatusTypeDef HalTimReconfigurePwm(TIM_HandleTypeDef *htim, uint32_t channel, const TIM_Base_InitTypeDef *base, const TIM_OC_InitTypeDef *oc);
 
 #endif /* HAL_TIM_MODULE_ENABLED */
 

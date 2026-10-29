@@ -52,8 +52,8 @@ static uint8_t HalGpioIsValidPull(uint32_t pull)
 
 static uint8_t HalGpioIsValidSpeed(uint32_t speed)
 {
-    return (uint8_t)((speed == GPIO_SPEED_FREQ_LOW) || (speed == GPIO_SPEED_FREQ_MEDIUM) ||
-                     (speed == GPIO_SPEED_FREQ_HIGH) || (speed == GPIO_SPEED_FREQ_VERY_HIGH));
+    return (uint8_t)((speed == GPIO_SPEED_FREQ_LOW) || (speed == GPIO_SPEED_FREQ_MEDIUM) || (speed == GPIO_SPEED_FREQ_HIGH) ||
+                     (speed == GPIO_SPEED_FREQ_VERY_HIGH));
 }
 
 /**
