@@ -4,7 +4,6 @@
 
 #include "bsp_log.h"
 #include "bsp_dwt.h"
-#include "bsp_tim.h"
 
 // 用于保存所有的daemon instance
 static DaemonInstance *s_daemon_instances[DAEMON_MX_CNT] = {NULL};
@@ -14,24 +13,21 @@ static uint8_t s_idx = 0;
 #endif                                                              // !DRV_DAEMON_LOG_LIMIT
 LOG_INSTANCE_DEF(g_daemon_log, "drv_daemon", DRV_DAEMON_LOG_LIMIT); // Daemon 日志实例
 
-// 蜂鸣器鸣叫声音表格（预留：当前全 0、无代码读取。要按 fault 类型播不同节奏时填这里 ——
-// 现在只实现了 DAEMON_FAULT_BUZZER_SHORT，靠下面的 buzzer_flag + PWM 占空比）
-const uint8_t voice_map[DAEMON_FAULT_NUM][12] = {0};
-static uint8_t buzzer_flag = 0; // TODO:这个之后用位域实现
+/* 故障动作表：由 app 在 DaemonInit 时登记，本模块只认函数指针，不认识具体设备 */
+static const Daemon_ActionTable_s *s_actions = NULL;
 // 调试用聚合标志：给人 Watch 的"全体在线"快照，本文件只写不读。
 // 代码里要判某个模块在不在线，请查它自己的 is_online
 static uint8_t all_daemon_is_online = 1;
-
-PWM_INSTANCE_DEF(buzzer_pwm);
 
 void DaemonConfig(DaemonInstance *inst, const Daemon_Config_s *config)
 {
     if (!inst || !config)
         return;
 
-    if (config->fault_action > DAEMON_FAULT_RESERVED_7)
+    if (config->fault_action >= DAEMON_FAULT_NUM)
     {
-        BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "Invalid fault_action: %d, max: %d", config->fault_action, DAEMON_FAULT_RESERVED_7);
+        BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "Invalid fault_action: %d, max: %d", (int)config->fault_action,
+               (int)DAEMON_FAULT_BUZZER_EMERGENCY);
         return;
     }
 
@@ -99,7 +95,6 @@ uint8_t DaemonIsOnline(DaemonInstance *instance)
 void DaemonTask(void)
 {
     DaemonInstance *dins;
-    buzzer_flag = 0; // 刷新，避免上一轮循环影响
     uint8_t all_daemon_is_online_temp = 1;
     /* 本拍统一取一次时刻：下面按"距上次喂狗的实耗毫秒数"判离线，而不是按本函数被调用的次数。
      * 原因：调用方是 app 的周期任务，旧版 FreeRTOS 的 vTaskDelayUntil 落后时不会跳到当前时刻，
@@ -151,26 +146,13 @@ void DaemonTask(void)
                 BSPLOG(&g_daemon_log, LOG_LEVEL_ERROR, "Module 0x%08X OFFLINE", (uint32_t)(uintptr_t)dins->owner_id);
             }
             all_daemon_is_online_temp = 0; // 只要有一个掉线就标志为0
-            switch (dins->fault_action)
+            /* 离线期间每拍都调：动作实现需自身幂等（如 BuzzerPlay(HIGH) 同序列正在播则忽略），
+             * 于是"持续掉线"自然表现为报警循环，无需 daemon 记额外的边沿状态 */
+            if (s_actions != NULL && (uint8_t)dins->fault_action < (uint8_t)DAEMON_FAULT_NUM)
             {
-            case DAEMON_FAULT_BUZZER_SHORT:
-                buzzer_flag = 1;
-                break;
-            case DAEMON_FAULT_BUZZER_LONG:
-                break;
-            case DAEMON_FAULT_LIGHT_SHORT:
-                break;
-            case DAEMON_FAULT_LIGHT_LONG:
-                break;
-            case DAEMON_FAULT_RESERVED_5:
-                break;
-            case DAEMON_FAULT_RESERVED_6:
-                break;
-            case DAEMON_FAULT_RESERVED_7:
-                break;
-            case DAEMON_FAULT_NONE:
-            default:
-                break;
+                daemon_action_fn action = s_actions->action[dins->fault_action];
+                if (action != NULL)
+                    action();
             }
 
             if (dins->callback)
@@ -188,22 +170,15 @@ void DaemonTask(void)
     {
         all_daemon_is_online = 1;
     }
-
-    PWMSetDutyRatio(&buzzer_pwm, (buzzer_flag / 2.0f));
 }
 
 /*==================== 初始化 ====================*/
 
-void DaemonInit(void)
+void DaemonInit(const Daemon_ActionTable_s *table)
 {
-    /* 本模块不创建任务：周期调用 DaemonTask() 的任务由 app 注册（drv 层不依赖 FreeRTOS） */
-#if (DEVELOPMENT_BOARD == DM_MC02) || (DEVELOPMENT_BOARD == DJI_C) || (DEVELOPMENT_BOARD == DJI_A)
-    PWMRegister(&buzzer_pwm);
-    PWM_Config_s pwm_cfg = {.tim_e = TIM_BUZZER};
-    PWMConfig(&buzzer_pwm, &pwm_cfg);
-#else
-#error "without config buzzer"
-#endif // #if DEVELOPMENT_BOARD
+    /* 本模块不创建任务：周期调用 DaemonTask() 的任务由 app 注册（drv 层不依赖 FreeRTOS）。
+     * 动作表只存指针：它必须由 app 以静态存储期提供（static const Daemon_ActionTable_s）。 */
+    s_actions = table;
 }
 
 #else
@@ -237,8 +212,9 @@ void DaemonTask(void)
 {
 }
 
-void DaemonInit(void)
+void DaemonInit(const Daemon_ActionTable_s *table)
 {
+    (void)table;
 }
 
 #endif // DAEMON_USED

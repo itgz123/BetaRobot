@@ -24,6 +24,7 @@ set(MODULE_SOURCES
     drv_planner/drv_planner.c
     drv_pid/drv_pid.c
     drv_terminal_lite/drv_terminal_lite.c
+    drv_buzzer_simple/drv_buzzer_simple.c
     # comm开始
     drv_comm/drv_comm.c
     drv_comm/media/comm_media.c
@@ -64,6 +65,7 @@ set(MODULE_INCLUDE_DIRS
     drv_planner
     drv_pid
     drv_terminal_lite
+    drv_buzzer_simple
     # comm开始
     drv_comm/
     drv_comm/media

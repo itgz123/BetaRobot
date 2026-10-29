@@ -13,22 +13,38 @@
 #define DAEMON_MX_CNT 64
 #endif
 
-/* 离线故障动作枚举（8种, 占uint8_t） */
+/* 离线故障动作枚举：5 种蜂鸣器报警等级（从轻到重，占 uint8_t） */
 typedef enum : uint8_t
 {
-    DAEMON_FAULT_NONE = 0,         // 无动作
-    DAEMON_FAULT_BUZZER_SHORT = 1, // 蜂鸣器短叫
-    DAEMON_FAULT_BUZZER_LONG = 2,  // 蜂鸣器长叫
-    DAEMON_FAULT_LIGHT_SHORT = 3,  // 故障灯短闪
-    DAEMON_FAULT_LIGHT_LONG = 4,   // 故障灯长闪
-    DAEMON_FAULT_RESERVED_5 = 5,   // 预留
-    DAEMON_FAULT_RESERVED_6 = 6,   // 预留
-    DAEMON_FAULT_RESERVED_7 = 7,   // 预留
-    DAEMON_FAULT_NUM,              // 默认行为数量
+    DAEMON_FAULT_NONE = 0,             // 无动作
+    DAEMON_FAULT_BUZZER_MINOR = 1,     // 轻微：一声短促
+    DAEMON_FAULT_BUZZER_MAJOR = 2,     // 一般：两声
+    DAEMON_FAULT_BUZZER_CRITICAL = 3,  // 严重：三声
+    DAEMON_FAULT_BUZZER_FATAL = 4,     // 致命：长鸣 + 短促
+    DAEMON_FAULT_BUZZER_EMERGENCY = 5, // 紧急：高低交替三组
+    DAEMON_FAULT_NUM,                  // 动作数量
 } DaemonFaultAction_e;
 
 /* 模块离线处理函数指针 */
 typedef void (*offline_callback)(void *);
+
+/**
+ * @brief 故障动作执行函数指针（无参数、无返回值）
+ * @note daemon 只认识这个签名，不认识蜂鸣器/灯；
+ *       app 自己写无参函数、在函数体里访问自己的蜂鸣器实例
+ *       （如 `static void AlarmMinor(void) { BuzzerPlay(&g_buzzer, ...); }`）。
+ */
+typedef void (*daemon_action_fn)(void);
+
+/**
+ * @brief 故障动作表，按 DaemonFaultAction_e 索引
+ * @note 元素为 NULL 表示该故障不产生动作；
+ *       daemon 不引用任何具体设备模块，具体实现由 app 填。
+ */
+typedef struct
+{
+    daemon_action_fn action[DAEMON_FAULT_NUM];
+} Daemon_ActionTable_s;
 
 /* daemon结构体定义 */
 typedef struct daemon_ins
@@ -93,10 +109,13 @@ uint8_t DaemonIsOnline(DaemonInstance *instance);
 void DaemonTask(void);
 
 /**
- * @brief 初始化 daemon 的板级资源（蜂鸣器 PWM）
- * @note 只做硬件初始化，**不创建任何任务**；在 app 初始化流程里、调度器启动前调用。
+ * @brief 初始化 daemon，并登记故障动作表
+ * @param table 动作表（需静态存储期，本模块只保存指针、不拷贝），可为 NULL
+ * @note daemon 不知道蜂鸣器/灯的存在：具体动作由 app 填无参函数决定，
+ *       因此 daemon 侧不依赖 bsp_tim，也不依赖任何 drv 设备模块。
+ * @note 在 app 初始化流程里、调度器启动前调用；**不创建任何任务**，
  *       周期调用 DaemonTask() 由 app 自行注册任务完成。
  */
-void DaemonInit(void);
+void DaemonInit(const Daemon_ActionTable_s *table);
 
 #endif // !__DRV_DAEMON_H

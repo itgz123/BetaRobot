@@ -33,12 +33,17 @@
 /**
  * @brief PWM实例结构体
  * @note 配置即启动，不用时设置 dutyratio = 0 即可
+ * @note 频率是**定时器级属性**：同一 htim 上的多个通道共用 PSC/ARR，
+ *       对其中任意一个实例调频会同时改变该定时器所有通道的频率。（除了buzzer一般不改频率，3个板子buzzer用独立tim）
  */
 typedef struct PWMInstance
 {
-    BoardTIM_e tim_e; // 板载TIM枚举（Config时查找映射）
-    TIM_Map_t map;    // 硬件映射（Config时自动填充）
-    float dutyratio;  // 占空比（0~1）
+    BoardTIM_e tim_e;      // 板载TIM枚举（Config时查找映射）
+    TIM_Map_t map;         // 硬件映射（Config时自动填充）
+    float dutyratio;       // 占空比（0~1），0 与 1 为精确的恒低/恒高
+    float frequency_hz;    // 当前 PWM 频率（Config 时按 CubeMX 的 PSC/ARR 实测）
+    uint32_t tim_clock_hz; // 定时器输入时钟（Config 时由 RCC 算好，供调频使用）
+    uint8_t oc_mode;       // 通道当前 OCxM（6=PWM1，4=forced inactive，5=forced active；0=未知）
 } PWMInstance;
 
 /**
@@ -78,7 +83,8 @@ typedef struct EncoderInstance
  */
 typedef struct
 {
-    BoardTIM_e tim_e; // 板载TIM枚举（用于查找硬件映射）
+    BoardTIM_e tim_e;   // 板载TIM枚举（用于查找硬件映射）
+    float frequency_hz; // 期望频率（Hz）：0 = 沿用 CubeMX 配置（PSC/ARR 不动）
 } PWM_Config_s;
 
 /**
@@ -113,8 +119,24 @@ int8_t PWMConfig(PWMInstance *instance, const PWM_Config_s *config);
  * @brief 设置PWM占空比
  * @param instance   PWM实例指针
  * @param dutyratio  占空比（0~1），超出范围自动钳位
+ * @note dutyratio == 0 与 == 1 走 CCMR1/CCMR2 的 OCxM 强制电平：
+ *       0 恒低、1 恒高（严格 100%，不只是 ARR/(ARR+1)）；中间值恢复 PWM1 并写 CCR。
+ *       前提是通道已由 HAL_TIM_PWM_Start 启动（CCxE=1，高级定时器 MOE=1），且 CubeMX 配的是 PWM1。
  */
 void PWMSetDutyRatio(PWMInstance *instance, float dutyratio);
+
+/**
+ * @brief 设置PWM频率（Hz）
+ * @param instance     PWM实例指针
+ * @param frequency_hz 目标频率（Hz，> 0）
+ * @retval 0  成功
+ * @retval -1 失败（空指针/未 Config/频率非法）
+ *
+ * @note 由定时器输入时钟自动选择 PSC/ARR：优先 ARR 占满 16 位以保证占空比分辨率。
+ * @note 改频会重算该 htim 上所有已注册实例的 CCR（占空比不变）。
+ * @note 频率为定时器级属性，同一 htim 的其它通道会一起变化。
+ */
+int8_t PWMSetFrequency(PWMInstance *instance, float frequency_hz);
 
 /*------------- 编码器接口声明 --------------*/
 
