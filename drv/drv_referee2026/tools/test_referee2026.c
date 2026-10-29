@@ -349,7 +349,7 @@ static void Relink(uint32_t filter)
         .robot_id = 3u,
         .filter = filter,
         .daemon_reload = 0u, /* 0 应被提升成 REFEREE2026_DAEMON_RELOAD_MS */
-        .daemon_fault = DAEMON_FAULT_BUZZER_SHORT,
+        .daemon_fault = DAEMON_FAULT_BUZZER_MINOR,
     };
 
     CHECK(Referee2026Config(&t_inst.core, &cfg) == BSP_OK, "Config 失败");
@@ -490,7 +490,7 @@ static void test_config(void)
      *    owner_id 必须指回内核（离线钩子靠它取回实例） */
     CHECK(g_daemon.config_calls == 1, "DaemonConfig 调用 %d 次", g_daemon.config_calls);
     CHECK(g_daemon.last_cfg.reload_count == (uint16_t)REFEREE2026_DAEMON_RELOAD_MS, "reload 未提升：%u", (unsigned)g_daemon.last_cfg.reload_count);
-    CHECK(g_daemon.last_cfg.fault_action == DAEMON_FAULT_BUZZER_SHORT, "故障动作未透传");
+    CHECK(g_daemon.last_cfg.fault_action == DAEMON_FAULT_BUZZER_MINOR, "故障动作未透传");
     CHECK(g_daemon.last_cfg.owner_id == (void *)&t_inst.core, "owner_id 未指回内核");
     /* 钩子都是本文件的 static，名字取不到；这里只验"挂上了"，行为在 test_hooks 里经
      * usart 的成员反调验证。 */
@@ -1120,7 +1120,7 @@ static void test_tx_only_link(void)
         .robot_id = 3u,
         .filter = REFEREE2026_NONE_FILTER_DEFAULT,
         .daemon_reload = 100u,
-        .daemon_fault = DAEMON_FAULT_BUZZER_LONG,
+        .daemon_fault = DAEMON_FAULT_BUZZER_MAJOR,
     };
 
     CHECK(Referee2026Register(&t_none.core) == BSP_OK, "非链路 Register 失败");
@@ -1172,7 +1172,7 @@ static void test_video_link(void)
         .robot_id = 3u,
         .filter = REFEREE2026_VIDEO_FILTER_DEFAULT,
         .daemon_reload = 0u, /* 0 仍要被提升成默认值（离线钩子要用这个节拍） */
-        .daemon_fault = DAEMON_FAULT_BUZZER_SHORT,
+        .daemon_fault = DAEMON_FAULT_BUZZER_MINOR,
     };
 
     CHECK(Referee2026Register(&t_video.core) == BSP_OK, "图传 Register 失败");

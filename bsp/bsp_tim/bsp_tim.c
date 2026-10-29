@@ -30,6 +30,90 @@ static PWMInstance *s_pwm_instance[PWM_INSTANCE_NUM] = {NULL};
 static PWMInstance **s_pwm_instance = NULL;
 #endif
 
+/*------------- PWM 私有辅助 --------------*/
+
+/* CCMR1/CCMR2 的 OCxM[2:0]：输出比较模式 */
+#define PWM_OCM_FORCED_INACTIVE 4u /* 100：引脚强制无效电平（恒低） */
+#define PWM_OCM_FORCED_ACTIVE 5u   /* 101：引脚强制有效电平（恒高） */
+#define PWM_OCM_PWM1 6u            /* 110：PWM 模式 1（与 CubeMX 一致） */
+
+/**
+ * @brief 取定时器的输入时钟（Hz）
+ * @note APB 预分频为 1 时定时器时钟 = PCLK，否则 = 2*PCLK（F4/H7 同一规则）。
+ *       用外设基址区间判 APB2：两族的 APB2 外设都从 APB2PERIPH_BASE 起 64KB，
+ *       因此不需要按器件宏分支（F4 的 TIM1/8~11、H7 的 TIM1/8/15~17 都在其中）。
+ */
+static uint32_t BSPTim_GetTimerClock(TIM_TypeDef *tim)
+{
+    uintptr_t addr = (uintptr_t)tim;
+    uintptr_t apb2_begin = (uintptr_t)APB2PERIPH_BASE;
+    uint32_t hclk = HAL_RCC_GetHCLKFreq();
+    uint32_t pclk = (addr >= apb2_begin && addr < (apb2_begin + 0x10000UL)) ? HAL_RCC_GetPCLK2Freq() : HAL_RCC_GetPCLK1Freq();
+
+    return (pclk == hclk) ? pclk : (pclk * 2u);
+}
+
+/**
+ * @brief 写通道输出比较模式（CCMR1/CCMR2 的 OCxM）
+ * @param ocm 3 位模式值，见上方 PWM_OCM_* 宏
+ * @note 与上次写入相同时直接返回（占空比每拍都设时避免重复写 CCMR）。
+ *       强制电平要真正输出到引脚，还要求 CCxE=1（HAL_TIM_PWM_Start 已置位），
+ *       高级定时器另需 MOE=1（同由 PWM_Start 置位）。
+ */
+static void PWM_SetOcMode(PWMInstance *instance, uint32_t ocm)
+{
+    TIM_TypeDef *tim = instance->map.htim->Instance;
+    volatile uint32_t *ccmr;
+    uint32_t shift;
+    uint32_t value;
+
+    if (instance->oc_mode == (uint8_t)ocm)
+        return;
+
+    if (instance->map.channel == TIM_CHANNEL_1 || instance->map.channel == TIM_CHANNEL_2)
+        ccmr = &tim->CCMR1;
+    else if (instance->map.channel == TIM_CHANNEL_3 || instance->map.channel == TIM_CHANNEL_4)
+        ccmr = &tim->CCMR2;
+    else
+        return; // 非法通道
+
+    shift = (instance->map.channel == TIM_CHANNEL_1 || instance->map.channel == TIM_CHANNEL_3) ? 4u : 12u;
+    value = (uint32_t)((*ccmr & (uint32_t)~(7UL << shift)) | (ocm << shift));
+    *ccmr = value;
+    instance->oc_mode = (uint8_t)ocm;
+}
+
+/**
+ * @brief 按缓存的 dutyratio 把占空比落到硬件
+ * @note 0/1 用强制电平保证严格 0%/100%；中间值回 PWM1 并写 CCR = duty*(ARR+1)。
+ */
+static void PWM_ApplyDuty(PWMInstance *instance)
+{
+    TIM_HandleTypeDef *htim = instance->map.htim;
+    float duty = instance->dutyratio;
+    uint32_t arr;
+    uint32_t ccr;
+
+    if (duty <= 0.0f)
+    {
+        PWM_SetOcMode(instance, PWM_OCM_FORCED_INACTIVE);
+        return;
+    }
+    if (duty >= 1.0f)
+    {
+        PWM_SetOcMode(instance, PWM_OCM_FORCED_ACTIVE);
+        return;
+    }
+
+    PWM_SetOcMode(instance, PWM_OCM_PWM1);
+
+    arr = htim->Instance->ARR;
+    ccr = (uint32_t)(duty * (float)(arr + 1u) + 0.5f);
+    if (ccr > arr)
+        ccr = arr;
+    __HAL_TIM_SET_COMPARE(htim, instance->map.channel, ccr);
+}
+
 /*------------- PWM接口实现 --------------*/
 
 /**
@@ -71,6 +155,9 @@ int8_t PWMConfig(PWMInstance *instance, const PWM_Config_s *config)
     // 填充枚举和硬件映射
     instance->tim_e = config->tim_e;
     instance->map = tim_map[instance->tim_e];
+    /* 板级映射允许留空（如 DM_MC02 的 TIM_HEATER = {NULL, 0}），此处必须挡掉，
+     * 否则后面的 htim->Instance 会解引用空指针 */
+    BSP_RETURN_IF_TRUE_LOG(instance->map.htim == NULL, -1, BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "PWM tim_e has no hardware mapping!"));
 
     // 重复注册检查（同一 htim+channel 不能重复注册）
     for (uint8_t i = 0; i < s_pwm_idx; i++)
@@ -84,8 +171,20 @@ int8_t PWMConfig(PWMInstance *instance, const PWM_Config_s *config)
         }
     }
 
+    // 记录定时器时钟与 CubeMX 配置的当前频率（调频时不用再查 RCC）
+    instance->tim_clock_hz = BSPTim_GetTimerClock(instance->map.htim->Instance);
+    instance->frequency_hz =
+        (float)instance->tim_clock_hz / ((float)(instance->map.htim->Instance->PSC + 1u) * (float)(instance->map.htim->Instance->ARR + 1u));
+    /* CubeMX 生成的是 PWM1 且 HAL_TIM_PWM_ConfigChannel 已写过 CCMR，缓存之，
+     * 避免首拍占空比再写一次同样的模式 */
+    instance->oc_mode = PWM_OCM_PWM1;
+
     // 启动PWM
     HAL_TIM_PWM_Start(instance->map.htim, instance->map.channel);
+
+    // 可选：按配置改频（0 = 沿用 CubeMX）
+    if (config->frequency_hz > 0.0f)
+        (void)PWMSetFrequency(instance, config->frequency_hz);
 
     // 设置初始占空比
     PWMSetDutyRatio(instance, instance->dutyratio);
@@ -96,9 +195,9 @@ int8_t PWMConfig(PWMInstance *instance, const PWM_Config_s *config)
 
 void PWMSetDutyRatio(PWMInstance *instance, float dutyratio)
 {
-    if (instance == NULL)
+    if (instance == NULL || instance->map.htim == NULL)
     {
-        BSPLOG(&g_tim_log, LOG_LEVEL_WARNING, "PWM instance is NULL!");
+        BSPLOG(&g_tim_log, LOG_LEVEL_WARNING, "PWM instance is NULL or not configured!");
         return;
     }
 
@@ -109,8 +208,65 @@ void PWMSetDutyRatio(PWMInstance *instance, float dutyratio)
         dutyratio = 1.0f;
 
     instance->dutyratio = dutyratio;
-    uint32_t ccr = (uint32_t)(dutyratio * (float)instance->map.htim->Instance->ARR);
-    __HAL_TIM_SET_COMPARE(instance->map.htim, instance->map.channel, ccr);
+    PWM_ApplyDuty(instance);
+}
+
+int8_t PWMSetFrequency(PWMInstance *instance, float frequency_hz)
+{
+    if (instance == NULL || instance->map.htim == NULL || instance->tim_clock_hz == 0)
+    {
+        BSPLOG(&g_tim_log, LOG_LEVEL_WARNING, "PWM instance is NULL or not configured!");
+        return -1;
+    }
+    if (!(frequency_hz > 0.0f))
+    {
+        BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "PWM frequency must be > 0!");
+        return -1;
+    }
+
+    /* 总分频 = 定时器时钟 / 目标频率；再拆成 PSC 与 ARR。
+     * 优先让 ARR 占满 16 位（PSC 取满足 ARR<=65535 的最小值），占空比分辨率最高。
+     * float 在 2.4e8 量级仍有 ~1e-7 相对精度，足够。 */
+    {
+        float div_f = (float)instance->tim_clock_hz / frequency_hz;
+        uint32_t div;
+        uint32_t psc_div;
+        uint32_t arr;
+        float real_hz;
+        TIM_HandleTypeDef *htim = instance->map.htim;
+
+        if (!(div_f >= 2.0f) || div_f > 4.0e9f)
+        {
+            BSPLOG(&g_tim_log, LOG_LEVEL_ERROR, "PWM frequency out of range!");
+            return -1;
+        }
+        div = (uint32_t)(div_f + 0.5f);
+        /* ceil(div / 65536)，写成 (div-1)/65536+1 避免 div+65535 溢出 */
+        psc_div = (div - 1u) / 65536u + 1u;
+        arr = div / psc_div - 1u;
+        if (arr < 1u)
+            arr = 1u;
+
+        __HAL_TIM_SET_PRESCALER(htim, psc_div - 1u);
+        __HAL_TIM_SET_AUTORELOAD(htim, arr);
+        /* PSC 是预装载的，靠一次 UG 立即生效并让计数器从新周期起点开始。
+         * 不用 HAL_TIM_GenerateEvent：它会把 htim->State 改成 READY，语义不对。 */
+        htim->Instance->EGR = TIM_EGR_UG;
+        __HAL_TIM_CLEAR_FLAG(htim, TIM_FLAG_UPDATE);
+
+        real_hz = (float)instance->tim_clock_hz / ((float)psc_div * (float)(arr + 1u));
+
+        /* 频率是定时器级属性：同一 htim 的其它通道共用 PSC/ARR，占空比要按新 ARR 重算 */
+        for (uint8_t i = 0; i < s_pwm_idx; i++)
+        {
+            if (s_pwm_instance[i] == NULL || s_pwm_instance[i]->map.htim != htim)
+                continue;
+            s_pwm_instance[i]->frequency_hz = real_hz;
+            PWM_ApplyDuty(s_pwm_instance[i]);
+        }
+    }
+
+    return 0;
 }
 
 /*============= 编码器 部分 =============*/

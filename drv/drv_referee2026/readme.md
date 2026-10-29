@@ -40,7 +40,7 @@ const Referee2026Config_s cfg = {
     .robot_id = 3,
     .filter = REFEREE2026_COMMON_FILTER_DEFAULT,  /* 本链路全部 RX；要挑就 |= 具体那几位 */
     .daemon_reload = 0,                      /* 0 = 用默认 300ms（本驱动挂了离线钩子，0 会被提升） */
-    .daemon_fault = DAEMON_FAULT_BUZZER_SHORT,   /* 本链路无周期 RX 命令时被忽略（见图传链路说明） */
+    .daemon_fault = DAEMON_FAULT_BUZZER_MINOR,   /* 本链路无周期 RX 命令时被忽略（见图传链路说明） */
 };
 Referee2026Config(&referee_inst.core, &cfg);        /* 可重入；Config 类型四条链路共用 */
 
