@@ -47,6 +47,12 @@
 #define USB_RX_STALL_DEFAULT_MS 100u /* 距上次收帧超过该时长即判接收停摆 */
 #endif
 
+/* 注册表槽位数：本模块**按单活动实例设计**（多设备枚举未做），四块板都是 1。
+ * 可用编译选项（-D）覆盖，但覆盖成 >1 也不会得到真正的多实例支持。 */
+#ifndef USB_INSTANCE_NUM
+#define USB_INSTANCE_NUM 1
+#endif
+
 /*------------- 错误上报 --------------*/
 
 /**
@@ -140,7 +146,7 @@ typedef struct
  *
  * @note 仅注册实例（TX 环形缓冲为实例内嵌数组），不初始化硬件。
  *       硬件初始化由 MX_USB_DEVICE_Init 负责，须早于第一次 USBTransmit。
- * @note USB_INSTANCE_NUM 目前四块板都是 1（bsp_map.h），本模块**按单活动实例设计**
+ * @note USB_INSTANCE_NUM 目前四块板都是 1（bsp_usb.h 的可覆盖默认值），本模块**按单活动实例设计**
  *       （s_active_inst + CubeMX 侧唯一的 UserRxBuffer/HCDC 句柄）。多实例是待办事项，
  *       不是本模块已支持的用法。
  */

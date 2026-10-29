@@ -190,20 +190,6 @@ typedef enum
 } BoardDAC_e;
 
 /*============================================
- *              逻辑实例数量配置
- *============================================*/
-#define CAN_INSTANCE_NUM 16
-#define I2C_INSTANCE_NUM 1
-#define SPI_INSTANCE_NUM 3
-#define GPIO_INSTANCE_NUM 16
-#define UART_INSTANCE_NUM 6
-#define PWM_INSTANCE_NUM 22
-#define ENCODER_INSTANCE_NUM 0
-#define ADC_INSTANCE_NUM 11
-#define DAC_INSTANCE_NUM 2
-#define USB_INSTANCE_NUM 1
-
-/*============================================
  *              extern 声明
  *============================================*/
 extern const GPIO_Map_t gpio_map[];

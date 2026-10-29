@@ -286,7 +286,7 @@ USB 两个后端现在都挂了钩子，所以这条自恢复通道不会被"禁
 | DMA                   | `usbd_conf.c` 的 `dma_enable` 必须为 `DISABLE`（本就是）——启用后缓冲要移进 RAM_D1/D2 | ✅ DISABLE | ✅ DISABLE |
 | 端点 abort / 重枚举   | `HAL_PCD_EP_Abort` / `HAL_PCD_DevConnect` / `HAL_PCD_DevDisconnect` 在 F4/H7 的 PCD HAL 里都有 | ✅ | ✅ |
 | 枚举状态              | `USBD_HandleTypeDef.dev_state`（中间件维护）                      | ✅                 | ✅                                 |
-| 实例数                | `USB_INSTANCE_NUM = 1`（`bsp_map.h`）→ **本模块按单活动实例设计** | ✅                 | ✅                                 |
+| 实例数                | `USB_INSTANCE_NUM = 1`（`bsp_usb.h`，可覆盖）→ **本模块按单活动实例设计** | ✅                 | ✅                                 |
 
 **硬件初始化时机**：`MX_USB_DEVICE_Init()` 由 CubeMX 生成在 `freertos.c` 的
 `StartDefaultTask`（`osPriorityIdle`）里调用，**不是**旧注释说的"`osKernelStart()` 之前"。

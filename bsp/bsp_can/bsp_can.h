@@ -12,6 +12,15 @@
 #define CAN_TX_MAILBOX_NUM 3 // BxCAN 每个 CAN 的发送邮箱数量（FDCAN 不用它，见 bsp_fdcan.c 的 FDCAN_TX_MARKER_NUM）
 #define CAN_ID_UNUSED ((uint32_t)0xFFFFFFFF)
 
+/*------------- 逻辑实例容量 --------------*/
+/* 注册表槽位数（不是板载 CAN 数量）：bsp_bxcan.c 与 bsp_fdcan.c 共用。
+ * 三块板共用同一份源码，取各板最大值（DM_MC02 24 / DJI_A·DJI_C 16）；多出的槽位
+ * 只是 static 指针数组里多几个字节。需要时可用编译选项（-D）覆盖；板级 bsp_map.h
+ * 先于本头文件包含，也可在那里按板覆盖。 */
+#ifndef CAN_INSTANCE_NUM
+#define CAN_INSTANCE_NUM 24
+#endif
+
 /* CANRecover 里"等取消请求落地"的上限 (us)。
  * 取消在途帧（ABRQ / TXBCR）是**硬件异步执行**的：写下去立刻回读占用量，可能还是旧值，
  * 于是把一次正常的恢复误判成"邮箱/FIFO 仍满"。任务上下文里有界轮询一下就够了。 */
