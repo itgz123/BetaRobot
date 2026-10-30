@@ -29,7 +29,7 @@ typedef struct
     uint8_t volume_pct;   // 音量百分比（1~100），0 = 用实例默认音量
 } MusicPulse_t;
 
-/* 数组元素个数（结果为 uint16_t，与 BuzzerPlayMusic 的 num 参数一致） */
+/* 数组元素个数（结果为 uint16_t，与 BuzzerPlay 的 num 参数一致） */
 #define MUSIC_PULSE_COUNT(arr) ((uint16_t)(sizeof(arr) / sizeof((arr)[0])))
 
 /*============================================
@@ -81,7 +81,7 @@ typedef struct
 #define MUSIC_NOTE_BUZZER 4000u
 
 /*============================================
- *              默认音效（末尾留静音，循环触发才有间隔）
+ *              默认音效（末尾留静音，上层离线期间循环触发才有间隙）
  *============================================*/
 /* 长度显式写在声明里：定义在 .c 中、声明在头里，若写成 []，
  * 别处的 MUSIC_PULSE_COUNT 会对不完整类型取 sizeof（编译错误） */
@@ -91,7 +91,7 @@ extern const MusicPulse_t MUSIC_EFFECT_ALARM[6];   // 断续报警：三短音
 extern const MusicPulse_t MUSIC_EFFECT_STARTUP[5]; // 开机音：上行琶音
 extern const MusicPulse_t MUSIC_DEMO_SCALE[9];     // 调试用：C5 音阶
 
-/* 常用提示音（单次播放；拍与拍之间由 drv 自动插静音间隔） */
+/* 常用提示音（单次播放；相邻同音调靠 drv 的衰减包络分开，见 Buzzer_Config_s.decay_ms） */
 extern const MusicPulse_t MUSIC_EFFECT_TICK[1];     // 按键/单次提示：一声短促
 extern const MusicPulse_t MUSIC_EFFECT_OK[2];       // 完成/确认：上行两音 "叮咚"
 extern const MusicPulse_t MUSIC_EFFECT_ERR[2];      // 失败/错误：低音两声
