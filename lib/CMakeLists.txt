@@ -24,6 +24,8 @@ set(MODULE_SOURCES
     lib_math/lib_math.c
     lib_math/lib_math_trig_lut.c
     lib_mit/lib_mit.c
+    lib_music/see_you_again/see_you_again.c
+    lib_music/twinkle_star/twinkle_star.c
     lib_music_simple/lib_music_simple.c
     lib_pid/lib_pid.c
     lib_rls/lib_rls.c
@@ -55,6 +57,8 @@ set(MODULE_INCLUDE_DIRS
     lib_mahony
     lib_math
     lib_mit
+    lib_music/see_you_again
+    lib_music/twinkle_star
     lib_music_simple
     lib_pid
     lib_rls

@@ -11,9 +11,12 @@
  *       - BUZZER_PRIO_LOW（音乐）：可被高优先级抢占。抢占时保存播放游标与本拍剩余时长，
  *         报警播完从被打断处续播；高优先级在播期间 BuzzerPlay(LOW) 直接返回 0（不排队）。
  *
- * @note 打断时序：音乐被打断时先静音，隔一个脉冲间隔（BUZZER_PULSE_GAP_US）再起报警第一拍。
- * @note 每个脉冲之间都插入一段短静音间隔，用来把相邻的同音调分开（否则听起来是一个长音）。
- * @note 倍速：BuzzerPlay 的 speed 同时缩放脉冲时长与脉冲间隔；<= 0 按 1.0 处理。
+ * @note 打断时序：音乐被打断时立即起报警第一拍，没有额外的静音间隔。
+ * @note 衰减包络：每个发声脉冲都以满音量起音，然后在 decay_ms 内线性衰减到 0
+ *       （模拟钢琴/拨弦的指数衰减，听感上比方波柔）。衰减时长 = min(decay_ms, 本拍时长)：
+ *       音短就在音尾截断衰减直接换下一拍，音长则衰减到 0 后余下时间静音。
+ *       decay_ms = 0 表示不衰减（整拍恒定音量）——此时相邻同音调会连成一声。
+ * @note 倍速：BuzzerPlay 的 speed 同时缩放脉冲时长、衰减时长与续播的剩余时长；<= 0 按 1.0 处理。
  *
  * @note 实例只保存 2 个序列：正在播的 + 被打断的音乐（含续播游标）。
  *       高优先级报警短、不会被打断，因此不需要游标快照。
@@ -44,8 +47,9 @@ typedef enum : uint8_t
  *============================================*/
 typedef struct
 {
-    BoardTIM_e tim_e; // 蜂鸣器 PWM 的板载定时器枚举
-    float volume;     // 默认音量（0~1），内部换算成占空比 volume*0.5
+    BoardTIM_e tim_e;  // 蜂鸣器 PWM 的板载定时器枚举
+    float volume;      // 默认音量（0~1），内部换算成占空比 volume*0.5
+    uint16_t decay_ms; // 每个音的线性衰减时长（ms）；0 = 不衰减
 } Buzzer_Config_s;
 
 /*============================================
@@ -53,24 +57,27 @@ typedef struct
  *============================================*/
 typedef struct BuzzerInstance
 {
-    PWMInstance pwm; // 底层 PWM（占空比 = 音量、频率 = 音调）
-    float volume;    // 默认音量（0~1）
+    PWMInstance pwm;  // 底层 PWM（占空比 = 音量、频率 = 音调）
+    float volume;     // 默认音量（0~1）
+    uint16_t decay_ms; // 每个音的线性衰减时长（0 = 不衰减）
 
     /* —— 正在播放的序列（任一时刻最多 1 个）—— */
     const MusicPulse_t *seq; // 当前序列
     uint16_t seq_len;        // 序列长度
-    uint16_t seq_idx;        // 正在发声 / 刚播完等待间隔的这一拍
-    uint16_t pending_idx;    // 间隔结束后要起播的下标
+    uint16_t seq_idx;        // 正在发声的这一拍
     float speed;             // 当前序列倍速（已归一，恒 > 0）
     BuzzerPriority_e prio;   // 当前序列优先级
     uint8_t playing;         // 1 = 有序列在播；0 = 空闲（seq 同时为 NULL）
-    uint8_t waiting_gap;     // 1 = 处于脉冲间静音间隔
-    uint64_t next_us;        // waiting_gap ? 间隔结束时刻 : 本拍结束时刻（DWT 绝对时刻）
+    uint64_t next_us;        // 本拍结束时刻（DWT 绝对时刻，64 位）
+
+    /* —— 衰减包络 —— */
+    uint64_t env_start_us;  // 本拍起音时刻（必须 64 位，与 DWT 同宽）
+    uint32_t env_decay_us;  // 本拍实际衰减时长（已按倍速缩放并截断到音长；0 = 不衰减）
 
     /* —— 低优先级被打断时的续播快照（高优先级不存）—— */
     const MusicPulse_t *music_seq;
     uint16_t music_len;
-    uint16_t music_idx;       // 被打断处；在间隔中被打断时记 pending_idx
+    uint16_t music_idx;       // 被打断处（已响完的那一拍不会被重放）
     uint32_t music_remain_us; // 被打断那一拍的剩余时长；0 = 从整拍重放
     float music_speed;
     uint8_t music_suspended; // 1 = 有被挂起的音乐
@@ -91,7 +98,7 @@ int8_t BuzzerRegister(BuzzerInstance *instance);
 
 /**
  * @brief 配置蜂鸣器（可重复调用）
- * @param config 含 tim_e 与默认音量
+ * @param config 含 tim_e、默认音量与衰减时长 decay_ms
  * @return 0 成功，-1 失败
  * @note 要求先 BuzzerRegister；内部完成 PWM 的 Config（启动输出、初始静音）。
  */
@@ -103,7 +110,8 @@ int8_t BuzzerConfig(BuzzerInstance *instance, const Buzzer_Config_s *config);
 
 /**
  * @brief 设置默认音量（0~1，超出钳位）
- * @note 立即作用于当前输出：序列中只有 volume_pct==0 的拍受影响；静音间隔中不写硬件。
+ * @note 立即作用于当前输出：序列中只有 volume_pct==0 的拍受影响；
+ *       已衰减到 0 的静音尾部不会因为调大音量重新起音（衰减包络继续走完）。
  */
 void BuzzerSetVolume(BuzzerInstance *instance, float volume);
 
@@ -111,6 +119,13 @@ void BuzzerSetVolume(BuzzerInstance *instance, float volume);
  * @brief 立即静音，并丢弃当前序列 / 被挂起的音乐
  */
 void BuzzerStop(BuzzerInstance *instance);
+
+/**
+ * @brief 只停低优先级音乐（连同被打断的续播快照），正在播的报警不受影响
+ * @note 用于"功能关闭时停音乐，但报警该响还得响"的场景：
+ *       音乐在播 → 立即静音回空闲；报警在播 → 报警继续，只是不再续播被打断的音乐。
+ */
+void BuzzerStopMusic(BuzzerInstance *instance);
 
 /*============================================
  *              序列播放
@@ -121,10 +136,10 @@ void BuzzerStop(BuzzerInstance *instance);
  * @param seq      脉冲数组
  * @param num      脉冲个数（用 MUSIC_PULSE_COUNT 取）
  * @param priority BUZZER_PRIO_LOW 音乐 / BUZZER_PRIO_HIGH 报警
- * @param speed    倍速，<=0 按 1.0；脉冲时长与脉冲间隔都按此缩放
+ * @param speed    倍速，<=0 按 1.0；脉冲时长与衰减时长都按此缩放
  * @return 1 已开始播放（或同一高优先级序列正在播）；0 参数非法 / 音乐被报警挡住
  *
- * @note HIGH：打断低优先级音乐时先保存游标、静音，隔一个脉冲间隔后起报警第一拍。
+ * @note HIGH：打断低优先级音乐时保存续播游标后立即起报警第一拍。
  * @note HIGH 同序列幂等：同一报警正在播时直接返回 1，适合 daemon 每拍重复调用。
  * @note LOW：高优先级在播时返回 0（不排队）；否则替换当前音乐（被挂起的音乐一并丢弃）。
  */
@@ -133,7 +148,8 @@ uint8_t BuzzerPlay(BuzzerInstance *instance, const MusicPulse_t *seq, uint16_t n
 /**
  * @brief 节拍推进（非阻塞）
  * @note 必须周期调用（建议 1ms，与 DaemonTask 同一个任务）；用 DWT 绝对时刻，
- *       任务偶尔落后不会累积漂移，也不会把落后期间的所有拍一次性补出来。
+ *       落后时会从当前时刻重新起整拍（不补拍，整体时间轴后移），下一次调用不会加倍追赶。
+ *       每 1ms 还会按衰减包络重写一次占空比，换拍与衰减都在这里推进。
  */
 void BuzzerTask(BuzzerInstance *instance);
 
