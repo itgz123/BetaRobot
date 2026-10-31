@@ -64,9 +64,9 @@ static uint32_t Buzzer_PulseDurationUs(const MusicPulse_t *pulse)
     return (duration_us == 0u) ? BUZZER_MS_TO_US : duration_us;
 }
 
-static uint8_t Buzzer_SequenceValid(const MusicPulse_t *seq, uint16_t num)
+static uint8_t Buzzer_SequenceValid(const MusicSequence_t *music)
 {
-    return (seq != NULL && num > 0u) ? 1u : 0u;
+    return (music != NULL && music->pulses != NULL && music->count > 0u) ? 1u : 0u;
 }
 
 /**
@@ -89,7 +89,7 @@ static float Buzzer_PulseVolume(const BuzzerInstance *instance, const MusicPulse
 }
 
 /**
- * @brief 把 seq[seq_idx] 这一拍落到硬件（满音量起音），并算出它的结束时刻
+ * @brief 把 seq->pulses[seq_idx] 这一拍落到硬件（满音量起音），并算出它的结束时刻
  * @param duration_us 非 0 时覆盖这一拍的时长（续播被报警打断的拍时用剩余时长，已是 us、不再缩放）
  *
  * @note 衰减时长 = min(decay_ms, 本拍时长)：音短就在音尾截断衰减直接换下一拍，
@@ -97,7 +97,7 @@ static float Buzzer_PulseVolume(const BuzzerInstance *instance, const MusicPulse
  */
 static void Buzzer_ApplyPulse(BuzzerInstance *instance, uint64_t now, uint32_t duration_us)
 {
-    const MusicPulse_t *pulse = &instance->seq[instance->seq_idx];
+    const MusicPulse_t *pulse = &instance->seq->pulses[instance->seq_idx];
     uint32_t note_us;
     uint32_t decay_us;
 
@@ -144,10 +144,10 @@ static void Buzzer_UpdateEnvelope(BuzzerInstance *instance, uint64_t now)
     float ratio;
     float duty;
 
-    if (instance->pwm.map.htim == NULL || !instance->playing || instance->seq == NULL || instance->seq_idx >= instance->seq_len)
+    if (instance->pwm.map.htim == NULL || !instance->playing || instance->seq == NULL || instance->seq_idx >= instance->seq->count)
         return;
 
-    pulse = &instance->seq[instance->seq_idx];
+    pulse = &instance->seq->pulses[instance->seq_idx];
     if (pulse->freq_hz == 0u)
         return;
 
@@ -172,10 +172,9 @@ static void Buzzer_UpdateEnvelope(BuzzerInstance *instance, uint64_t now)
 /**
  * @brief 从头开始播一个序列（立即起第一拍）
  */
-static void Buzzer_StartSequence(BuzzerInstance *instance, const MusicPulse_t *seq, uint16_t num, BuzzerPriority_e prio, float speed, uint64_t now)
+static void Buzzer_StartSequence(BuzzerInstance *instance, const MusicSequence_t *music, BuzzerPriority_e prio, float speed, uint64_t now)
 {
-    instance->seq = seq;
-    instance->seq_len = num;
+    instance->seq = music;
     instance->seq_idx = 0u;
     instance->speed = (speed > 0.0f) ? speed : 1.0f;
     instance->prio = prio;
@@ -191,13 +190,12 @@ static void Buzzer_EndSequence(BuzzerInstance *instance, uint64_t now)
     uint32_t remain;
 
     if (instance->prio == BUZZER_PRIO_HIGH && instance->music_suspended && instance->music_seq != NULL &&
-        instance->music_len > 0u && instance->music_idx < instance->music_len)
+        instance->music_idx < instance->music_seq->count)
     {
         /* 音乐续播：从被打断的位置重新起音（剩余时长 0 则整拍重放） */
         remain = instance->music_remain_us;
         instance->music_remain_us = 0u;
         instance->seq = instance->music_seq;
-        instance->seq_len = instance->music_len;
         instance->seq_idx = instance->music_idx;
         instance->speed = instance->music_speed;
         instance->prio = BUZZER_PRIO_LOW;
@@ -208,7 +206,6 @@ static void Buzzer_EndSequence(BuzzerInstance *instance, uint64_t now)
 
     instance->playing = 0u;
     instance->seq = NULL;
-    instance->seq_len = 0u;
     instance->seq_idx = 0u;
     instance->music_suspended = 0u;
     instance->env_start_us = 0u;
@@ -241,7 +238,6 @@ int8_t BuzzerConfig(BuzzerInstance *instance, const Buzzer_Config_s *config)
     instance->volume = Buzzer_ClampVolume(config->volume);
     instance->decay_ms = config->decay_ms;
     instance->seq = NULL;
-    instance->seq_len = 0u;
     instance->seq_idx = 0u;
     instance->speed = 1.0f;
     instance->prio = BUZZER_PRIO_LOW;
@@ -250,7 +246,6 @@ int8_t BuzzerConfig(BuzzerInstance *instance, const Buzzer_Config_s *config)
     instance->env_start_us = 0u;
     instance->env_decay_us = 0u;
     instance->music_seq = NULL;
-    instance->music_len = 0u;
     instance->music_idx = 0u;
     instance->music_remain_us = 0u;
     instance->music_speed = 1.0f;
@@ -271,10 +266,10 @@ void BuzzerSetVolume(BuzzerInstance *instance, float volume)
 
     /* 只有"正在发声且用实例默认音量"的拍需要立即重写占空比；
      * 休止符由 UpdateEnvelope 自己跳过。已衰减到 0 的静音尾部不会因调大音量重新起音。 */
-    if (!instance->playing || instance->seq == NULL || instance->seq_idx >= instance->seq_len)
+    if (!instance->playing || instance->seq == NULL || instance->seq_idx >= instance->seq->count)
         return;
 
-    if (instance->seq[instance->seq_idx].volume_pct == 0u)
+    if (instance->seq->pulses[instance->seq_idx].volume_pct == 0u)
         Buzzer_UpdateEnvelope(instance, DWT_GetTimeUs());
 }
 
@@ -285,7 +280,6 @@ void BuzzerStop(BuzzerInstance *instance)
 
     instance->playing = 0u;
     instance->seq = NULL;
-    instance->seq_len = 0u;
     instance->seq_idx = 0u;
     instance->music_suspended = 0u;
     instance->env_start_us = 0u;
@@ -300,7 +294,6 @@ void BuzzerStopMusic(BuzzerInstance *instance)
 
     /* 被打断的音乐一律作废：即便此刻报警在播，也不能在报警结束后"接着放" */
     instance->music_seq = NULL;
-    instance->music_len = 0u;
     instance->music_idx = 0u;
     instance->music_remain_us = 0u;
     instance->music_speed = 1.0f;
@@ -311,7 +304,6 @@ void BuzzerStopMusic(BuzzerInstance *instance)
     {
         instance->playing = 0u;
         instance->seq = NULL;
-        instance->seq_len = 0u;
         instance->seq_idx = 0u;
         instance->env_start_us = 0u;
         instance->env_decay_us = 0u;
@@ -321,11 +313,11 @@ void BuzzerStopMusic(BuzzerInstance *instance)
 
 /*------------- 序列播放 --------------*/
 
-uint8_t BuzzerPlay(BuzzerInstance *instance, const MusicPulse_t *seq, uint16_t num, BuzzerPriority_e priority, float speed)
+uint8_t BuzzerPlay(BuzzerInstance *instance, const MusicSequence_t *music, BuzzerPriority_e priority, float speed)
 {
     uint64_t now;
 
-    if (instance == NULL || instance->pwm.map.htim == NULL || !Buzzer_SequenceValid(seq, num))
+    if (instance == NULL || instance->pwm.map.htim == NULL || !Buzzer_SequenceValid(music))
         return 0;
 
     if (!(speed > 0.0f))
@@ -334,7 +326,7 @@ uint8_t BuzzerPlay(BuzzerInstance *instance, const MusicPulse_t *seq, uint16_t n
     if (priority == BUZZER_PRIO_HIGH)
     {
         /* 同一报警正在播：幂等返回。调用方每拍重复调用即变成"循环报警" */
-        if (instance->playing && instance->prio == BUZZER_PRIO_HIGH && instance->seq == seq && instance->seq_len == num)
+        if (instance->playing && instance->prio == BUZZER_PRIO_HIGH && instance->seq == music)
             return 1;
 
         now = DWT_GetTimeUs();
@@ -343,7 +335,7 @@ uint8_t BuzzerPlay(BuzzerInstance *instance, const MusicPulse_t *seq, uint16_t n
         {
             /* 抢占音乐：记下续播游标。当前拍还在响 → 记本拍 + 剩余时长；
              * 已经到点但 BuzzerTask 还没推进 → 记下一拍（已响完的拍不能重放）。
-             * 下一拍越界说明音乐其实已播完，不再续播（否则会对 seq[seq_len] 越界读）。 */
+             * 下一拍越界说明音乐其实已播完，不再续播（否则会对 pulses[count] 越界读）。 */
             uint16_t idx;
             uint32_t remain = 0u;
 
@@ -357,10 +349,9 @@ uint8_t BuzzerPlay(BuzzerInstance *instance, const MusicPulse_t *seq, uint16_t n
                 idx = (uint16_t)((uint32_t)instance->seq_idx + 1u);
             }
 
-            if (idx < instance->seq_len)
+            if (idx < instance->seq->count)
             {
                 instance->music_seq = instance->seq;
-                instance->music_len = instance->seq_len;
                 instance->music_idx = idx;
                 instance->music_remain_us = remain;
                 instance->music_speed = instance->speed;
@@ -372,7 +363,7 @@ uint8_t BuzzerPlay(BuzzerInstance *instance, const MusicPulse_t *seq, uint16_t n
             }
         }
 
-        Buzzer_StartSequence(instance, seq, num, priority, speed, now);
+        Buzzer_StartSequence(instance, music, priority, speed, now);
         return 1;
     }
 
@@ -381,7 +372,7 @@ uint8_t BuzzerPlay(BuzzerInstance *instance, const MusicPulse_t *seq, uint16_t n
         return 0;
 
     instance->music_suspended = 0u;
-    Buzzer_StartSequence(instance, seq, num, BUZZER_PRIO_LOW, speed, DWT_GetTimeUs());
+    Buzzer_StartSequence(instance, music, BUZZER_PRIO_LOW, speed, DWT_GetTimeUs());
     return 1;
 }
 
@@ -400,7 +391,7 @@ void BuzzerTask(BuzzerInstance *instance)
             break;
 
         /* 当前脉冲结束：还有下一拍就换拍，否则整段结束 */
-        if ((uint32_t)instance->seq_idx + 1u >= (uint32_t)instance->seq_len)
+        if ((uint32_t)instance->seq_idx + 1u >= (uint32_t)instance->seq->count)
         {
             Buzzer_EndSequence(instance, now);
             break;
@@ -446,11 +437,10 @@ void BuzzerStopMusic(BuzzerInstance *instance)
     (void)instance;
 }
 
-uint8_t BuzzerPlay(BuzzerInstance *instance, const MusicPulse_t *seq, uint16_t num, BuzzerPriority_e priority, float speed)
+uint8_t BuzzerPlay(BuzzerInstance *instance, const MusicSequence_t *music, BuzzerPriority_e priority, float speed)
 {
     (void)instance;
-    (void)seq;
-    (void)num;
+    (void)music;
     (void)priority;
     (void)speed;
     return 0;

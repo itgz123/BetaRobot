@@ -25,6 +25,7 @@ set(MODULE_SOURCES
     drv_pid/drv_pid.c
     drv_terminal_lite/drv_terminal_lite.c
     drv_buzzer_simple/drv_buzzer_simple.c
+    drv_buzzer_simple/drv_buzzer_note.c
     # comm开始
     drv_comm/drv_comm.c
     drv_comm/media/comm_media.c
