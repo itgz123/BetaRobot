@@ -1,8 +1,6 @@
 # drvlib 层源文件（器件 + 算法联合：通信、标定、滤波一体）
 set(MODULE_SOURCES
-    drvlib_bmi088_ist8310_eskf/drvlib_bmi088_ist8310_eskf.c
     drvlib_bmi088_kalman/drvlib_bmi088_kalman.c
-    drvlib_bmi088_mahony/drvlib_bmi088_mahony.c
     drvlib_motor/drvlib_motor.c
 )
 
@@ -11,9 +9,6 @@ set(MODULE_SOURCES
 #   函数），故只出现在这里
 set(MODULE_INCLUDE_DIRS
     drvlib_bmi088_calib
-    drvlib_bmi088_ist8310_eskf
     drvlib_bmi088_kalman
-    drvlib_bmi088_mahony
-    drvlib_ist8310_calib
     drvlib_motor
 )
