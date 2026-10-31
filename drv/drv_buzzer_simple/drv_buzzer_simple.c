@@ -158,9 +158,7 @@ static void Buzzer_UpdateEnvelope(BuzzerInstance *instance, uint64_t now)
     else
     {
         elapsed = (now > instance->env_start_us) ? (now - instance->env_start_us) : 0u;
-        ratio = (elapsed >= (uint64_t)instance->env_decay_us)
-                    ? 1.0f
-                    : (float)elapsed / (float)instance->env_decay_us;
+        ratio = (elapsed >= (uint64_t)instance->env_decay_us) ? 1.0f : (float)elapsed / (float)instance->env_decay_us;
     }
 
     duty = Buzzer_PulseVolume(instance, pulse) * BUZZER_DUTY_PER_VOLUME * (1.0f - ratio);
@@ -189,8 +187,7 @@ static void Buzzer_EndSequence(BuzzerInstance *instance, uint64_t now)
 {
     uint32_t remain;
 
-    if (instance->prio == BUZZER_PRIO_HIGH && instance->music_suspended && instance->music_seq != NULL &&
-        instance->music_idx < instance->music_seq->count)
+    if (instance->prio == BUZZER_PRIO_HIGH && instance->music_suspended && instance->music_seq != NULL && instance->music_idx < instance->music_seq->count)
     {
         /* 音乐续播：从被打断的位置重新起音（剩余时长 0 则整拍重放） */
         remain = instance->music_remain_us;

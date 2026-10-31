@@ -16,27 +16,40 @@
 
 #ifdef LIB_MUSIC_USED
 
-#define JIANPU_BASE 523u          /* 1 = C5 */
+#define JIANPU_BASE 523u /* 1 = C5 */
 #define J(d) BUZZER_DEG_HZ(JIANPU_BASE, (d))
 #define JH(d) BUZZER_DEG_HZ_HI(JIANPU_BASE, (d)) /* 高音点 */
 #define NOTE(freq, dur) {(freq), (dur), 0u}
 
 static const MusicPulse_t s_happy_birthday[25] = {
     /* 祝你生日快乐（一）5 5 | 6 5 1' | 7 - - */
-    NOTE(J(5), 300u), NOTE(J(5), 300u),
-    NOTE(J(6), 600u), NOTE(J(5), 600u), NOTE(JH(1), 600u),
+    NOTE(J(5), 300u),
+    NOTE(J(5), 300u),
+    NOTE(J(6), 600u),
+    NOTE(J(5), 600u),
+    NOTE(JH(1), 600u),
     NOTE(J(7), 1800u),
     /* 祝你生日快乐（二）5 5 | 6 5 2' | 1' - - */
-    NOTE(J(5), 300u), NOTE(J(5), 300u),
-    NOTE(J(6), 600u), NOTE(J(5), 600u), NOTE(JH(2), 600u),
+    NOTE(J(5), 300u),
+    NOTE(J(5), 300u),
+    NOTE(J(6), 600u),
+    NOTE(J(5), 600u),
+    NOTE(JH(2), 600u),
     NOTE(JH(1), 1800u),
     /* 祝你生日快乐（三）5 5 | 5' 3' 1' | 7 6 - */
-    NOTE(J(5), 300u), NOTE(J(5), 300u),
-    NOTE(JH(5), 600u), NOTE(JH(3), 600u), NOTE(JH(1), 600u),
-    NOTE(J(7), 600u), NOTE(J(6), 1200u),
+    NOTE(J(5), 300u),
+    NOTE(J(5), 300u),
+    NOTE(JH(5), 600u),
+    NOTE(JH(3), 600u),
+    NOTE(JH(1), 600u),
+    NOTE(J(7), 600u),
+    NOTE(J(6), 1200u),
     /* 祝你生日快乐（四）4' 4' | 3' 1' 2' | 1' - - */
-    NOTE(JH(4), 300u), NOTE(JH(4), 300u),
-    NOTE(JH(3), 600u), NOTE(JH(1), 600u), NOTE(JH(2), 600u),
+    NOTE(JH(4), 300u),
+    NOTE(JH(4), 300u),
+    NOTE(JH(3), 600u),
+    NOTE(JH(1), 600u),
+    NOTE(JH(2), 600u),
     NOTE(JH(1), 1800u),
 };
 

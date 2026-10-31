@@ -14,7 +14,8 @@
 | `music_custom/` | 常用提示音、5 级报警音效、开机音等（`MUSIC_EFFECT_*`） |
 | `twinkle_star/` | 《小星星》，验证音高/包络用 |
 | `happy_birthday/` | 《祝你生日快乐》 |
-| `see_you_again/see_you_again_guitar/` | 《See You Again》吉他谱版（`MUSIC_SEE_YOU_AGAIN_GUITAR`），**当前不参与编译**（等指令再加回） |
+| `see_you_again/see_you_again_guitar/` | 《See You Again》吉他谱版（`MUSIC_SEE_YOU_AGAIN_GUITAR`），已参与构建 |
+| `host/` | PC 端验证工具：gcc 编共享库 + Python 合成 FLAC，见 `host/readme.md` |
 
 `lib/lib_music/`（没有 simple）预留给之后基于 DAC 的方案，目前为空。
 
