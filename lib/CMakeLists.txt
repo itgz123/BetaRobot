@@ -24,9 +24,13 @@ set(MODULE_SOURCES
     lib_math/lib_math.c
     lib_math/lib_math_trig_lut.c
     lib_mit/lib_mit.c
-    lib_music/see_you_again/see_you_again.c
-    lib_music/twinkle_star/twinkle_star.c
+    # 音频数据统一挂在 lib_music_simple/ 下：music_custom = 常用音效，其余一首歌一个目录
+    # 注：lib_music/（无 simple）预留给之后基于 DAC 的方案，目前没有实现、不参与构建
+    lib_music_simple/happy_birthday/happy_birthday.c
+    lib_music_simple/see_you_again/see_you_again_guitar/see_you_again_guitar.c
     lib_music_simple/lib_music_simple.c
+    lib_music_simple/music_custom/music_custom.c
+    lib_music_simple/twinkle_star/twinkle_star.c
     lib_pid/lib_pid.c
     lib_rls/lib_rls.c
     lib_traj/lib_traj.c
@@ -57,9 +61,11 @@ set(MODULE_INCLUDE_DIRS
     lib_mahony
     lib_math
     lib_mit
-    lib_music/see_you_again
-    lib_music/twinkle_star
     lib_music_simple
+    lib_music_simple/happy_birthday
+    lib_music_simple/music_custom
+    lib_music_simple/see_you_again/see_you_again_guitar
+    lib_music_simple/twinkle_star
     lib_pid
     lib_rls
     lib_traj
