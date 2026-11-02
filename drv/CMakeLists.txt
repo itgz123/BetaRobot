@@ -5,6 +5,7 @@ set(MODULE_SOURCES
     drv_bmi088/drv_bmi088.c
     drv_ist8310/drv_ist8310.c
     drv_daemon/drv_daemon.c
+    drv_tx_slot/drv_tx_slot.c
     drv_vofa/drv_vofa.c
     drv_motor/drv_dmmotor/drv_dmmotor.c
     drv_motor/drv_rsmotor/drv_rsmotor.c
@@ -47,6 +48,7 @@ set(MODULE_INCLUDE_DIRS
     drv_sbus
     drv_dbus
     drv_daemon
+    drv_tx_slot
     drv_vofa
     drv_motor/drv_dmmotor
     drv_motor/drv_rsmotor
