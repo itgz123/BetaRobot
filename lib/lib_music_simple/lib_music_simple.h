@@ -9,8 +9,8 @@
  * @note 目录约定（同目录）：
  *       - music_custom/：常用提示音/报警音效（非曲目）
  *       - twinkle_star/、happy_birthday/、see_you_again/see_you_again_guitar/：一首歌一个文件夹
- *       - 音名 → 频率的换算在 drv_buzzer_simple/drv_buzzer_note.{h,c}
- *         （曲谱数组用编译期宏 BUZZER_DEG_HZ；查表函数用于运行时换算/移调）
+ *       - 音名 → 频率的换算在 drv_buzzer_simple/drv_buzzer_note.h
+ *         （纯编译期宏 BUZZER_NOTE_HZ / BUZZER_NOTE_MS，没有运行时查表实现）
  *
  * @note 门控：需在 app_cfg.h 定义 LIB_MUSIC_USED。
  */
