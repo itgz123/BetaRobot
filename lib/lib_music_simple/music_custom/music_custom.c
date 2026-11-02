@@ -12,7 +12,7 @@
 /* 板载蜂鸣器的谐振点（CubeMX 给 TIM_BUZZER 配的 ~4 kHz）：提示音用它最响 */
 #define MUSIC_HZ_BUZZER 4000u
 
-/* 音名 → Hz（摘自 drv_buzzer_simple/drv_buzzer_note.c 的频率表）：
+/* 音名 → Hz（与 drv_buzzer_simple/drv_buzzer_note_table.h 的十二平均律表一致）：
  * C5 523、E5 659、G4 392、G5 784、C6 1047 */
 
 /* ---------------- 基础音效 ---------------- */

@@ -13,10 +13,11 @@
 
 #ifdef LIB_MUSIC_USED
 
-#define JIANPU_BASE 466u                                        /* 1 = bB4（谱面 1=G、bB 调，按发声音高） */
-#define J(d) BUZZER_DEG_HZ(JIANPU_BASE, (d))                    /* 简谱 1~7 */
-#define JH(d) BUZZER_DEG_HZ_HI(JIANPU_BASE, (d))                /* +i：上加点，高八度 */
-#define CELLS(n) ((uint16_t)(((uint32_t)(n) * 375u + 1u) / 2u)) /* n 个 16 分音符（80 BPM） */
+#define BPM 80u
+#define SONG_BASE BB4                                      /* 1 = bB4（谱面 1=G、bB 调，按发声音高） */
+#define J(d) BUZZER_NOTE_HZ(SONG_BASE, (d), 0)             /* 简谱 1~7 */
+#define JH(d) BUZZER_NOTE_HZ(SONG_BASE, (d), +1)           /* +i：上加点，高八度 */
+#define CELLS(n) BUZZER_NOTE_MS(BPM, (n), 16u)             /* n 个 16 分音符（80 BPM） */
 
 static const MusicPulse_t s_see_you_again_guitar[258] = {
     /* ---------------- 第 1 小节 ---------------- */
