@@ -21,7 +21,8 @@
 #include "bsp_usart.h"
 #include "bsp_log.h"
 #include "lib_format.h"
-#include "main.h" // __get_PRIMASK / __disable_irq / __enable_irq
+#include "drv_tx_slot.h"
+#include "main.h" // DMA_RAM / HAL_UART_STATE_READY
 #include <stdarg.h>
 #include <string.h>
 
@@ -58,28 +59,13 @@ LOG_INSTANCE_DEF(g_terminal_lite_log, "drv_terminal_lite", TERMINAL_LITE_LOG_LIM
 
 USART_INSTANCE_DEF(s_tl_uart, TERMINAL_LITE_MAX_LINE);
 
-/*------------- 发送缓冲池（仿 bsp_log 槽池状态机；单写者=execute 所在任务） --------------
- * 每槽自带 data+state+len（替代原"数据/长度分数组 + 头尾游标"的写法）；
- * 状态机：FREE 借出 → WRITE 格式化 → SEND 直发（忙则 WAIT_SEND 排队），
- * DMA 完成回调把发完的 SEND 槽归还 FREE 并补发下一个 WAIT_SEND，串起发送链。 */
+/*------------- 发送槽池（drv_tx_slot 共用实现；单写者=execute 所在任务） --------------
+ * 状态机与排队/补发都在 drv_tx_slot，本文件只提供缓冲、格式化和传输层适配。
+ * 缓冲必须在 DMA_RAM；槽对象只被 CPU 访问，放普通 RAM 即可。 */
 
-typedef enum : uint8_t
-{
-    TL_TX_FREE = 0,  // 空闲：可借出
-    TL_TX_WRITE,     // 写入：TerminalLiteSend 正在格式化，未提交
-    TL_TX_SEND,      // 发送：已提交传输层，DMA 发送中
-    TL_TX_WAIT_SEND, // 等待发送：DMA 完成回调扫描补发
-} TerminalLiteTxState_e;
-
-typedef struct
-{
-    char data[TERMINAL_LITE_TX_BUF];      // DMA 直接读取，生命周期长
-    volatile TerminalLiteTxState_e state; // 槽状态
-    uint8_t len;                          // 本条有效长度（WAIT_SEND 补发时要用）
-} TerminalLiteTxBuf_s;
-
-static TerminalLiteTxBuf_s s_tx_pool[TERMINAL_LITE_TX_QUEUE_LEN] DMA_RAM;
-static volatile TerminalLiteTxBuf_s *s_tx_now = NULL; // 当前 DMA 发送中的槽（完成回调归还并补发下一个）
+static uint8_t s_tx_buff[TERMINAL_LITE_TX_QUEUE_LEN][TERMINAL_LITE_TX_BUF] DMA_RAM;
+static TxSlot_s s_tx_slots[TERMINAL_LITE_TX_QUEUE_LEN];
+static TxSlotPool_s s_tx_pool;
 
 /*------------- 行缓冲（Execute 私有） --------------*/
 
@@ -185,25 +171,6 @@ static int parse_float(const char *s, float *out)
 }
 
 /*============================================
- *              临界区（不依赖 FreeRTOS）
- *============================================*/
-
-/* 只用于与 DMA 完成/错误回调（ISR）互斥：保存 PRIMASK 以支持嵌套，
- * 退出时只在原本开着中断的情况下恢复中断。 */
-static inline uint32_t tl_enter_critical(void)
-{
-    uint32_t primask = __get_PRIMASK();
-    __disable_irq();
-    return primask;
-}
-
-static inline void tl_exit_critical(uint32_t primask)
-{
-    if (primask == 0U)
-        __enable_irq();
-}
-
-/*============================================
  *              RX：ISR 收字节
  *============================================*/
 
@@ -262,24 +229,22 @@ static const char *err_text(TerminalLiteErr_e err)
     }
 }
 
-// 前置：调用方已在临界区（task）或处于 ISR（TX 完成回调）
-// 启动 DMA 发送一个槽，成功才置 SEND/认领（调用方须已临界 / 处于 ISR，s_tx_now 不被并发改）
-static void tx_start_slot(TerminalLiteTxBuf_s *tb)
+/**
+ * @brief 启动一次 DMA 发送（drv_tx_slot 的传输层适配）
+ * @note 非阻塞：DMA 启动即返回，完成/错误由下面的回调转交槽池。
+ */
+static TxSlotStartResult_e TerminalLiteTxStart(void *transport, const uint8_t *buf, uint16_t len)
 {
-    /* 顺序刻意是"先启动、成功才认领"：置 SEND/s_tx_now 在前的话，一个早先挂起、此刻才被
-     * 响应的 UART 错误中断会在启动窗口里看到"本槽在途"，把尚未交给 DMA 的它当成被中止的
-     * 那次释放掉，而外层照旧把 DMA 启动了 —— 槽随即可能被别的发送借走、边发边被改写。
-     * 反过来没有窗口：DMA 完成中断至少要等一帧的传输时间，抢不到这两行之前。 */
-    if (USARTTransmit(&s_tl_uart, (const uint8_t *)tb->data, tb->len, BSP_DMA_MODE, 0) != BSP_OK)
+    BSP_Status_e ret = USARTTransmit((USARTInstance *)transport, buf, len, BSP_DMA_MODE, 0);
+    if (ret == BSP_OK)
     {
-        // DMA 启动失败：归还本槽；后续若有 WAIT_SEND 由下次完成回调补发
-        tb->state = TL_TX_FREE;
-        BSPLOG(&g_terminal_lite_log, LOG_LEVEL_WARNING, "DMA send start failed, dropped!");
-        return;
+        return TX_SLOT_START_OK;
     }
-
-    tb->state = TL_TX_SEND;
-    s_tx_now = tb;
+    if (ret == BSP_BUSY)
+    {
+        return TX_SLOT_START_BUSY;
+    }
+    return TX_SLOT_START_FAIL;
 }
 
 /* UART 错误回调（ISR 或**任务上下文**；后者来自 bsp 的发送卡死自恢复 USART_RecoverTx）：
@@ -288,47 +253,29 @@ static void tx_start_slot(TerminalLiteTxBuf_s *tb)
  * 若发送仍在途（gState 非 READY），错在接收侧，此刻不能释放 DMA 还在读的缓冲——
  * 那种残留由下一次发送完成回调兜底归还。
  *
- * 幂等：重复调用须无副作用（同一次错误可能既走硬件错误又走卡死恢复）。
- *
- * 这里刻意**不**补发 WAIT_SEND：本回调可能在 USARTTransmit 调用栈内被触发（卡死恢复），
- * 补发等于嵌套调用 USARTTransmit，外层失败后还会写 s_tx_now / 槽状态，会把内层刚启动的
- * 槽覆盖掉。积压的 WAIT_SEND 由下一次发送完成回调（TxCplt）带出；
- * 期间若再没有一次 TerminalLiteSend，这些槽就一直挂在 WAIT_SEND，直到下一次发送触发。 */
+ * 幂等由槽池保证：同一次错误可能既走硬件错误又走卡死恢复，重复调用无副作用。
+ * 释放后**不**补发排队槽（槽池同样刻意不补发：本回调可能在 USARTTransmit 调用栈内
+ * 被触发，补发等于嵌套启动；积压的排队帧由下一次完成回调带出）。 */
 static void TerminalLiteErrHandler(USARTInstance *instance, USART_ErrReason_e reason)
 {
     /* RX_STALLED 与本函数无关：接收停摆由 TerminalLiteExecute 的周期自检 + TerminalLiteRxRecover 处理 */
     if (reason == USART_ERR_RX_STALLED)
+    {
         return;
-
-    if (s_tx_now == NULL)
-        return;
+    }
 
     /* TX_ABORT：bsp 已强止发送并把 gState 复位；HW：错误位都在接收侧，
      * gState 非 READY 说明发送仍在途，不能归还 DMA 正在读的缓冲 */
-    if (reason == USART_ERR_TX_ABORT || (instance != NULL && instance->handle != NULL && instance->handle->gState == HAL_UART_STATE_READY))
-    {
-        s_tx_now->state = TL_TX_FREE;
-        s_tx_now = NULL;
-    }
+    bool tx_aborted = (reason == USART_ERR_TX_ABORT) || (instance != NULL && instance->handle != NULL && instance->handle->gState == HAL_UART_STATE_READY);
+
+    TxSlotOnError(&s_tx_pool, tx_aborted);
 }
 
-// DMA 发送完成回调（ISR 上下文）：归还发完的槽（SEND→FREE），并补发一个 WAIT_SEND
+// DMA 发送完成回调（ISR 上下文）：归还发完的槽并补发一个排队槽，细节全在 drv_tx_slot
 static void TerminalLiteTxCplt(USARTInstance *instance)
 {
     (void)instance;
-    if (s_tx_now != NULL)
-    {
-        s_tx_now->state = TL_TX_FREE;
-        s_tx_now = NULL;
-    }
-    for (uint8_t i = 0; i < TERMINAL_LITE_TX_QUEUE_LEN; i++)
-    {
-        if (s_tx_pool[i].state == TL_TX_WAIT_SEND)
-        {
-            tx_start_slot(&s_tx_pool[i]);
-            break;
-        }
-    }
+    TxSlotOnTxCplt(&s_tx_pool);
 }
 
 // 公开函数
@@ -350,16 +297,7 @@ void TerminalLiteSend(const char *fmt, ...)
     (void)USARTRecoverTxIfStuck(&s_tl_uart, 0);
 
     // 借空闲槽；WRITE 期间 DMA/完成回调不会碰该槽，格式化可在临界区外做
-    TerminalLiteTxBuf_s *tb = NULL;
-    for (uint8_t i = 0; i < TERMINAL_LITE_TX_QUEUE_LEN; i++)
-    {
-        if (s_tx_pool[i].state == TL_TX_FREE)
-        {
-            s_tx_pool[i].state = TL_TX_WRITE;
-            tb = &s_tx_pool[i];
-            break;
-        }
-    }
+    TxSlot_s *tb = TxSlotClaim(&s_tx_pool);
     if (tb == NULL)
     {
         BSPLOG(&g_terminal_lite_log, LOG_LEVEL_WARNING, "tx pool full, dropped");
@@ -369,24 +307,24 @@ void TerminalLiteSend(const char *fmt, ...)
     // 直接格式化进槽内缓冲（复用 lib_format，与日志同款；无 %f，浮点先定点化由 app echo 处理）
     va_list args;
     va_start(args, fmt);
-    int n = LibFormatV(tb->data, sizeof(tb->data), fmt, strlen(fmt), args);
+    int n = LibFormatV((char *)tb->buf, tb->cap, fmt, strlen(fmt), args);
     va_end(args);
     if (n <= 0)
     {
-        tb->state = TL_TX_FREE; // 无内容，归还
+        TxSlotRelease(tb); // 无内容，归还
         return;
     }
-    if (n >= (int)sizeof(tb->data))
-        n = (int)sizeof(tb->data) - 1; // LibFormatV 至多写满 cap-1
+    if (n >= (int)tb->cap)
+    {
+        n = (int)tb->cap - 1; // LibFormatV 至多写满 cap-1
+    }
     tb->len = (uint16_t)n;
 
-    // 提交：临界区内判空闲并启动，保证与完成回调互斥；忙则排队等补发
-    uint32_t primask = tl_enter_critical();
-    if (s_tx_now == NULL)
-        tx_start_slot(tb); // 空闲：直接发
-    else
-        tb->state = TL_TX_WAIT_SEND; // 忙：排队，完成回调扫描补发
-    tl_exit_critical(primask);
+    // 提交：槽池内部在临界区判在途并启动，保证与完成回调互斥；忙则排队等补发
+    if (TxSlotSubmit(tb) == TX_SLOT_SUBMIT_FAILED)
+    {
+        BSPLOG(&g_terminal_lite_log, LOG_LEVEL_WARNING, "DMA send start failed, dropped!");
+    }
 }
 
 /*============================================
@@ -560,6 +498,13 @@ void TerminalLiteInit(const TerminalLiteCmd_s *table, uint8_t cnt)
 {
     s_table = table;
     s_cnt = cnt;
+
+    /* 槽池先就绪再注册串口：回调一旦挂上就可能进来 */
+    TxSlotTransport_s transport = {
+        .start = TerminalLiteTxStart,
+        .transport = &s_tl_uart,
+    };
+    TxSlotPoolInit(&s_tx_pool, &transport, s_tx_slots, TERMINAL_LITE_TX_QUEUE_LEN, &s_tx_buff[0][0], TERMINAL_LITE_TX_BUF);
 
     USART_Config_s usart_cfg = {
         .uart_e = TERMINAL_LITE_UART,

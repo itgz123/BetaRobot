@@ -241,7 +241,7 @@ BSP_Status_e USARTRecoverRxIfStalled(USARTInstance *instance, uint32_t period_ms
  *
  * @note 为什么要有这个入口（而不是只靠 USARTTransmit 内部的复位）：IT/DMA 发送卡死后
  *       gState 停在 BUSY_TX，该次发送的 tx_callback 永远不会来。而各发送链的"发送中就绪判据"
- *       用的是自己的缓冲状态（bsp_log 找 SEND 槽、vofa 找 ACTIVE、terminal 找 s_tx_now、
+ *       用的是自己的缓冲状态（bsp_log 找 SEND 槽、vofa/terminal_lite 找 drv_tx_slot 的在途槽、
  *       media 直接看 gState），一旦有帧卡在"发送中"，它们**再也不会调用 USARTTransmit**
  *       （新帧只会被排进 WAIT_SEND/PENDING 队列，池满后连排都不排），于是 USARTTransmit
  *       里那段卡死复位永远没有机会执行 —— 链接永久静默，且看不到任何错误。

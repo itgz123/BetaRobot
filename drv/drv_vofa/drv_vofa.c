@@ -1,8 +1,8 @@
 /**
  * @file drv_vofa.c
  * @brief VOFA+ JustFloat 协议驱动实现（无任务，外部调用）
- *        使用三缓冲区 + 发送完成回调实现高频发送
- *        VofaSetChannel 直接写入发送缓冲区，减少一次数据复制
+ *        发送缓冲/排队/补发交给 drv_tx_slot，本文件只管协议帧
+ *        VofaSetChannel 直接写入当前写槽，减少一次数据复制
  */
 
 #include "drv_vofa.h"
@@ -11,12 +11,18 @@
 #include "bsp_log.h"
 #include "bsp_usart.h"
 #include "bsp_dwt.h"
+#include "drv_tx_slot.h"
 #include <string.h>
 
 /*------------- 发送缓冲区大小计算 --------------*/
 
 // 缓冲区 = (时间戳1 + 用户通道) * 4 + 帧尾4字节
 #define TX_BUFF_SIZE ((1 + VOFA_CHANNELS) * 4 + 4)
+
+// 槽数（三缓冲：一个在途 + 一个排队 + 一个可写；与原实现一致）
+#ifndef VOFA_TX_SLOT_COUNT
+#define VOFA_TX_SLOT_COUNT 3
+#endif
 
 /*------------- 联合体：float与uint8_t/uint32_t互转 --------------*/
 
@@ -25,15 +31,6 @@ typedef union
     float f;
     uint32_t u32;
 } FloatBytes_u;
-
-/*------------- 缓冲区状态枚举 --------------*/
-
-typedef enum : uint8_t
-{
-    BUFF_IDLE = 0, // 空闲，可写入或发送
-    BUFF_PENDING,  // 待发送，等待 DMA
-    BUFF_ACTIVE,   // DMA 正在发送
-} BuffState_e;
 
 /*------------- 静态实例定义 --------------*/
 
@@ -45,21 +42,17 @@ USART_INSTANCE_DEF(s_vofa_uart, 1);
 #endif                                                        // !DRV_VOFA_LOG_LIMIT
 LOG_INSTANCE_DEF(g_vofa_log, "drv_vofa", DRV_VOFA_LOG_LIMIT); // VOFA 日志实例
 
-// 三套发送缓冲区（放在 DMA_RAM 区域）
-static uint8_t s_tx_buff[3][TX_BUFF_SIZE] DMA_RAM = {0};
+// 发送槽池（缓冲放在 DMA_RAM 区域；槽对象只在 CPU 侧用，不必进 DMA_RAM）
+static uint8_t s_tx_buff[VOFA_TX_SLOT_COUNT][TX_BUFF_SIZE] DMA_RAM = {0};
+static TxSlot_s s_tx_slots[VOFA_TX_SLOT_COUNT];
+static TxSlotPool_s s_vofa_pool;
 
-// 缓冲区状态
-static volatile BuffState_e s_buff_state[3] = {BUFF_IDLE, BUFF_IDLE, BUFF_IDLE};
-
-// 当前写入缓冲区索引（必须为 IDLE 状态）
-static volatile uint8_t s_write_buff = 0;
-
-// 当前 DMA 使用的缓冲区索引
-static volatile uint8_t s_active_buff = 0;
+// 当前写槽（唯一写者：调用 VofaSetChannel/VofaSend 的任务）
+static TxSlot_s *s_write_slot = NULL;
 
 /* 孤儿 PENDING 槽回收计数（见 VofaSend 入口）：
- * 恒 0 = 发送链从未出现"有 PENDING 却无 ACTIVE"的空档；
- * 非 0 = 该空档发生过（错误回调释放了唯一在途槽、却没带走排队的 PENDING），
+ * 恒 0 = 发送链从未出现"有排队却无在途"的空档；
+ * 非 0 = 该空档发生过（错误回调释放了唯一在途槽、却没带走排队的槽），
  * 值就是被回收救回的槽数，是可观测的自愈凭据，勿删。 */
 volatile uint32_t g_vofa_pending_reclaim = 0;
 
@@ -71,85 +64,95 @@ volatile uint32_t g_vofa_pending_reclaim = 0;
 
 /*------------- 内部函数 --------------*/
 
-/* 是否已有缓冲区在 DMA 发送中：同一时刻至多一个，用作"能否直接发送"的就绪判据
- * （问自己的状态即可，无需查 uart 就绪；且无 ACTIVE 时必然没有传输在途，不会有完成回调抢跑） */
-static uint8_t VofaHasActive(void)
+/**
+ * @brief 启动一次 DMA 发送（drv_tx_slot 的传输层适配）
+ * @note 非阻塞：DMA 启动即返回，完成/错误由下面的回调转交槽池。
+ */
+static TxSlotStartResult_e VofaTxStart(void *transport, const uint8_t *buf, uint16_t len)
 {
-    for (uint8_t i = 0; i < 3; i++)
+    BSP_Status_e ret = USARTTransmit((USARTInstance *)transport, buf, len, BSP_DMA_MODE, 0);
+    if (ret == BSP_OK)
     {
-        if (s_buff_state[i] == BUFF_ACTIVE)
-        {
-            return 1;
-        }
+        return TX_SLOT_START_OK;
     }
-    return 0;
+    if (ret == BSP_BUSY)
+    {
+        return TX_SLOT_START_BUSY;
+    }
+    return TX_SLOT_START_FAIL;
 }
 
 /**
  * @brief DMA 发送完成回调
  * @param instance USART 实例
+ * @note 归还 slot 并补发一个排队槽，细节全在 drv_tx_slot。
  */
 static void VofaTxCpltCallback(USARTInstance *instance)
 {
-    // 当前 active 缓冲区变为空闲
-    s_buff_state[s_active_buff] = BUFF_IDLE;
-
-    // 查找 pending 缓冲区并发送
-    for (uint8_t i = 0; i < 3; i++)
-    {
-        if (s_buff_state[i] == BUFF_PENDING)
-        {
-            /* 与 VofaSend 同款：启动成功才置 ACTIVE/认领。提前置 ACTIVE 的话，一个早先挂起、
-             * 此刻才被响应的错误中断会看到"本槽在途"，把尚未交给 DMA 的它释放成 IDLE，
-             * 而外层照旧把 DMA 启动了（缓冲随即可能被 WriteBuff 复用）。 */
-            if (USARTTransmit(instance, s_tx_buff[i], TX_BUFF_SIZE, BSP_DMA_MODE, 0) != BSP_OK)
-            {
-                // 启动失败：归还本槽（下一次完成回调或新的 VofaSend 会重新调度）
-                s_buff_state[i] = BUFF_IDLE;
-            }
-            else
-            {
-                s_buff_state[i] = BUFF_ACTIVE;
-                s_active_buff = i;
-            }
-            return;
-        }
-    }
+    (void)instance;
+    TxSlotOnTxCplt(&s_vofa_pool);
 }
 
 /* UART 错误回调（ISR 或**任务上下文**；后者来自 bsp 的发送卡死自恢复 USART_RecoverTx）：
  * 若本次发送已被中止（HAL/Abort 已把状态置回 READY），不会再有待归还的完成回调，
- * 须释放缓冲，否则它永久停在 ACTIVE、反复出错会耗光三缓冲。
+ * 须释放槽，否则它永久停在 SEND、反复出错会耗光槽池。
  * 若发送仍在途（gState 非 READY），错在接收侧，此刻不能释放 DMA 还在读的缓冲——
  * 那种残留由下一次发送完成回调兜底归还。
  *
- * 幂等：重复调用须无副作用（同一次错误可能既走硬件错误又走卡死恢复）。
- *
- * 这里刻意**不**补发 PENDING：本回调可能在 USARTTransmit 调用栈内被触发（卡死恢复），
- * 补发等于嵌套调用 USARTTransmit，外层失败后还会写 s_buff_state / s_active_buff，
- * 会把内层刚启动的槽状态覆盖掉。积压的 PENDING 由下一次发送完成回调（TxCplt）带出；
- * 期间若再没有一次 VofaSend，这些槽就一直挂在 PENDING，直到下一帧触发发送。 */
+ * 幂等由槽池保证：同一次错误可能既走硬件错误又走卡死恢复，重复调用无副作用。
+ * 释放后**不**补发排队槽（槽池同样刻意不补发：本回调可能在 USARTTransmit 调用栈内
+ * 被触发，补发等于嵌套启动；积压的排队帧由下一次完成回调带出）。 */
 static void VofaErrHandler(USARTInstance *instance, USART_ErrReason_e reason)
 {
     /* RX_STALLED 与本模块无关（VOFA 只发不收） */
     if (reason == USART_ERR_RX_STALLED)
+    {
         return;
-
-    if (s_buff_state[s_active_buff] != BUFF_ACTIVE)
-        return;
+    }
 
     /* TX_ABORT：bsp 已强止发送并把 gState 复位；HW：错误位都在接收侧，
      * gState 非 READY 说明发送仍在途，不能归还 DMA 正在读的缓冲 */
-    if (reason == USART_ERR_TX_ABORT || (instance != NULL && instance->handle != NULL && instance->handle->gState == HAL_UART_STATE_READY))
+    bool tx_aborted = (reason == USART_ERR_TX_ABORT) || (instance != NULL && instance->handle != NULL && instance->handle->gState == HAL_UART_STATE_READY);
+
+    TxSlotOnError(&s_vofa_pool, tx_aborted);
+}
+
+/**
+ * @brief 确保手上有一个写槽（池满时先回收孤儿再借）
+ * @return true=有写槽可写 false=池满
+ * @note 单写者调用（SetChannel/VofaSend 所在任务）。孤儿 = 排队却无在途的槽：
+ *       没有在途就不会再有完成回调去补发它们，占着槽只会让后面借不到。
+ */
+static bool VofaEnsureWriteSlot(void)
+{
+    if (s_write_slot != NULL)
     {
-        s_buff_state[s_active_buff] = BUFF_IDLE;
+        return true;
     }
+
+    s_write_slot = TxSlotClaim(&s_vofa_pool);
+    if (s_write_slot == NULL)
+    {
+        g_vofa_pending_reclaim += TxSlotReclaimOrphans(&s_vofa_pool);
+        s_write_slot = TxSlotClaim(&s_vofa_pool);
+    }
+
+    return s_write_slot != NULL;
 }
 
 /*------------- 实现函数 --------------*/
 
 void VofaInit(void)
 {
+    /* 槽池必须先就绪再注册串口：回调一旦挂上就可能进来 */
+    TxSlotTransport_s transport = {
+        .start = VofaTxStart,
+        .transport = &s_vofa_uart,
+    };
+    TxSlotPoolInit(&s_vofa_pool, &transport, s_tx_slots, VOFA_TX_SLOT_COUNT, &s_tx_buff[0][0], TX_BUFF_SIZE);
+
+    /* 预借第一帧的写槽，使上电后的 VofaSetChannel 立刻有效 */
+    s_write_slot = TxSlotClaim(&s_vofa_pool);
 
     USART_Config_s usart_cfg = {
         .uart_e = VOFA_UART,
@@ -169,121 +172,74 @@ void VofaInit(void)
         return;
     }
 
-    BSPLOG(&g_vofa_log, LOG_LEVEL_INFO, "Initialized, UART: %d, Channels: %d (ch0=timestamp, ch1~%d=user), Triple-buffer DMA", VOFA_UART, VOFA_CHANNELS,
-           VOFA_CHANNELS);
+    BSPLOG(&g_vofa_log, LOG_LEVEL_INFO, "Initialized, UART: %d, Channels: %d (ch0=timestamp, ch1~%d=user), %d-slot DMA", VOFA_UART, VOFA_CHANNELS,
+           VOFA_CHANNELS, VOFA_TX_SLOT_COUNT);
 }
 
 void VofaSetChannel(uint8_t ch, float value)
 {
     // ch=0 为时间戳通道，用户不能设置
     if (ch == 0 || ch > VOFA_CHANNELS)
-        return;
-
-    // 检查写入缓冲区是否为空闲状态
-    if (s_buff_state[s_write_buff] != BUFF_IDLE)
     {
-        // 缓冲区正在使用，写入无效
+        return;
+    }
+
+    /* 本周期第一个通道写入时就地借写槽：池满则本次丢弃，整帧都不会发（见 VofaSend 入口）。
+     * 放在这里而不是 Send 里，是为了让"池刚腾出空位"的那一帧能从第一个通道开始写完整。 */
+    if (!VofaEnsureWriteSlot())
+    {
         return;
     }
 
     // 使用联合体直接写入（单次字写入，避免 memcpy 和逐字节赋值）
     FloatBytes_u fb = {.f = value};
-    *(uint32_t *)&s_tx_buff[s_write_buff][4 + (ch - 1) * 4] = fb.u32;
+    *(uint32_t *)&s_write_slot->buf[4 + (ch - 1) * 4] = fb.u32;
 }
 
 void VofaSend(void)
 {
-    /* 0. 发送卡死自检（必须早于下面那行"时间戳写入"和任何状态判断）：
-     * 本模块的发送链一旦卡住就再也调用不到 USARTTransmit —— 在途槽永远停在 ACTIVE、
-     * 新帧全部转 PENDING、三缓冲占满后连 PENDING 都不再产生，整条链静默。
-     * 只有每帧必经的这里能把状态复位、并借 err_callback 释放那个 ACTIVE 槽。
+    /* 0. 发送卡死自检（必须早于下面任何状态判断）：
+     * 本模块的发送链一旦卡住就再也调用不到 USARTTransmit —— 在途槽永远停在 SEND、
+     * 新帧全部转 WAIT_SEND、槽池占满后连借都借不到，整条链静默。
+     * 只有每帧必经的这里能把状态复位、并借 err_callback 释放那个 SEND 槽。
      * ISR 里调用安全（bsp 入口直接返回 BSP_BUSY）；空闲时只做一次 DWT 读。 */
     (void)USARTRecoverTxIfStuck(&s_vofa_uart, 0);
 
-    /* 写缓冲必须真是空闲的：第 4 步在三缓冲全非 IDLE 时会**保留原索引**，而那个槽可能
-     * 正被 DMA 读（ACTIVE）或已排队等发送（PENDING）。往在途 DMA 缓冲里写，或者改写一个
-     * 已排队帧的时间戳（通道数据还是旧周期的、时间戳却是新的），都会让遥测流自相矛盾、
-     * 而且从外面完全看不出来。这里直接丢弃本帧：控制周期（1ms）远快于遥测一帧（~4ms@115200），
-     * 少发一帧不影响判读，冒险写坏一帧才要命。VofaSetChannel 一直就有同样的检查。 */
-    if (s_buff_state[s_write_buff] != BUFF_IDLE)
+    /* 写槽必须真是本周期借到的那块：上一帧提交后预借失败（池满）时它是 NULL，
+     * 本周期 VofaSetChannel 也全都丢了 —— 通道数据不完整，本帧必须丢弃，
+     * 否则会发出"旧通道数据配新时间戳"的帧，从外面完全看不出来。
+     * 丢弃归丢弃，写槽必须在这里补借回来：入口只认 s_write_slot，别处没有谁会去借，
+     * 不补的话一次池满就会让 VofaSend 永久早退（后续 SetChannel 也永远无效）。 */
+    if (s_write_slot == NULL)
     {
-        /* 唯一的例外：写槽停在 PENDING、而模块里没有任何 ACTIVE —— 没有在途发送，也就
-         * 没有 TxCplt 再来把它升成 ACTIVE（VofaErrHandler 只释放 ACTIVE 槽，搁死的 PENDING
-         * 没人管；PENDING 的来源见下面第 3 步的 BUSY 分支）。这种槽就是孤儿，当 IDLE 用；
-         * 有 ACTIVE 时绝不能动 —— 它可能正排在那笔完成后的补发队列里，且这个槽不会被 DMA 读
-         * （PENDING 从未交给传输层），回收到 IDLE 是安全的。 */
-        if (s_buff_state[s_write_buff] == BUFF_PENDING && !VofaHasActive())
-        {
-            s_buff_state[s_write_buff] = BUFF_IDLE;
-            g_vofa_pending_reclaim++;
-        }
-
-        /* 回收与否都**丢弃本帧**，别接着往下写：回收出来的槽里还是上一周期（甚至更早）的
-         * 通道值 —— 本周期的 VofaSetChannel 见它非 IDLE 已经全部丢弃 —— 继续写就会发出
-         * 上面刚否掉的那种帧：旧通道数据配新时间戳。留着当 IDLE，下个周期 SetChannel 会
-         * 填进全新一组值，那时才是自洽的一帧。 */
+        (void)VofaEnsureWriteSlot();
         return;
     }
 
     // 1. 填充时间戳到写入缓冲区（单次字写入）
     FloatBytes_u ts = {.f = (float)DWT_GetTimeUs()};
-    *(uint32_t *)s_tx_buff[s_write_buff] = ts.u32;
+    *(uint32_t *)s_write_slot->buf = ts.u32;
 
     // 2. 填充帧尾
-    uint8_t *p = &s_tx_buff[s_write_buff][4 + VOFA_CHANNELS * 4];
+    uint8_t *p = &s_write_slot->buf[4 + VOFA_CHANNELS * 4];
     *p++ = VOFA_JUST_FLOAT_FRAME_END_0;
     *p++ = VOFA_JUST_FLOAT_FRAME_END_1;
     *p++ = VOFA_JUST_FLOAT_FRAME_END_2;
     *p++ = VOFA_JUST_FLOAT_FRAME_END_3;
 
-    // 3. 标记写入缓冲区状态并发送
-    if (VofaHasActive())
+    // 3. 提交：传输层空闲则直接启动，忙则排队（槽池内部判在途 + 启动，与完成回调互斥）
+    s_write_slot->len = TX_BUFF_SIZE;
+    if (TxSlotSubmit(s_write_slot) == TX_SLOT_SUBMIT_FAILED)
     {
-        // DMA 忙（本帧完成回调未到），标记为待发送，由完成回调补发
-        s_buff_state[s_write_buff] = BUFF_PENDING;
-    }
-    else
-    {
-        /* 无在途发送：直接启动 —— 无 ACTIVE 就不会有完成回调抢跑（TxCplt 只由在途传输产生）。
-         * 但无 ACTIVE **不**蕴含无 PENDING：下面的 BSP_BUSY 分支正会在无 ACTIVE 时留下
-         * PENDING（bsp 的发送契约就是"忙即 BSP_BUSY、上层排队重试"，故这条是正常路径而非兜底）。
-         * 那种槽不会再有 TxCplt 去把它升成 ACTIVE，属孤儿：由 VofaSend 入口回收到 IDLE
-         * （那一帧顺带丢弃，理由见入口注释），链路由下一个周期的直发重新接上，本分支不负责它。
-         * 顺序刻意是"先启动、成功才标 ACTIVE"：USARTTransmit 内部可能触发 err_callback
-         * （发送卡死自恢复），若提前标 ACTIVE，那个回调会把**尚未交给 DMA** 的本帧当成
-         * 被中止的那次一并释放，与下面的成功分支打架；不标则它只认 ACTIVE、碰不到本帧。
-         * 反方向没有窗口：DMA 完成中断至少要等一帧的传输时间，抢不到这两行之前。 */
-        BSP_Status_e ret = USARTTransmit(&s_vofa_uart, s_tx_buff[s_write_buff], TX_BUFF_SIZE, BSP_DMA_MODE, 0);
-
-        if (ret == BSP_OK)
-        {
-            s_buff_state[s_write_buff] = BUFF_ACTIVE;
-            s_active_buff = s_write_buff;
-        }
-        else if (ret == BSP_BUSY)
-        {
-            s_buff_state[s_write_buff] = BUFF_PENDING; // 外设仍忙：排队
-        }
-        else
-        {
-            s_buff_state[s_write_buff] = BUFF_IDLE; // 启动失败：归还本帧缓冲（丢弃本帧）
-            BSPLOG(&g_vofa_log, LOG_LEVEL_WARNING, "DMA send start failed (%d), frame dropped!", (int)ret);
-        }
+        BSPLOG(&g_vofa_log, LOG_LEVEL_WARNING, "DMA send start failed, frame dropped!");
     }
 
-    // 4. 切换到下一个空闲缓冲区作为写入缓冲区
-    for (uint8_t i = 0; i < 3; i++)
+    // 4. 预借下一帧的写槽；池满就留 NULL，下次 VofaSend 的入口会丢弃并尝试回收
+    s_write_slot = TxSlotClaim(&s_vofa_pool);
+    if (s_write_slot == NULL)
     {
-        if (s_buff_state[i] == BUFF_IDLE)
-        {
-            s_write_buff = i;
-            return;
-        }
+        BSPLOG(&g_vofa_log, LOG_LEVEL_WARNING, "No idle buffer, VofaSend/SetChannel will be ignored until buffer available!");
     }
-    /* 没有空闲缓冲区，保持当前索引 —— 该槽当前非 IDLE（PENDING/ACTIVE），
-     * 下次 VofaSend 的入口检查会丢弃当帧、VofaSetChannel 也会因状态检查失效，
-     * 直到某个槽被完成回调释放。这两个丢弃都是有意的（见 VofaSend 入口注释）。 */
-    BSPLOG(&g_vofa_log, LOG_LEVEL_WARNING, "No idle buffer, VofaSend/SetChannel will be ignored until buffer available!");
 }
 
 #else // !(defined(VOFA_USED)) && (defined(VOFA_UART))
