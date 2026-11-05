@@ -100,6 +100,8 @@ int8_t PlannerInit(PlannerInstance *inst, const Planner_Init_Config_s *cfg);
  * @note 设定速度 = clamp(target_cmd × max_speed, ±max_speed)，作为"设定速度"输出不变。
  * @note 设定位置 = 内部累加器 += 设定速度×dt，再按位置模式处理并写回累加器：
  *       LIMITED 写回限幅值（防积分饱和），WRAP 写回归一化值（防多圈发散/精度丢失）。
+ * @note LIMITED 模式下若位置已到限位且设定速度仍指向界外，本拍输出的设定速度与设定加速度
+ *       会被清零（避免执行层持续顶着机械限位）；速度符号一反转立即恢复正常输出。
  *       不读 current_position 做外推；仅当 in->seed=1 或 position_valid=0（首次调用）时，
  *       用 current_position 重置累加器。
  * @note 相邻两次调用间隔超过 PLANNER_DT_MAX_S（50ms，见 drv_planner.c）时，本次积分按该值

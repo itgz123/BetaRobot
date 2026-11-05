@@ -108,6 +108,22 @@ void PlannerCalculate(PlannerInstance *inst, const PlannerInput_s *in, PlannerOu
     // WRAP 防多圈发散/精度丢失（累加器恒在 [min, max) 内）
     inst->ref_position = ref_pos;
 
+    /* 顶到位置限位时把外向速度/加速度清零：位置目标不越界，但下游 MIT 的
+     * kd*(ref_vel - 实测速度) 在摇杆打满、轴已停住时仍会把轴持续往限位上顶。
+     * 只清"继续向外"的那一半：ref_speed 符号一反转（摇杆反向）就立刻恢复，
+     * 不会把已到边的轴锁死。ref_acc 是同一拍按 ref_speed 算的惯量前馈，必须联动清零，
+     * 否则速度已停、前馈还在往外推。
+     * 仅 LIMITED 模式：WRAP 的 ±π 是环绕点不是机械止点，到边仍要继续转。 */
+    if ((cfg->position_mode == PLANNER_POS_LIMITED) && (cfg->pos_limit_min < cfg->pos_limit_max))
+    {
+        uint8_t push_out = ((ref_pos <= cfg->pos_limit_min) && (ref_speed < 0.0f)) || ((ref_pos >= cfg->pos_limit_max) && (ref_speed > 0.0f));
+        if (push_out)
+        {
+            ref_speed = 0.0f;
+            ref_acc = 0.0f;
+        }
+    }
+
     out->position = ref_pos;
     out->speed = ref_speed;
     out->acceleration = ref_acc;
