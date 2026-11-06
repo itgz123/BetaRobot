@@ -108,6 +108,9 @@ typedef struct
     float position;     // 外部位置设定 (rad)
     float speed;        // 外部速度设定 (rad/s)
     float acceleration; // 外部加速度设定 (rad/s²)
-} AxisMitLiteRef_s;
+} AxisLiteRef_s;
+
+/* 旧名兼容：drv_axis_mit_lite 及已有 app 代码仍使用 AxisMitLiteRef_s */
+typedef AxisLiteRef_s AxisMitLiteRef_s;
 
 #endif // !DRV_AXIS_LITE_DEF_H

@@ -13,6 +13,7 @@ set(MODULE_SOURCES
     drv_motor/drv_djimotor_broadcast/drv_djimotor_broadcast.c
     drv_motor/drv_lkmotor_broadcast/drv_lkmotor_broadcast.c
     drv_axis_lite/drv_axis_mit_lite.c
+    drv_axis_lite/drv_axis_pid_lite.c
     drv_super_cap_yq2027/drv_super_cap_yq2027.c
     drv_referee2026/public/referee2026_proto.c
     # referee2026：模块根放暴露接口（四条链路共用的 Register/Config/Send + 收发内核），
