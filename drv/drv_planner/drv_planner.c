@@ -12,6 +12,15 @@
 /* 积分保护：相邻两次调用间隔超过该值时按该值积分，避免位置跳变 */
 #define PLANNER_DT_MAX_S (0.05f)
 
+/* 速度误差 → 加速度前馈的默认增益 (1/s)。
+ * 旧实现用 1/dt：500 Hz 下是 500 1/s，实测速度的编码器量化/测速噪声（±0.04 rad/s）
+ * 会被放大成 ±20 rad/s² 并顶到 max_acc，再经轴侧 J·a 变成 ±0.135 Nm 反作用于轴，
+ * 形成 44 Hz 自激极限环（ig/v_e.csv 实测）。
+ * 有限增益下速度环等效阻尼 J·K：K=20 时 0.27 Nm/(rad/s)，
+ * 穿越频率 ≈ K + kv/J ≈ 42 rad/s（6.7 Hz），对几 ms 的 CAN/任务延迟仍有足够相位裕度；
+ * 44 Hz 处环增益 J·K/(Jω) ≈ 0.15 << 1，不会自激。 */
+#define PLANNER_ACC_ERROR_GAIN_DEFAULT (20.0f)
+
 int8_t PlannerInit(PlannerInstance *inst, const Planner_Init_Config_s *cfg)
 {
     if (inst == NULL || cfg == NULL)
@@ -63,13 +72,13 @@ void PlannerCalculate(PlannerInstance *inst, const PlannerInput_s *in, PlannerOu
     // ======== 2. 设定速度：通道值(-1~1) × max_speed = 目标速度，限幅到 ±max_speed ========
     float ref_speed = Lib_Math_Clamp(in->target_cmd * cfg->max_speed, -cfg->max_speed, cfg->max_speed);
 
-    // ======== 3. 设定加速度：当前加速度 + 速度差纠正，限幅到 ±max_acc ========
-    // 稳态（设定速度==当前速度）时输出当前加速度；有速度差时叠加纠正项
-    float ref_acc = in->current_acceleration;
-    if (dt > 0.0f)
-    {
-        ref_acc += (ref_speed - in->current_speed) / dt;
-    }
+    // ======== 3. 设定加速度：当前加速度 + 速度差 × 有限增益，限幅到 ±max_acc ========
+    // 稳态（设定速度==当前速度）时输出当前加速度；有速度差时叠加纠正项。
+    // ⚠ 这里不能用 (ref_speed - current_speed)/dt：1/dt 在 500 Hz 下等于 500 1/s，
+    //   实测速度的 ±0.04 rad/s 抖动会变成 ±20 rad/s²，顶到 max_acc 后经惯量前馈
+    //   反过来驱动轴，形成 44 Hz 自激（见 ig/v_e.csv 与 PLANNER_ACC_ERROR_GAIN_DEFAULT）。
+    const float acc_gain = (cfg->acc_error_gain > 0.0f) ? cfg->acc_error_gain : PLANNER_ACC_ERROR_GAIN_DEFAULT;
+    float ref_acc = in->current_acceleration + acc_gain * (ref_speed - in->current_speed);
     ref_acc = Lib_Math_Clamp(ref_acc, -cfg->max_acc, cfg->max_acc);
 
     // ======== 4. 设定位置：内部累加器开环积分（不读反馈），再按位置模式处理 ========
