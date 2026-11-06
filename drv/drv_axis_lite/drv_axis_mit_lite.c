@@ -27,7 +27,14 @@ int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, const AxisMitLite_Init_Config_
     memset(inst, 0, sizeof(AxisMitLiteInstance));
     inst->stage = cfg->stage;
     inst->delay_ms = cfg->delay_ms;
-    inst->vofa_enable = cfg->vofa_enable; // 该实例是否写 VOFA 调试通道（多轴仅一个置 1）
+    inst->vofa_enable = cfg->vofa_enable; // 该实例是否写 VOFA 调试通道
+    /* 起始通道：0 按 1 处理；上限收敛到 244，保证 base+11 不超出 uint8_t 范围。
+     * 超出 VOFA_CHANNELS 的部分由 VofaSetChannel 自动丢弃，不会越界写缓冲。 */
+    inst->vofa_base_ch = (cfg->vofa_base_ch == 0) ? 1 : cfg->vofa_base_ch;
+    if (inst->vofa_base_ch > (uint8_t)(UINT8_MAX - 11))
+    {
+        inst->vofa_base_ch = (uint8_t)(UINT8_MAX - 11);
+    }
     inst->params = cfg->params;
 
     // 初始化扫频参数
@@ -306,23 +313,25 @@ float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const AxisLiteState_s *sta
 vofa_output:
     if (inst->vofa_enable)
     {
-        /* CH1-CH3: 测量值 */
-        VofaSetChannel(1, angle);                // CH1: 反馈位置 (rad)
-        VofaSetChannel(2, speed);                // CH2: 反馈速度 (rad/s)
-        VofaSetChannel(3, state->torque * gear); // CH3: 轴侧实际力矩 (Nm)
-        /* CH4-CH6: 设定值 */
-        VofaSetChannel(4, ref_pos); // CH4: 位置设定值 (rad)
-        VofaSetChannel(5, ref_vel); // CH5: 速度设定值 (rad/s)
-        VofaSetChannel(6, ref_acc); // CH6: 加速度设定值 (rad/s^2)
-        /* CH7-CH9: 前馈分量 */
-        VofaSetChannel(7, inst->params.gravity_ff);  // CH7: 重力前馈 (Nm)
-        VofaSetChannel(8, inst->params.inertia_ff);  // CH8: 惯量前馈 (Nm)
-        VofaSetChannel(9, inst->params.friction_ff); // CH9: 摩擦前馈 / chirp (Nm)
-        /* CH10-CH11: MIT 输出 */
-        VofaSetChannel(10, inst->mit.pos_output);   // CH10: MIT 位置环输出 (Nm)
-        VofaSetChannel(11, inst->mit.speed_output); // CH11: MIT 速度环输出 (Nm)
-        /* CH12: setref值，最终发送给电机的电流/力矩值 */
-        VofaSetChannel(12, setref);
+        /* 起始通道 B = vofa_base_ch，多轴实例各自偏移，一帧即可发多轴数据 */
+        uint8_t b = inst->vofa_base_ch;
+        /* B+0 ~ B+2: 测量值 */
+        VofaSetChannel((uint8_t)(b + 0), angle);                // 反馈位置 (rad)
+        VofaSetChannel((uint8_t)(b + 1), speed);                // 反馈速度 (rad/s)
+        VofaSetChannel((uint8_t)(b + 2), state->torque * gear); // 轴侧实际力矩 (Nm)
+        /* B+3 ~ B+5: 设定值 */
+        VofaSetChannel((uint8_t)(b + 3), ref_pos); // 位置设定值 (rad)
+        VofaSetChannel((uint8_t)(b + 4), ref_vel); // 速度设定值 (rad/s)
+        VofaSetChannel((uint8_t)(b + 5), ref_acc); // 加速度设定值 (rad/s^2)
+        /* B+6 ~ B+8: 前馈分量 */
+        VofaSetChannel((uint8_t)(b + 6), inst->params.gravity_ff);  // 重力前馈 (Nm)
+        VofaSetChannel((uint8_t)(b + 7), inst->params.inertia_ff);  // 惯量前馈 (Nm)
+        VofaSetChannel((uint8_t)(b + 8), inst->params.friction_ff); // 摩擦前馈 / chirp (Nm)
+        /* B+9 ~ B+10: MIT 输出 */
+        VofaSetChannel((uint8_t)(b + 9), inst->mit.pos_output);    // MIT 位置环输出 (Nm)
+        VofaSetChannel((uint8_t)(b + 10), inst->mit.speed_output); // MIT 速度环输出 (Nm)
+        /* B+11: setref值，最终发送给电机的电流/力矩值 */
+        VofaSetChannel((uint8_t)(b + 11), setref);
     }
 
     return setref;

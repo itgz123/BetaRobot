@@ -38,7 +38,8 @@ typedef struct
     uint32_t delay_ms;                  // 延时时间 (ms)
     uint64_t init_time_us;              // 初始化时间戳 (us)
     uint8_t init_flag;                  // init_time_us 初始化标志，0=未初始化
-    uint8_t vofa_enable;                // VOFA 调试输出使能，1=写 12 通道（多轴实例仅一个置 1）
+    uint8_t vofa_enable;                // VOFA 调试输出使能，1=写 12 通道（多轴实例各自配置不同起始通道）
+    uint8_t vofa_base_ch;               // VOFA 起始通道，占用 base_ch ~ base_ch+11，最小为 1
     float tune_base_angle;              // TUNE 阶段正弦参考基准角度 (rad)，延时结束时记录
     float error_normalize_range;        // 位置误差归一化范围 (rad)，0=不启用
     uint8_t error_normalize_enable;     // 归一化使能
@@ -52,7 +53,9 @@ typedef struct
 {
     AxisLiteStage_e stage;              // 控制阶段
     uint32_t delay_ms;                  // 延时时间 (ms)
-    uint8_t vofa_enable;                // VOFA 调试输出使能，1=写 12 通道（多轴实例仅一个置 1）
+    uint8_t vofa_enable;                // VOFA 调试输出使能，1=写 12 通道
+    uint8_t vofa_base_ch;               // VOFA 起始通道，占用 base_ch ~ base_ch+11，0 按 1 处理
+                                        // 多个轴同时输出时分别设 1、13、25……即可一帧发多轴数据
     AxisLiteParams_s params;            // 轴参数
     SineParam_s sine_params;            // 正弦参数
     ChirpParam_s chirp_params;          // 扫频参数
@@ -87,27 +90,29 @@ int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, const AxisMitLite_Init_Config_
  * @note 反馈数据坐标系由 app 决定：state 应填与 params.gear_ratio 匹配的电机侧数据，
  *       内部按 angle = angle/gear 换算到输出侧；若 app 直接给输出侧数据请将 gear_ratio 置 1
  * @note setref =（重力前馈 + 惯量前馈 + 摩擦前馈） + （kp * 位置误差 + kd * 速度误差）
- * @note 当实例 vofa_enable 置 1 时，自动设定 12 个 VOFA 调试通道：
- *       CH1-CH3: 反馈量（轴侧，经 gear_ratio 转换）
- *       ch1:  position       — 反馈位置 (rad)
- *       ch2:  speed          — 反馈速度 (rad/s)
- *       ch3:  torque          — 轴侧实际力矩 (Nm)
+ * @note 当实例 vofa_enable 置 1 时，自动设定 12 个 VOFA 调试通道，
+ *       起始通道由 vofa_base_ch 指定（记为 B，默认 1）：
+ *       CH(B+0)~CH(B+2): 反馈量（轴侧，经 gear_ratio 转换）
+ *       B+0:  position       — 反馈位置 (rad)
+ *       B+1:  speed          — 反馈速度 (rad/s)
+ *       B+2:  torque         — 轴侧实际力矩 (Nm)
  *
- *       CH4-CH6: 设定值
- *       ch4:  ref_pos        — 位置设定值 (rad)
- *       ch5:  ref_vel        — 速度设定值 (rad/s)
- *       ch6:  ref_acc        — 加速度设定值 (rad/s^2)
+ *       CH(B+3)~CH(B+5): 设定值
+ *       B+3:  ref_pos        — 位置设定值 (rad)
+ *       B+4:  ref_vel        — 速度设定值 (rad/s)
+ *       B+5:  ref_acc        — 加速度设定值 (rad/s^2)
  *
- *       CH7-CH9: 前馈分量
- *       ch7:  gravity_ff     — 重力前馈 (Nm)
- *       ch8:  inertia_ff     — 惯量前馈 (Nm)
- *       ch9:  friction_ff    — 摩擦前馈 / chirp (Nm)
+ *       CH(B+6)~CH(B+8): 前馈分量
+ *       B+6:  gravity_ff     — 重力前馈 (Nm)
+ *       B+7:  inertia_ff     — 惯量前馈 (Nm)
+ *       B+8:  friction_ff    — 摩擦前馈 / chirp (Nm)
  *
- *       CH10-CH11: MIT 控制器 PD 输出
- *       ch10: pos_output     — 位置环输出 (Nm)
- *       ch11: speed_output   — 速度环输出 (Nm)
+ *       CH(B+9)~CH(B+10): MIT 控制器 PD 输出
+ *       B+9:  pos_output     — 位置环输出 (Nm)
+ *       B+10: speed_output   — 速度环输出 (Nm)
  *
- *       ch12: setref值，最终发送给电机的力矩值 (Nm)
+ *       CH(B+11): setref值，最终发送给电机的力矩值 (Nm)
+ * @note 超出 VOFA_CHANNELS 的通道由 VofaSetChannel 自动忽略，不会越界写缓冲
  */
 float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const AxisLiteState_s *state, const AxisMitLiteRef_s *ref);
 
