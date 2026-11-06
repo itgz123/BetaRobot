@@ -71,6 +71,7 @@ static void MotorProcessFeedback(DrvlibMotorInstance *inst, const DrvlibMotorFee
     {
         memset(inst->pid_seeded, 0, sizeof(inst->pid_seeded));
         inst->lpf_seeded = 0;
+        inst->speed_ma_seeded = 0;
     }
 
     int32_t wraps = 0;
@@ -118,7 +119,19 @@ static void MotorProcessFeedback(DrvlibMotorInstance *inst, const DrvlibMotorFee
     {
         speed = fb->speed;
     }
-    inst->speed_lpf_state = speed;
+    inst->speed_lpf_state = speed; /* 存 IIR 输出，MA 只作用于对外速度 */
+
+    /* 2 点滑动平均：H(z)=0.5(1+z^-1)，零点在 z=-1 即 fs/2。
+     * 电机静止时编码器在两个相邻计数间抖动，内部测速把它变成严格每拍交替的 ±0.04 rad/s；
+     * 一阶 RC 在 fs/2 只衰减一半，这里正好把这个 Nyquist 分量消掉。
+     * 状态用 IIR 输出（不是 MA 输出），避免两级滤波互相污染。 */
+    if (cfg->speed_ma_enable)
+    {
+        float ma = inst->speed_ma_seeded ? 0.5f * (speed + inst->speed_ma_prev) : speed;
+        inst->speed_ma_prev = speed;
+        inst->speed_ma_seeded = 1;
+        speed = ma;
+    }
 
     float current;
     if (can_filter && cfg->current_lpf_rc > 0.0f)
@@ -334,9 +347,11 @@ int8_t DrvlibMotorConfig(DrvlibMotorInstance *inst, const DrvlibMotor_Config_s *
     inst->position_cnt = 0;
     inst->position_continuous = 0.0;
     inst->speed_lpf_state = 0.0f;
+    inst->speed_ma_prev = 0.0f;
     inst->current_lpf_state = 0.0f;
     inst->feedback_last_ts = 0;
     inst->lpf_seeded = 0;
+    inst->speed_ma_seeded = 0;
     inst->has_last = 0;
     memset(inst->pid_seeded, 0, sizeof(inst->pid_seeded));
     memset(&inst->data, 0, sizeof(inst->data));
@@ -432,11 +447,13 @@ void DrvlibMotorReset(DrvlibMotorInstance *inst)
     /* 下次某环第一次计算时重新播种 last_measure（见 MotorSeedStage） */
     memset(inst->pid_seeded, 0, sizeof(inst->pid_seeded));
     inst->speed_lpf_state = 0.0f;
+    inst->speed_ma_prev = 0.0f;
     inst->current_lpf_state = 0.0f;
     /* 清帧时间戳：Reset 后即使 app 又喂了同一帧，也要重新处理；
      * 清播种标志：下一帧用原始值播种低通，而不是从 0 爬。 */
     inst->feedback_last_ts = 0;
     inst->lpf_seeded = 0;
+    inst->speed_ma_seeded = 0;
 }
 
 #endif /* DRVLIB_MOTOR_USED && LIB_PID_USED && LIB_MATH_USED */

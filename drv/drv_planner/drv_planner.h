@@ -8,7 +8,10 @@
  *       输出设定位置/设定速度/设定加速度，供 AxisMitLiteCalculate 等控制器使用。
  * @note 位置模式与电机驱动 MotorPositionMode_e 对应（限幅/环绕/连续），
  *       位置限幅、最大速度、最大加速度在初始化时写入。
- * @note 加速度设定 = 当前加速度 + (设定速度 - 当前速度)/dt，并限幅到 ±max_acc；
+ * @note 加速度设定 = 当前加速度 + acc_error_gain*(设定速度 - 当前速度)，并限幅到 ±max_acc；
+ *       旧实现用 (设定速度 - 当前速度)/dt（500 Hz 下等效 500 1/s），会把实测速度的
+ *       量化/测速噪声放大成 ±max_acc 的加速度前馈，再经 J·a 反作用于轴形成自激极限环；
+ *       现改为有限增益，默认 PLANNER_ACC_ERROR_GAIN_DEFAULT（20 1/s）。
  *       位置设定为**内部开环累加**：ref_position += 设定速度*dt，再按位置模式处理
  *       （限幅/归一化/不限幅），处理结果写回累加器。位置设定不读反馈位置：外力
  *       （重力/手推/底盘甩）只体现为下游位置环的误差，指令不变时目标不变，松手后回到原目标。
@@ -42,6 +45,8 @@ typedef struct
     float pos_limit_max;                 // 位置上限 (rad)，LIMITED: 限幅上限, WRAP: 归一化上限
     float max_speed;                     // 最大速度 (rad/s)
     float max_acc;                       // 最大加速度 (rad/s²)
+    float acc_error_gain;                // 速度误差 → 加速度前馈的增益 (1/s)，<=0 用默认值
+                                         // （旧实现等效为 1/dt = 500 1/s，实测会把测速噪声放大成自激）
 } Planner_Init_Config_s;
 
 /*============================================
