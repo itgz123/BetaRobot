@@ -25,6 +25,30 @@
 #include "app_cfg.h"
 
 /*============================================
+ *              VOFA 输出使能位
+ *============================================*/
+/**
+ * @brief VOFA 调试输出使能位（按位或使用）
+ * @note 每个位对应一个独立通道块，块起始通道由各自的 vofa_*_base_ch 指定：
+ *       - AXIS_PID_LITE_VOFA_BASE    : 基础变量块，占 12 通道 (B+0 ~ B+11)
+ *       - AXIS_PID_LITE_VOFA_POS_PID : 位置环内部变量，占 6 通道 (P+0 ~ P+5)
+ *                                     error / p_out / i_out / d_out / ff / output
+ *       - AXIS_PID_LITE_VOFA_VEL_PID : 速度环内部变量，占 6 通道 (V+0 ~ V+5)
+ *                                     error / p_out / i_out / d_out / ff / output
+ * @note 同时开启两个 PID 块时，两个 base 至少相隔 6 个通道。
+ * @note 通道预算：基础块 12 + 位置环 6 + 速度环 6 = 24（CH1~CH24），
+ *       正好不超过 VOFA_CHANNELS=25，三块可同帧输出。
+ * @note `vofa_enable = 1` 等价于只开 AXIS_PID_LITE_VOFA_BASE，兼容旧配置。
+ */
+typedef enum : uint8_t
+{
+    AXIS_PID_LITE_VOFA_NONE = 0,          // 不输出
+    AXIS_PID_LITE_VOFA_BASE = 1u << 0,    // 基础变量块（12 通道）
+    AXIS_PID_LITE_VOFA_POS_PID = 1u << 1, // 位置环内部变量（6 通道：误差 + P/I/D + 前馈 + 总输出）
+    AXIS_PID_LITE_VOFA_VEL_PID = 1u << 2, // 速度环内部变量（6 通道：误差 + P/I/D + 前馈 + 总输出）
+} AxisPidLiteVofa_e;
+
+/*============================================
  *              实例结构体
  *============================================*/
 typedef struct
@@ -43,8 +67,10 @@ typedef struct
     uint8_t calc_flag;                  // last_calc_us 初始化标志，0=首帧 dt=0
     uint8_t pid_seeded;                 // PID 微分状态已播种标志，0=首次闭环需播种
     float dt_max;                       // 单帧 dt 上限 (s)，<=0 不钳位
-    uint8_t vofa_enable;                // VOFA 调试输出使能，1=写 12 通道
-    uint8_t vofa_base_ch;               // VOFA 起始通道，占用 base_ch ~ base_ch+11，最小为 1
+    uint8_t vofa_enable;                // VOFA 输出使能位掩码，见 AxisPidLiteVofa_e
+    uint8_t vofa_base_ch;               // 基础变量块起始通道，占 base_ch ~ base_ch+11，最小为 1
+    uint8_t vofa_pos_pid_base_ch;       // 位置环内部变量起始通道，占 base ~ base+5，最小为 1
+    uint8_t vofa_vel_pid_base_ch;       // 速度环内部变量起始通道，占 base ~ base+5，最小为 1
     float tune_base_angle;              // TUNE 阶段正弦参考基准角度 (rad)，延时结束时记录
     uint8_t tune_base_flag;             // 基准角度已记录标志，0=未记录
 } AxisPidLiteInstance;
@@ -56,9 +82,14 @@ typedef struct
 {
     AxisLiteStage_e stage;              // 控制阶段
     uint32_t delay_ms;                  // 延时时间 (ms)
-    uint8_t vofa_enable;                // VOFA 调试输出使能，1=写 12 通道
-    uint8_t vofa_base_ch;               // VOFA 起始通道，占用 base_ch ~ base_ch+11，0 按 1 处理
+    uint8_t vofa_enable;                // VOFA 输出使能位掩码，按位或 AxisPidLiteVofa_e
+                                        // 1 = 只输出基础变量块，兼容旧配置
+    uint8_t vofa_base_ch;               // 基础变量块起始通道，占 base_ch ~ base_ch+11，0 按 1 处理
                                         // 多个轴同时输出时分别设 1、13、25……即可一帧发多轴数据
+    uint8_t vofa_pos_pid_base_ch;       // 位置环内部变量起始通道，占 base ~ base+5，0 按 1 处理
+    uint8_t vofa_vel_pid_base_ch;       // 速度环内部变量起始通道，占 base ~ base+5，0 按 1 处理
+                                        // ⚠ 各通道号全局唯一，不要与基础块/其他轴重叠；
+                                        //   两个 PID 块同时开启时 base 至少相隔 6
     AxisLiteParams_s params;            // 轴参数
     SineParam_s sine_params;            // 正弦参数
     ChirpParam_s chirp_params;          // 扫频参数
@@ -97,7 +128,9 @@ int8_t AxisPidLiteInit(AxisPidLiteInstance *inst, const AxisPidLite_Init_Config_
  *       内部按 angle = angle/gear 换算到输出侧；若 app 直接给输出侧数据请将 gear_ratio 置 1
  * @note setref =（重力前馈 + 惯量前馈 + 摩擦前馈） + 速度环 PID 输出，
  *       速度环设定值 = 位置环 PID 输出（位置环前馈为设定速度）
- * @note 当实例 vofa_enable 置 1 时，自动设定 12 个 VOFA 调试通道，
+ * @note vofa_enable 为 AxisPidLiteVofa_e 的位或，按位分别输出三个独立通道块。
+ *
+ *       ① AXIS_PID_LITE_VOFA_BASE（旧配置的 vofa_enable=1 即此位）：
  *       起始通道由 vofa_base_ch 指定（记为 B，默认 1）：
  *       CH(B+0)~CH(B+2): 反馈量（轴侧，经 gear_ratio 转换）
  *       B+0:  position       — 反馈位置 (rad)
@@ -119,6 +152,28 @@ int8_t AxisPidLiteInit(AxisPidLiteInstance *inst, const AxisPidLite_Init_Config_
  *       B+10: vel_pid_out    — 速度环输出 (Nm)
  *
  *       CH(B+11): setref值，最终发送给电机的力矩值 (Nm)
+ *
+ *       ② AXIS_PID_LITE_VOFA_POS_PID：位置环内部变量，通道由 vofa_pos_pid_base_ch 指定（记为 P）：
+ *       CH(P+0): pos_pid.error           — 位置环误差 ref_pos - angle (rad)
+ *       CH(P+1): pos_pid.p_out           — 位置环比例项输出 (rad/s)
+ *       CH(P+2): pos_pid.i_out           — 位置环积分项输出 (rad/s)
+ *       CH(P+3): pos_pid.d_out           — 位置环微分项输出 (rad/s)
+ *       CH(P+4): pos_pid.feedforward_out — 位置环前馈项输出 (rad/s)，即 ref_vel
+ *       CH(P+5): pos_pid.output          — 位置环总输出 (rad/s)，即速度环设定 vel_set
+ *
+ *       ③ AXIS_PID_LITE_VOFA_VEL_PID：速度环内部变量，通道由 vofa_vel_pid_base_ch 指定（记为 V）：
+ *       CH(V+0): vel_pid.error           — 速度环误差 vel_set - speed (rad/s)
+ *       CH(V+1): vel_pid.p_out           — 速度环比例项输出 (Nm)
+ *       CH(V+2): vel_pid.i_out           — 速度环积分项输出 (Nm)
+ *       CH(V+3): vel_pid.d_out           — 速度环微分项输出 (Nm)
+ *       CH(V+4): vel_pid.feedforward_out — 速度环前馈项输出 (Nm)，即 total_ff
+ *       CH(V+5): vel_pid.output          — 速度环总输出 (Nm)
+ *
+ * @note ②③ 的变量均为 LibPIDCalculate 内部值（error 已做误差归一化）。
+ *       P+5/V+5 与基础块的 B+9/B+10 数值相同，提供它是为了让每个块自洽：
+ *       output = p_out + i_out + d_out + feedforward_out（再经输出滤波/限幅）。
+ * @note 对应 PID 未运行（非串级阶段）时保持上次值；死区触发时 LibPIDCalculate
+ *       提前返回，只有 error/i_out 被更新（i_out 清零），其余项保持上次值。
  * @note 超出 VOFA_CHANNELS 的通道由 VofaSetChannel 自动忽略，不会越界写缓冲
  */
 float AxisPidLiteCalculate(AxisPidLiteInstance *inst, const AxisLiteState_s *state, const AxisLiteRef_s *ref);

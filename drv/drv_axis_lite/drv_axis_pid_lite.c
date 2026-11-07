@@ -27,13 +27,25 @@ int8_t AxisPidLiteInit(AxisPidLiteInstance *inst, const AxisPidLite_Init_Config_
     inst->stage = cfg->stage;
     inst->delay_ms = cfg->delay_ms;
     inst->dt_max = cfg->dt_max;
-    inst->vofa_enable = cfg->vofa_enable; // 该实例是否写 VOFA 调试通道
-    /* 起始通道：0 按 1 处理；上限收敛到 244，保证 base+11 不超出 uint8_t 范围。
+    inst->vofa_enable = cfg->vofa_enable; // 位掩码：基础块 / 位置环 / 速度环，见 AxisPidLiteVofa_e
+    /* 起始通道 0 按 1 处理（CH0 是 DWT 时间戳，不能被数据覆盖）。
+     * 基础块上限收敛到 244（base+11）、两个 PID 块收敛到 250（base+5），
+     * 保证 uint8_t 通道号相加不溢出。
      * 超出 VOFA_CHANNELS 的部分由 VofaSetChannel 自动丢弃，不会越界写缓冲。 */
     inst->vofa_base_ch = (cfg->vofa_base_ch == 0) ? 1 : cfg->vofa_base_ch;
     if (inst->vofa_base_ch > (uint8_t)(UINT8_MAX - 11))
     {
         inst->vofa_base_ch = (uint8_t)(UINT8_MAX - 11);
+    }
+    inst->vofa_pos_pid_base_ch = (cfg->vofa_pos_pid_base_ch == 0) ? 1 : cfg->vofa_pos_pid_base_ch;
+    if (inst->vofa_pos_pid_base_ch > (uint8_t)(UINT8_MAX - 5))
+    {
+        inst->vofa_pos_pid_base_ch = (uint8_t)(UINT8_MAX - 5);
+    }
+    inst->vofa_vel_pid_base_ch = (cfg->vofa_vel_pid_base_ch == 0) ? 1 : cfg->vofa_vel_pid_base_ch;
+    if (inst->vofa_vel_pid_base_ch > (uint8_t)(UINT8_MAX - 5))
+    {
+        inst->vofa_vel_pid_base_ch = (uint8_t)(UINT8_MAX - 5);
     }
     inst->params = cfg->params;
 
@@ -394,7 +406,7 @@ float AxisPidLiteCalculate(AxisPidLiteInstance *inst, const AxisLiteState_s *sta
     setref = output / gear; // gear 已在上方保护为合法值
 
 vofa_output:
-    if (inst->vofa_enable)
+    if (inst->vofa_enable & AXIS_PID_LITE_VOFA_BASE)
     {
         /* 起始通道 B = vofa_base_ch，多轴实例各自偏移，一帧即可发多轴数据 */
         uint8_t b = inst->vofa_base_ch;
@@ -415,6 +427,32 @@ vofa_output:
         VofaSetChannel((uint8_t)(b + 10), inst->vel_pid.output); // 速度环输出 (Nm)
         /* B+11: setref值，最终发送给电机的电流/力矩值 */
         VofaSetChannel((uint8_t)(b + 11), setref);
+    }
+
+    /* 位置环 / 速度环内部变量：各占 6 通道
+     * （error / p_out / i_out / d_out / feedforward_out / output），
+     * 起始通道分别由两个 base 指定。
+     * output = p_out + i_out + d_out + feedforward_out（再经输出滤波/限幅）。
+     * error 已做误差归一化；非串级阶段 PID 未运行，输出保持上次值。 */
+    if (inst->vofa_enable & AXIS_PID_LITE_VOFA_POS_PID)
+    {
+        uint8_t p = inst->vofa_pos_pid_base_ch;
+        VofaSetChannel((uint8_t)(p + 0), inst->pos_pid.error);           // 误差 (rad)
+        VofaSetChannel((uint8_t)(p + 1), inst->pos_pid.p_out);           // P 项 (rad/s)
+        VofaSetChannel((uint8_t)(p + 2), inst->pos_pid.i_out);           // I 项 (rad/s)
+        VofaSetChannel((uint8_t)(p + 3), inst->pos_pid.d_out);           // D 项 (rad/s)
+        VofaSetChannel((uint8_t)(p + 4), inst->pos_pid.feedforward_out); // 前馈 (rad/s)
+        VofaSetChannel((uint8_t)(p + 5), inst->pos_pid.output);          // 总输出 (rad/s)
+    }
+    if (inst->vofa_enable & AXIS_PID_LITE_VOFA_VEL_PID)
+    {
+        uint8_t v = inst->vofa_vel_pid_base_ch;
+        VofaSetChannel((uint8_t)(v + 0), inst->vel_pid.error);           // 误差 (rad/s)
+        VofaSetChannel((uint8_t)(v + 1), inst->vel_pid.p_out);           // P 项 (Nm)
+        VofaSetChannel((uint8_t)(v + 2), inst->vel_pid.i_out);           // I 项 (Nm)
+        VofaSetChannel((uint8_t)(v + 3), inst->vel_pid.d_out);           // D 项 (Nm)
+        VofaSetChannel((uint8_t)(v + 4), inst->vel_pid.feedforward_out); // 前馈 (Nm)
+        VofaSetChannel((uint8_t)(v + 5), inst->vel_pid.output);          // 总输出 (Nm)
     }
 
     return setref;
