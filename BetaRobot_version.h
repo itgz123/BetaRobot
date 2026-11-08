@@ -2,7 +2,7 @@
  * @file BetaRobot_version.h
  * @brief BetaRobot 主仓库版本号。由 .githooks/pre_commit.py 自动生成，请勿手动修改。
  * @note app 必须锁定内核版本（写在 app 的 app_cfg.h 里，且在 include 之前）：
- *         #define APP_LOCKED_BETAROBOT_VERSION 20261108131205
+ *         #define APP_LOCKED_BETAROBOT_VERSION 20261108131221
  *         #include "BetaRobot_version.h"
  *       未定义该宏或版本不匹配都会在下面的检查里直接 #error。
  */
@@ -10,9 +10,9 @@
 #define BETAROBOT_VERSION_H
 
 /* 版本号格式：V_年_月_日_时_分_秒（本地时间） */
-#define V_2026_11_08_13_12_05   20261108131205
-#define BETAROBOT_VERSION        V_2026_11_08_13_12_05
-#define BETAROBOT_VERSION_STRING "V_2026_11_08_13_12_05"
+#define V_2026_11_08_13_12_21   20261108131221
+#define BETAROBOT_VERSION        V_2026_11_08_13_12_21
+#define BETAROBOT_VERSION_STRING "V_2026_11_08_13_12_21"
 
 /* app 必须锁定版本：未定义或版本不一致都在这里 #error */
 #ifndef APP_LOCKED_BETAROBOT_VERSION

@@ -110,7 +110,7 @@ typedef enum : uint8_t
  */
 typedef enum : uint8_t
 {
-    LIB_MOTOR_LOOP_OPEN = 0x00,                               /* 开环：ref 直接作输出 */
+    LIB_MOTOR_LOOP_OPEN = 0x00,                            /* 开环：ref 直接作输出 */
     LIB_MOTOR_LOOP_ANGLE = 1 << LIB_MOTOR_STAGE_ANGLE,     /* 最外环：measure = 位置 (rad) */
     LIB_MOTOR_LOOP_SPEED = 1 << LIB_MOTOR_STAGE_SPEED,     /* 中间环：measure = 速度 (rad/s) */
     LIB_MOTOR_LOOP_CURRENT = 1 << LIB_MOTOR_STAGE_CURRENT, /* 最内环：measure = 电流 (A) */
@@ -196,13 +196,13 @@ typedef struct
 
     /* ---- 速度/电流低通 ---- */
     LibMotorLpf_e lpf_enable; /* 速度低通开关（只管速度；电流见 current_lpf_rc） */
-    float lpf_rc;                /* 速度低通时间常数 (s)，<=0 视为不用（透传） */
-    float current_lpf_rc;        /* 电流低通时间常数 (s)，<=0 透传。最内环默认**不滤**：
-                                  * 电流环里塞一个大 RC 会直接吃掉相位裕度，需要时才显式给值 */
-    uint8_t speed_ma_enable;     /* 1 = 速度在 IIR 之后再串 2 点滑动平均（零点在 fs/2）。
-                                  * 消电机静止时编码器 LSB 抖动经内部测速形成的 Nyquist 交替；
-                                  * 低频只多半个采样周期延迟（500 Hz 下 1 ms，0.9 Hz 处 -0.36°）。
-                                  * 默认 0，不影响存量轴 */
+    float lpf_rc;             /* 速度低通时间常数 (s)，<=0 视为不用（透传） */
+    float current_lpf_rc;     /* 电流低通时间常数 (s)，<=0 透传。最内环默认**不滤**：
+                               * 电流环里塞一个大 RC 会直接吃掉相位裕度，需要时才显式给值 */
+    uint8_t speed_ma_enable;  /* 1 = 速度在 IIR 之后再串 2 点滑动平均（零点在 fs/2）。
+                               * 消电机静止时编码器 LSB 抖动经内部测速形成的 Nyquist 交替；
+                               * 低频只多半个采样周期延迟（500 Hz 下 1 ms，0.9 Hz 处 -0.36°）。
+                               * 默认 0，不影响存量轴 */
 
     /* ---- 前馈来源（三环各一，DISABLE 或指针为空则前馈 0） ---- */
     LibMotorFeedforwardSrc_e angle_feedforward_src;
@@ -246,16 +246,16 @@ typedef struct LibMotorInstance
     LibMotor_Config_s cfg;                /* 配置快照（含 app 传入的指针） */
 
     /* 反馈后处理状态 */
-    float position_single_last;                 /* 上次原始位置，用于回绕检测 */
-    int64_t position_cnt;                       /* 回绕累加计数 */
-    double position_continuous;                 /* 连续多圈位置 (rad)：累加+偏置+方向后**不归一化**，供角度环微分 */
-    float speed_lpf_state;                      /* 速度低通状态（存 IIR 输出） */
-    float speed_ma_prev;                        /* 2 点滑动平均的上一帧速度（IIR 输出） */
-    float current_lpf_state;                    /* 电流低通状态 */
-    uint64_t feedback_last_ts;                  /* 上一帧已处理反馈的 CAN 时间戳 (us)：同帧去重 + 帧间隔 dt */
-    uint8_t lpf_seeded;                         /* 低通状态是否已播种（Config/Reset/中断恢复后首帧用原始值播种） */
-    uint8_t speed_ma_seeded;                    /* 滑动平均是否已播种（首帧直接透传） */
-    uint8_t has_last;                           /* 是否已收到过一帧 */
+    float position_single_last;              /* 上次原始位置，用于回绕检测 */
+    int64_t position_cnt;                    /* 回绕累加计数 */
+    double position_continuous;              /* 连续多圈位置 (rad)：累加+偏置+方向后**不归一化**，供角度环微分 */
+    float speed_lpf_state;                   /* 速度低通状态（存 IIR 输出） */
+    float speed_ma_prev;                     /* 2 点滑动平均的上一帧速度（IIR 输出） */
+    float current_lpf_state;                 /* 电流低通状态 */
+    uint64_t feedback_last_ts;               /* 上一帧已处理反馈的 CAN 时间戳 (us)：同帧去重 + 帧间隔 dt */
+    uint8_t lpf_seeded;                      /* 低通状态是否已播种（Config/Reset/中断恢复后首帧用原始值播种） */
+    uint8_t speed_ma_seeded;                 /* 滑动平均是否已播种（首帧直接透传） */
+    uint8_t has_last;                        /* 是否已收到过一帧 */
     uint8_t pid_seeded[LIB_MOTOR_STAGE_NUM]; /* 各环首次计算是否已播种 last_measure */
 
     uint8_t enable;
