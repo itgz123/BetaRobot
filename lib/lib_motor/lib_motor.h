@@ -1,17 +1,17 @@
 /**
- * @file drvlib_motor.h
- * @brief 电机三级级联 PID 控制核：位置/速度/电流 + 反馈后处理（drvlib 层）
+ * @file lib_motor.h
+ * @brief 电机三级级联 PID 控制核：位置/速度/电流 + 反馈后处理（lib 层）
  *
  * ═══════════════════ 分层定位 ═══════════════════
  *   drv_motor : 纯协议（字节 ↔ 物理量、收发），不做闭环/滤波/方向/多圈/偏置，
  *                无虚表、无使能状态，把"跨帧推断与策略"全部留给上层
- *   本模块     : drvlib 层 —— 把 lib_pid 的三个 PID 与"电机反馈后处理策略"组合
+ *   本模块     : lib 层 —— 把 lib_pid 的三个 PID 与"电机反馈后处理策略"组合
  *                起来，对上给 app 一个可直接驱动的三环控制对象
- *   app        : 胶水 —— 从 DrvXxxGetData 取一帧反馈填进 DrvlibMotorFeedback_s，
- *                调 DrvlibMotorSetRef 拿到下发量交给 DrvXxxSetRef / GroupSend
+ *   app        : 胶水 —— 从 DrvXxxGetData 取一帧反馈填进 LibMotorFeedback_s，
+ *                调 LibMotorSetRef 拿到下发量交给 DrvXxxSetRef / GroupSend
  *
  * ═══════════════════ 为什么本模块不依赖任何 drv 头 ═══════════════════
- * 它只认 DrvlibMotorFeedback_s（位置/速度/电流/时间戳），对后端完全无关 ——
+ * 它只认 LibMotorFeedback_s（位置/速度/电流/时间戳），对后端完全无关 ——
  * DM/RS/LK/DJI 广播乃至非 CAN 电机都能喂进来。
  *
  * ═══════════════════ 三级级联 ═══════════════════
@@ -60,34 +60,34 @@
  * @code
  *     DRV_DJIMOTOR_BROADCAST_INSTANCE_DEF(m);
  *     DRV_DJIMOTOR_BROADCAST_GROUP_DEF(m_group);
- *     DRVLIB_MOTOR_INSTANCE_DEF(ctrl);
+ *     LIB_MOTOR_INSTANCE_DEF(ctrl);
  *
  *     DrvDJIMotorBroadcastRegister(&m);
  *     DrvDJIMotorBroadcastConfig(&m, &(DrvDJIMotorBroadcastConfig_s){ ... });
- *     DrvlibMotorConfig(&ctrl, &(DrvlibMotor_Config_s){
- *         .loop_type = DRVLIB_MOTOR_LOOP_SPEED,
+ *     LibMotorConfig(&ctrl, &(LibMotor_Config_s){
+ *         .loop_type = LIB_MOTOR_LOOP_SPEED,
  *         .position_span = 6.2831853f,
- *         .pid[DRVLIB_MOTOR_STAGE_SPEED] = { .kp = 0.1f },
+ *         .pid[LIB_MOTOR_STAGE_SPEED] = { .kp = 0.1f },
  *     });
- *     DrvlibMotorEnable(&ctrl);
+ *     LibMotorEnable(&ctrl);
  *
  *     // 周期任务（dt 为秒）：
  *     DrvDJIMotorBroadcastData_s d = DrvDJIMotorBroadcastGetData(&m);
- *     DrvlibMotorFeedback_s fb = { .position = d.position, .speed = d.speed,
+ *     LibMotorFeedback_s fb = { .position = d.position, .speed = d.speed,
  *                                  .current = d.current, .timestamp_us = d.timestamp_us };
- *     float out = DrvlibMotorSetRef(&ctrl, ref, &fb, dt_ms * 0.001f);
+ *     float out = LibMotorSetRef(&ctrl, ref, &fb, dt_ms * 0.001f);
  *     DrvDJIMotorBroadcastSetRef(&m, out);
  *     DrvDJIMotorBroadcastGroupSend(&m_group);
  * @endcode
  */
 
-#ifndef __DRVLIB_MOTOR_H
-#define __DRVLIB_MOTOR_H
+#ifndef __LIB_MOTOR_H
+#define __LIB_MOTOR_H
 
 #include "app_cfg.h"
 
 /* 依赖被组合的算法层：lib_pid（PID）+ lib_math（角度/限幅）（任一未开则整体不编译） */
-#if defined(DRVLIB_MOTOR_USED) && defined(LIB_PID_USED) && defined(LIB_MATH_USED)
+#if defined(LIB_MOTOR_USED) && defined(LIB_PID_USED) && defined(LIB_MATH_USED)
 
 #include "lib_pid.h"
 #include "lib_math.h"
@@ -99,44 +99,44 @@
  */
 typedef enum : uint8_t
 {
-    DRVLIB_MOTOR_STAGE_ANGLE = 0,   /* 最外环：位置 (rad) */
-    DRVLIB_MOTOR_STAGE_SPEED = 1,   /* 中间环：速度 (rad/s) */
-    DRVLIB_MOTOR_STAGE_CURRENT = 2, /* 最内环：电流 (A) */
-    DRVLIB_MOTOR_STAGE_NUM = 3,     /* 环数 = pid[] 数组维度 */
-} DrvlibMotorStage_e;
+    LIB_MOTOR_STAGE_ANGLE = 0,   /* 最外环：位置 (rad) */
+    LIB_MOTOR_STAGE_SPEED = 1,   /* 中间环：速度 (rad/s) */
+    LIB_MOTOR_STAGE_CURRENT = 2, /* 最内环：电流 (A) */
+    LIB_MOTOR_STAGE_NUM = 3,     /* 环数 = pid[] 数组维度 */
+} LibMotorStage_e;
 
 /**
  * @brief 环路选择位掩码：各环 = 1 << 对应 stage
  */
 typedef enum : uint8_t
 {
-    DRVLIB_MOTOR_LOOP_OPEN = 0x00,                               /* 开环：ref 直接作输出 */
-    DRVLIB_MOTOR_LOOP_ANGLE = 1 << DRVLIB_MOTOR_STAGE_ANGLE,     /* 最外环：measure = 位置 (rad) */
-    DRVLIB_MOTOR_LOOP_SPEED = 1 << DRVLIB_MOTOR_STAGE_SPEED,     /* 中间环：measure = 速度 (rad/s) */
-    DRVLIB_MOTOR_LOOP_CURRENT = 1 << DRVLIB_MOTOR_STAGE_CURRENT, /* 最内环：measure = 电流 (A) */
-} DrvlibMotorLoop_e;
+    LIB_MOTOR_LOOP_OPEN = 0x00,                               /* 开环：ref 直接作输出 */
+    LIB_MOTOR_LOOP_ANGLE = 1 << LIB_MOTOR_STAGE_ANGLE,     /* 最外环：measure = 位置 (rad) */
+    LIB_MOTOR_LOOP_SPEED = 1 << LIB_MOTOR_STAGE_SPEED,     /* 中间环：measure = 速度 (rad/s) */
+    LIB_MOTOR_LOOP_CURRENT = 1 << LIB_MOTOR_STAGE_CURRENT, /* 最内环：measure = 电流 (A) */
+} LibMotorLoop_e;
 
 /* 全部闭环环路位：用来区分"一位都没选 = 开环"与"选错了位" */
-#define DRVLIB_MOTOR_LOOP_ALL (DRVLIB_MOTOR_LOOP_ANGLE | DRVLIB_MOTOR_LOOP_SPEED | DRVLIB_MOTOR_LOOP_CURRENT)
+#define LIB_MOTOR_LOOP_ALL (LIB_MOTOR_LOOP_ANGLE | LIB_MOTOR_LOOP_SPEED | LIB_MOTOR_LOOP_CURRENT)
 
 typedef enum : uint8_t
 {
-    DRVLIB_MOTOR_POS_LIMITED = 0,    /* 限幅：setpoint 限到 [min,max] */
-    DRVLIB_MOTOR_POS_WRAP = 1,       /* 环绕：setpoint 归一化、误差归一化 */
-    DRVLIB_MOTOR_POS_CONTINUOUS = 2, /* 连续：不限幅 */
-} DrvlibMotorPositionMode_e;
+    LIB_MOTOR_POS_LIMITED = 0,    /* 限幅：setpoint 限到 [min,max] */
+    LIB_MOTOR_POS_WRAP = 1,       /* 环绕：setpoint 归一化、误差归一化 */
+    LIB_MOTOR_POS_CONTINUOUS = 2, /* 连续：不限幅 */
+} LibMotorPositionMode_e;
 
 typedef enum : uint8_t
 {
-    DRVLIB_MOTOR_FF_DISABLE = 0,  /* 无前馈 */
-    DRVLIB_MOTOR_FF_EXTERNAL = 1, /* 用外部指针前馈 */
-} DrvlibMotorFeedforwardSrc_e;
+    LIB_MOTOR_FF_DISABLE = 0,  /* 无前馈 */
+    LIB_MOTOR_FF_EXTERNAL = 1, /* 用外部指针前馈 */
+} LibMotorFeedforwardSrc_e;
 
 typedef enum : uint8_t
 {
-    DRVLIB_MOTOR_LPF_DISABLE = 0, /* 速度不滤波（透传） */
-    DRVLIB_MOTOR_LPF_ENABLE = 1,  /* 速度一阶低通，RC 见 cfg.lpf_rc；电流另由 cfg.current_lpf_rc 控制 */
-} DrvlibMotorLpf_e;
+    LIB_MOTOR_LPF_DISABLE = 0, /* 速度不滤波（透传） */
+    LIB_MOTOR_LPF_ENABLE = 1,  /* 速度一阶低通，RC 见 cfg.lpf_rc；电流另由 cfg.current_lpf_rc 控制 */
+} LibMotorLpf_e;
 
 /**
  * @brief 电机方向：+1 正向 / -1 反向（可直接与物理量相乘）
@@ -150,9 +150,9 @@ typedef enum : uint8_t
  */
 typedef enum : int8_t
 {
-    DRVLIB_MOTOR_DIRECTION_NORMAL = 1,   /* 正向 */
-    DRVLIB_MOTOR_DIRECTION_REVERSE = -1, /* 反向 */
-} DrvlibMotorDirection_e;
+    LIB_MOTOR_DIRECTION_NORMAL = 1,   /* 正向 */
+    LIB_MOTOR_DIRECTION_REVERSE = -1, /* 反向 */
+} LibMotorDirection_e;
 
 /*============================ 反馈输入 ============================*/
 
@@ -170,32 +170,32 @@ typedef struct
     float speed;           /* rad/s */
     float current;         /* A */
     uint64_t timestamp_us; /* CAN 帧到达时间戳 (us) */
-} DrvlibMotorFeedback_s;
+} LibMotorFeedback_s;
 
 /*============================ 配置结构体 ============================*/
 
 /**
- * @brief drvlib_motor 配置结构体（Config 时整份拷贝进实例）
+ * @brief lib_motor 配置结构体（Config 时整份拷贝进实例）
  * @note 外部前馈指针须由 app 保证长期有效（Config 只存指针）。
  */
 typedef struct
 {
     /* ---- 控制模式 ---- */
-    DrvlibMotorLoop_e loop_type; /* 环路位掩码，见 DrvlibMotorLoop_e */
+    LibMotorLoop_e loop_type; /* 环路位掩码，见 LibMotorLoop_e */
 
-    /* ---- 方向（不写或为 0 时按 NORMAL 处理，见 DrvlibMotorDirection_e） ---- */
-    DrvlibMotorDirection_e motor_direction;    /* 输出方向：SetRef 返回值 × 本值 */
-    DrvlibMotorDirection_e feedback_direction; /* 反馈方向：position/speed/current × 本值 */
+    /* ---- 方向（不写或为 0 时按 NORMAL 处理，见 LibMotorDirection_e） ---- */
+    LibMotorDirection_e motor_direction;    /* 输出方向：SetRef 返回值 × 本值 */
+    LibMotorDirection_e feedback_direction; /* 反馈方向：position/speed/current × 本值 */
 
     /* ---- 位置模式 ---- */
-    DrvlibMotorPositionMode_e position_mode;
+    LibMotorPositionMode_e position_mode;
     float angle_limit_min; /* LIMITED: 限幅下界 / WRAP: 归一化下界 */
     float angle_limit_max; /* LIMITED: 限幅上界 / WRAP: 归一化上界 */
     float position_span;   /* 单范围回绕跨度 (rad)，<=0 则不做多圈累加 */
     float position_offset; /* 位置偏置 (rad)：累加后叠加 */
 
     /* ---- 速度/电流低通 ---- */
-    DrvlibMotorLpf_e lpf_enable; /* 速度低通开关（只管速度；电流见 current_lpf_rc） */
+    LibMotorLpf_e lpf_enable; /* 速度低通开关（只管速度；电流见 current_lpf_rc） */
     float lpf_rc;                /* 速度低通时间常数 (s)，<=0 视为不用（透传） */
     float current_lpf_rc;        /* 电流低通时间常数 (s)，<=0 透传。最内环默认**不滤**：
                                   * 电流环里塞一个大 RC 会直接吃掉相位裕度，需要时才显式给值 */
@@ -205,15 +205,15 @@ typedef struct
                                   * 默认 0，不影响存量轴 */
 
     /* ---- 前馈来源（三环各一，DISABLE 或指针为空则前馈 0） ---- */
-    DrvlibMotorFeedforwardSrc_e angle_feedforward_src;
-    DrvlibMotorFeedforwardSrc_e speed_feedforward_src;
-    DrvlibMotorFeedforwardSrc_e current_feedforward_src;
+    LibMotorFeedforwardSrc_e angle_feedforward_src;
+    LibMotorFeedforwardSrc_e speed_feedforward_src;
+    LibMotorFeedforwardSrc_e current_feedforward_src;
     float *angle_feedforward_ptr;
     float *speed_feedforward_ptr;
     float *current_feedforward_ptr;
 
     /* ---- PID（按 stage 下标；只初始化参与环路的那些） ---- */
-    PID_Init_Config_s pid[DRVLIB_MOTOR_STAGE_NUM];
+    PID_Init_Config_s pid[LIB_MOTOR_STAGE_NUM];
 
     /* ---- 其他 ---- */
     float dt_max;        /* 单帧 dt 上限 (s)，<=0 不钳位 */
@@ -221,7 +221,7 @@ typedef struct
                           * 各环微分状态与低通状态（防止 D 用断前的测量值求导打尖峰）。
                           * <=0 时回退用 dt_max；两者都 <=0 则不检测 */
     uint8_t vofa_enable; /* 1 = 每帧写 VOFA CH1~CH3 并发送；默认 0 */
-} DrvlibMotor_Config_s;
+} LibMotor_Config_s;
 
 /*============================ 输出数据结构 ============================*/
 
@@ -236,14 +236,14 @@ typedef struct
     float speed;           /* 处理后速度 (rad/s)：按 cfg.lpf_rc 低通，未开则透传 */
     float current;         /* 处理后电流 (A)：按 cfg.current_lpf_rc 低通，<=0 透传 */
     uint64_t timestamp_us;
-} DrvlibMotor_Data_t;
+} LibMotor_Data_t;
 
 /*============================ 实例结构体 ============================*/
 
-typedef struct DrvlibMotorInstance
+typedef struct LibMotorInstance
 {
-    PIDInstance pid[DRVLIB_MOTOR_STAGE_NUM]; /* 三个级联环 */
-    DrvlibMotor_Config_s cfg;                /* 配置快照（含 app 传入的指针） */
+    PIDInstance pid[LIB_MOTOR_STAGE_NUM]; /* 三个级联环 */
+    LibMotor_Config_s cfg;                /* 配置快照（含 app 传入的指针） */
 
     /* 反馈后处理状态 */
     float position_single_last;                 /* 上次原始位置，用于回绕检测 */
@@ -256,21 +256,21 @@ typedef struct DrvlibMotorInstance
     uint8_t lpf_seeded;                         /* 低通状态是否已播种（Config/Reset/中断恢复后首帧用原始值播种） */
     uint8_t speed_ma_seeded;                    /* 滑动平均是否已播种（首帧直接透传） */
     uint8_t has_last;                           /* 是否已收到过一帧 */
-    uint8_t pid_seeded[DRVLIB_MOTOR_STAGE_NUM]; /* 各环首次计算是否已播种 last_measure */
+    uint8_t pid_seeded[LIB_MOTOR_STAGE_NUM]; /* 各环首次计算是否已播种 last_measure */
 
     uint8_t enable;
     uint8_t registered;
 
-    DrvlibMotor_Data_t data; /* 最近一帧处理后反馈（app 直接读） */
-} DrvlibMotorInstance;
+    LibMotor_Data_t data; /* 最近一帧处理后反馈（app 直接读） */
+} LibMotorInstance;
 
 /*============================ 实例定义宏 ============================*/
 
 /**
  * @brief 定义控制实例（纯计算对象，无硬件句柄）
- * @example DRVLIB_MOTOR_INSTANCE_DEF(friction_motor_ctrl);
+ * @example LIB_MOTOR_INSTANCE_DEF(friction_motor_ctrl);
  */
-#define DRVLIB_MOTOR_INSTANCE_DEF(name) static DrvlibMotorInstance name = {0}
+#define LIB_MOTOR_INSTANCE_DEF(name) static LibMotorInstance name = {0}
 
 /*============================ 公开接口 ============================*/
 
@@ -280,7 +280,7 @@ typedef struct DrvlibMotorInstance
  * @return 0 成功，-1 失败
  * @note 调用一次即可，要求在 Config 之前
  */
-int8_t DrvlibMotorRegister(DrvlibMotorInstance *inst);
+int8_t LibMotorRegister(LibMotorInstance *inst);
 
 /**
  * @brief 配置（可重入；会重置反馈累加与 PID 状态）
@@ -290,9 +290,9 @@ int8_t DrvlibMotorRegister(DrvlibMotorInstance *inst);
  * @note 复刻旧 drv_motor：位置环/速度环的 PID 自动补 PID_ENABLE_TRAPEZOID_INTEGRAL；
  *       位置模式为 WRAP 时位置环自动启用误差归一化（范围 = max-min）。
  *       CURRENT 环不做这些默认（新环，保持 app 配置原样）。
- * @note 不改动既有使能态（使能须显式调 DrvlibMotorEnable）。
+ * @note 不改动既有使能态（使能须显式调 LibMotorEnable）。
  */
-int8_t DrvlibMotorConfig(DrvlibMotorInstance *inst, const DrvlibMotor_Config_s *cfg);
+int8_t LibMotorConfig(LibMotorInstance *inst, const LibMotor_Config_s *cfg);
 
 /**
  * @brief 传入一帧反馈并计算，返回下发量（由 app 周期任务调用）
@@ -307,23 +307,23 @@ int8_t DrvlibMotorConfig(DrvlibMotorInstance *inst, const DrvlibMotor_Config_s *
  *       这样手动转动电机后再使能，位置是连续的。
  * @note 同一 fb（timestamp_us 相同）只会被后处理一次；闭环每拍仍会重算 PID（dt 用 app 传入值）。
  */
-float DrvlibMotorSetRef(DrvlibMotorInstance *inst, float ref, const DrvlibMotorFeedback_s *fb, float dt);
+float LibMotorSetRef(LibMotorInstance *inst, float ref, const LibMotorFeedback_s *fb, float dt);
 
 /**
  * @brief 使能（仅置软件标志；协议层使能由 app 调 DrvXxxSendCmd）
  */
-void DrvlibMotorEnable(DrvlibMotorInstance *inst);
+void LibMotorEnable(LibMotorInstance *inst);
 
 /**
  * @brief 失能（清标志并复位 PID；停机还需 app 把返回值 0 下发）
  */
-void DrvlibMotorDisable(DrvlibMotorInstance *inst);
+void LibMotorDisable(LibMotorInstance *inst);
 
 /**
  * @brief 复位（清三个 PID 状态与低通状态，不清位置累加）
  */
-void DrvlibMotorReset(DrvlibMotorInstance *inst);
+void LibMotorReset(LibMotorInstance *inst);
 
-#endif /* DRVLIB_MOTOR_USED && LIB_PID_USED && LIB_MATH_USED */
+#endif /* LIB_MOTOR_USED && LIB_PID_USED && LIB_MATH_USED */
 
-#endif /* __DRVLIB_MOTOR_H */
+#endif /* __LIB_MOTOR_H */

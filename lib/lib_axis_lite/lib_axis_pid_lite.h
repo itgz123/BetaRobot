@@ -1,10 +1,10 @@
 /**
- * @file drv_axis_pid_lite.h
+ * @file lib_axis_pid_lite.h
  * @brief 轻量级单轴关节控制驱动模块（位置 + 速度串级双 PID）
  * @author TRW
  * @date 2026-11-06
  *
- * @note 前馈与 drv_axis_mit_lite 完全一致：
+ * @note 前馈与 lib_axis_mit_lite 完全一致：
  *       total_ff = gravity * cos(pos) + inertia * ref_acc + friction(actual speed)
  *
  * @note 反馈采用串级双 PID（位置环为外环、速度环为内环）：
@@ -12,15 +12,15 @@
  *       output  = VEL_PID(vel_set, vel, total_ff)  // 速度环前馈为力矩前馈
  *       其中 dt 由 DWT 自动测量（首次调用 dt=0，可用 dt_max 钳位异常间隔）。
  *
- * @note 与 drv_axis_mit_lite 相同，本文件轻量封装，不依赖 motor：
+ * @note 与 lib_axis_mit_lite 相同，本文件轻量封装，不依赖 motor：
  *       Calculate 接收 AxisLiteState_s 反馈、计算并返回 setref，由 app 层手动调用 motor.set_ref 设置力矩。
  */
 
-#ifndef DRV_AXIS_PID_LITE_H
-#define DRV_AXIS_PID_LITE_H
+#ifndef LIB_AXIS_PID_LITE_H
+#define LIB_AXIS_PID_LITE_H
 
 #include "lib_pid.h"
-#include "drv_axis_lite_def.h"
+#include "lib_axis_lite_def.h"
 #include <stdint.h>
 #include "app_cfg.h"
 
@@ -178,4 +178,4 @@ int8_t AxisPidLiteInit(AxisPidLiteInstance *inst, const AxisPidLite_Init_Config_
  */
 float AxisPidLiteCalculate(AxisPidLiteInstance *inst, const AxisLiteState_s *state, const AxisLiteRef_s *ref);
 
-#endif // !DRV_AXIS_PID_LITE_H
+#endif // !LIB_AXIS_PID_LITE_H

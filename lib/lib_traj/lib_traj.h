@@ -29,22 +29,22 @@
  *         (p,v,a) 作新段初值，再构造 ConstJerk 段，**按构造即 C² 连续**。
  *       规划器正是用 AppendJerk 逐段接力，所以规划出的轨迹段间 p/v/a 连续。
  *
- * @note 与 drvlib_motor（三级级联 PID）的接法 —— 规划库只管给参考量：
+ * @note 与 lib_motor（三级级联 PID）的接法 —— 规划库只管给参考量：
  *       级联结构 ref(位置) —ANGLE PID→ 速度设定 —SPEED PID→ 电流设定 —CURRENT PID→ 电流；
  *       前馈是 LibPIDCalculate(pid, sp, meas, ff, dt) 里**加在该环输出上**的，
  *       因此量纲必须与该环**下一环的输入**一致：
  *       | 本库输出          | 接到                                        | 为什么 |
  *       |------------------|---------------------------------------------|--------|
- *       | out.position     | DrvlibMotorSetRef 的 ref（loop_type 含 ANGLE）| 位置设定值 |
+ *       | out.position     | LibMotorSetRef 的 ref（loop_type 含 ANGLE）| 位置设定值 |
  *       | out.velocity     | angle_feedforward_ptr                       | ANGLE 环输出 = SPEED 环设定值，rad/s |
  *       | out.acceleration | speed_feedforward_ptr（须先 ×J÷Kt 换成电流）  | SPEED 环输出 = 电流(A)；加速度前馈 = J·α÷Kt |
  *       注意：
  *       - 前馈指针是 float*，指向调用方持有的变量；angle_feedforward_ptr 可直接
  *         指向 out.velocity，但加速度前馈要先自己算一个
  *         `float ff_i = out.acceleration * J / Kt;` 再取址。
- *       - position_mode 用 DRVLIB_MOTOR_POS_CONTINUOUS（轨迹是多圈绝对角，不要 WRAP）。
+ *       - position_mode 用 LIB_MOTOR_POS_CONTINUOUS（轨迹是多圈绝对角，不要 WRAP）。
  *       - dt 单位是**秒**（APP_TASK_DEF 给的是 ms，须 ×0.001f）。
- *       - drvlib_motor 最内环是**电流环**，要"力矩"语义由 app 自己 ÷Kt/×Kt。
+ *       - lib_motor 最内环是**电流环**，要"力矩"语义由 app 自己 ÷Kt/×Kt。
  *
  * @note 编译开关：固件在 app_cfg.h 定义 LIB_TRAJ_USED（不开则 .c 是空翻译单元）。
  *       本模块只依赖 <stdint.h>/<string.h>/<math.h>，不依赖 bsp/drv/lib_math。

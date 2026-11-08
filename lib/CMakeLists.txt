@@ -2,6 +2,8 @@
 # 卡尔曼族统一挂在 lib_kf/ 下：lib_kf_core.h 是三者共用的代数内核，
 # lib_lkf（线性 KF）/ lib_ekf（非线性 EKF）/ lib_eskf（误差状态 ESKF）为同级子模块。
 set(MODULE_SOURCES
+    lib_axis_lite/lib_axis_mit_lite.c
+    lib_axis_lite/lib_axis_pid_lite.c
     lib_chassis/lib_chassis.c
     lib_chassis/chassis_all_rudder/lib_chassis_all_rudder.c
     lib_chassis/chassis_half_rudder/lib_chassis_half_rudder.c
@@ -24,6 +26,7 @@ set(MODULE_SOURCES
     lib_math/lib_math.c
     lib_math/lib_math_trig_lut.c
     lib_mit/lib_mit.c
+    lib_motor/lib_motor.c
     # 音频数据统一挂在 lib_music_simple/ 下：music_custom = 常用音效，其余一首歌一个目录
     # 注：lib_music/（无 simple）预留给之后基于 DAC 的方案，目前没有实现、不参与构建
     lib_music_simple/happy_birthday/happy_birthday.c
@@ -40,6 +43,7 @@ set(MODULE_SOURCES
 # lib 层头文件路径
 set(MODULE_INCLUDE_DIRS
     .
+    lib_axis_lite
     lib_chassis
     lib_chassis/chassis_all_rudder
     lib_chassis/chassis_half_rudder
@@ -61,6 +65,7 @@ set(MODULE_INCLUDE_DIRS
     lib_mahony
     lib_math
     lib_mit
+    lib_motor
     lib_music_simple
     lib_music_simple/happy_birthday
     lib_music_simple/music_custom
