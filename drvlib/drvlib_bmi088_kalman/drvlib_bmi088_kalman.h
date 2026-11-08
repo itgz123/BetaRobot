@@ -69,7 +69,7 @@
  *     dt==0 的帧照样发（那正是要看的东西），姿态量保持上一帧的值。
  *   - drv_vofa 是三缓冲 DMA + 忙则跳过，波特率不够时自然丢帧、不阻塞控制任务。
  *   - VOFA_USED / VOFA_UART 未定义时所有 Vofa* 是空实现，本项零开销、无副作用。
- * ⚠ 通道号是全驱动唯一的一组：drv_axis_*_lite 的 vofa_enable 占
+ * ⚠ 通道号是全驱动唯一的一组：lib_axis_*_lite 的 vofa_enable 占
  *   CH vofa_base_ch ~ +11、app_shoot 的调试块占 CH1~CH3，都与本模块的 CH1~CH15 重叠。同一时刻只能有
  *   一路在写（VofaSend 发的是缓冲区里**所有**通道当下的值，混写会互相覆盖），
  *   要同时看就把别的模块的通道号错开。

@@ -35,7 +35,7 @@
  *       - WRITE 槽不会被 ISR 看到，故"借出 → 写入 → 提交"期间的格式化可在临界区外做。
  *
  * @note 依赖与开关：本模块只依赖 <stdint.h>/<stdbool.h>，不依赖 bsp/lib，**不设 USE 开关**
- *       （与 drv_pid/drv_planner 一致，始终参与编译；没人引用时由 --gc-sections 丢弃）。
+ *       （与 drv_planner 一致，始终参与编译；没人引用时由 --gc-sections 丢弃）。
  *       写固件时从 main.h 取 PRIMASK 原语；PC 单测定义 DRV_TX_SLOT_STANDALONE 改为空实现。
  *
  * @note 为什么 bsp_log 不用这里：bsp 是 drv 的下层，让 bsp 反向包含 drv 会把依赖方向翻过来；

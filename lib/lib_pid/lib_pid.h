@@ -16,7 +16,7 @@
  *
  * @note 本模块为 lib 层纯算法，无硬件/时间源依赖：
  *       - dt 由调用方作为参数传入，不内嵌时间戳
- *       - 需要自动计算 dt 时使用 drv_pid（封装 DWT）或调用方自行维护时间
+ *       - dt 由调用方自行测量并传入（本库不依赖任何时间源）
  *
  * @note 拓展功能启用规则：
  *       - 所有高级功能统一通过掩码 config_mask 控制启用/禁用
@@ -147,7 +147,7 @@ typedef struct PIDInstance
     float last_output;     // 上次输出 (用于输出滤波)
 
     float dt;         // 本次计算时间间隔 (秒)，由 LibPIDCalculate 的 dt 参数写入
-    uint64_t time_us; // 上次计算时间戳 (us)，供时间供给层(drv_pid)计算 dt；lib 算法不读取
+    uint64_t time_us; // 上次计算时间戳 (us)，供调用方计算 dt；lib 算法不读取
 } PIDInstance;
 
 /*------------- 外部接口声明 --------------*/

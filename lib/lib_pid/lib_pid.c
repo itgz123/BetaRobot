@@ -273,7 +273,7 @@ void LibPIDReset(PIDInstance *instance)
     instance->output = 0.0f;
     instance->last_output = 0.0f;
     instance->dt = 0.0f;
-    // time_us 由时间供给层(drv_pid)维护，重置 dt 起点由调用方清零
+    // time_us 由调用方维护，重置 dt 起点由调用方清零
 }
 
 float LibPIDCalculate(PIDInstance *instance, float setpoint, float measure, float feedforward, float dt)

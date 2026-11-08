@@ -1,5 +1,5 @@
 /**
- * @file drv_axis_lite_def.h
+ * @file lib_axis_lite_def.h
  * @brief axis lite 层公共类型（关节控制的输入/输出/参数）
  * @author TRW
  * @date 2026-06-07
@@ -9,8 +9,8 @@
  * @note axis lite 模块统一约定：只做控制律计算，不持有电机、不直接收发 CAN。
  *       反馈由 app 层读好后填进 AxisLiteState_s 传入，输出 setref 由 app 层交给 DrvXxxSetRef 下发。
  */
-#ifndef DRV_AXIS_LITE_DEF_H
-#define DRV_AXIS_LITE_DEF_H
+#ifndef LIB_AXIS_LITE_DEF_H
+#define LIB_AXIS_LITE_DEF_H
 
 #include <stdint.h>
 
@@ -110,7 +110,7 @@ typedef struct
     float acceleration; // 外部加速度设定 (rad/s²)
 } AxisLiteRef_s;
 
-/* 旧名兼容：drv_axis_mit_lite 及已有 app 代码仍使用 AxisMitLiteRef_s */
+/* 旧名兼容：lib_axis_mit_lite 及已有 app 代码仍使用 AxisMitLiteRef_s */
 typedef AxisLiteRef_s AxisMitLiteRef_s;
 
-#endif // !DRV_AXIS_LITE_DEF_H
+#endif // !LIB_AXIS_LITE_DEF_H

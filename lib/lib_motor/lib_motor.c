@@ -1,14 +1,14 @@
 /**
- * @file drvlib_motor.c
+ * @file lib_motor.c
  * @brief 电机三级级联 PID 控制核：位置/速度/电流 + 反馈后处理（实现）
  *
- * @note 分层定位、三级级联语义、反馈处理顺序、dt 约定全在 drvlib_motor.h
+ * @note 分层定位、三级级联语义、反馈处理顺序、dt 约定全在 lib_motor.h
  *       的头注释里；本文件只记实现层面的取舍（见各函数内注释）。
  */
 
-#include "drvlib_motor.h"
+#include "lib_motor.h"
 
-#if defined(DRVLIB_MOTOR_USED) && defined(LIB_PID_USED) && defined(LIB_MATH_USED)
+#if defined(LIB_MOTOR_USED) && defined(LIB_PID_USED) && defined(LIB_MATH_USED)
 
 #include <string.h>
 
@@ -18,17 +18,17 @@
 /*============================ 日志实例 ============================*/
 
 /* 本模块日志实例（日志关闭时宏退化为 extern 声明，不分配、不引用） */
-#ifndef DRVLIB_MOTOR_LOG_LIMIT
-#define DRVLIB_MOTOR_LOG_LIMIT 10
-#endif // !DRVLIB_MOTOR_LOG_LIMIT
-LOG_INSTANCE_DEF(g_drvlib_motor_log, "drvlib_motor", DRVLIB_MOTOR_LOG_LIMIT);
+#ifndef LIB_MOTOR_LOG_LIMIT
+#define LIB_MOTOR_LOG_LIMIT 10
+#endif // !LIB_MOTOR_LOG_LIMIT
+LOG_INSTANCE_DEF(g_lib_motor_log, "lib_motor", LIB_MOTOR_LOG_LIMIT);
 
 /*============================ 内部函数声明 ============================*/
 
-static void MotorProcessFeedback(DrvlibMotorInstance *inst, const DrvlibMotorFeedback_s *fb, float dt);
-static float MotorApplyCascade(DrvlibMotorInstance *inst, float ref, float dt);
-static void MotorVofaOutput(const DrvlibMotorInstance *inst);
-static void MotorSeedStage(DrvlibMotorInstance *inst, DrvlibMotorStage_e stage, float setpoint, float measure);
+static void MotorProcessFeedback(LibMotorInstance *inst, const LibMotorFeedback_s *fb, float dt);
+static float MotorApplyCascade(LibMotorInstance *inst, float ref, float dt);
+static void MotorVofaOutput(const LibMotorInstance *inst);
+static void MotorSeedStage(LibMotorInstance *inst, LibMotorStage_e stage, float setpoint, float measure);
 
 /*============================ 内部函数实现 ============================*/
 
@@ -41,9 +41,9 @@ static void MotorSeedStage(DrvlibMotorInstance *inst, DrvlibMotorStage_e stage, 
  *       调 SetRef 的周期），否则控制快于反馈时会重复滤波、重复累加圈数。
  * @note **中断恢复**：帧间隔超过 stale_gap（缺省 dt_max）时重新播种各环微分状态与低通状态。
  */
-static void MotorProcessFeedback(DrvlibMotorInstance *inst, const DrvlibMotorFeedback_s *fb, float dt)
+static void MotorProcessFeedback(LibMotorInstance *inst, const LibMotorFeedback_s *fb, float dt)
 {
-    const DrvlibMotor_Config_s *cfg = &inst->cfg;
+    const LibMotor_Config_s *cfg = &inst->cfg;
     const float span = cfg->position_span;
     const float raw = fb->position;                      /* 协议原始量：回绕检测与 LPF 状态都基于未修正值 */
     const float fb_dir = (float)cfg->feedback_direction; /* Config 已归一化为 ±1 */
@@ -99,7 +99,7 @@ static void MotorProcessFeedback(DrvlibMotorInstance *inst, const DrvlibMotorFee
     pos *= (double)fb_dir; /* 方向：累加-偏置后、归一化前（照搬旧 drv_motor 顺序） */
     /* 连续值：角度环微分用（跨窗口边界不跳变），对外不暴露 */
     inst->position_continuous = pos;
-    if (cfg->position_mode == DRVLIB_MOTOR_POS_WRAP)
+    if (cfg->position_mode == LIB_MOTOR_POS_WRAP)
     {
         pos = (double)Lib_Math_WrapAngle((float)pos, cfg->angle_limit_min, cfg->angle_limit_max);
     }
@@ -110,7 +110,7 @@ static void MotorProcessFeedback(DrvlibMotorInstance *inst, const DrvlibMotorFee
     const uint8_t can_filter = (uint8_t)((inst->lpf_seeded && fb_dt > 0.0f) ? 1u : 0u);
 
     float speed;
-    if (can_filter && cfg->lpf_enable == DRVLIB_MOTOR_LPF_ENABLE && cfg->lpf_rc > 0.0f)
+    if (can_filter && cfg->lpf_enable == LIB_MOTOR_LPF_ENABLE && cfg->lpf_rc > 0.0f)
     {
         float alpha = fb_dt / (cfg->lpf_rc + fb_dt);
         speed = fb->speed * alpha + inst->speed_lpf_state * (1.0f - alpha);
@@ -146,7 +146,7 @@ static void MotorProcessFeedback(DrvlibMotorInstance *inst, const DrvlibMotorFee
     inst->current_lpf_state = current;
     inst->lpf_seeded = 1;
 
-    DrvlibMotor_Data_t *d = &inst->data;
+    LibMotor_Data_t *d = &inst->data;
     d->position = pos; /* 已含 feedback_direction */
     d->position_single = raw;
     d->position_cnt = inst->position_cnt;
@@ -165,7 +165,7 @@ static void MotorProcessFeedback(DrvlibMotorInstance *inst, const DrvlibMotorFee
  *       第一拍"微分先行"会按 (0 − measure)/dt 打出一个尖峰；在第一次计算前
  *       把 last_measure 对齐到当前测量值即可。每个环只播种一次（pid_seeded）。
  */
-static void MotorSeedStage(DrvlibMotorInstance *inst, DrvlibMotorStage_e stage, float setpoint, float measure)
+static void MotorSeedStage(LibMotorInstance *inst, LibMotorStage_e stage, float setpoint, float measure)
 {
     PIDInstance *pid = &inst->pid[stage];
 
@@ -183,28 +183,28 @@ static void MotorSeedStage(DrvlibMotorInstance *inst, DrvlibMotorStage_e stage, 
  * @brief 三级级联：由外向内，每个参与的环把输出作为下一环的 setpoint
  * @return 最终输出（电流 A）
  */
-static float MotorApplyCascade(DrvlibMotorInstance *inst, float ref, float dt)
+static float MotorApplyCascade(LibMotorInstance *inst, float ref, float dt)
 {
-    const DrvlibMotor_Config_s *cfg = &inst->cfg;
-    const DrvlibMotor_Data_t *d = &inst->data;
+    const LibMotor_Config_s *cfg = &inst->cfg;
+    const LibMotor_Data_t *d = &inst->data;
 
     float s = ref;
 
     /* 位置环（最外） */
-    if (cfg->loop_type & DRVLIB_MOTOR_LOOP_ANGLE)
+    if (cfg->loop_type & LIB_MOTOR_LOOP_ANGLE)
     {
         /* 测量值：WRAP 模式用连续的 position_continuous（见头文件注释）。 */
         float measure = (float)d->position;
 
         switch (cfg->position_mode)
         {
-        case DRVLIB_MOTOR_POS_LIMITED:
+        case LIB_MOTOR_POS_LIMITED:
             if (cfg->angle_limit_min < cfg->angle_limit_max)
             {
                 s = Lib_Math_Clamp(s, cfg->angle_limit_min, cfg->angle_limit_max);
             }
             break;
-        case DRVLIB_MOTOR_POS_WRAP: {
+        case LIB_MOTOR_POS_WRAP: {
             const float range = cfg->angle_limit_max - cfg->angle_limit_min;
             if (range > 0.0f)
             {
@@ -221,42 +221,42 @@ static float MotorApplyCascade(DrvlibMotorInstance *inst, float ref, float dt)
             }
             break;
         }
-        case DRVLIB_MOTOR_POS_CONTINUOUS:
+        case LIB_MOTOR_POS_CONTINUOUS:
         default:
             break;
         }
 
-        if (inst->pid_seeded[DRVLIB_MOTOR_STAGE_ANGLE] == 0u)
+        if (inst->pid_seeded[LIB_MOTOR_STAGE_ANGLE] == 0u)
         {
-            MotorSeedStage(inst, DRVLIB_MOTOR_STAGE_ANGLE, s, measure);
+            MotorSeedStage(inst, LIB_MOTOR_STAGE_ANGLE, s, measure);
         }
 
-        float ff = (cfg->angle_feedforward_src == DRVLIB_MOTOR_FF_EXTERNAL && cfg->angle_feedforward_ptr) ? *cfg->angle_feedforward_ptr : 0.0f;
-        s = LibPIDCalculate(&inst->pid[DRVLIB_MOTOR_STAGE_ANGLE], s, measure, ff, dt);
+        float ff = (cfg->angle_feedforward_src == LIB_MOTOR_FF_EXTERNAL && cfg->angle_feedforward_ptr) ? *cfg->angle_feedforward_ptr : 0.0f;
+        s = LibPIDCalculate(&inst->pid[LIB_MOTOR_STAGE_ANGLE], s, measure, ff, dt);
     }
 
     /* 速度环（中间） */
-    if (cfg->loop_type & DRVLIB_MOTOR_LOOP_SPEED)
+    if (cfg->loop_type & LIB_MOTOR_LOOP_SPEED)
     {
-        if (inst->pid_seeded[DRVLIB_MOTOR_STAGE_SPEED] == 0u)
+        if (inst->pid_seeded[LIB_MOTOR_STAGE_SPEED] == 0u)
         {
-            MotorSeedStage(inst, DRVLIB_MOTOR_STAGE_SPEED, s, d->speed);
+            MotorSeedStage(inst, LIB_MOTOR_STAGE_SPEED, s, d->speed);
         }
 
-        float ff = (cfg->speed_feedforward_src == DRVLIB_MOTOR_FF_EXTERNAL && cfg->speed_feedforward_ptr) ? *cfg->speed_feedforward_ptr : 0.0f;
-        s = LibPIDCalculate(&inst->pid[DRVLIB_MOTOR_STAGE_SPEED], s, d->speed, ff, dt);
+        float ff = (cfg->speed_feedforward_src == LIB_MOTOR_FF_EXTERNAL && cfg->speed_feedforward_ptr) ? *cfg->speed_feedforward_ptr : 0.0f;
+        s = LibPIDCalculate(&inst->pid[LIB_MOTOR_STAGE_SPEED], s, d->speed, ff, dt);
     }
 
     /* 电流环（最内） */
-    if (cfg->loop_type & DRVLIB_MOTOR_LOOP_CURRENT)
+    if (cfg->loop_type & LIB_MOTOR_LOOP_CURRENT)
     {
-        if (inst->pid_seeded[DRVLIB_MOTOR_STAGE_CURRENT] == 0u)
+        if (inst->pid_seeded[LIB_MOTOR_STAGE_CURRENT] == 0u)
         {
-            MotorSeedStage(inst, DRVLIB_MOTOR_STAGE_CURRENT, s, d->current);
+            MotorSeedStage(inst, LIB_MOTOR_STAGE_CURRENT, s, d->current);
         }
 
-        float ff = (cfg->current_feedforward_src == DRVLIB_MOTOR_FF_EXTERNAL && cfg->current_feedforward_ptr) ? *cfg->current_feedforward_ptr : 0.0f;
-        s = LibPIDCalculate(&inst->pid[DRVLIB_MOTOR_STAGE_CURRENT], s, d->current, ff, dt);
+        float ff = (cfg->current_feedforward_src == LIB_MOTOR_FF_EXTERNAL && cfg->current_feedforward_ptr) ? *cfg->current_feedforward_ptr : 0.0f;
+        s = LibPIDCalculate(&inst->pid[LIB_MOTOR_STAGE_CURRENT], s, d->current, ff, dt);
     }
 
     /* 输出方向：修正电机安装方向。反馈侧已由 feedback_direction 修正，故闭环仍是负反馈 */
@@ -268,13 +268,13 @@ static float MotorApplyCascade(DrvlibMotorInstance *inst, float ref, float dt)
  * @note 通道 CH1~CH3 = 位置/速度/电流。与其它模块的通道号可能重叠，
  *       同时只能有一路在写，要同时看就把通道号错开（见头注释）。
  */
-static void MotorVofaOutput(const DrvlibMotorInstance *inst)
+static void MotorVofaOutput(const LibMotorInstance *inst)
 {
     if (!inst->cfg.vofa_enable)
     {
         return;
     }
-    const DrvlibMotor_Data_t *d = &inst->data;
+    const LibMotor_Data_t *d = &inst->data;
     VofaSetChannel(1, (float)d->position);
     VofaSetChannel(2, d->speed);
     VofaSetChannel(3, d->current);
@@ -283,11 +283,11 @@ static void MotorVofaOutput(const DrvlibMotorInstance *inst)
 
 /*============================ 公开接口实现 ============================*/
 
-int8_t DrvlibMotorRegister(DrvlibMotorInstance *inst)
+int8_t LibMotorRegister(LibMotorInstance *inst)
 {
     if (!inst)
     {
-        BSPLOG(&g_drvlib_motor_log, LOG_LEVEL_ERROR, "Register: null instance");
+        BSPLOG(&g_lib_motor_log, LOG_LEVEL_ERROR, "Register: null instance");
         return -1;
     }
     memset(inst, 0, sizeof(*inst));
@@ -295,11 +295,11 @@ int8_t DrvlibMotorRegister(DrvlibMotorInstance *inst)
     return 0;
 }
 
-int8_t DrvlibMotorConfig(DrvlibMotorInstance *inst, const DrvlibMotor_Config_s *cfg)
+int8_t LibMotorConfig(LibMotorInstance *inst, const LibMotor_Config_s *cfg)
 {
     if (!inst || !cfg)
     {
-        BSPLOG(&g_drvlib_motor_log, LOG_LEVEL_ERROR, "Config: null instance/config");
+        BSPLOG(&g_lib_motor_log, LOG_LEVEL_ERROR, "Config: null instance/config");
         return -1;
     }
 
@@ -308,41 +308,41 @@ int8_t DrvlibMotorConfig(DrvlibMotorInstance *inst, const DrvlibMotor_Config_s *
 
     /* 方向归一化：只认 REVERSE(-1)，其余（含未初始化的 0）一律 NORMAL(+1)。
      * 存量配置不写方向字段时保持"正向"原行为，也免去每拍再判一次。 */
-    if (inst->cfg.motor_direction != DRVLIB_MOTOR_DIRECTION_REVERSE)
+    if (inst->cfg.motor_direction != LIB_MOTOR_DIRECTION_REVERSE)
     {
-        inst->cfg.motor_direction = DRVLIB_MOTOR_DIRECTION_NORMAL;
+        inst->cfg.motor_direction = LIB_MOTOR_DIRECTION_NORMAL;
     }
-    if (inst->cfg.feedback_direction != DRVLIB_MOTOR_DIRECTION_REVERSE)
+    if (inst->cfg.feedback_direction != LIB_MOTOR_DIRECTION_REVERSE)
     {
-        inst->cfg.feedback_direction = DRVLIB_MOTOR_DIRECTION_NORMAL;
+        inst->cfg.feedback_direction = LIB_MOTOR_DIRECTION_NORMAL;
     }
 
     /* PID 初始化：只初始化参与环路的 stage。
      * 复刻旧 drv_motor：位置/速度环自动补梯形积分；WRAP 时位置环自动启用误差归一化。
      * CURRENT 环为新环，不做这些默认（保持 app 配置原样）。 */
-    if (inst->cfg.loop_type & DRVLIB_MOTOR_LOOP_ANGLE)
+    if (inst->cfg.loop_type & LIB_MOTOR_LOOP_ANGLE)
     {
-        inst->cfg.pid[DRVLIB_MOTOR_STAGE_ANGLE].config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL;
-        if (inst->cfg.position_mode == DRVLIB_MOTOR_POS_WRAP)
+        inst->cfg.pid[LIB_MOTOR_STAGE_ANGLE].config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL;
+        if (inst->cfg.position_mode == LIB_MOTOR_POS_WRAP)
         {
-            inst->cfg.pid[DRVLIB_MOTOR_STAGE_ANGLE].error_normalize_range = inst->cfg.angle_limit_max - inst->cfg.angle_limit_min;
-            inst->cfg.pid[DRVLIB_MOTOR_STAGE_ANGLE].config_mask |= PID_ENABLE_ERROR_NORMALIZE;
+            inst->cfg.pid[LIB_MOTOR_STAGE_ANGLE].error_normalize_range = inst->cfg.angle_limit_max - inst->cfg.angle_limit_min;
+            inst->cfg.pid[LIB_MOTOR_STAGE_ANGLE].config_mask |= PID_ENABLE_ERROR_NORMALIZE;
         }
-        LibPIDInit(&inst->pid[DRVLIB_MOTOR_STAGE_ANGLE], &inst->cfg.pid[DRVLIB_MOTOR_STAGE_ANGLE]);
+        LibPIDInit(&inst->pid[LIB_MOTOR_STAGE_ANGLE], &inst->cfg.pid[LIB_MOTOR_STAGE_ANGLE]);
     }
 
-    if (inst->cfg.loop_type & DRVLIB_MOTOR_LOOP_SPEED)
+    if (inst->cfg.loop_type & LIB_MOTOR_LOOP_SPEED)
     {
-        inst->cfg.pid[DRVLIB_MOTOR_STAGE_SPEED].config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL;
-        LibPIDInit(&inst->pid[DRVLIB_MOTOR_STAGE_SPEED], &inst->cfg.pid[DRVLIB_MOTOR_STAGE_SPEED]);
+        inst->cfg.pid[LIB_MOTOR_STAGE_SPEED].config_mask |= PID_ENABLE_TRAPEZOID_INTEGRAL;
+        LibPIDInit(&inst->pid[LIB_MOTOR_STAGE_SPEED], &inst->cfg.pid[LIB_MOTOR_STAGE_SPEED]);
     }
 
-    if (inst->cfg.loop_type & DRVLIB_MOTOR_LOOP_CURRENT)
+    if (inst->cfg.loop_type & LIB_MOTOR_LOOP_CURRENT)
     {
-        LibPIDInit(&inst->pid[DRVLIB_MOTOR_STAGE_CURRENT], &inst->cfg.pid[DRVLIB_MOTOR_STAGE_CURRENT]);
+        LibPIDInit(&inst->pid[LIB_MOTOR_STAGE_CURRENT], &inst->cfg.pid[LIB_MOTOR_STAGE_CURRENT]);
     }
 
-    /* 状态清零（不动 enable：使能须显式调 DrvlibMotorEnable） */
+    /* 状态清零（不动 enable：使能须显式调 LibMotorEnable） */
     inst->position_single_last = 0.0f;
     inst->position_cnt = 0;
     inst->position_continuous = 0.0;
@@ -356,12 +356,12 @@ int8_t DrvlibMotorConfig(DrvlibMotorInstance *inst, const DrvlibMotor_Config_s *
     memset(inst->pid_seeded, 0, sizeof(inst->pid_seeded));
     memset(&inst->data, 0, sizeof(inst->data));
 
-    BSPLOG(&g_drvlib_motor_log, LOG_LEVEL_INFO, "Config: loop=0x%02X pos_mode=%u span=%d mrad", inst->cfg.loop_type, inst->cfg.position_mode,
+    BSPLOG(&g_lib_motor_log, LOG_LEVEL_INFO, "Config: loop=0x%02X pos_mode=%u span=%d mrad", inst->cfg.loop_type, inst->cfg.position_mode,
            (int)(inst->cfg.position_span * 1000.0f));
     return 0;
 }
 
-float DrvlibMotorSetRef(DrvlibMotorInstance *inst, float ref, const DrvlibMotorFeedback_s *fb, float dt)
+float LibMotorSetRef(LibMotorInstance *inst, float ref, const LibMotorFeedback_s *fb, float dt)
 {
     if (!inst)
     {
@@ -396,8 +396,8 @@ float DrvlibMotorSetRef(DrvlibMotorInstance *inst, float ref, const DrvlibMotorF
 
     /* 开环（一位闭环位都没选）：ref 直接作输出。
      * 方向仍按安装方向修正 —— 与闭环走同一个 motor_direction，避免"开环标方向"时对不上。
-     * 用掩码判断而不是 == DRVLIB_MOTOR_LOOP_OPEN：未定义的位不会被误判成闭环。 */
-    if ((inst->cfg.loop_type & DRVLIB_MOTOR_LOOP_ALL) == 0)
+     * 用掩码判断而不是 == LIB_MOTOR_LOOP_OPEN：未定义的位不会被误判成闭环。 */
+    if ((inst->cfg.loop_type & LIB_MOTOR_LOOP_ALL) == 0)
     {
         MotorVofaOutput(inst);
         return ref * (float)inst->cfg.motor_direction;
@@ -415,7 +415,7 @@ float DrvlibMotorSetRef(DrvlibMotorInstance *inst, float ref, const DrvlibMotorF
     return out;
 }
 
-void DrvlibMotorEnable(DrvlibMotorInstance *inst)
+void LibMotorEnable(LibMotorInstance *inst)
 {
     if (!inst)
     {
@@ -424,23 +424,23 @@ void DrvlibMotorEnable(DrvlibMotorInstance *inst)
     inst->enable = 1;
 }
 
-void DrvlibMotorDisable(DrvlibMotorInstance *inst)
+void LibMotorDisable(LibMotorInstance *inst)
 {
     if (!inst)
     {
         return;
     }
     inst->enable = 0;
-    DrvlibMotorReset(inst);
+    LibMotorReset(inst);
 }
 
-void DrvlibMotorReset(DrvlibMotorInstance *inst)
+void LibMotorReset(LibMotorInstance *inst)
 {
     if (!inst)
     {
         return;
     }
-    for (int i = 0; i < DRVLIB_MOTOR_STAGE_NUM; i++)
+    for (int i = 0; i < LIB_MOTOR_STAGE_NUM; i++)
     {
         LibPIDReset(&inst->pid[i]);
     }
@@ -456,4 +456,4 @@ void DrvlibMotorReset(DrvlibMotorInstance *inst)
     inst->speed_ma_seeded = 0;
 }
 
-#endif /* DRVLIB_MOTOR_USED && LIB_PID_USED && LIB_MATH_USED */
+#endif /* LIB_MOTOR_USED && LIB_PID_USED && LIB_MATH_USED */

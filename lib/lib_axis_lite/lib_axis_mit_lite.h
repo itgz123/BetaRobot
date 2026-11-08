@@ -1,5 +1,5 @@
 /**
- * @file drv_axis_mit_lite.h
+ * @file lib_axis_mit_lite.h
  * @brief 轻量级单轴关节控制驱动模块
  * @author TRW
  * @date 2026-06-07
@@ -13,14 +13,14 @@
  *       step5: 正常控制
  * @note 这个文件轻量封装，不依赖 motor：AxisMitLiteCalculate 接收 AxisLiteState_s 反馈、计算并返回 setref，
  *       由 app 层手动调用 motor.set_ref 设置力矩
- * @note drv\drv_axis_lite\identify_axis_mit_lite.py可以辨识参数
+ * @note lib_axis_lite 下的辨识脚本可以辨识参数
  */
 
-#ifndef DRV_AXIS_MIT_LITE_H
-#define DRV_AXIS_MIT_LITE_H
+#ifndef LIB_AXIS_MIT_LITE_H
+#define LIB_AXIS_MIT_LITE_H
 
 #include "lib_mit.h"
-#include "drv_axis_lite_def.h"
+#include "lib_axis_lite_def.h"
 #include <stdint.h>
 #include "app_cfg.h"
 
@@ -116,4 +116,4 @@ int8_t AxisMitLiteInit(AxisMitLiteInstance *inst, const AxisMitLite_Init_Config_
  */
 float AxisMitLiteCalculate(AxisMitLiteInstance *inst, const AxisLiteState_s *state, const AxisMitLiteRef_s *ref);
 
-#endif // !DRV_AXIS_MIT_LITE_H
+#endif // !LIB_AXIS_MIT_LITE_H

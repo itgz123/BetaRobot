@@ -12,8 +12,6 @@ set(MODULE_SOURCES
     drv_motor/drv_lkmotor/drv_lkmotor.c
     drv_motor/drv_djimotor_broadcast/drv_djimotor_broadcast.c
     drv_motor/drv_lkmotor_broadcast/drv_lkmotor_broadcast.c
-    drv_axis_lite/drv_axis_mit_lite.c
-    drv_axis_lite/drv_axis_pid_lite.c
     drv_super_cap_yq2027/drv_super_cap_yq2027.c
     drv_referee2026/public/referee2026_proto.c
     # referee2026：模块根放暴露接口（四条链路共用的 Register/Config/Send + 收发内核），
@@ -24,7 +22,6 @@ set(MODULE_SOURCES
     drv_referee2026/link_none/referee2026_none.c
     drv_referee2026/link_radar/referee2026_radar.c
     drv_planner/drv_planner.c
-    drv_pid/drv_pid.c
     drv_terminal_lite/drv_terminal_lite.c
     drv_buzzer_simple/drv_buzzer_simple.c
     # comm开始
@@ -56,7 +53,6 @@ set(MODULE_INCLUDE_DIRS
     drv_motor/drv_lkmotor
     drv_motor/drv_djimotor_broadcast
     drv_motor/drv_lkmotor_broadcast
-    drv_axis_lite
     drv_super_cap_yq2027
     # referee2026：模块根放公开接口头 + public 放协议层公共件，link_* 各自放本链路的公开头（用哪条 include 哪个）
     drv_referee2026
@@ -66,7 +62,6 @@ set(MODULE_INCLUDE_DIRS
     drv_referee2026/link_none
     drv_referee2026/link_radar
     drv_planner
-    drv_pid
     drv_terminal_lite
     drv_buzzer_simple
     # comm开始
