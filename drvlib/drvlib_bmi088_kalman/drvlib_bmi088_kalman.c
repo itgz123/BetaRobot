@@ -54,7 +54,7 @@ LOG_INSTANCE_DEF(g_bmi088_kalman_log, "bmi088_kalman", DRVLIB_BMI088_KALMAN_LOG_
 
 /*============================ 内部函数声明 ============================*/
 
-static void KalmanAxisInit(LkfInstance *kf, float r_tilt);
+static void KalmanAxisInit(LkfInstance *kf, float r_tilt, uint8_t bias_est_disable);
 static float KalmanAxisStep(LkfInstance *kf, float rate, float dt, const BMI088KalmanInstance *inst, uint8_t meas_ok, float z, float r_now);
 
 /*============================ 内部函数实现 ============================*/
@@ -67,9 +67,15 @@ static float KalmanAxisStep(LkfInstance *kf, float rate, float dt, const BMI088K
  * @note 只有 H/R 是常量，F/Q/B 的 dt 相关项每帧在 KalmanAxisStep 里改写；
  *       opt 用 Joseph 更新：n=2 的代价可忽略，换来协方差长期不发散
  */
-static void KalmanAxisInit(LkfInstance *kf, float r_tilt)
+static void KalmanAxisInit(LkfInstance *kf, float r_tilt, uint8_t bias_est_disable)
 {
-    const float P0[4] = {BMI088_KALMAN_P0_TILT, 0.0f, 0.0f, BMI088_KALMAN_P0_BIAS};
+    /* 冻结 b 时把 b 的初始不确定度也置 0：F01 在 KalmanAxisStep 里同时置 0，
+     * P12/P22 从初始就恒为 0，K2=0，b 永远不参与更新。 */
+    float P0[4] = {BMI088_KALMAN_P0_TILT, 0.0f, 0.0f, BMI088_KALMAN_P0_BIAS};
+    if (bias_est_disable != 0u)
+    {
+        P0[3] = 0.0f;
+    }
     const float F[4] = {1.0f, 0.0f, 0.0f, 1.0f};
     const float H[2] = {1.0f, 0.0f};
     const float R[1] = {r_tilt};
@@ -107,10 +113,19 @@ static float KalmanAxisStep(LkfInstance *kf, float rate, float dt, const BMI088K
     float u[1] = {rate};
 
     /* 时变模型：lib_lkf 不感知时间，dt 由调用方折进 F/B/Q 后传入 */
-    LKF_F(kf, 0, 1) = -dt; /* θ ← θ + (rate - b)·dt */
+    if (inst->bias_est_disable != 0u)
+    {
+        /* 冻结 b：断开 θ←b 的预测耦合，b 不参与、也不会被更新（K2 由 P12=0 保证 0） */
+        LKF_F(kf, 0, 1) = 0.0f;
+        LKF_Q(kf, 1, 1) = 0.0f;
+    }
+    else
+    {
+        LKF_F(kf, 0, 1) = -dt; /* θ ← θ + (rate - b)·dt */
+        LKF_Q(kf, 1, 1) = inst->q_bias * dt;
+    }
     LKF_B(kf, 0, 0) = dt;
     LKF_Q(kf, 0, 0) = inst->q_tilt * dt;
-    LKF_Q(kf, 1, 1) = inst->q_bias * dt;
 
     LkfPredict(kf, u);
 
@@ -193,13 +208,16 @@ int8_t BMI088KalmanConfig(BMI088KalmanInstance *inst, const BMI088Kalman_Config_
     inst->q_tilt = (config->q_tilt > 0.0f) ? config->q_tilt : BMI088_KALMAN_DEF_Q_TILT;
     inst->q_bias = config->q_bias;
     inst->r_tilt = (config->r_tilt > 0.0f) ? config->r_tilt : BMI088_KALMAN_DEF_R_TILT;
+    inst->bias_est_disable = (config->bias_est_disable != 0u) ? 1u : 0u;
+    inst->acc_reject_roll = 0u;
+    inst->acc_reject_pitch = 0u;
     inst->dt_max = (config->dt_max > 0.0f) ? config->dt_max : BMI088_KALMAN_DEF_DT_MAX;
     inst->temp_lpf_alpha = (config->temp_lpf_alpha > 0.0f) ? config->temp_lpf_alpha : BMI088_KALMAN_DEF_TEMP_LPF_ALPHA;
     inst->vofa_enable = (config->vofa_enable != 0); /* 归一成 0/1，非 0 都算开 */
 
     /* ---- 状态复位：姿态/滤波器/温度低通全部重来 ---- */
-    KalmanAxisInit(inst->kf_roll, inst->r_tilt);
-    KalmanAxisInit(inst->kf_pitch, inst->r_tilt);
+    KalmanAxisInit(inst->kf_roll, inst->r_tilt, inst->bias_est_disable);
+    KalmanAxisInit(inst->kf_pitch, inst->r_tilt, inst->bias_est_disable);
 
     inst->euler.roll = 0.0f;
     inst->euler.pitch = 0.0f;
@@ -377,9 +395,15 @@ void BMI088KalmanUpdate(BMI088KalmanInstance *inst)
         float pitch_rate = cr * gyro[1] - sr * gyro[2];
         yaw_rate = (sr * gyro[1] + cr * gyro[2]) / cp;
 
-        /* ---- roll/pitch：KF 预测（用运动学速率）+ 加速度计量测 ---- */
-        inst->euler.roll = KalmanAxisStep(inst->kf_roll, roll_rate, dt, inst, meas_ok, acc_roll, r_now);
-        inst->euler.pitch = KalmanAxisStep(inst->kf_pitch, pitch_rate, dt, inst, meas_ok, acc_pitch, r_now);
+        /* ---- roll/pitch：KF 预测（用运动学速率）+ 加速度计量测 ----
+         * acc_reject_* 是 app 本帧写入的外部门控（例如底盘加速度超阈值）：
+         * 只跳过对应轴的加速度计量测，陀螺预报/积分照常。 */
+        const uint8_t roll_meas_ok = (uint8_t)((meas_ok != 0u) && (inst->acc_reject_roll == 0u));
+        const uint8_t pitch_meas_ok = (uint8_t)((meas_ok != 0u) && (inst->acc_reject_pitch == 0u));
+        inst->euler.roll = KalmanAxisStep(inst->kf_roll, roll_rate, dt, inst, roll_meas_ok, acc_roll, r_now);
+        inst->euler.pitch = KalmanAxisStep(inst->kf_pitch, pitch_rate, dt, inst, pitch_meas_ok, acc_pitch, r_now);
+        inst->acc_reject_roll = 0u;
+        inst->acc_reject_pitch = 0u;
 
         /* ---- yaw：六轴不可观测，纯积分，零偏准不准直接决定精度 ---- */
         inst->euler.yaw = Lib_Math_WrapAngleNegPIToPI(inst->euler.yaw + yaw_rate * dt);
@@ -395,6 +419,16 @@ void BMI088KalmanUpdate(BMI088KalmanInstance *inst)
         inst->data.bias[i] = inst->gyro_bias[i];
 
     KalmanVofaOutput(inst);
+}
+
+void BMI088KalmanSetAccelGate(BMI088KalmanInstance *inst, uint8_t reject_roll, uint8_t reject_pitch)
+{
+    if (inst == NULL)
+    {
+        return;
+    }
+    inst->acc_reject_roll = (reject_roll != 0u) ? 1u : 0u;
+    inst->acc_reject_pitch = (reject_pitch != 0u) ? 1u : 0u;
 }
 
 BMI088Kalman_Data_t BMI088KalmanGetData(const BMI088KalmanInstance *inst)

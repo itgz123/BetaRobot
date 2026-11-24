@@ -48,7 +48,13 @@
  *     P12 稳态 ≈ -dt·R、K2 ≠ 0，量测残差照样推动 b（仿真：静止 1~2s 内收敛到
  *     真值）。q_bias 的真实作用是给 b 加过程噪声，而 q_bias>0 反而让 b 过冲
  *     （仿真：q_bias=1e-6 时学到真值的 257%）。所以该项保持 0 是更稳的选择。
+ *   要**真正**冻结 b，用 Config 的 bias_est_disable=1：F01 与 P0_BIAS 同时置 0，
+ *   滤波器退化为单状态倾角互补（云台侧抗加减速污染用）。
  *   与标定精度强耦合的是 P0_BIAS（b 的初值不确定度），标定越准应给得越小。
+ *
+ * 加速度计量测还可以由 app **逐帧门控**（BMI088KalmanSetAccelGate）：
+ *   例如云台用底盘 vx/vy 差分得到加速度，超阈值时跳过当帧 acc 更新，让陀螺
+ *   承担动态；门控只影响 acc，不影响陀螺积分/yaw。
  *
  * yaw **不设 KF**：六轴下加速度计对 yaw 没有任何观测能力（重力方向不含航向
  * 信息），设一个永不更新的滤波器只是自欺欺人。yaw 精度只取决于零偏准不准。
@@ -189,6 +195,11 @@ typedef struct
     float q_tilt; /* 倾角过程噪声 (rad²/s)：陀螺积分的不确定度增长 */
     float q_bias; /* 零偏残差过程噪声 (rad²/s³)：0 是合法值（推荐），但 ≠ 关闭 b 的估计 */
     float r_tilt; /* 倾角量测噪声 (rad²)：加速度计反算倾角的噪声 */
+    /* 冻结残余零偏状态 b（0 = 旧行为，1 = b 恒 0、P12/P22 恒 0）：
+     * 旧 KF 的 b 会把"加速度计看到的假倾角"当陀螺零偏学进去，底盘加减速时
+     * 俯仰估计跟着点头。云台侧置 1，配 r_tilt 放慢 + 外部加速度门控；
+     * 底盘侧不设置（默认 0），行为与旧版完全一致。 */
+    uint8_t bias_est_disable;
     float dt_max; /* 单步积分 dt 上限 (s)：任务被拖长时钳位，防一步跳变 */
 
     /* ---- 温漂补偿用的温度低通系数 (0~1) ----
@@ -263,6 +274,9 @@ typedef struct BMI088KalmanInstance
 
     /* config 快照 */
     float q_tilt, q_bias, r_tilt, dt_max;
+    uint8_t bias_est_disable; /* 1 = 冻结 b 状态（单状态倾角互补）；见 Config 的同名字段 */
+    uint8_t acc_reject_roll;  /* 1 = 本帧跳过 roll 的加速度计量测（由 app 门控写入） */
+    uint8_t acc_reject_pitch; /* 1 = 本帧跳过 pitch 的加速度计量测（由 app 门控写入） */
     uint8_t vofa_enable; /* 1 = 每帧写 VOFA 通道并发送，见 Config 的说明 */
 
     /* 最近一次输出 */
@@ -316,6 +330,21 @@ int8_t BMI088KalmanConfig(BMI088KalmanInstance *inst, const BMI088Kalman_Config_
  * @note 数据未就绪时本帧不积分，输出 data.valid=0、dt=0
  */
 void BMI088KalmanUpdate(BMI088KalmanInstance *inst);
+
+/**
+ * @brief 设置本帧的加速度计量测门控（app 用底盘加速度等外部量给出）
+ * @param inst 实例指针
+ * @param reject_roll  1 = 本帧跳过 roll 的加速度计更新
+ * @param reject_pitch 1 = 本帧跳过 pitch 的加速度计更新
+ *
+ * @note 只影响**下一次** Update 的加速度计更新；陀螺积分/预报、播种、
+ *       yaw 积分都不受影响。门控是"本帧"语义：Update 用完即清零，
+ *       app 必须每帧在 Update 之前重新设置。
+ * @note 底盘 app 不调用本函数 -> 两轴都不门控，行为与旧版完全一致。
+ *       典型用法（云台）：用底盘 vx/vy 差分得到加速度，转到基座系后
+ *       超过阈值就冻结对应轴的 acc 校正，让陀螺承担动态。
+ */
+void BMI088KalmanSetAccelGate(BMI088KalmanInstance *inst, uint8_t reject_roll, uint8_t reject_pitch);
 
 /**
  * @brief 取最近一次输出（按值返回，与 drv 层读取接口风格一致）
